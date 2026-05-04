@@ -1,0 +1,41 @@
+export default {
+  translation: {
+    popUp: {
+      error: {
+        connection: '連線錯誤',
+        restartApp: '麻煩請重新開啟App謝謝',
+        reconnectPubNub: '請按下方按鈕重新連線',
+        reconnectNetwork: '網路不穩，請重新連線',
+        multiConnection: '已偵測使用其他裝置登入',
+        topUp: '您的罐頭不足',
+      },
+      reconnectBtn: '重新連線',
+    },
+    gameStage: {
+      startToBet: '開始下注',
+      stopToBet: '停止投注',
+      prepareNextRound: '準備中',
+    },
+    language: 'ZH',
+    history: {
+      title: '近 10 局對戰紀錄',
+    },
+    historyState: {
+      pending: '載入中...',
+      error: '連線失敗',
+    },
+    cat: {
+      cat1: '幽靈喵喵',
+      cat2: '月光仙喵',
+      cat3: '喵喵隊長',
+      cat4: '怪盜喵德',
+      cat5: '蘋狗',
+    },
+    race: {
+      winText: '你贏了',
+      can: '罐頭',
+      wins: '贏了！',
+      payrate: '賠率',
+    },
+  },
+};
