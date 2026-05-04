@@ -1,0 +1,198 @@
+.container {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 12px;
+  color: #1f2937;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.2);
+}
+
+.canvasShell {
+  width: 400px;
+  height: 400px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+}
+
+.canvasHost {
+  position: relative;
+  width: 400px;
+  height: 400px;
+
+  :global(.canvas-container) {
+    position: relative !important;
+    inset: auto !important;
+  }
+}
+
+.panel {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 236px;
+}
+
+.panelHeader,
+.colorRow,
+.historyRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panelHeader {
+  justify-content: space-between;
+  min-height: 32px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.toolGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.toolButton,
+.activeToolButton,
+.secondaryButton,
+.iconButton {
+  min-height: 32px;
+  padding: 6px 10px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.activeToolButton {
+  color: #ffffff;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.secondaryButton:disabled {
+  color: #94a3b8;
+  background: #e2e8f0;
+  cursor: not-allowed;
+}
+
+.iconButton {
+  width: 32px;
+  padding: 0;
+}
+
+.field,
+.colorField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field input[type='range'] {
+  width: 100%;
+}
+
+.colorField {
+  flex: 1;
+}
+
+.colorField input[type='color'] {
+  width: 100%;
+  height: 34px;
+  padding: 2px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+
+.historyRow .secondaryButton {
+  flex: 1;
+}
+
+.importDialog {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
+}
+
+.importHeader {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.importTextarea {
+  min-height: 160px;
+  padding: 8px;
+  color: #0f172a;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.importError {
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.importActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .container {
+    flex-direction: column;
+    width: min-content;
+  }
+
+  .panel {
+    width: 400px;
+    max-width: calc(100vw - 48px);
+  }
+
+  .canvasShell,
+  .canvasHost {
+    width: min(400px, calc(100vw - 48px));
+    height: min(400px, calc(100vw - 48px));
+  }
+
+  .importDialog {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+}

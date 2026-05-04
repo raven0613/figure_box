@@ -108,18 +108,18 @@ export class GameManagerService {
     const gameflowAnimation = new GameflowAnimation();
 
     gameFlowStateService.onStateTransition(stateNode => {
-      if (stateNode.matches(gameState.PREPARE_WIDGET) || stateNode.event.type === 'Game start') {
-        // gameFlowStateService.send({
+      // if (stateNode.matches(gameState.PREPARE_WIDGET) || stateNode.event.type === 'Game start') {
+      //   gameFlowStateService.send({
 
-        // });
-      }
+      //   });
+      // }
     });
 
     gameFlowStateService.onContextChange(state => {
       // console.log('onContextChange', state.context);
-      const { status, currentStageTimeStamp, nextStageTimeStamp } = state.context;
+      // const { status, currentStageTimeStamp, nextStageTimeStamp } = state.context;
 
-      gameflowAnimation.catchTimestamp(status, { startTime: currentStageTimeStamp, endTime: nextStageTimeStamp });
+      // gameflowAnimation.catchTimestamp(status, { startTime: currentStageTimeStamp, endTime: nextStageTimeStamp });
     });
 
   }
