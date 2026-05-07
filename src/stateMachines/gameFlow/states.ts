@@ -1,42 +1,43 @@
-export enum BigBattleGameStates {
-  PREPARING = 'preparing',
-  FLOW = 'flow start',
-  ERROR = 'error',
+enum GameState {
+  Loading = "loading",
+  Active = "active",
+  Error = "error"
+}
+// user 觸發 UI 行為
+enum GameSystemState {
+  Null = "null",
+  Operating = "operating", // 操作系統中，可當作最高級，即使原本在上帝干預中，打開了系統，遊戲世界中的上帝干預狀態還是存在著
 }
 
-export enum PreparingStates {
-  SUCCESS = 'Success',
+// 指 user 觸發關於遊戲的行為
+enum GameGodState {
+  Normal = "normal",
+  Interaction = "interaction", // 上帝干預中，例如抓著某人、跳出選項中
 }
 
-export enum FlowStates {
-  JOIN = 'join',
+// 以下四個人物狀態平行，因為希望能做出組合動作，動畫系統可以直接根據這兩個軌道做混合。例如，身體拿躺著的圖，手上改成拿手機
+// 角色動作 state
+enum CharacterBodyActionState {
+  Idle = "idle", // 閒置
+  Observing = "observing", // 觀察地圖上的物件中
+  Operating = "operating", // 操作物品中，為父狀態，子狀態可以有很多例如吃飯、滑手機
+  PickedUp = "pickedUp", // 被提起中
+  Socializing = "socializing", // 社交中
 }
-
-export enum StartStates {
-  BET_START = 'Bet start',
+// 角色移動 state
+enum CharacterBodyMoveState {
+  Stand = "stand", // 閒置
+  Lie = "lie", // 躺著
+  Sit = "sit",
+  Walking = "walking", // 需處理座標位移
+  Running = "running",
+  fallDown = "fallDown" // 跌倒
 }
-
-export enum RewardStates {
-  START = 'Start',
-  ANIMATING = 'Animating',
+enum CharacterMindState {
+  Null = "null", // 閒置
+  Thinking = "thinking", // 思考中
 }
-
-export const gameState = {
-  PREPARE_WIDGET: `${BigBattleGameStates.PREPARING}.${PreparingStates.UPDATING_WIDGET}`,
-  BET_START: `${BigBattleGameStates.FLOW}.${FlowStates.START}.${StartStates.BET_START}`,
-};
-
-export enum CatEnum {
-  CAT1 = 'cat1',
-  CAT2 = 'cat2',
-  CAT3 = 'cat3',
-  CAT4 = 'cat4',
-  CAT5 = 'cat5',
+enum CharacterCommunicationState {
+  Null = "null", // 閒置
+  Requesting = "requesting", // 主動向 user 發出信號（代表可以一邊做事一邊提需求）
 }
-
-export interface Payrate {
-  payRate: number;
-  probability?: number; // 後端會給，前端暫時用不到
-}
-
-export type Stage = BigBattleGameStates | FlowStates;

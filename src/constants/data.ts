@@ -1,129 +1,62 @@
-// 想要有性格&容易遇到的事的權重，但這樣會不會變無聊？
-interface User {
-    name: string;
-    avatar: {
-        eyes: {
-            offsetX: number; // 以臉部中間線為中心，偏移多少
-            offsetY: number; // 以預設高度為中心，偏移多少
-            rotate: number; // 旋轉
-            scale: number; // 眼睛大小，預設1
-            sclera: string; // 眼白的顏色 zIndex: 0;
-            color: string; // 眼珠的顏色 zIndex: 1;
-            pupil: string; // 瞳孔的顏色 zIndex: 2;
-
-            upperEyelid: { // 上眼瞼 zIndex: 4;
-                id: 0; // 0 是無 1.2.3...為系統提供的選擇
-                color: string;
-                offsetX: number; // 以眼睛中間線為中心，偏移多少
-                offsetY: number; // 以眼睛中間線為中心，偏移多少
-                rotate: number; // 旋轉
-                scale: number; // 眼睛大小，預設1
-                path: string; // 有自己畫的話，蓋在上面的作畫資料
-            }
-            lowerEyelid: { // 下眼瞼 zIndex: 4;
-                id: 0; // 0 是無 1.2.3...為系統提供的選擇
-                color: string;
-                offsetX: number; // 以眼睛中間線為中心，偏移多少
-                offsetY: number; // 以眼睛中間線為中心，偏移多少
-                rotate: number; // 旋轉
-                scale: number; // 眼睛大小，預設1
-                path: string; // 有自己畫的話，蓋在上面的作畫資料
-            }
-            light: { // 光點 zIndex: 3;
-                id: 0; // 0 是無 1.2.3...為系統提供的選擇
-                color: string;
-                offsetX: number; // 以眼睛中間線為中心，偏移多少
-                offsetY: number; // 以眼睛中間線為中心，偏移多少
-                rotate: number; // 旋轉
-                scale: number; // 眼睛大小，預設1
-                path: string; // 有自己畫的話，蓋在上面的作畫資料
-                zIndex: 0;
-            }
-        }
-        hair: {
-            bangs: { // 瀏海
-                id: number; // 系統提供的選擇
-                color: string;
-                offsetX: number;
-                offsetY: number;
-                rotate: number; // 旋轉
-                scale: number; // 大小，預設1
-                path: string; // 有自己畫的話，蓋在上面的作畫資料
-            }
-            sideburns: { // 側髮
-                id: number; // 系統提供的選擇
-                color: string;
-                offsetX: number;
-                offsetY: number;
-                rotate: number; // 旋轉
-                scale: number; // 大小，預設1
-                path: string; // 有自己畫的話，蓋在上面的作畫資料
-            }
-            topHair: {
-                id: number; // 系統提供的選擇
-                color: string;
-                offsetX: number;
-                offsetY: number;
-                rotate: number; // 旋轉
-                scale: number; // 大小，預設1
-                path: string; // 有自己畫的話，蓋在上面的作畫資料
-            }
-            backHair: {
-                id: number; // 系統提供的選擇
-                color: string;
-                offsetX: number;
-                offsetY: number;
-                rotate: number; // 旋轉
-                scale: number; // 大小，預設1
-                path: string; // 有自己畫的話，蓋在上面的作畫資料
-            }
-            light: { // 光點
-                id: 0; // 0 是無 1.2.3...為系統提供的選擇
-                color: string;
-                offsetX: number;
-                offsetY: number;
-                rotate: number; // 旋轉
-                scale: number; // 眼睛大小，預設1
-                path: string; // 有自己畫的話，蓋在上面的作畫資料
-            }
-        }
-        mouth: {
-            id: number; // 系統提供的選擇
-            color: string;
-            offsetX: number;
-            offsetY: number;
-            rotate: number; // 旋轉
-            scale: number; // 大小，預設1
-            path: string; // 有自己畫的話，蓋在上面的作畫資料
-        }
-        nose: {
-            id: number; // 系統提供的選擇
-            color: string;
-            offsetX: number;
-            offsetY: number;
-            rotate: number; // 旋轉
-            scale: number; // 大小，預設1
-            path: string; // 有自己畫的話，蓋在上面的作畫資料
-        }
-        face: { // 臉型
-            id: number; // 系統提供的選擇
-            color: string; // 膚色
-            path: string; // 有自己畫的話，蓋在上面的作畫資料，例如：刺青、OK繃、雀斑
-        }
-    }
-    wayOfSaying: { // 口癖
-        beginning: string; // 話語開頭，例如：蛤？ 
-        chuckle: string; // 輕笑，例如：呵呵、嘻嘻
-        laugh: string; // 大笑，例如：哈——哈哈哈哈！、哈哈哈哈哈！
-        ending: string; // 話語結尾，例如：喵
-        selfReference: string; // 自稱，例如：我、在下
-    }
-    status: {
-        mood: Mood
-    }
+// 綁 character
+export interface Item {
+    id: string;
+    amount: number;
+    isHanding: boolean;
+}
+// item 基本資料
+interface ItemInfo {
+    id: string;
+    image: string;
+    type: ItemType;
+    limitPerChar: number; // 一人限制擁有幾個
+}
+// 物品可以拿在手上，會顯示在地圖小人身上
+// 遇到人看到手上的物品可能會觸發相關對話
+// 角色可能會說想要什麼，如果讓人送他會觸發好感，平時也可以讓角色之間送禮
+enum ItemType {
+    Food = "food",
+    Tool = "tool"
 }
 
-enum Mood {
-    Happy = "happy",
-    Angry = "angry"
+// 事件分成 地圖上自動發生的、會顯示但是需要點擊觸發的
+// 事件要分成不同的嗎，例如點擊地圖的自己一個 interface
+// 每次事件發生時，挑出所有 condition 符合的事件，塞進一個事件池，再依照權重決定機率
+interface EventInfo {
+    id: string;
+    name: Event;
+    type:
+    condition: Record<string, string>[]; // 飽足度大於五 saturation: ">= 5"
+    limitChar: number; // 最多幾人同時
+}
+
+// 人物的互動是動詞名詞接起來的，解鎖不同地方可以解鎖新的動詞或名詞
+enum Event {
+    Massage = "massage", // 按摩
+    Gossip = "gossip" // 聊八卦
+}
+
+enum EventType {
+    Tick = "tick", // 自動：時間流逝
+    SenseObject = "senseObject", // 自動：感應到物品
+    SocialProximity = "socialProximity", // 自動：感知到附近有人
+    RequestAction = "requestAction", // 主動：提出需求，需要玩家點擊
+    UserClick = "userClick", // 主動：玩家點擊
+}
+
+export type CharacterEvent =
+    | { type: EventType.Tick } // 自動：時間流逝
+    | { type: EventType.SenseObject; objectId: string; gridType: string } // 自動：感應到物品
+    | { type: EventType.SocialProximity; targetActorId: string } // 自動：感知到附近有人
+    | { type: EventType.RequestAction; actionType: 'WANT_FRIEND' | 'HUNGRY'; payload: any } // 主動：需要玩家點擊
+    | { type: EventType.UserClick; actionId: string } // 主動：玩家點擊核准
+
+// 以後再說的：
+// 大逃殺...會有出局、不同事件
+// 玩具戰鬥系統，例如怪獸對打機那種
+
+// 大逃殺模式的設定
+interface BattleCharacter {
+    hp: number;
+    sp: number;
 }

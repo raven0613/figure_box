@@ -3,6 +3,7 @@ import i18n from '~/i18n';
 import styles from './App.module.scss';
 import { FabricDrawingBoardContainer } from './components/drawingBoard/FabricDrawingBoardContainer';
 import { AvatarEditorContainer } from './components/avatarEditor/AvatarEditorContainer';
+import { TownMapContainer } from './components/townMap/TownMapContainer';
 
 function App() {
   return (
@@ -14,7 +15,8 @@ function App() {
           onDataChange={() => { }}
           onClose={() => { }}
         /> */}
-        <AvatarEditorContainer />
+        {/* <AvatarEditorContainer /> */}
+        <TownMapContainer />
       </div>
     </I18nextProvider>
   );
