@@ -64,7 +64,11 @@ export class TownMapGrid {
   moveOccupant(occupantId: string, target: GridCoordinate): boolean {
     const targetTile = this.getTile(target.x, target.y);
 
-    if (!targetTile || !targetTile.cell.walkable || targetTile.cell.occupantId) {
+    if (!targetTile || !targetTile.cell.walkable) {
+      return false;
+    }
+
+    if (targetTile.cell.occupantId && targetTile.cell.occupantId !== occupantId) {
       return false;
     }
 

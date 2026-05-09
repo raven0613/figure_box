@@ -1,14 +1,46 @@
 import { useEffect, useRef, useState } from 'react';
+import { createActor, type ActorRefFrom, type SnapshotFrom } from 'xstate';
+import {
+  characterMachine,
+  formatCharacterStateValue,
+  getCharacterStateSummary,
+} from '~/stateMachines/gameFlow/children/character';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
+import { EventType } from '~/stateMachines/gameFlow/events';
 import type { TownMapTile } from '~/widgets/townMapGrid';
 
 import styles from './townMap.module.scss';
 
+const CHARACTER_SEEDS = [
+  {
+    id: 'friend-01',
+    name: 'Momo',
+    label: 'M',
+    color: '#f7d65a',
+    position: { x: 3, y: 5 },
+    saturation: 58,
+  },
+  {
+    id: 'friend-02',
+    name: 'Nina',
+    label: 'N',
+    color: '#89d7c5',
+    position: { x: 5, y: 5 },
+    saturation: 32,
+  },
+] as const;
+
+type CharacterActor = ActorRefFrom<typeof characterMachine>;
+type CharacterSnapshot = SnapshotFrom<typeof characterMachine>;
+
 export function TownMapContainer() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<FabricTownMapWidget | null>(null);
+  const characterActorsRef = useRef<Map<string, CharacterActor>>(new Map());
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
   const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
+  const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -22,16 +54,90 @@ export function TownMapContainer() {
         setSelectedTile(tile);
         setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
       },
+      onCharacterPickUp: characterId => {
+        setSelectedCharacterId(characterId);
+        characterActorsRef.current.get(characterId)?.send({ type: EventType.PickUp });
+      },
+      onCharacterDrop: (characterId, tile) => {
+        const actor = characterActorsRef.current.get(characterId);
+
+        if (!actor) {
+          return;
+        }
+
+        if (tile && widget.moveCharacter(characterId, tile)) {
+          actor.send({ type: EventType.Drop, position: tile });
+          return;
+        }
+
+        actor.send({ type: EventType.Drop });
+      },
     });
 
     widgetRef.current = widget;
 
-    // Public movement interface example for game logic:
-    // widget.placeCharacter({ id: 'player-01', x: 4, y: 5, color: '#f7d65a', label: 'P' });
-    // widget.moveCharacter('player-01', { x: 5, y: 5 });
-    widget.placeCharacter({ id: 'player-01', x: 4, y: 5, color: '#f7d65a', label: 'P' });
+    const subscriptions = CHARACTER_SEEDS.map(character => {
+      widget.placeCharacter({
+        id: character.id,
+        x: character.position.x,
+        y: character.position.y,
+        color: character.color,
+        label: character.label,
+      });
+
+      const actor = createActor(characterMachine, {
+        input: {
+          id: character.id,
+          name: character.name,
+          position: character.position,
+          saturation: character.saturation,
+        },
+      });
+
+      characterActorsRef.current.set(character.id, actor);
+
+      const subscription = actor.subscribe(snapshot => {
+        setCharacterSnapshots(current => ({
+          ...current,
+          [character.id]: snapshot,
+        }));
+
+        widget.updateCharacterStatus(character.id, formatCharacterStateValue(snapshot.value));
+
+        const summary = getCharacterStateSummary(snapshot.value);
+        const target = snapshot.context.target;
+
+        if (summary.bodyMove !== 'walking' || !target) {
+          return;
+        }
+
+        if (widget.moveCharacter(character.id, target)) {
+          actor.send({ type: EventType.Arrive, position: target });
+          return;
+        }
+
+        actor.send({ type: EventType.MoveBlocked });
+      });
+
+      actor.start();
+      return subscription;
+    });
+
+    const tickTimer = window.setInterval(() => {
+      characterActorsRef.current.forEach(actor => {
+        actor.send({ type: EventType.Tick });
+      });
+    }, 1000);
 
     return () => {
+      window.clearInterval(tickTimer);
+      subscriptions.forEach(subscription => {
+        subscription.unsubscribe();
+      });
+      characterActorsRef.current.forEach(actor => {
+        actor.stop();
+      });
+      characterActorsRef.current.clear();
       widgetRef.current = null;
       void widget.destroy();
       canvasHost.replaceChildren();
@@ -73,7 +179,77 @@ export function TownMapContainer() {
             </span>
           ))}
         </div>
+
+        <div className={styles.characterList}>
+          {CHARACTER_SEEDS.map(character => {
+            const snapshot = characterSnapshots[character.id];
+            const summary = snapshot ? getCharacterStateSummary(snapshot.value) : null;
+            const isSelected = selectedCharacterId === character.id;
+
+            return (
+              <button
+                className={`${styles.characterButton} ${isSelected ? styles.characterButtonActive : ''}`}
+                key={character.id}
+                type="button"
+                onClick={() => setSelectedCharacterId(character.id)}
+              >
+                <span>{character.name}</span>
+                <strong>{summary ? summary.bodyAction : '-'}</strong>
+              </button>
+            );
+          })}
+        </div>
+
+        {characterSnapshots[selectedCharacterId] ? (
+          <CharacterStatusPanel snapshot={characterSnapshots[selectedCharacterId]} />
+        ) : null}
       </aside>
     </section>
+  );
+}
+
+function CharacterStatusPanel({ snapshot }: { snapshot: CharacterSnapshot }) {
+  const summary = getCharacterStateSummary(snapshot.value);
+
+  return (
+    <div className={styles.characterPanel}>
+      <div className={styles.panelTitle}>{snapshot.context.name}</div>
+      <div className={styles.detailRow}>
+        <span>Body action</span>
+        <strong>{summary.bodyAction}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Body move</span>
+        <strong>{summary.bodyMove}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Mind</span>
+        <strong>{summary.mind}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Comm</span>
+        <strong>{summary.communication}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Motivation</span>
+        <strong>{snapshot.context.currentMotivation}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Saturation</span>
+        <strong>{snapshot.context.status.saturation}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Eat score</span>
+        <strong>{snapshot.context.utilityScores.findFood}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Play score</span>
+        <strong>{snapshot.context.utilityScores.play}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Rest score</span>
+        <strong>{snapshot.context.utilityScores.rest}</strong>
+      </div>
+    </div>
   );
 }

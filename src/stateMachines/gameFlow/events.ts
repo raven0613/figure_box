@@ -1,13 +1,9 @@
 
+import { Position } from '~/constants/character';
 import { CatEnum, FlowStates } from './states';
 
 export enum FlowEventType {
   GAME_START = 'Game start',
-  BET_TIMES_OUT = 'Bet times out',
-  RACE = 'Race',
-  REWARD = 'Reward',
-  GAME_FINISHED = 'Game finished',
-  RESTART = 'Game restart',
   INITIAL = 'Game Initial',
   SOCKET_HEARTBEAT_STOP = 'Socket heartbeat stop',
   USER_NETWORK_DOWN = 'User network down',
@@ -34,14 +30,50 @@ export type GameFlowEvents =
     type: FlowEventType.INITIAL;
     payload: FlowEventPayload;
   }
-  | {
-    type: FlowEventType.MULTI_CONNECTION_ERROR;
-  };
+  | { type: 'OPEN_SYSTEM_UI' }
+  | { type: 'CLOSE_SYSTEM_UI' }
+  | { type: 'START_INTERACTION' }
+  | { type: 'END_INTERACTION' }
+  | { type: 'PICK_CHARACTER'; characterId: string }
+  | { type: 'RELEASE_CHARACTER'; characterId: string };
 
-export const flowEventByServerState: { [key in FlowStates]?: FlowEventType } = {
-  [FlowStates.INITIAL]: FlowEventType.RESTART,
-  [FlowStates.START]: FlowEventType.GAME_START,
-  [FlowStates.STOP]: FlowEventType.BET_TIMES_OUT,
-  [FlowStates.REWARD]: FlowEventType.REWARD,
-  [FlowStates.FINISHED]: FlowEventType.GAME_FINISHED,
-};
+export type CharacterEvent =
+  | { type: EventType.Tick }
+  | { type: EventType.GoEat }
+  | { type: EventType.GoRest }
+  | { type: EventType.GoPlay }
+  | { type: EventType.GoIdle }
+  | { type: EventType.PickUp }
+  | { type: EventType.Drop; position?: Position }
+  | { type: EventType.MoveTo; target: Position }
+  | { type: EventType.Arrive; position: Position }
+  | { type: EventType.MoveBlocked }
+  | { type: EventType.StartThinking }
+  | { type: EventType.StopThinking };
+
+export type CharacterEventOld =
+  | { type: EventType.Tick } // 自動：時間流逝
+  | { type: EventType.SenseObject; objectId: string; gridType: string } // 自動：感應到物品
+  | { type: EventType.SocialProximity; targetActorId: string } // 自動：感知到附近有人
+  | { type: EventType.RequestAction; actionType: 'WANT_FRIEND' | 'HUNGRY'; payload: any } // 主動：需要玩家點擊
+  | { type: EventType.UserClick; actionId: string } // 主動：玩家點擊核准
+
+
+export enum EventType {
+  Tick = "tick", // 自動：時間流逝
+  SenseObject = "senseObject", // 自動：感應到物品
+  SocialProximity = "socialProximity", // 自動：感知到附近有人
+  RequestAction = "requestAction", // 主動：提出需求，需要玩家點擊
+  UserClick = "userClick", // 主動：玩家點擊
+  GoEat = "goEat",
+  GoRest = "goRest",
+  GoPlay = "goPlay",
+  GoIdle = "goIdle",
+  PickUp = "pickUp",
+  Drop = "drop",
+  MoveTo = "moveTo",
+  Arrive = "arrive",
+  MoveBlocked = "moveBlocked",
+  StartThinking = "startThinking",
+  StopThinking = "stopThinking",
+}

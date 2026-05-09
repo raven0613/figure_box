@@ -5,11 +5,14 @@ import type { InteractableObjectData, TerrainType, TownMapCellData } from '~/con
 export interface TownMapCharacter extends CharacterPlacement {
   color?: string;
   label?: string;
+  statusText?: string;
 }
 
 export interface FabricTownMapOptions {
   cellSize?: number;
   onTileClick?: (tile: TownMapTile) => void;
+  onCharacterPickUp?: (characterId: string) => void;
+  onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
 }
 
 interface TerrainStyle {
@@ -86,15 +89,37 @@ class CharacterTokenFactory {
       selectable: false,
       evented: false,
     });
+    const status = new Text(character.statusText ?? '', {
+      top: -cellSize * 0.48,
+      fontSize: 10,
+      fontFamily: 'Arial, sans-serif',
+      fill: '#20252b',
+      backgroundColor: 'rgba(255, 255, 255, 0.82)',
+      originX: 'center',
+      originY: 'bottom',
+      selectable: false,
+      evented: false,
+    });
 
-    return new Group([token, label], {
+    const group = new Group([status, token, label], {
       left: center.x,
       top: center.y,
       originX: 'center',
       originY: 'center',
-      selectable: false,
-      evented: false,
+      selectable: true,
+      evented: true,
+      hasControls: false,
+      hasBorders: false,
+      lockScalingX: true,
+      lockScalingY: true,
+      lockRotation: true,
+      hoverCursor: 'grab',
+      moveCursor: 'grabbing',
     });
+
+    group.set('characterId', character.id);
+    group.set('statusObject', status);
+    return group;
   }
 }
 
@@ -107,10 +132,14 @@ export class FabricTownMapWidget {
   private readonly cellSize: number;
   private readonly characterTokens = new Map<string, Group>();
   private readonly onTileClick?: (tile: TownMapTile) => void;
+  private readonly onCharacterPickUp?: (characterId: string) => void;
+  private readonly onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
 
   constructor(canvasElement: HTMLCanvasElement | string, options: FabricTownMapOptions = {}) {
     this.cellSize = options.cellSize ?? DEFAULT_CELL_SIZE;
     this.onTileClick = options.onTileClick;
+    this.onCharacterPickUp = options.onCharacterPickUp;
+    this.onCharacterDrop = options.onCharacterDrop;
     this.canvas = new Canvas(canvasElement, {
       width: this.grid.width * this.cellSize,
       height: this.grid.height * this.cellSize,
@@ -120,12 +149,32 @@ export class FabricTownMapWidget {
     });
 
     this.canvas.on('mouse:down', event => {
+      const characterId = this.getCharacterIdFromTarget(event.target);
+
+      if (characterId) {
+        this.onCharacterPickUp?.(characterId);
+        return;
+      }
+
       const pointer = this.canvas.getScenePoint(event.e);
       const tile = this.grid.getTile(Math.floor(pointer.x / this.cellSize), Math.floor(pointer.y / this.cellSize));
 
       if (tile) {
         this.onTileClick?.(tile);
       }
+    });
+
+    this.canvas.on('mouse:up', event => {
+      const characterId = this.getCharacterIdFromTarget(event.target ?? this.canvas.getActiveObject());
+
+      if (!characterId) {
+        return;
+      }
+
+      const pointer = this.canvas.getScenePoint(event.e);
+      const tile = this.grid.getTile(Math.floor(pointer.x / this.cellSize), Math.floor(pointer.y / this.cellSize));
+      this.onCharacterDrop?.(characterId, tile ? { x: tile.x, y: tile.y } : null);
+      this.snapCharacterToGrid(characterId);
     });
 
     this.draw();
@@ -169,6 +218,25 @@ export class FabricTownMapWidget {
     }
 
     return true;
+  }
+
+  updateCharacterStatus(characterId: string, statusText: string): void {
+    const token = this.characterTokens.get(characterId);
+    const status = token?.get('statusObject') as Text | undefined;
+
+    if (!token || !status || status.text === statusText) {
+      return;
+    }
+
+    status.set('text', statusText);
+    token.setCoords();
+    this.canvas.requestRenderAll();
+  }
+
+  getCharacterTile(characterId: string): GridCoordinate | null {
+    const tile = this.grid.getTiles().find(item => item.cell.occupantId === characterId);
+
+    return tile ? { x: tile.x, y: tile.y } : null;
   }
 
   removeCharacter(characterId: string): void {
@@ -243,10 +311,34 @@ export class FabricTownMapWidget {
     this.canvas.add(token);
   }
 
+  private snapCharacterToGrid(characterId: string): void {
+    const currentTile = this.getCharacterTile(characterId);
+    const token = this.characterTokens.get(characterId);
+
+    if (!currentTile || !token) {
+      return;
+    }
+
+    token.set(this.getCharacterPosition(currentTile));
+    token.setCoords();
+    this.canvas.requestRenderAll();
+  }
+
   private getCharacterPosition(coordinate: GridCoordinate): GridCoordinate {
     return {
       x: coordinate.x * this.cellSize + this.cellSize / 2,
       y: coordinate.y * this.cellSize + this.cellSize / 2,
     };
+  }
+
+  private getCharacterIdFromTarget(target: unknown): string | null {
+    if (!target) {
+      return null;
+    }
+
+    const maybeCharacter = target as { get?: (key: string) => unknown };
+    const characterId = maybeCharacter.get?.('characterId');
+
+    return typeof characterId === 'string' ? characterId : null;
   }
 }

@@ -1,3 +1,4 @@
+import type { CharacterMotivation, CharacterUtilityScores } from "~/stateMachines/gameFlow/children/character";
 import { Item } from "./data";
 
 // 想要有性格&容易遇到的事的權重，但這樣會不會變無聊？
@@ -121,16 +122,9 @@ interface CharacterBaseSetting {
         selfReference: string; // 自稱，例如：我、在下
     }
 }
-
-// 遊戲中需讀取的必要資料
-interface Character {
-    name: string;
-    ownItems: Item[],
-    status: {
-        mood: Mood,
-        saturation: number, // 飽足度：用長條圖顯示
-        moodValue: number
-    }
+export interface Position {
+    x: number;
+    y: number;
 }
 
 // 表情（顯示在臉上的）
@@ -142,7 +136,7 @@ enum Expression {
 }
 
 
-enum Mood {
+export enum Mood {
     Happy = "happy",
     Angry = "angry",
     Sad = "sad"

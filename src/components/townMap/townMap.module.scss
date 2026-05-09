@@ -70,6 +70,45 @@
   font-size: 12px;
 }
 
+.characterList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(28, 31, 35, 0.12);
+}
+
+.characterButton {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid rgba(28, 31, 35, 0.16);
+  border-radius: 6px;
+  background: #f7f3ea;
+  color: #24313a;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.characterButton strong {
+  font-weight: 700;
+}
+
+.characterButtonActive {
+  border-color: #3b776e;
+  background: #dceee9;
+}
+
+.characterPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(28, 31, 35, 0.12);
+}
+
 @media (max-width: 760px) {
   .container {
     grid-template-columns: 1fr;

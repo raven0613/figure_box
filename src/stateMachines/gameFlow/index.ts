@@ -1,8 +1,6 @@
 import { assign, createMachine, fromCallback } from 'xstate';
-import i18n from '~/i18n';
-import { ErrorPopUp, ErrorType } from '~/widgets/error';
 import { GameFlowEvents } from './events';
-import { BigBattleGameStates, FlowStates, PreparingStates } from './states';
+import { GameGodState, GameState, GameSystemState } from './states';
 import type { GameFlowContext } from './context';
 
 export const ABLY_TRANSFER_TIME = 700;
@@ -14,27 +12,27 @@ export const gameFlowMachine = createMachine(
       context: GameFlowContext;
       events: GameFlowEvents;
     },
-    initial: BigBattleGameStates.PREPARING,
+    initial: GameState.Loading,
     context: {
       nothing: undefined,
     },
     states: {
-      [BigBattleGameStates.PREPARING]: {
-        initial: PreparingStates.SUCCESS,
+      [GameState.Loading]: {
+        initial: 'success',
         entry: assign({
         }),
         states: {
-          [PreparingStates.SUCCESS]: {
+          success: {
             type: 'final' as const,
           },
         },
         onDone: {
-          target: BigBattleGameStates.FLOW,
+          target: GameState.Active,
         },
       },
 
-      [BigBattleGameStates.FLOW]: {
-        initial: FlowStates.JOIN,
+      [GameState.Active]: {
+        type: 'parallel',
         invoke: [
           {
             src: 'loginSocket',
@@ -44,20 +42,88 @@ export const gameFlowMachine = createMachine(
           },
         ],
         states: {
-          [FlowStates.JOIN]: {
-            invoke: [
-              {
-                src: 'heartbeat',
+          system: {
+            initial: GameSystemState.Null,
+            states: {
+              [GameSystemState.Null]: {
+                on: {
+                  OPEN_SYSTEM_UI: {
+                    target: GameSystemState.Operating,
+                  },
+                },
               },
-              {
-                src: 'gameFlowSocket',
+              [GameSystemState.Operating]: {
+                on: {
+                  CLOSE_SYSTEM_UI: {
+                    target: GameSystemState.Null,
+                  },
+                },
               },
-            ],
+            },
+          },
+          god: {
+            initial: GameGodState.Normal,
+            states: {
+              [GameGodState.Normal]: {
+                on: {
+                  START_INTERACTION: {
+                    target: GameGodState.Interaction,
+                  },
+                  PICK_CHARACTER: {
+                    target: GameGodState.Interaction,
+                  },
+                },
+              },
+              [GameGodState.Interaction]: {
+                on: {
+                  END_INTERACTION: {
+                    target: GameGodState.Normal,
+                  },
+                  RELEASE_CHARACTER: {
+                    target: GameGodState.Normal,
+                  },
+                },
+              },
+            },
+          },
+          world: {
+            initial: 'join',
+            states: {
+              join: {
+                invoke: [
+                  {
+                    src: 'heartbeat',
+                  },
+                  {
+                    src: 'gameFlowSocket',
+                  },
+                ],
+              },
+            },
+          },
+          user: {
+            initial: 'observing',
+            states: {
+              observing: {
+                on: {
+                  PICK_CHARACTER: {
+                    target: 'draggingCharacter',
+                  },
+                },
+              },
+              draggingCharacter: {
+                on: {
+                  RELEASE_CHARACTER: {
+                    target: 'observing',
+                  },
+                },
+              },
+            },
           },
         },
       },
 
-      [BigBattleGameStates.ERROR]: {
+      [GameState.Error]: {
         entry: () => {
         },
       },
