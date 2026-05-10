@@ -8,7 +8,7 @@ import {
     CharacterStateSummary,
 } from '../states';
 import { CharacterEvent, EventType } from '../events';
-import { CharacterContext, CharacterMachineInput, CharacterUtilityScores } from '../context';
+import { CharacterContext, CharacterMachineInput, CharacterUtilityScores, UtilityDrivenMotivation } from '../context';
 
 const MAP_WIDTH = 10;
 const MAP_HEIGHT = 10;
@@ -131,7 +131,7 @@ export const characterMachine = createMachine(
                     '.bodyAction.idle',
                     '.bodyMove.stand',
                 ],
-                actions: ['setIdleMotivation', 'clearTarget'],
+                actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget'],
             },
             [EventType.StartThinking]: {
                 target: '.mind.thinking',
@@ -223,7 +223,13 @@ export const characterMachine = createMachine(
                 currentMotivation: () => 'controllingByGod',
             }),
             chooseRandomTarget: assign({
-                target: ({ context }) => getRandomTarget(context.position),
+                target: ({ context }) => {
+                    if (context.name === "Momo") {
+                        console.log(context.name, context.currentMotivation)
+                        console.log(context.name, getRandomTarget(context.position))
+                    }
+                    return getRandomTarget(context.position)
+                }
             }),
             clearTarget: assign({
                 target: () => null,
@@ -259,6 +265,13 @@ export const characterMachine = createMachine(
                     return context.status;
                 },
                 currentMotivation: () => 'idle',
+            }),
+            syncPositionOnBlock: assign({
+                position: ({ context, event }) => (
+                    event.type === EventType.MoveBlocked && event.position
+                        ? event.position
+                        : context.position
+                ),
             }),
         },
     }
@@ -334,6 +347,5 @@ function getRandomTarget(position: Position): Position {
             y: target.y,
         };
     }
-    console.log("getRandomTarget", target)
     return target;
 }

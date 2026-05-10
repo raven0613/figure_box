@@ -131,6 +131,7 @@ export class FabricTownMapWidget {
   private readonly characterTokenFactory = new CharacterTokenFactory();
   private readonly cellSize: number;
   private readonly characterTokens = new Map<string, Group>();
+  private readonly activeWalks = new Map<string, AbortController>();
   private readonly onTileClick?: (tile: TownMapTile) => void;
   private readonly onCharacterPickUp?: (characterId: string) => void;
   private readonly onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
@@ -212,7 +213,8 @@ export class FabricTownMapWidget {
     const token = this.characterTokens.get(characterId);
 
     if (token) {
-      token.set(this.getCharacterPosition(target));
+      const pos = this.getCharacterPosition(target);
+      token.set({ left: pos.x, top: pos.y });
       token.setCoords();
       this.canvas.requestRenderAll();
     }
@@ -248,6 +250,82 @@ export class FabricTownMapWidget {
       this.characterTokens.delete(characterId);
       this.canvas.requestRenderAll();
     }
+  }
+
+  findPath(from: GridCoordinate, to: GridCoordinate, occupantId: string): GridCoordinate[] | null {
+    return this.grid.findPath(from, to, occupantId);
+  }
+
+  findBlockingTiles(from: GridCoordinate, to: GridCoordinate): GridCoordinate[] {
+    return this.grid.findBlockingTiles(from, to);
+  }
+
+  walkCharacterAlongPath(
+    characterId: string,
+    path: GridCoordinate[],
+    onArrive: (position: GridCoordinate) => void,
+    onBlocked: (position: GridCoordinate) => void,
+  ): void {
+    this.cancelWalk(characterId);
+
+    const controller = new AbortController();
+    this.activeWalks.set(characterId, controller);
+
+    const walk = async () => {
+      for (const step of path) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const moved = this.grid.moveOccupant(characterId, step);
+
+        if (!moved) {
+          this.activeWalks.delete(characterId);
+          const currentTile = this.getCharacterTile(characterId);
+          onBlocked(currentTile ?? step);
+          return;
+        }
+
+        const token = this.characterTokens.get(characterId);
+
+        if (token) {
+          await this.animateTokenToCell(token, step, 300);
+        }
+
+        if (controller.signal.aborted) {
+          return;
+        }
+      }
+
+      this.activeWalks.delete(characterId);
+      onArrive(path[path.length - 1]);
+    };
+
+    void walk();
+  }
+
+  cancelWalk(characterId: string): void {
+    const controller = this.activeWalks.get(characterId);
+
+    if (controller) {
+      controller.abort();
+      this.activeWalks.delete(characterId);
+    }
+  }
+
+  private animateTokenToCell(token: Group, target: GridCoordinate, durationMs: number): Promise<void> {
+    const pos = this.getCharacterPosition(target);
+
+    return new Promise<void>(resolve => {
+      token.animate({ left: pos.x, top: pos.y }, {
+        duration: durationMs,
+        onChange: () => this.canvas.requestRenderAll(),
+        onComplete: () => {
+          token.setCoords();
+          resolve();
+        },
+      });
+    });
   }
 
   getCell(x: number, y: number): TownMapCellData | null {
@@ -300,7 +378,11 @@ export class FabricTownMapWidget {
   }
 
   private renderCharacter(character: TownMapCharacter): void {
-    this.characterTokens.get(character.id)?.set(this.getCharacterPosition(character));
+    const existing = this.characterTokens.get(character.id);
+    if (existing) {
+      const pos = this.getCharacterPosition(character);
+      existing.set({ left: pos.x, top: pos.y });
+    }
 
     if (this.characterTokens.has(character.id)) {
       return;
@@ -319,7 +401,8 @@ export class FabricTownMapWidget {
       return;
     }
 
-    token.set(this.getCharacterPosition(currentTile));
+    const pos = this.getCharacterPosition(currentTile);
+    token.set({ left: pos.x, top: pos.y });
     token.setCoords();
     this.canvas.requestRenderAll();
   }

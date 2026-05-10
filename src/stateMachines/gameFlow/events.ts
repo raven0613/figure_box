@@ -1,6 +1,6 @@
 
 import { Position } from '~/constants/character';
-import { CatEnum, FlowStates } from './states';
+import { FlowStates } from './states';
 
 export enum FlowEventType {
   GAME_START = 'Game start',
@@ -21,8 +21,6 @@ export interface FlowEventPayload {
   startTimeStamp: number;
   currentStageTimeStamp: number;
   nextStageTimeStamp: number;
-  winner: CatEnum;
-  payRates?: Record<CatEnum, number>;
 }
 
 export type GameFlowEvents =
@@ -47,7 +45,7 @@ export type CharacterEvent =
   | { type: EventType.Drop; position?: Position }
   | { type: EventType.MoveTo; target: Position }
   | { type: EventType.Arrive; position: Position }
-  | { type: EventType.MoveBlocked }
+  | { type: EventType.MoveBlocked; position?: Position }
   | { type: EventType.StartThinking }
   | { type: EventType.StopThinking };
 

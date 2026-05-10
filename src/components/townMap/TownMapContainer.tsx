@@ -37,6 +37,7 @@ export function TownMapContainer() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<FabricTownMapWidget | null>(null);
   const characterActorsRef = useRef<Map<string, CharacterActor>>(new Map());
+  const walkingCharactersRef = useRef<Set<string>>(new Set());
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
   const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
@@ -108,15 +109,48 @@ export function TownMapContainer() {
         const target = snapshot.context.target;
 
         if (summary.bodyMove !== 'walking' || !target) {
+          if (walkingCharactersRef.current.has(character.id)) {
+            widget.cancelWalk(character.id);
+            walkingCharactersRef.current.delete(character.id);
+          }
           return;
         }
 
-        if (widget.moveCharacter(character.id, target)) {
+        if (walkingCharactersRef.current.has(character.id)) {
+          return;
+        }
+
+        const currentPos = snapshot.context.position;
+        const path = widget.findPath(currentPos, target, character.id);
+
+        if (!path) {
+          const blockingTiles = widget.findBlockingTiles(currentPos, target);
+          blockingTiles.forEach(tile => {
+            console.log('最短距離受到阻擋，阻擋格子為', tile);
+          });
+          actor.send({ type: EventType.MoveBlocked });
+          return;
+        }
+
+        if (path.length === 0) {
           actor.send({ type: EventType.Arrive, position: target });
           return;
         }
 
-        actor.send({ type: EventType.MoveBlocked });
+        walkingCharactersRef.current.add(character.id);
+
+        widget.walkCharacterAlongPath(
+          character.id,
+          path,
+          arrivedPosition => {
+            walkingCharactersRef.current.delete(character.id);
+            actor.send({ type: EventType.Arrive, position: arrivedPosition });
+          },
+          blockedPosition => {
+            walkingCharactersRef.current.delete(character.id);
+            actor.send({ type: EventType.MoveBlocked, position: blockedPosition });
+          },
+        );
       });
 
       actor.start();
@@ -131,6 +165,8 @@ export function TownMapContainer() {
 
     return () => {
       window.clearInterval(tickTimer);
+      walkingCharactersRef.current.forEach(id => widget.cancelWalk(id));
+      walkingCharactersRef.current.clear();
       subscriptions.forEach(subscription => {
         subscription.unsubscribe();
       });
