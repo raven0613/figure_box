@@ -5,6 +5,7 @@ import babel from '@rolldown/plugin-babel'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/figure_box/',
   resolve: {
     alias: {
       '~': path.resolve(__dirname, 'src'),
