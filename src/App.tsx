@@ -1,8 +1,6 @@
 import { I18nextProvider } from 'react-i18next';
 import i18n from '~/i18n';
 import styles from './App.module.scss';
-import { FabricDrawingBoardContainer } from './components/drawingBoard/FabricDrawingBoardContainer';
-import { AvatarEditorContainer } from './components/avatarEditor/AvatarEditorContainer';
 import { TownMapContainer } from './components/townMap/TownMapContainer';
 
 function App() {

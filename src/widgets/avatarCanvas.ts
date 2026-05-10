@@ -624,8 +624,8 @@ abstract class MirroredEyePart extends AvatarPart {
 
       object.set({
         left: this.getSideBaseX(side) + side * (this.state.offsetX ?? 0),
-        top: this.getSideBaseY(side) + (this.state.offsetY ?? 0),
-        angle: this.getSideBaseAngle(side) + side * (this.state.rotate ?? 0),
+        top: this.getSideBaseY() + (this.state.offsetY ?? 0),
+        angle: this.getSideBaseAngle() + side * (this.state.rotate ?? 0),
         scaleX: this.scale,
         scaleY: this.scale,
       });

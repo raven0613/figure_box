@@ -1,7 +1,7 @@
-self.onmessage = function (e) {
+self.onmessage = function () {
   setInterval(() => {
     self.postMessage(100);
   }, 100);
 };
 
-export {};
+export { };

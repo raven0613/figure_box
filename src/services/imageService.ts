@@ -1,6 +1,6 @@
 import { FabricImage, FabricObject } from 'fabric';
 import { SCALE_X, SCALE_Y } from '~/constants/canvas';
-import { imagesPath, preloadImagesPath, type PreloadImage, type Image, type GifImage, type ImagePathMap } from '~/constants/paths';
+import { PreloadImage, Image, GifImage, ImagePathMap, imagesPath, preloadImagesPath } from '~/constants/paths';
 import { fabricGif } from '~/utils/fabricSprite/fabricGif';
 
 export type FabricImages = { [key in Image]: FabricObject };

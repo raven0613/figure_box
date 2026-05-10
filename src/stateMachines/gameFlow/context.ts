@@ -1,6 +1,5 @@
 import { Mood, Position } from "~/constants/character";
 import { Item } from "~/constants/data";
-import { CharacterMotivation, CharacterUtilityScores } from "./children/character";
 
 // 放要存的資料
 export interface GameFlowContext {

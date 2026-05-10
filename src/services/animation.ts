@@ -38,8 +38,8 @@ export class Animation {
   ) {
     return new Promise<void>(resolve => {
       const canvas = canvasService.getCanvasContext(canvasTag)!;
-      shape.animate('opacity', endValue, {
-        from: startValue,
+      shape.animate({ opacity: endValue }, {
+        startValue,
         onChange: shouldRerender ? canvas.renderAll.bind(canvas) : canvas.requestRenderAll.bind(canvas),
         duration: duration,
         onComplete: () => {
@@ -64,7 +64,7 @@ export class Animation {
       shape.animate(
         { scaleX: scale, scaleY: scale },
         {
-          from: startValue,
+          startValue,
           onChange: shouldRerender ? canvas.renderAll.bind(canvas) : canvas.requestRenderAll.bind(canvas),
           duration: duration,
           onComplete: () => {

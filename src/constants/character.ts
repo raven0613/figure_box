@@ -1,8 +1,6 @@
-import type { CharacterMotivation, CharacterUtilityScores } from "~/stateMachines/gameFlow/children/character";
-import { Item } from "./data";
 
 // 想要有性格&容易遇到的事的權重，但這樣會不會變無聊？
-interface CharacterBaseSetting {
+export interface CharacterBaseSetting {
     name: string;
     avatar: {
         eyes: {
@@ -128,7 +126,7 @@ export interface Position {
 }
 
 // 表情（顯示在臉上的）
-enum Expression {
+export enum Expression {
     Normal = "normal", // 玩家設定好的
     Laugh = "laugh", // 系統大笑臉
     Cry = "cry", // 系統哭臉
@@ -155,12 +153,12 @@ enum RelationshipStage {
     Married = "married"
 }
 
-interface Relationship {
+export interface Relationship {
     stage: RelationshipStage;
 
 }
 
-interface RelationshipRecord {
+export interface RelationshipRecord {
     charId: [string, string];
     timestamp: number;
     stage: RelationshipStage;

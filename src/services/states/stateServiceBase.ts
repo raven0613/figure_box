@@ -33,11 +33,11 @@ export abstract class StateServiceBase<TMachine extends AnyStateMachine> {
   }
 
   public getContext(): ContextFrom<TMachine> {
-    return this.getActor().getSnapshot().context as ContextFrom<TMachine>;
+    return this.getActor().getSnapshot() as ContextFrom<TMachine>;
   }
 
   public getState(): StateValueFrom<TMachine> {
-    return this.getActor().getSnapshot().value as StateValueFrom<TMachine>;
+    return this.getActor().getSnapshot() as StateValueFrom<TMachine>;
   }
 
   public onContextChange(callback: (state: SnapshotFrom<TMachine>) => void) {

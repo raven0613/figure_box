@@ -5,7 +5,7 @@ export interface Item {
     isHanding: boolean;
 }
 // item 基本資料
-interface ItemInfo {
+export interface ItemInfo {
     id: string;
     image: string;
     type: ItemType;
@@ -22,7 +22,7 @@ enum ItemType {
 // 事件分成 地圖上自動發生的、會顯示但是需要點擊觸發的
 // 事件要分成不同的嗎，例如點擊地圖的自己一個 interface
 // 每次事件發生時，挑出所有 condition 符合的事件，塞進一個事件池，再依照權重決定機率
-interface EventInfo {
+export interface EventInfo {
     id: string;
     name: Event;
     type: string;
@@ -41,7 +41,7 @@ enum Event {
 // 玩具戰鬥系統，例如怪獸對打機那種
 
 // 大逃殺模式的設定
-interface BattleCharacter {
+export interface BattleCharacter {
     hp: number;
     sp: number;
 }
