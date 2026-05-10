@@ -61,6 +61,7 @@ class MapObjectGlyphFactory {
       door: 'D',
       tree: 'T',
       lamp: 'L',
+      ground: 'G'
     };
 
     return glyphs[type];

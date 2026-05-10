@@ -37,7 +37,7 @@ export type GameFlowEvents =
 
 export type CharacterEvent =
   | { type: EventType.Tick }
-  | { type: EventType.GoEat }
+  | { type: EventType.GoEat; target: Position }
   | { type: EventType.GoRest }
   | { type: EventType.GoPlay }
   | { type: EventType.GoIdle }

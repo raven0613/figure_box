@@ -61,7 +61,8 @@ export const characterMachine = createMachine(
                 ],
                 actions: ['setFoodMotivation',
                     // 'chooseRandomTarget',
-                    'setManualTarget'],
+                    'setManualTarget'
+                ],
             },
             [EventType.GoRest]: {
                 guard: 'shouldChangeToRest',
@@ -237,7 +238,7 @@ export const characterMachine = createMachine(
                 target: () => null,
             }),
             setManualTarget: assign({
-                target: ({ event }) => (event.type === EventType.MoveTo ? event.target : null),
+                target: ({ event }) => ((event.type === EventType.MoveTo || event.type === EventType.GoEat) ? event.target : null),
             }),
             dropAtPosition: assign({
                 position: ({ context, event }) => (
@@ -329,7 +330,7 @@ function getTopMotivation(scores: CharacterUtilityScores): UtilityDrivenMotivati
 function getUtilityEvent(motivation: UtilityDrivenMotivation): CharacterEvent {
     const eventByMotivation: Record<UtilityDrivenMotivation, CharacterEvent> = {
         idle: { type: EventType.GoIdle },
-        findFood: { type: EventType.GoEat },
+        findFood: { type: EventType.GoEat, target: { x: 0, y: 6 } },
         rest: { type: EventType.GoRest },
         play: { type: EventType.GoPlay },
     };

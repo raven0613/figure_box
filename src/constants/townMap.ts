@@ -2,7 +2,7 @@ export type TerrainType = 'grass' | 'road' | 'plaza' | 'water' | 'building' | 'g
 
 export interface InteractableObjectData {
   id: string;
-  type: 'well' | 'marketStall' | 'sign' | 'door' | 'tree' | 'lamp';
+  type: 'well' | 'marketStall' | 'sign' | 'door' | 'tree' | 'lamp' | 'ground';
   label: string;
 }
 
@@ -104,9 +104,9 @@ export const TOWN_MAP_GRID: TownMapCellData[][] = [
     grass(),
     road(),
     grass(),
-    building({ id: 'smithy-door', type: 'door', label: '鐵匠鋪' }),
-    building(),
-    grass(),
+    plaza({ id: 'tennis-court-1', type: 'ground', label: '網球場' }),
+    plaza({ id: 'tennis-court-2', type: 'ground', label: '網球場' }),
+    plaza({ id: 'tennis-court-3', type: 'ground', label: '網球場' }),
     grass(),
   ],
   [
@@ -116,9 +116,9 @@ export const TOWN_MAP_GRID: TownMapCellData[][] = [
     plaza({ id: 'town-sign', type: 'sign', label: '鎮口告示牌' }),
     plaza({ id: 'central-well', type: 'well', label: '中央水井' }),
     plaza(),
-    building(),
-    grass(),
-    grass(),
+    plaza({ id: 'tennis-court-4', type: 'ground', label: '網球場' }),
+    plaza({ id: 'tennis-court-5', type: 'ground', label: '網球場' }),
+    plaza({ id: 'tennis-court-6', type: 'ground', label: '網球場' }),
     grass(),
   ],
   [

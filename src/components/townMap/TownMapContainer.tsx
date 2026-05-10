@@ -39,7 +39,7 @@ export function TownMapContainer() {
   const characterActorsRef = useRef<Map<string, CharacterActor>>(new Map());
   const walkingCharactersRef = useRef<Set<string>>(new Set());
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
-  const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
+  // const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
   const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
 
@@ -53,7 +53,7 @@ export function TownMapContainer() {
       cellSize: 48,
       onTileClick: tile => {
         setSelectedTile(tile);
-        setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
+        // setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
       },
       onCharacterPickUp: characterId => {
         setSelectedCharacterId(characterId);
@@ -208,13 +208,13 @@ export function TownMapContainer() {
           <span>Object</span>
           <strong>{selectedTile?.cell.interactableObject?.label ?? '-'}</strong>
         </div>
-        <div className={styles.neighborList}>
+        {/* <div className={styles.neighborList}>
           {nearbyTiles.map(tile => (
             <span key={tile.index}>
               {tile.x},{tile.y}
             </span>
           ))}
-        </div>
+        </div> */}
 
         <div className={styles.characterList}>
           {CHARACTER_SEEDS.map(character => {
