@@ -362,12 +362,13 @@ export class FabricTownMapWidget {
 
   private createTileRect(tile: TownMapTile): Rect {
     const style = this.terrainStyles.get(tile.cell.terrain);
-
     return new Rect({
       left: tile.x * this.cellSize,
       top: tile.y * this.cellSize,
       width: this.cellSize,
       height: this.cellSize,
+      originX: 'left',
+      originY: 'top',
       fill: style.fill,
       stroke: style.stroke,
       strokeWidth: 1,

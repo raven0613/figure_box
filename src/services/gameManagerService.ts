@@ -1,16 +1,16 @@
-import { Canvas } from 'fabric';
-import { canvasSize } from '~/constants/canvas';
+// import { Canvas } from 'fabric';
+// import { canvasSize } from '~/constants/canvas';
 // import { gameState } from '~/stateMachines/gameFlow/states';
 // import { DrawHelper } from '~/widgets/drawHelper';
-import { CanvasContainer, CanvasTag, canvasService } from './canvasCtxService';
+// import { CanvasContainer, CanvasTag, canvasService } from './canvasCtxService';
 import { documentService } from './documentService';
 import { imageService } from './imageService';
 import { gameFlowStateService } from './states/gameFlowStateService';
 // import { GameflowAnimation } from '~/widgets/gameflowAnimation';
 
-const STATIC_CANVAS_ID = 'meow-racing-static';
-const INTERACTIVE_CANVAS_ID = 'meow-racing-interactive';
-const PLAYGROUND_CANVAS_ID = 'meow-racing-playground';
+// const STATIC_CANVAS_ID = 'meow-racing-static';
+// const INTERACTIVE_CANVAS_ID = 'meow-racing-interactive';
+// const PLAYGROUND_CANVAS_ID = 'meow-racing-playground';
 
 export class GameManagerService {
   static instance: GameManagerService;
@@ -24,45 +24,45 @@ export class GameManagerService {
   }
 
   public async load() {
-    canvasService
-      .setCanvasContext(
-        CanvasTag.STATIC,
-        new CanvasContainer(
-          new Canvas(STATIC_CANVAS_ID, {
-            width: canvasSize.WIDTH,
-            height: canvasSize.HEIGHT,
-            interactive: false,
-            selection: false,
-          })
-        )
-      )
-      .setCanvasContext(
-        CanvasTag.PLAYGROUND,
-        new CanvasContainer(
-          new Canvas(PLAYGROUND_CANVAS_ID, {
-            width: canvasSize.WIDTH,
-            height: canvasSize.HEIGHT,
-            interactive: false,
-            selection: false,
-          })
-        )
-      )
-      .setCanvasContext(
-        CanvasTag.INTERACTIVE,
-        new CanvasContainer(
-          new Canvas(INTERACTIVE_CANVAS_ID, {
-            width: canvasSize.WIDTH,
-            height: canvasSize.HEIGHT,
-            interactive: false,
-            selection: false,
-          })
-        )
-      );
+    // canvasService
+    //   .setCanvasContext(
+    //     CanvasTag.STATIC,
+    //     new CanvasContainer(
+    //       new Canvas(STATIC_CANVAS_ID, {
+    //         width: canvasSize.WIDTH,
+    //         height: canvasSize.HEIGHT,
+    //         interactive: false,
+    //         selection: false,
+    //       })
+    //     )
+    //   )
+    //   .setCanvasContext(
+    //     CanvasTag.PLAYGROUND,
+    //     new CanvasContainer(
+    //       new Canvas(PLAYGROUND_CANVAS_ID, {
+    //         width: canvasSize.WIDTH,
+    //         height: canvasSize.HEIGHT,
+    //         interactive: false,
+    //         selection: false,
+    //       })
+    //     )
+    //   )
+    //   .setCanvasContext(
+    //     CanvasTag.INTERACTIVE,
+    //     new CanvasContainer(
+    //       new Canvas(INTERACTIVE_CANVAS_ID, {
+    //         width: canvasSize.WIDTH,
+    //         height: canvasSize.HEIGHT,
+    //         interactive: false,
+    //         selection: false,
+    //       })
+    //     )
+    //   );
 
-    canvasService.resizeCanvas();
+    // canvasService.resizeCanvas();
 
     window.addEventListener('resize', () => {
-      canvasService.resizeCanvas();
+      // canvasService.resizeCanvas();
     });
     gameFlowStateService.initial();
 
@@ -73,7 +73,7 @@ export class GameManagerService {
       }
     });
 
-    canvasService.setFabricImages({ ...imageService.getImages(), ...imageService.getPreloadImages() });
+    // canvasService.setFabricImages({ ...imageService.getImages(), ...imageService.getPreloadImages() });
 
     documentService.listenDocumentVisibility();
 

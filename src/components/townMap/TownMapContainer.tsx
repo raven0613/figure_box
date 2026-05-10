@@ -14,17 +14,17 @@ import styles from './townMap.module.scss';
 const CHARACTER_SEEDS = [
   {
     id: 'friend-01',
-    name: 'Momo',
-    label: 'M',
-    color: '#f7d65a',
+    name: 'Tezuka',
+    label: 'T',
+    color: '#413636',
     position: { x: 3, y: 5 },
     saturation: 58,
   },
   {
     id: 'friend-02',
-    name: 'Nina',
-    label: 'N',
-    color: '#89d7c5',
+    name: 'Fuji',
+    label: 'F',
+    color: '#e57070',
     position: { x: 5, y: 5 },
     saturation: 32,
   },

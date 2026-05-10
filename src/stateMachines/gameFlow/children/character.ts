@@ -59,7 +59,9 @@ export const characterMachine = createMachine(
                     '.mind.thinking',
                     '.communication.requesting',
                 ],
-                actions: ['setFoodMotivation', 'chooseRandomTarget'],
+                actions: ['setFoodMotivation',
+                    // 'chooseRandomTarget',
+                    'setManualTarget'],
             },
             [EventType.GoRest]: {
                 guard: 'shouldChangeToRest',
