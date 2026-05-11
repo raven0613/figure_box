@@ -109,6 +109,14 @@
   border-top: 1px solid rgba(28, 31, 35, 0.12);
 }
 
+.relationshipRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(28, 31, 35, 0.1);
+}
+
 @media (max-width: 760px) {
   .container {
     grid-template-columns: 1fr;

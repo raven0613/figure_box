@@ -5,8 +5,15 @@ import {
   formatCharacterStateValue,
   getCharacterStateSummary,
 } from '~/stateMachines/gameFlow/children/character';
+import {
+  createRelationshipStore,
+  normalizeRelationshipPair,
+  recordPassByPair,
+  type RelationshipStore,
+} from '~/stateMachines/gameFlow/relationships';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { EventType } from '~/stateMachines/gameFlow/events';
+import { MemoryType, SocialStatus } from '~/constants/character';
 import type { TownMapTile } from '~/widgets/townMapGrid';
 
 import styles from './townMap.module.scss';
@@ -37,12 +44,14 @@ export function TownMapContainer() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<FabricTownMapWidget | null>(null);
   const characterActorsRef = useRef<Map<string, CharacterActor>>(new Map());
+  const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(createRelationshipStore);
   const walkingCharactersRef = useRef<Set<string>>(new Set());
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
   // const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
   const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
 
+  // TODO: 把角色相關的狀態移出去，react只負責渲染
   useEffect(() => {
     if (!canvasHostRef.current) {
       return;
@@ -124,10 +133,10 @@ export function TownMapContainer() {
         const path = widget.findPath(currentPos, target, character.id);
 
         if (!path) {
-          const blockingTiles = widget.findBlockingTiles(currentPos, target);
-          blockingTiles.forEach(tile => {
-            console.log('最短距離受到阻擋，阻擋格子為', tile);
-          });
+          // const blockingTiles = widget.findBlockingTiles(currentPos, target);
+          // blockingTiles.forEach(tile => {
+          //   console.log('最短距離受到阻擋，阻擋格子為', tile);
+          // });
           actor.send({ type: EventType.MoveBlocked });
           return;
         }
@@ -158,9 +167,18 @@ export function TownMapContainer() {
     });
 
     const tickTimer = window.setInterval(() => {
+      const timestamp = Date.now();
+
       characterActorsRef.current.forEach(actor => {
         actor.send({ type: EventType.Tick });
       });
+
+      setRelationshipStore(current => triggerPassByRelationships(
+        widget,
+        characterActorsRef.current,
+        current,
+        timestamp,
+      ));
     }, 1000);
 
     return () => {
@@ -174,6 +192,7 @@ export function TownMapContainer() {
         actor.stop();
       });
       characterActorsRef.current.clear();
+      setRelationshipStore(createRelationshipStore);
       widgetRef.current = null;
       void widget.destroy();
       canvasHost.replaceChildren();
@@ -237,14 +256,22 @@ export function TownMapContainer() {
         </div>
 
         {characterSnapshots[selectedCharacterId] ? (
-          <CharacterStatusPanel snapshot={characterSnapshots[selectedCharacterId]} />
+          <CharacterStatusPanel
+            snapshot={characterSnapshots[selectedCharacterId]}
+            allSnapshots={characterSnapshots}
+            relationshipStore={relationshipStore}
+          />
         ) : null}
       </aside>
     </section>
   );
 }
 
-function CharacterStatusPanel({ snapshot }: { snapshot: CharacterSnapshot }) {
+function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
+  snapshot: CharacterSnapshot;
+  allSnapshots: Record<string, CharacterSnapshot>;
+  relationshipStore: RelationshipStore;
+}) {
   const summary = getCharacterStateSummary(snapshot.value);
 
   return (
@@ -286,6 +313,79 @@ function CharacterStatusPanel({ snapshot }: { snapshot: CharacterSnapshot }) {
         <span>Rest score</span>
         <strong>{snapshot.context.utilityScores.rest}</strong>
       </div>
+      {snapshot.context.relationships.map(relationship => {
+        const targetName = allSnapshots[relationship.targetCharId]?.context.name ?? relationship.targetCharId;
+        const pair = normalizeRelationshipPair(snapshot.context.id, relationship.targetCharId);
+        const mutualStatus = pair
+          ? relationshipStore.mutualRelationships.find(
+              m => m.charIds[0] === pair[0] && m.charIds[1] === pair[1],
+            )?.status ?? SocialStatus.Stranger
+          : SocialStatus.Stranger;
+
+        return (
+          <div className={styles.relationshipRow} key={relationship.targetCharId}>
+            <div className={styles.detailRow}>
+              <span>{targetName}</span>
+            </div>
+            <div className={styles.detailRow}>
+              <span>Feeling</span>
+              <strong>{relationship.feeling}</strong>
+            </div>
+            <div className={styles.detailRow}>
+              <span>Relationship</span>
+              <strong>{mutualStatus}</strong>
+            </div>
+            <div className={styles.detailRow}>
+              <span>Impression</span>
+              <strong>{relationship.memories[MemoryType.Impression].counts}</strong>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+function triggerPassByRelationships(
+  widget: FabricTownMapWidget,
+  characterActors: Map<string, CharacterActor>,
+  relationshipStore: RelationshipStore,
+  timestamp: number,
+): RelationshipStore {
+  let nextRelationshipStore = relationshipStore;
+
+  characterActors.forEach((actor, characterId) => {
+    const nearbyCharacterIds = getNearbyCharacterIds(widget, characterId, 2);
+
+    nearbyCharacterIds.forEach(targetCharId => {
+      actor.send({ type: EventType.PassBy, targetCharId, timestamp });
+      nextRelationshipStore = recordPassByPair(
+        nextRelationshipStore,
+        characterId,
+        targetCharId,
+        timestamp,
+      );
+    });
+  });
+
+  return nextRelationshipStore;
+}
+
+function getNearbyCharacterIds(
+  widget: FabricTownMapWidget,
+  characterId: string,
+  radius: number,
+): string[] {
+  const tile = widget.getCharacterTile(characterId);
+
+  if (!tile) {
+    return [];
+  }
+
+  return widget
+    .getNeighbors(tile.x, tile.y, radius)
+    .map(neighbor => neighbor.cell.occupantId)
+    .filter((occupantId): occupantId is string => (
+      typeof occupantId === 'string' && occupantId !== characterId
+    ));
 }

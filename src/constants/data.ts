@@ -33,7 +33,8 @@ export interface EventInfo {
 // 人物的互動是動詞名詞接起來的，解鎖不同地方可以解鎖新的動詞或名詞
 enum Event {
     Massage = "massage", // 按摩
-    Gossip = "gossip" // 聊八卦
+    Gossip = "gossip", // 聊八卦
+    ThrowSomethingToWrongPlace = "throwSomethingToWrongPlace", // 一回家到廚房把襪子丟垃圾桶 
 }
 
 // 以後再說的：

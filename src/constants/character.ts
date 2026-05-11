@@ -1,4 +1,3 @@
-
 // 想要有性格&容易遇到的事的權重，但這樣會不會變無聊？
 export interface CharacterBaseSetting {
     name: string;
@@ -135,31 +134,85 @@ export enum Expression {
 
 
 export enum Mood {
+    Ecstatic = "ecstatic",
     Happy = "happy",
+    Relaxed = "relaxed",
+    Peaceful = "peaceful",
+    Nervous = "nervous",
+    Sad = "sad",
+    Upset = "upset",
+    Heartbroken = "heartbroken",
     Angry = "angry",
-    Sad = "sad"
+    Afraid = "afraid",
 }
-// 關係要兩人用一個，還是兩人對對方可能是不同關係？
-// 單戀多加上暗戀or明戀
+
 // 擁有同樣或類似物品可以互動
-enum RelationshipStage {
+// 範例：如果不喜歡對方，可能觸發雖然人很差，但品味倒不錯
+// 雙方互相喜歡，觸發定情信物
+// 一方喜歡一方朋友，觸發超級心跳
+// 雙方朋友，觸發融洽互動
+
+// 1. 單向的個人情感 (主觀的心情)
+export enum Feeling {
     Hate = "hate",
+    Neutral = "neutral", // 無感
+    Like = "like",
+    SecretCrush = "secret_crush", // 暗戀
+    OpenCrush = "open_crush",     // 明戀
+}
+
+// 2. 雙向的社會關係 (客觀的事實)
+export enum SocialStatus {
     Stranger = "stranger",
     Acquaintance = "acquaintance",
     Friend = "friend",
-    Crush = "crush",
-    Like = "like",
     Lovers = "lovers",
     Married = "married"
 }
 
-export interface Relationship {
-    stage: RelationshipStage;
-
+// 紀錄 A 怎麼看待 B (有向圖 Directed Graph)
+export interface DirectedRelationship {
+    charId: string; // owner
+    targetCharId: string; // 對方
+    feeling: Feeling;
+    // 可以再擴充：例如隱藏的數值化好感度，用來決定什麼時候升級 Feeling
+    intimacy: number; // 親密度 (-100 到 100，預設0),
+    memories: MemoryValueMap;
 }
 
-export interface RelationshipRecord {
-    charId: [string, string];
+export enum MemoryType {
+    Impression = "impression",
+    Argument = "argument",
+    Fight = "fight",
+}
+
+export type MemoryValueMap = {
+    [MemoryType.Impression]: Memory;
+    [MemoryType.Argument]: MemoryData;
+    [MemoryType.Fight]: MemoryData;
+};
+
+export interface Memory {
+    counts: number;
+    lastUpdate: number; // 可以計算超過30天沒更新就刪除
+}
+
+export interface MemoryData extends Memory {
+    startedById: string; // charId
+}
+
+// 紀錄兩人共同的社會關係 (無向圖 Undirected Graph)
+export interface MutualRelationship {
+    charIds: [string, string]; // 陣列順序不重要，代表這兩人
+    status: SocialStatus;
     timestamp: number;
-    stage: RelationshipStage;
+}
+
+// 還要記錄所有關係，得知關係變化
+export interface RelationshipRecord {
+    charIds: [string, string]; // 陣列順序不重要，代表這兩人
+    records: {
+        status: SocialStatus;
+        timestamp: number;
+    }[];
 }

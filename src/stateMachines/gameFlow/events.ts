@@ -1,33 +1,22 @@
+import { Position } from "~/constants/character";
 
-import { Position } from '~/constants/character';
-import { FlowStates } from './states';
+// export enum FlowEventType {
 
-export enum FlowEventType {
-  GAME_START = 'Game start',
-  INITIAL = 'Game Initial',
-  SOCKET_HEARTBEAT_STOP = 'Socket heartbeat stop',
-  USER_NETWORK_DOWN = 'User network down',
-  MULTI_CONNECTION_ERROR = 'Multi connections occur',
-}
+// }
 
 export enum WidgetEventType {
   INITIAL = 'Initial',
   UPDATE = 'Update',
 }
 
-export interface FlowEventPayload {
-  gameRoundId: string;
-  status: FlowStates;
-  startTimeStamp: number;
-  currentStageTimeStamp: number;
-  nextStageTimeStamp: number;
-}
+// export interface FlowEventPayload {
+
+// }
 
 export type GameFlowEvents =
-  | {
-    type: FlowEventType.INITIAL;
-    payload: FlowEventPayload;
-  }
+  // | {
+  //   type: FlowEventType.INITIAL;
+  // }
   | { type: 'OPEN_SYSTEM_UI' }
   | { type: 'CLOSE_SYSTEM_UI' }
   | { type: 'START_INTERACTION' }
@@ -37,6 +26,7 @@ export type GameFlowEvents =
 
 export type CharacterEvent =
   | { type: EventType.Tick }
+  | { type: EventType.PassBy; targetCharId: string; timestamp?: number }
   | { type: EventType.GoEat; target: Position }
   | { type: EventType.GoRest }
   | { type: EventType.GoPlay }
@@ -63,6 +53,7 @@ export enum EventType {
   SocialProximity = "socialProximity", // 自動：感知到附近有人
   RequestAction = "requestAction", // 主動：提出需求，需要玩家點擊
   UserClick = "userClick", // 主動：玩家點擊
+  PassBy = "passBy", // 自動：擦肩而過
   GoEat = "goEat",
   GoRest = "goRest",
   GoPlay = "goPlay",

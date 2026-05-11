@@ -9,6 +9,7 @@ import {
 } from '../states';
 import { CharacterEvent, EventType } from '../events';
 import { CharacterContext, CharacterMachineInput, CharacterUtilityScores, UtilityDrivenMotivation } from '../context';
+import { rememberPassBy } from '../relationships';
 
 const MAP_WIDTH = 10;
 const MAP_HEIGHT = 10;
@@ -45,11 +46,15 @@ export const characterMachine = createMachine(
             currentMotivation: 'idle',
             position: input.position,
             target: null,
+            relationships: input.relationships ?? [],
         }),
         type: 'parallel',
         on: {
             [EventType.Tick]: {
                 actions: ['tickStatus', 'calculateUtilityScores', 'raiseBestUtilityEvent'],
+            },
+            [EventType.PassBy]: {
+                actions: 'rememberPassBy',
             },
             [EventType.GoEat]: {
                 guard: 'shouldChangeToFindFood',
@@ -274,6 +279,18 @@ export const characterMachine = createMachine(
                     event.type === EventType.MoveBlocked && event.position
                         ? event.position
                         : context.position
+                ),
+            }),
+            rememberPassBy: assign({
+                relationships: ({ context, event }) => (
+                    event.type === EventType.PassBy
+                        ? rememberPassBy(
+                            context.relationships,
+                            context.id,
+                            event.targetCharId,
+                            event.timestamp ?? Date.now(),
+                        )
+                        : context.relationships
                 ),
             }),
         },

@@ -1,9 +1,10 @@
-import { Mood, Position } from "~/constants/character";
+import { DirectedRelationship, Mood, Position } from "~/constants/character";
 import { Item } from "~/constants/data";
+import type { RelationshipStore } from "./relationships";
 
 // 放要存的資料
 export interface GameFlowContext {
-  nothing: any
+  relationships: RelationshipStore;
 }
 
 // 遊戲中需讀取的必要資料
@@ -21,6 +22,7 @@ export interface CharacterContext {
   target: Position | null;
   position: Position;
   currentMotivation: CharacterMotivation;
+  relationships: DirectedRelationship[];
 }
 
 // 創建角色時必須輸入的 initial data
@@ -29,6 +31,7 @@ export interface CharacterMachineInput {
   name: string;
   position: Position;
   saturation?: number;
+  relationships?: DirectedRelationship[];
 }
 
 export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'controllingByGod';

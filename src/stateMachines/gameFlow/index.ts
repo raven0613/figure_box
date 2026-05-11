@@ -2,6 +2,7 @@ import { assign, createMachine, fromCallback } from 'xstate';
 import { GameFlowEvents } from './events';
 import { GameGodState, GameState, GameSystemState } from './states';
 import type { GameFlowContext } from './context';
+import { createRelationshipStore } from './relationships';
 
 export const ABLY_TRANSFER_TIME = 700;
 
@@ -14,7 +15,7 @@ export const gameFlowMachine = createMachine(
     },
     initial: GameState.Loading,
     context: {
-      nothing: undefined,
+      relationships: createRelationshipStore(),
     },
     states: {
       [GameState.Loading]: {
