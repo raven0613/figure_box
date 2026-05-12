@@ -1,8 +1,9 @@
-import { assign, createMachine, fromCallback } from 'xstate';
+import { assign, createMachine, forwardTo, fromCallback } from 'xstate';
 import { GameFlowEvents } from './events';
 import { GameGodState, GameState, GameSystemState } from './states';
 import type { GameFlowContext } from './context';
 import { createRelationshipStore } from './relationships';
+import { dialogueManagerMachine } from './children/dialogue';
 
 export const ABLY_TRANSFER_TIME = 700;
 
@@ -121,6 +122,23 @@ export const gameFlowMachine = createMachine(
               },
             },
           },
+          dialogue: {
+            invoke: {
+              id: 'dialogueManager',
+              src: 'dialogueManager',
+            },
+            on: {
+              START_DIALOGUE: {
+                actions: forwardTo('dialogueManager'),
+              },
+              RESOLVE: {
+                actions: forwardTo('dialogueManager'),
+              },
+              CANCEL_DIALOGUE: {
+                actions: forwardTo('dialogueManager'),
+              },
+            },
+          },
         },
       },
 
@@ -137,10 +155,11 @@ export const gameFlowMachine = createMachine(
       }),
     },
     actors: {
-      loginSocket: fromCallback(() => {}),
-      spyingNetwork: fromCallback(() => {}),
-      heartbeat: fromCallback(() => {}),
-      gameFlowSocket: fromCallback(() => {}),
+      loginSocket: fromCallback(() => { }),
+      spyingNetwork: fromCallback(() => { }),
+      heartbeat: fromCallback(() => { }),
+      gameFlowSocket: fromCallback(() => { }),
+      dialogueManager: dialogueManagerMachine,
     },
   }
 );

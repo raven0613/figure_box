@@ -47,13 +47,21 @@ export const characterMachine = createMachine(
             position: input.position,
             target: null,
             relationships: input.relationships ?? [],
+            locks: {
+                bodyAction: [],
+                bodyMove: [],
+                mind: [],
+                communication: [],
+            },
         }),
         type: 'parallel',
         on: {
             [EventType.Tick]: {
+                guard: 'canReceiveLogicCommand',
                 actions: ['tickStatus', 'calculateUtilityScores', 'raiseBestUtilityEvent'],
             },
             [EventType.PassBy]: {
+                guard: 'canReceiveLogicCommand',
                 actions: 'rememberPassBy',
             },
             [EventType.GoEat]: {
@@ -64,10 +72,7 @@ export const characterMachine = createMachine(
                     '.mind.thinking',
                     '.communication.requesting',
                 ],
-                actions: ['setFoodMotivation',
-                    // 'chooseRandomTarget',
-                    'setManualTarget'
-                ],
+                actions: ['setFoodMotivation', 'setManualTarget'],
             },
             [EventType.GoRest]: {
                 guard: 'shouldChangeToRest',
@@ -100,6 +105,7 @@ export const characterMachine = createMachine(
                 actions: ['setIdleMotivation', 'clearTarget'],
             },
             [EventType.PickUp]: {
+                guard: 'canReceiveLogicCommand',
                 target: [
                     '.bodyAction.pickedUp',
                     '.bodyMove.stand',
@@ -109,6 +115,7 @@ export const characterMachine = createMachine(
                 actions: ['setPickedUpMotivation', 'clearTarget'],
             },
             [EventType.Drop]: {
+                guard: 'canReceiveLogicCommand',
                 target: [
                     '.bodyAction.idle',
                     '.bodyMove.stand',
@@ -118,6 +125,7 @@ export const characterMachine = createMachine(
                 actions: ['dropAtPosition', 'setIdleMotivation', 'clearTarget'],
             },
             [EventType.MoveTo]: {
+                guard: 'canReceiveLogicCommand',
                 target: [
                     '.bodyAction.observing',
                     '.bodyMove.walking',
@@ -142,10 +150,18 @@ export const characterMachine = createMachine(
                 actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget'],
             },
             [EventType.StartThinking]: {
+                guard: 'canReceiveLogicCommand',
                 target: '.mind.thinking',
             },
             [EventType.StopThinking]: {
+                guard: 'canReceiveLogicCommand',
                 target: '.mind.null',
+            },
+            [EventType.AddLock]: {
+                actions: 'addLock',
+            },
+            [EventType.RemoveLock]: {
+                actions: 'removeLock',
             },
         },
         states: {
@@ -188,20 +204,49 @@ export const characterMachine = createMachine(
     },
     {
         guards: {
+            canReceiveLogicCommand: ({ context }) => !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove'),
             shouldChangeToFindFood: ({ context }) => (
-                context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'findFood'
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                context.currentMotivation !== 'controllingByGod' &&
+                (context.currentMotivation !== 'findFood' || context.target === null)
             ),
             shouldChangeToRest: ({ context }) => (
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
                 context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'rest'
             ),
             shouldChangeToPlay: ({ context }) => (
-                context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'play'
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                context.currentMotivation !== 'controllingByGod' &&
+                (context.currentMotivation !== 'play' || context.target === null)
             ),
             shouldChangeToIdle: ({ context }) => (
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
                 context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'idle'
             ),
         },
         actions: {
+            addLock: assign({
+                locks: ({ context, event }) => {
+                    if (event.type !== EventType.AddLock) return context.locks;
+                    const newLocks = { ...context.locks };
+                    event.parts.forEach(part => {
+                        if (!newLocks[part].includes(event.reason)) {
+                            newLocks[part] = [...newLocks[part], event.reason];
+                        }
+                    });
+                    return newLocks;
+                },
+            }),
+            removeLock: assign({
+                locks: ({ context, event }) => {
+                    if (event.type !== EventType.RemoveLock) return context.locks;
+                    const newLocks = { ...context.locks };
+                    event.parts.forEach(part => {
+                        newLocks[part] = newLocks[part].filter(r => r !== event.reason);
+                    });
+                    return newLocks;
+                },
+            }),
             tickStatus: assign({
                 status: ({ context }) => ({
                     ...context.status,
@@ -368,4 +413,8 @@ function getRandomTarget(position: Position): Position {
         };
     }
     return target;
+}
+
+function isLocked(context: CharacterContext, part: keyof CharacterContext['locks']) {
+    return context.locks[part].length > 0;
 }

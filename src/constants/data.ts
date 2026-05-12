@@ -19,24 +19,6 @@ enum ItemType {
     Tool = "tool"
 }
 
-// 事件分成 地圖上自動發生的、會顯示但是需要點擊觸發的
-// 事件要分成不同的嗎，例如點擊地圖的自己一個 interface
-// 每次事件發生時，挑出所有 condition 符合的事件，塞進一個事件池，再依照權重決定機率
-export interface EventInfo {
-    id: string;
-    name: Event;
-    type: string;
-    condition: Record<string, string>[]; // 飽足度大於五 saturation: ">= 5"
-    limitChar: number; // 最多幾人同時
-}
-
-// 人物的互動是動詞名詞接起來的，解鎖不同地方可以解鎖新的動詞或名詞
-enum Event {
-    Massage = "massage", // 按摩
-    Gossip = "gossip", // 聊八卦
-    ThrowSomethingToWrongPlace = "throwSomethingToWrongPlace", // 一回家到廚房把襪子丟垃圾桶 
-}
-
 // 以後再說的：
 // 大逃殺...會有出局、不同事件
 // 玩具戰鬥系統，例如怪獸對打機那種

@@ -21,11 +21,16 @@
   height: 480px;
 }
 
-.panel {
+.info {
   display: flex;
   flex-direction: column;
+}
+
+.panel {
+  display: flex;
   gap: 10px;
   min-height: 220px;
+  width: fit-content;
   padding: 14px;
   border: 1px solid rgba(28, 31, 35, 0.18);
   border-radius: 8px;
@@ -76,6 +81,39 @@
   gap: 6px;
   padding-top: 8px;
   border-top: 1px solid rgba(28, 31, 35, 0.12);
+}
+
+.dialogueButton {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid rgba(28, 31, 35, 0.18);
+  border-radius: 6px;
+  background: #2f6f68;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.choicePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(47, 111, 104, 0.28);
+  border-radius: 6px;
+  background: #eef7f4;
+  font-size: 13px;
+}
+
+.choicePanel button {
+  padding: 7px 8px;
+  border: 1px solid rgba(28, 31, 35, 0.16);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #24313a;
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .characterButton {

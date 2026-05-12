@@ -1,28 +1,19 @@
 import { Position } from "~/constants/character";
-
-// export enum FlowEventType {
-
-// }
+import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
 
 export enum WidgetEventType {
   INITIAL = 'Initial',
   UPDATE = 'Update',
 }
 
-// export interface FlowEventPayload {
-
-// }
-
 export type GameFlowEvents =
-  // | {
-  //   type: FlowEventType.INITIAL;
-  // }
   | { type: 'OPEN_SYSTEM_UI' }
   | { type: 'CLOSE_SYSTEM_UI' }
   | { type: 'START_INTERACTION' }
   | { type: 'END_INTERACTION' }
   | { type: 'PICK_CHARACTER'; characterId: string }
-  | { type: 'RELEASE_CHARACTER'; characterId: string };
+  | { type: 'RELEASE_CHARACTER'; characterId: string }
+  | DialogueManagerEvent;
 
 export type CharacterEvent =
   | { type: EventType.Tick }
@@ -37,7 +28,9 @@ export type CharacterEvent =
   | { type: EventType.Arrive; position: Position }
   | { type: EventType.MoveBlocked; position?: Position }
   | { type: EventType.StartThinking }
-  | { type: EventType.StopThinking };
+  | { type: EventType.StopThinking }
+  | { type: EventType.AddLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: string }
+  | { type: EventType.RemoveLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: string };
 
 export type CharacterEventOld =
   | { type: EventType.Tick } // 自動：時間流逝
@@ -65,4 +58,47 @@ export enum EventType {
   MoveBlocked = "moveBlocked",
   StartThinking = "startThinking",
   StopThinking = "stopThinking",
+  AddLock = "addLock",
+  RemoveLock = "removeLock",
 }
+
+export type DialogueManagerEvent =
+  | {
+    type: 'START_DIALOGUE';
+    script: DialogueScriptDocument;
+    participants: DialogueParticipant[];
+  }
+  | {
+    type: 'RESOLVE';
+    choiceId: string;
+  }
+  | {
+    type: 'CANCEL_DIALOGUE';
+  };
+
+export type DialogueManagerEmittedEvent =
+  | {
+    type: 'DIALOGUE_LINE';
+    speakerId: string;
+    text: string;
+  }
+  | {
+    type: 'DIALOGUE_CHOICE_REQUESTED';
+    choice: DialogueChoiceInstruction;
+    participantIds: string[];
+  }
+  | {
+    type: 'DIALOGUE_CHOICE_RESOLVED';
+    choiceId: string;
+    participantIds: string[];
+  }
+  | {
+    type: 'DIALOGUE_CHARACTER_EVENT';
+    characterId: string;
+    event: CharacterEvent;
+  }
+  | {
+    type: 'DIALOGUE_ENDED';
+    scriptId: string | null;
+    participantIds: string[];
+  };

@@ -132,6 +132,8 @@ export class FabricTownMapWidget {
   private readonly characterTokenFactory = new CharacterTokenFactory();
   private readonly cellSize: number;
   private readonly characterTokens = new Map<string, Group>();
+  private readonly characterBubbles = new Map<string, Text>();
+  private readonly bubbleTimers = new Map<string, number>();
   private readonly activeWalks = new Map<string, AbortController>();
   private readonly onTileClick?: (tile: TownMapTile) => void;
   private readonly onCharacterPickUp?: (characterId: string) => void;
@@ -236,6 +238,61 @@ export class FabricTownMapWidget {
     this.canvas.requestRenderAll();
   }
 
+  showCharacterBubble(characterId: string, text: string, durationMs = 2600): void {
+    const token = this.characterTokens.get(characterId);
+
+    if (!token) {
+      return;
+    }
+
+    const existingTimer = this.bubbleTimers.get(characterId);
+
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      this.bubbleTimers.delete(characterId);
+    }
+
+    let bubble = this.characterBubbles.get(characterId);
+
+    if (!bubble) {
+      bubble = new Text(text, {
+        fontSize: 13,
+        fontFamily: 'Arial, sans-serif',
+        fill: '#18252c',
+        backgroundColor: 'rgba(255, 255, 255, 0.92)',
+        originX: 'center',
+        originY: 'bottom',
+        selectable: false,
+        evented: false,
+      });
+      this.characterBubbles.set(characterId, bubble);
+      this.canvas.add(bubble);
+    }
+
+    bubble.set({
+      text,
+      left: token.left ?? 0,
+      top: (token.top ?? 0) - this.cellSize * 0.46,
+    });
+    this.canvas.remove(bubble);
+    this.canvas.add(bubble);
+    this.canvas.requestRenderAll();
+
+    const timer = window.setTimeout(() => {
+      const currentBubble = this.characterBubbles.get(characterId);
+
+      if (currentBubble) {
+        this.canvas.remove(currentBubble);
+        this.characterBubbles.delete(characterId);
+        this.canvas.requestRenderAll();
+      }
+
+      this.bubbleTimers.delete(characterId);
+    }, durationMs);
+
+    this.bubbleTimers.set(characterId, timer);
+  }
+
   getCharacterTile(characterId: string): GridCoordinate | null {
     const tile = this.grid.getTiles().find(item => item.cell.occupantId === characterId);
 
@@ -250,6 +307,18 @@ export class FabricTownMapWidget {
       this.canvas.remove(token);
       this.characterTokens.delete(characterId);
       this.canvas.requestRenderAll();
+    }
+
+    const bubble = this.characterBubbles.get(characterId);
+    if (bubble) {
+      this.canvas.remove(bubble);
+      this.characterBubbles.delete(characterId);
+    }
+
+    const timer = this.bubbleTimers.get(characterId);
+    if (timer) {
+      window.clearTimeout(timer);
+      this.bubbleTimers.delete(characterId);
     }
   }
 
@@ -379,6 +448,9 @@ export class FabricTownMapWidget {
   }
 
   destroy(): Promise<boolean> {
+    this.bubbleTimers.forEach(timer => window.clearTimeout(timer));
+    this.bubbleTimers.clear();
+    this.characterBubbles.clear();
     return this.canvas.dispose();
   }
 
