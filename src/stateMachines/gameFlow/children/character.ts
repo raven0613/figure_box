@@ -1,5 +1,6 @@
 import { assign, createMachine, enqueueActions, StateValue } from 'xstate';
 import { Mood, Position } from '~/constants/character';
+import { TOWN_MAP_WIDTH, TOWN_MAP_HEIGHT, DESTINATION_MAP } from '~/constants/townMap';
 import {
     CharacterBodyActionState,
     CharacterBodyMoveState,
@@ -10,9 +11,6 @@ import {
 import { CharacterEvent, EventType } from '../events';
 import { CharacterContext, CharacterMachineInput, CharacterUtilityScores, UtilityDrivenMotivation } from '../context';
 import { rememberPassBy } from '../relationships';
-
-const MAP_WIDTH = 10;
-const MAP_HEIGHT = 10;
 const SATURATION_LOSS_PER_TICK = 1;
 const SATURATION_GAIN_AFTER_EATING = 36;
 const LOW_SATURATION_THRESHOLD = 5;
@@ -389,10 +387,23 @@ function getTopMotivation(scores: CharacterUtilityScores): UtilityDrivenMotivati
         .sort((left, right) => right[1] - left[1])[0][0];
 }
 
+function getRandomDestinationTarget(motivation: string): Position | null {
+    const destinations = DESTINATION_MAP[motivation];
+
+    if (!destinations || destinations.length === 0) {
+        return null;
+    }
+
+    const destination = destinations[Math.floor(Math.random() * destinations.length)];
+    const tiles = destination.serviceTiles;
+    return tiles[Math.floor(Math.random() * tiles.length)];
+}
+
 function getUtilityEvent(motivation: UtilityDrivenMotivation): CharacterEvent {
+    const foodTarget = getRandomDestinationTarget('findFood');
     const eventByMotivation: Record<UtilityDrivenMotivation, CharacterEvent> = {
         idle: { type: EventType.GoIdle },
-        findFood: { type: EventType.GoEat, target: { x: 0, y: 6 } },
+        findFood: { type: EventType.GoEat, target: foodTarget ?? { x: 1, y: 20 } },
         rest: { type: EventType.GoRest },
         play: { type: EventType.GoPlay },
     };
@@ -402,13 +413,13 @@ function getUtilityEvent(motivation: UtilityDrivenMotivation): CharacterEvent {
 
 function getRandomTarget(position: Position): Position {
     const target = {
-        x: Math.floor(Math.random() * MAP_WIDTH),
-        y: Math.floor(Math.random() * MAP_HEIGHT),
+        x: Math.floor(Math.random() * TOWN_MAP_WIDTH),
+        y: Math.floor(Math.random() * TOWN_MAP_HEIGHT),
     };
 
     if (target.x === position.x && target.y === position.y) {
         return {
-            x: (target.x + 1) % MAP_WIDTH,
+            x: (target.x + 1) % TOWN_MAP_WIDTH,
             y: target.y,
         };
     }

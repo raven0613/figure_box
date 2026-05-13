@@ -3,7 +3,6 @@ import { createActor, ActorRefFrom, SnapshotFrom } from 'xstate';
 import { gameFlowMachine } from '~/stateMachines/gameFlow';
 import {
   characterMachine,
-  formatCharacterStateValue,
   getCharacterStateSummary,
 } from '~/stateMachines/gameFlow/children/character';
 import {
@@ -19,7 +18,8 @@ import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterEvent, DialogueManagerEmittedEvent } from '~/stateMachines/gameFlow/events';
 import { MemoryType, SocialStatus } from '~/constants/character';
-import type { TownMapTile } from '~/widgets/townMapGrid';
+import type { TownMapTile, GridCoordinate } from '~/widgets/townMapGrid';
+import { DESTINATION_MAP } from '~/constants/townMap';
 
 import styles from './townMap.module.scss';
 import { INVITATION_DIALOGUE } from '~/constants/dialogue';
@@ -30,7 +30,7 @@ const CHARACTER_SEEDS = [
     name: 'Tezuka',
     label: 'T',
     color: '#413636',
-    position: { x: 3, y: 5 },
+    position: { x: 10, y: 16 },
     saturation: 58,
   },
   {
@@ -38,8 +38,168 @@ const CHARACTER_SEEDS = [
     name: 'Fuji',
     label: 'F',
     color: '#e57070',
-    position: { x: 5, y: 5 },
+    position: { x: 16, y: 16 },
     saturation: 32,
+  },
+  {
+    id: 'friend-03',
+    name: 'Eiji',
+    label: 'E',
+    color: '#ff9900',
+    position: { x: 7, y: 1 },
+    saturation: 80,
+  },
+  {
+    id: 'friend-04',
+    name: 'Oishi',
+    label: 'O',
+    color: '#33cc33',
+    position: { x: 10, y: 1 },
+    saturation: 60,
+  },
+  {
+    id: 'friend-05',
+    name: 'Kikumaru',
+    label: 'K',
+    color: '#ff3333',
+    position: { x: 16, y: 1 },
+    saturation: 90,
+  },
+  {
+    id: 'friend-06',
+    name: 'Inui',
+    label: 'I',
+    color: '#333399',
+    position: { x: 19, y: 1 },
+    saturation: 50,
+  },
+  {
+    id: 'friend-07',
+    name: 'Kawamura',
+    label: 'Ka',
+    color: '#996633',
+    position: { x: 4, y: 4 },
+    saturation: 75,
+  },
+  {
+    id: 'friend-08',
+    name: 'Momoshiro',
+    label: 'M',
+    color: '#ff66cc',
+    position: { x: 7, y: 4 },
+    saturation: 85,
+  },
+  {
+    id: 'friend-09',
+    name: 'Kaidoh',
+    label: 'Kd',
+    color: '#339933',
+    position: { x: 10, y: 4 },
+    saturation: 65,
+  },
+  {
+    id: 'friend-10',
+    name: 'Atobe',
+    label: 'A',
+    color: '#cc99ff',
+    position: { x: 16, y: 4 },
+    saturation: 95,
+  },
+  {
+    id: 'friend-11',
+    name: 'Oshitari',
+    label: 'Os',
+    color: '#0066cc',
+    position: { x: 1, y: 7 },
+    saturation: 55,
+  },
+  {
+    id: 'friend-12',
+    name: 'Mukahi',
+    label: 'Mu',
+    color: '#ff0066',
+    position: { x: 4, y: 7 },
+    saturation: 70,
+  },
+  {
+    id: 'friend-13',
+    name: 'Shishido',
+    label: 'S',
+    color: '#ffcc00',
+    position: { x: 10, y: 7 },
+    saturation: 65,
+  },
+  {
+    id: 'friend-14',
+    name: 'Akutagawa',
+    label: 'Ak',
+    color: '#ff99cc',
+    position: { x: 16, y: 7 },
+    saturation: 80,
+  },
+  {
+    id: 'friend-15',
+    name: 'Jiro',
+    label: 'J',
+    color: '#ffcc99',
+    position: { x: 19, y: 7 },
+    saturation: 85,
+  },
+  {
+    id: 'friend-16',
+    name: 'Niou',
+    label: 'N',
+    color: '#99ccff',
+    position: { x: 22, y: 7 },
+    saturation: 45,
+  },
+  {
+    id: 'friend-17',
+    name: 'Yagyu',
+    label: 'Y',
+    color: '#cc6699',
+    position: { x: 25, y: 7 },
+    saturation: 40,
+  },
+  {
+    id: 'friend-18',
+    name: 'Marui',
+    label: 'Ma',
+    color: '#ff3399',
+    position: { x: 28, y: 7 },
+    saturation: 90,
+  },
+  {
+    id: 'friend-19',
+    name: 'Sanada',
+    label: 'Sa',
+    color: '#333333',
+    position: { x: 1, y: 10 },
+    saturation: 60,
+  },
+  {
+    id: 'friend-20',
+    name: 'Yukimura',
+    label: 'Yu',
+    color: '#6699ff',
+    position: { x: 10, y: 10 },
+    saturation: 80,
+  },
+  {
+    id: 'friend-21',
+    name: 'Kirihara',
+    label: 'Ki',
+    color: '#660000',
+    position: { x: 16, y: 10 },
+    saturation: 75,
+  },
+  {
+    id: 'friend-22',
+    name: 'Ryoma',
+    label: 'R',
+    color: '#cc0000',
+    position: { x: 28, y: 10 },
+    saturation: 100,
   },
 ] as const;
 
@@ -75,7 +235,7 @@ export function TownMapContainer() {
     const canvasHost = canvasHostRef.current;
     const characterSubscriptions = new Map<string, CharacterSubscription>();
     const widget = FabricTownMapWidget.mount(canvasHost, {
-      cellSize: 48,
+      cellSize: 20,
       onTileClick: tile => {
         setSelectedTile(tile);
         // setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
@@ -143,7 +303,7 @@ export function TownMapContainer() {
           [character.id]: snapshot,
         }));
 
-        widget.updateCharacterStatus(character.id, formatCharacterStateValue(snapshot.value));
+        widget.updateCharacterStatus(character.id, snapshot.context.currentMotivation);
 
         const summary = getCharacterStateSummary(snapshot.value);
         const target = snapshot.context.target;
@@ -184,7 +344,17 @@ export function TownMapContainer() {
           path,
           arrivedPosition => {
             walkingCharactersRef.current.delete(character.id);
+            const currentActor = characterActorsRef.current.get(character.id);
+            const motivation = currentActor?.getSnapshot().context.currentMotivation ?? '';
+
             sendToCharacter(characterActorsRef.current, character.id, { type: EventType.Arrive, position: arrivedPosition });
+
+            if (DESTINATION_MAP[motivation]) {
+              const dispersalTarget = findNearbyEmptyTile(widget, arrivedPosition, character.id, 4); // 4格內附近
+              if (dispersalTarget) {
+                sendToCharacter(characterActorsRef.current, character.id, { type: EventType.MoveTo, target: dispersalTarget });
+              }
+            }
           },
           blockedPosition => {
             walkingCharactersRef.current.delete(character.id);
@@ -523,12 +693,31 @@ function triggerPassByRelationships(
   timestamp: number,
 ): RelationshipStore {
   let nextRelationshipStore = relationshipStore;
+  const processedPairs = new Set<string>();
 
   characterActors.forEach((_actor, characterId) => {
-    const nearbyCharacterIds = getNearbyCharacterIds(widget, characterId, 2);
+    const tile = widget.getCharacterTile(characterId);
 
-    nearbyCharacterIds.forEach(targetCharId => {
+    if (!tile) {
+      return;
+    }
+
+    const nearbyIds = widget.getOccupiedNeighborIds(tile.x, tile.y, 2, characterId);
+
+    nearbyIds.forEach(targetCharId => {
+      const pairKey = characterId < targetCharId
+        ? `${characterId}::${targetCharId}`
+        : `${targetCharId}::${characterId}`;
+
+      if (processedPairs.has(pairKey)) {
+        return;
+      }
+
+      processedPairs.add(pairKey);
+
       sendToCharacter(characterActors, characterId, { type: EventType.PassBy, targetCharId, timestamp });
+      sendToCharacter(characterActors, targetCharId, { type: EventType.PassBy, targetCharId: characterId, timestamp });
+
       nextRelationshipStore = recordPassByPair(
         nextRelationshipStore,
         characterId,
@@ -541,21 +730,21 @@ function triggerPassByRelationships(
   return nextRelationshipStore;
 }
 
-function getNearbyCharacterIds(
+function findNearbyEmptyTile(
   widget: FabricTownMapWidget,
-  characterId: string,
-  radius: number,
-): string[] {
-  const tile = widget.getCharacterTile(characterId);
+  position: GridCoordinate,
+  occupantId: string,
+  range: number
+): GridCoordinate | null {
+  const neighbors = widget.getNeighbors(position.x, position.y, range);
+  const candidates = neighbors.filter(tile =>
+    tile.cell.walkable && (!tile.cell.occupantId || tile.cell.occupantId === occupantId)
+  );
 
-  if (!tile) {
-    return [];
+  if (candidates.length === 0) {
+    return null;
   }
 
-  return widget
-    .getNeighbors(tile.x, tile.y, radius)
-    .map(neighbor => neighbor.cell.occupantId)
-    .filter((occupantId): occupantId is string => (
-      typeof occupantId === 'string' && occupantId !== characterId
-    ));
+  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+  return { x: chosen.x, y: chosen.y };
 }

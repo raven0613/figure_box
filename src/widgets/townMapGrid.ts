@@ -18,6 +18,8 @@ export class TownMapGrid {
   readonly width: number;
   readonly height: number;
   private readonly tiles: TownMapTile[];
+  private readonly occupantToTile = new Map<string, number>();
+  private readonly tileToOccupant = new Map<number, string>();
 
   constructor(rows: TownMapCellData[][] = TOWN_MAP_GRID) {
     const gridRows = this.cloneRows(rows);
@@ -36,6 +38,44 @@ export class TownMapGrid {
     }
 
     return this.tiles[this.toIndex(x, y)];
+  }
+
+  getOccupantTile(occupantId: string): GridCoordinate | null {
+    const index = this.occupantToTile.get(occupantId);
+
+    if (index === undefined) {
+      return null;
+    }
+
+    const tile = this.tiles[index];
+    return { x: tile.x, y: tile.y };
+  }
+
+  getOccupiedNeighborIds(x: number, y: number, radius: number, excludeId?: string): string[] {
+    const normalizedRadius = Math.max(0, Math.floor(radius));
+    const minX = Math.max(0, x - normalizedRadius);
+    const maxX = Math.min(this.width - 1, x + normalizedRadius);
+    const minY = Math.max(0, y - normalizedRadius);
+    const maxY = Math.min(this.height - 1, y + normalizedRadius);
+    const result: string[] = [];
+
+    for (let currentY = minY; currentY <= maxY; currentY++) {
+      const rowStart = currentY * this.width;
+
+      for (let currentX = minX; currentX <= maxX; currentX++) {
+        if (currentX === x && currentY === y) {
+          continue;
+        }
+
+        const occupantId = this.tileToOccupant.get(rowStart + currentX);
+
+        if (occupantId && occupantId !== excludeId) {
+          result.push(occupantId);
+        }
+      }
+    }
+
+    return result;
   }
 
   getNeighbors(x: number, y: number, radius: number): TownMapTile[] {
@@ -72,13 +112,16 @@ export class TownMapGrid {
       return false;
     }
 
-    const currentTile = this.tiles.find(tile => tile.cell.occupantId === occupantId);
+    const currentIndex = this.occupantToTile.get(occupantId);
 
-    if (currentTile) {
-      currentTile.cell.occupantId = null;
+    if (currentIndex !== undefined) {
+      this.tiles[currentIndex].cell.occupantId = null;
+      this.tileToOccupant.delete(currentIndex);
     }
 
     targetTile.cell.occupantId = occupantId;
+    this.occupantToTile.set(occupantId, targetTile.index);
+    this.tileToOccupant.set(targetTile.index, occupantId);
     return true;
   }
 
@@ -87,10 +130,12 @@ export class TownMapGrid {
   }
 
   removeOccupant(occupantId: string): void {
-    const currentTile = this.tiles.find(tile => tile.cell.occupantId === occupantId);
+    const currentIndex = this.occupantToTile.get(occupantId);
 
-    if (currentTile) {
-      currentTile.cell.occupantId = null;
+    if (currentIndex !== undefined) {
+      this.tiles[currentIndex].cell.occupantId = null;
+      this.occupantToTile.delete(occupantId);
+      this.tileToOccupant.delete(currentIndex);
     }
   }
 

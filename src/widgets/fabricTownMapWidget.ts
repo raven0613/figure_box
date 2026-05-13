@@ -20,7 +20,7 @@ interface TerrainStyle {
   stroke: string;
 }
 
-const DEFAULT_CELL_SIZE = 48;
+const DEFAULT_CELL_SIZE = 20;
 const CHARACTER_RADIUS_RATIO = 0.28;
 
 class TerrainStyleCatalog {
@@ -124,6 +124,20 @@ class CharacterTokenFactory {
   }
 }
 
+interface WalkState {
+  token: Group;
+  allPoints: GridCoordinate[];
+  segmentLengths: number[];
+  currentSegment: number;
+  segmentProgress: number;
+  lastTimestamp: number | null;
+  speed: number;
+  path: GridCoordinate[];
+  characterId: string;
+  onArrive: (position: GridCoordinate) => void;
+  onBlocked: (position: GridCoordinate) => void;
+}
+
 export class FabricTownMapWidget {
   private readonly canvas: Canvas;
   private readonly grid = new TownMapGrid();
@@ -134,7 +148,8 @@ export class FabricTownMapWidget {
   private readonly characterTokens = new Map<string, Group>();
   private readonly characterBubbles = new Map<string, Text>();
   private readonly bubbleTimers = new Map<string, number>();
-  private readonly activeWalks = new Map<string, AbortController>();
+  private readonly walkers = new Map<string, WalkState>();
+  private animationFrameId: number | null = null;
   private readonly onTileClick?: (tile: TownMapTile) => void;
   private readonly onCharacterPickUp?: (characterId: string) => void;
   private readonly onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
@@ -192,6 +207,10 @@ export class FabricTownMapWidget {
 
   getNeighbors(x: number, y: number, radius: number): TownMapTile[] {
     return this.grid.getNeighbors(x, y, radius);
+  }
+
+  getOccupiedNeighborIds(x: number, y: number, radius: number, excludeId?: string): string[] {
+    return this.grid.getOccupiedNeighborIds(x, y, radius, excludeId);
   }
 
   placeCharacter(character: TownMapCharacter): boolean {
@@ -274,8 +293,7 @@ export class FabricTownMapWidget {
       left: token.left ?? 0,
       top: (token.top ?? 0) - this.cellSize * 0.46,
     });
-    this.canvas.remove(bubble);
-    this.canvas.add(bubble);
+    this.canvas.bringObjectToFront(bubble);
     this.canvas.requestRenderAll();
 
     const timer = window.setTimeout(() => {
@@ -294,9 +312,7 @@ export class FabricTownMapWidget {
   }
 
   getCharacterTile(characterId: string): GridCoordinate | null {
-    const tile = this.grid.getTiles().find(item => item.cell.occupantId === characterId);
-
-    return tile ? { x: tile.x, y: tile.y } : null;
+    return this.grid.getOccupantTile(characterId);
   }
 
   removeCharacter(characterId: string): void {
@@ -345,25 +361,16 @@ export class FabricTownMapWidget {
       return;
     }
 
-    const controller = new AbortController();
-    this.activeWalks.set(characterId, controller);
-
-    const speed = this.cellSize / 300;
-    const waypoints = path.map(p => this.getCharacterPosition(p));
-
-    let currentSegment = 0;
-    let segmentProgress = 0;
-    let lastTimestamp: number | null = null;
-
     const moved = this.grid.moveOccupant(characterId, path[0]);
 
     if (!moved) {
-      this.activeWalks.delete(characterId);
       const currentTile = this.getCharacterTile(characterId);
       onBlocked(currentTile ?? path[0]);
       return;
     }
 
+    const speed = this.cellSize / 300;
+    const waypoints = path.map(p => this.getCharacterPosition(p));
     const startPos = { x: token.left ?? 0, y: token.top ?? 0 };
     const allPoints = [startPos, ...waypoints];
 
@@ -374,73 +381,122 @@ export class FabricTownMapWidget {
       segmentLengths.push(Math.sqrt(dx * dx + dy * dy));
     }
 
-    const animate = (timestamp: number) => {
-      if (controller.signal.aborted) {
-        return;
-      }
+    this.walkers.set(characterId, {
+      token,
+      allPoints,
+      segmentLengths,
+      currentSegment: 0,
+      segmentProgress: 0,
+      lastTimestamp: null,
+      speed,
+      path,
+      characterId,
+      onArrive,
+      onBlocked,
+    });
 
-      if (lastTimestamp === null) {
-        lastTimestamp = timestamp;
-      }
-
-      const delta = timestamp - lastTimestamp;
-      lastTimestamp = timestamp;
-
-      const distanceThisFrame = speed * delta;
-      segmentProgress += distanceThisFrame;
-
-      while (currentSegment < segmentLengths.length && segmentProgress >= segmentLengths[currentSegment]) {
-        segmentProgress -= segmentLengths[currentSegment];
-        currentSegment++;
-
-        if (currentSegment < path.length) {
-          const nextMoved = this.grid.moveOccupant(characterId, path[currentSegment]);
-
-          if (!nextMoved) {
-            token.set({ left: allPoints[currentSegment].x, top: allPoints[currentSegment].y });
-            token.setCoords();
-            this.canvas.requestRenderAll();
-            this.activeWalks.delete(characterId);
-            const currentTile = this.getCharacterTile(characterId);
-            onBlocked(currentTile ?? path[currentSegment]);
-            return;
-          }
-        }
-      }
-
-      if (currentSegment >= segmentLengths.length) {
-        const final = allPoints[allPoints.length - 1];
-        token.set({ left: final.x, top: final.y });
-        token.setCoords();
-        this.canvas.requestRenderAll();
-        this.activeWalks.delete(characterId);
-        onArrive(path[path.length - 1]);
-        return;
-      }
-
-      const t = segmentProgress / segmentLengths[currentSegment];
-      const from = allPoints[currentSegment];
-      const to = allPoints[currentSegment + 1];
-      const x = from.x + (to.x - from.x) * t;
-      const y = from.y + (to.y - from.y) * t;
-
-      token.set({ left: x, top: y });
-      token.setCoords();
-      this.canvas.requestRenderAll();
-
-      requestAnimationFrame(animate);
-    };
-
-    requestAnimationFrame(animate);
+    this.startAnimationLoop();
   }
 
   cancelWalk(characterId: string): void {
-    const controller = this.activeWalks.get(characterId);
+    this.walkers.delete(characterId);
 
-    if (controller) {
-      controller.abort();
-      this.activeWalks.delete(characterId);
+    if (this.walkers.size === 0) {
+      this.stopAnimationLoop();
     }
+  }
+
+  private startAnimationLoop(): void {
+    if (this.animationFrameId !== null) {
+      return;
+    }
+
+    const animateAll = (timestamp: number) => {
+      const completedWalkers: { id: string; walker: WalkState }[] = [];
+
+      this.walkers.forEach((walker, id) => {
+        const result = this.advanceWalker(walker, timestamp);
+
+        if (result !== 'continue') {
+          completedWalkers.push({ id, walker });
+        }
+      });
+
+      completedWalkers.forEach(({ id, walker }) => {
+        if (this.walkers.get(id) === walker) {
+          this.walkers.delete(id);
+        }
+      });
+
+      if (this.walkers.size > 0) {
+        this.canvas.requestRenderAll();
+        this.animationFrameId = requestAnimationFrame(animateAll);
+      } else {
+        this.canvas.requestRenderAll();
+        this.animationFrameId = null;
+      }
+    };
+
+    this.animationFrameId = requestAnimationFrame(animateAll);
+  }
+
+  private stopAnimationLoop(): void {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  private advanceWalker(walker: WalkState, timestamp: number): 'continue' | 'done' {
+    if (walker.lastTimestamp === null) {
+      walker.lastTimestamp = timestamp;
+    }
+
+    const delta = timestamp - walker.lastTimestamp;
+    walker.lastTimestamp = timestamp;
+
+    const distanceThisFrame = walker.speed * delta;
+    walker.segmentProgress += distanceThisFrame;
+
+    while (
+      walker.currentSegment < walker.segmentLengths.length
+      && walker.segmentProgress >= walker.segmentLengths[walker.currentSegment]
+    ) {
+      walker.segmentProgress -= walker.segmentLengths[walker.currentSegment];
+      walker.currentSegment++;
+
+      if (walker.currentSegment < walker.path.length) {
+        const nextMoved = this.grid.moveOccupant(walker.characterId, walker.path[walker.currentSegment]);
+
+        if (!nextMoved) {
+          const snapPoint = walker.allPoints[walker.currentSegment];
+          walker.token.set({ left: snapPoint.x, top: snapPoint.y });
+          walker.token.setCoords();
+          const currentTile = this.getCharacterTile(walker.characterId);
+          walker.onBlocked(currentTile ?? walker.path[walker.currentSegment]);
+          return 'done';
+        }
+      }
+    }
+
+    if (walker.currentSegment >= walker.segmentLengths.length) {
+      const final = walker.allPoints[walker.allPoints.length - 1];
+      walker.token.set({ left: final.x, top: final.y });
+      walker.token.setCoords();
+      walker.onArrive(walker.path[walker.path.length - 1]);
+      return 'done';
+    }
+
+    const t = walker.segmentProgress / walker.segmentLengths[walker.currentSegment];
+    const from = walker.allPoints[walker.currentSegment];
+    const to = walker.allPoints[walker.currentSegment + 1];
+    const x = from.x + (to.x - from.x) * t;
+    const y = from.y + (to.y - from.y) * t;
+
+    walker.token.set({ left: x, top: y });
+    walker.token.setCoords();
+
+    return 'continue';
   }
 
   getCell(x: number, y: number): TownMapCellData | null {
@@ -448,6 +504,8 @@ export class FabricTownMapWidget {
   }
 
   destroy(): Promise<boolean> {
+    this.stopAnimationLoop();
+    this.walkers.clear();
     this.bubbleTimers.forEach(timer => window.clearTimeout(timer));
     this.bubbleTimers.clear();
     this.characterBubbles.clear();
