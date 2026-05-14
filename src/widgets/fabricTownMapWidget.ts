@@ -1,6 +1,6 @@
-import { Canvas, Circle, Group, Rect, Text } from 'fabric';
+import { Canvas, Circle, Ellipse, FabricObject, Group, Rect, Text } from 'fabric';
 import { TownMapGrid, type CharacterPlacement, type GridCoordinate, type TownMapTile } from './townMapGrid';
-import type { InteractableObjectData, TerrainType, TownMapCellData } from '~/constants/townMap';
+import type { TerrainType, TownMapCellData, TownMapObjectData, TownMapObjectType } from '~/constants/townMap';
 
 export interface TownMapCharacter extends CharacterPlacement {
   color?: string;
@@ -9,6 +9,7 @@ export interface TownMapCharacter extends CharacterPlacement {
 }
 
 export interface FabricTownMapOptions {
+  baseCanvasElement?: HTMLCanvasElement;
   cellSize?: number;
   onTileClick?: (tile: TownMapTile) => void;
   onCharacterPickUp?: (characterId: string) => void;
@@ -23,6 +24,8 @@ interface TerrainStyle {
 const DEFAULT_CELL_SIZE = 20;
 const CHARACTER_RADIUS_RATIO = 0.28;
 const CHARACTER_SCALE = 2;
+const DEFAULT_ENTITY_LAYER_RANK = 50;
+const FLOATING_UI_LAYER_RANK = 100;
 
 class TerrainStyleCatalog {
   private readonly styles: Record<TerrainType, TerrainStyle> = {
@@ -40,32 +43,227 @@ class TerrainStyleCatalog {
 }
 
 class MapObjectGlyphFactory {
-  create(object: InteractableObjectData, x: number, y: number, cellSize: number): Text {
-    return new Text(this.getGlyph(object.type), {
-      left: x + cellSize / 2,
-      top: y + cellSize / 2,
-      originX: 'center',
-      originY: 'center',
-      fontSize: cellSize * 0.36,
-      fontFamily: 'Arial, sans-serif',
-      fill: '#2b2b2b',
+  create(object: TownMapObjectData, cellSize: number): Group {
+    if (object.type === 'tree') {
+      return this.createTree(object, cellSize);
+    }
+
+    if (object.type === 'lamp') {
+      return this.createLamp(object, cellSize);
+    }
+
+    const left = object.x * cellSize;
+    const top = object.y * cellSize;
+    const width = object.width * cellSize;
+    const height = object.height * cellSize;
+    const body = new Rect({
+      left: 0,
+      top: 0,
+      width,
+      height,
+      originX: 'left',
+      originY: 'top',
+      fill: this.getFill(object.type),
+      stroke: '#263238',
+      strokeWidth: 1,
+      rx: Math.min(4, cellSize * 0.25),
+      ry: Math.min(4, cellSize * 0.25),
       selectable: false,
       evented: false,
     });
+    const glyph = new Text(this.getGlyph(object.type), {
+      left: width / 2,
+      top: height / 2,
+      originX: 'center',
+      originY: 'center',
+      fontSize: Math.max(8, Math.min(width, height) * 0.38),
+      fontFamily: 'Arial, sans-serif',
+      fontWeight: '700',
+      fill: '#f7fbff',
+      selectable: false,
+      evented: false,
+    });
+    const group = new Group([body, glyph], {
+      left,
+      top,
+      originX: 'left',
+      originY: 'top',
+      selectable: false,
+      evented: false,
+      objectCaching: true,
+    });
+
+    group.set('mapObjectId', object.id);
+    group.set('sortBottomY', top + height);
+    group.set('entityLayerRank', this.getLayerRank(object.layer));
+    return group;
   }
 
-  private getGlyph(type: InteractableObjectData['type']): string {
-    const glyphs: Record<InteractableObjectData['type'], string> = {
+  private createTree(object: TownMapObjectData, cellSize: number): Group {
+    const width = object.width * cellSize;
+    const height = object.height * cellSize;
+    const centerX = width / 2;
+
+    const trunkWidth = width * 0.2;
+    const trunkHeight = height * 0.35;
+    const trunk = new Rect({
+      left: centerX - trunkWidth / 2,
+      top: height - trunkHeight,
+      width: trunkWidth,
+      height: trunkHeight,
+      originX: 'left',
+      originY: 'top',
+      fill: '#5c3a1e',
+      selectable: false,
+      evented: false,
+    });
+
+    const crownRx = width * 0.48;
+    const crownRy = height * 0.38;
+    const crown = new Ellipse({
+      left: centerX,
+      top: height * 0.38,
+      rx: crownRx,
+      ry: crownRy,
+      originX: 'center',
+      originY: 'center',
+      fill: '#2f7651',
+      selectable: false,
+      evented: false,
+    });
+
+    const left = object.x * cellSize;
+    const top = object.y * cellSize;
+    const group = new Group([trunk, crown], {
+      left,
+      top,
+      originX: 'left',
+      originY: 'top',
+      selectable: false,
+      evented: false,
+      objectCaching: true,
+    });
+
+    group.set('mapObjectId', object.id);
+    group.set('sortBottomY', top + height);
+    group.set('entityLayerRank', this.getLayerRank(object.layer));
+    return group;
+  }
+
+  private createLamp(object: TownMapObjectData, cellSize: number): Group {
+    const width = object.width * cellSize;
+    const height = object.height * cellSize;
+    const centerX = width / 2;
+
+    const poleWidth = width * 0.15;
+    const poleHeight = height * 0.75;
+    const pole = new Rect({
+      left: centerX - poleWidth / 2,
+      top: height - poleHeight,
+      width: poleWidth,
+      height: poleHeight,
+      originX: 'left',
+      originY: 'top',
+      fill: '#5a5a5a',
+      selectable: false,
+      evented: false,
+    });
+
+    const headWidth = width * 0.6;
+    const headHeight = height * 0.15;
+    const head = new Rect({
+      left: centerX - headWidth / 2,
+      top: height - poleHeight - headHeight * 0.3,
+      width: headWidth,
+      height: headHeight,
+      originX: 'left',
+      originY: 'top',
+      fill: '#d0a84f',
+      rx: headHeight * 0.3,
+      ry: headHeight * 0.3,
+      selectable: false,
+      evented: false,
+    });
+
+    const glowRadius = width * 0.2;
+    const glow = new Circle({
+      left: centerX,
+      top: height - poleHeight - headHeight * 0.3 + headHeight / 2,
+      radius: glowRadius,
+      originX: 'center',
+      originY: 'center',
+      fill: '#ffeaa7',
+      opacity: 0.5,
+      selectable: false,
+      evented: false,
+    });
+
+    const left = object.x * cellSize;
+    const top = object.y * cellSize;
+    const group = new Group([glow, pole, head], {
+      left,
+      top,
+      originX: 'left',
+      originY: 'top',
+      selectable: false,
+      evented: false,
+      objectCaching: true,
+    });
+
+    group.set('mapObjectId', object.id);
+    group.set('sortBottomY', top + height);
+    group.set('entityLayerRank', this.getLayerRank(object.layer));
+    return group;
+  }
+
+  private getGlyph(type: TownMapObjectType): string {
+    const glyphs: Record<TownMapObjectType, string> = {
       well: 'W',
       marketStall: 'M',
       sign: 'S',
       door: 'D',
       tree: 'T',
       lamp: 'L',
-      ground: 'G'
+      ground: 'G',
+      chair: 'C',
+      table: 'Tb',
+      bookcase: 'B',
+      statue: 'St',
+      noticeBoard: 'N',
+      gate: 'Ga',
     };
 
     return glyphs[type];
+  }
+
+  private getFill(type: TownMapObjectType): string {
+    const fills: Record<TownMapObjectType, string> = {
+      well: '#5d7f91',
+      marketStall: '#b15f4a',
+      sign: '#806246',
+      door: '#6e4d36',
+      tree: '#2f7651',
+      lamp: '#d0a84f',
+      ground: '#6f7e86',
+      chair: '#9b6a45',
+      table: '#7f5c3f',
+      bookcase: '#5b3f2f',
+      statue: '#7c8792',
+      noticeBoard: '#8a633f',
+      gate: '#4f6c78',
+    };
+
+    return fills[type];
+  }
+
+  private getLayerRank(layer: TownMapObjectData['layer']): number {
+    const ranks: Record<TownMapObjectData['layer'], number> = {
+      floorObject: 0,
+      wallObject: 1,
+      decoration: 2,
+    };
+
+    return ranks[layer];
   }
 }
 
@@ -103,7 +301,6 @@ class CharacterTokenFactory {
       selectable: false,
       evented: false,
     });
-
     const group = new Group([status, token, label], {
       left: center.x,
       top: center.y,
@@ -141,12 +338,15 @@ interface WalkState {
 }
 
 export class FabricTownMapWidget {
+  private readonly baseCanvasElement: HTMLCanvasElement;
+  private readonly baseContext: CanvasRenderingContext2D;
   private readonly canvas: Canvas;
   private readonly grid = new TownMapGrid();
   private readonly terrainStyles = new TerrainStyleCatalog();
   private readonly objectGlyphFactory = new MapObjectGlyphFactory();
   private readonly characterTokenFactory = new CharacterTokenFactory();
   private readonly cellSize: number;
+  private readonly mapObjectShapes = new Map<string, Group>();
   private readonly characterTokens = new Map<string, Group>();
   private readonly characterBubbles = new Map<string, Text>();
   private readonly bubbleTimers = new Map<string, number>();
@@ -161,50 +361,43 @@ export class FabricTownMapWidget {
     this.onTileClick = options.onTileClick;
     this.onCharacterPickUp = options.onCharacterPickUp;
     this.onCharacterDrop = options.onCharacterDrop;
-    this.canvas = new Canvas(canvasElement, {
+
+    const entityCanvasElement = typeof canvasElement === 'string'
+      ? document.getElementById(canvasElement) as HTMLCanvasElement | null
+      : canvasElement;
+
+    if (!entityCanvasElement) {
+      throw new Error('FabricTownMapWidget requires a canvas element.');
+    }
+
+    this.baseCanvasElement = options.baseCanvasElement ?? document.createElement('canvas');
+    const baseContext = this.baseCanvasElement.getContext('2d');
+
+    if (!baseContext) {
+      throw new Error('FabricTownMapWidget requires a 2D canvas context.');
+    }
+
+    this.baseContext = baseContext;
+    this.prepareBaseCanvas();
+    this.attachBaseCanvas(entityCanvasElement);
+    this.canvas = new Canvas(entityCanvasElement, {
       width: this.grid.width * this.cellSize,
       height: this.grid.height * this.cellSize,
-      backgroundColor: '#f4ecd8',
+      backgroundColor: 'transparent',
       selection: false,
       allowTouchScrolling: true,
     });
-
-    this.canvas.on('mouse:down', event => {
-      const characterId = this.getCharacterIdFromTarget(event.target);
-
-      if (characterId) {
-        this.onCharacterPickUp?.(characterId);
-        return;
-      }
-
-      const pointer = this.canvas.getScenePoint(event.e);
-      const tile = this.grid.getTile(Math.floor(pointer.x / this.cellSize), Math.floor(pointer.y / this.cellSize));
-
-      if (tile) {
-        this.onTileClick?.(tile);
-      }
-    });
-
-    this.canvas.on('mouse:up', event => {
-      const characterId = this.getCharacterIdFromTarget(event.target ?? this.canvas.getActiveObject());
-
-      if (!characterId) {
-        return;
-      }
-
-      const pointer = this.canvas.getScenePoint(event.e);
-      const tile = this.grid.getTile(Math.floor(pointer.x / this.cellSize), Math.floor(pointer.y / this.cellSize));
-      this.onCharacterDrop?.(characterId, tile ? { x: tile.x, y: tile.y } : null);
-      this.snapCharacterToGrid(characterId);
-    });
-
+    this.prepareEntityCanvas();
+    this.bindPointerEvents();
     this.draw();
   }
 
   static mount(container: HTMLElement, options?: FabricTownMapOptions): FabricTownMapWidget {
+    const baseCanvasElement = document.createElement('canvas');
     const canvasElement = document.createElement('canvas');
+    container.appendChild(baseCanvasElement);
     container.appendChild(canvasElement);
-    return new FabricTownMapWidget(canvasElement, options);
+    return new FabricTownMapWidget(canvasElement, { ...options, baseCanvasElement });
   }
 
   getNeighbors(x: number, y: number, radius: number): TownMapTile[] {
@@ -213,6 +406,10 @@ export class FabricTownMapWidget {
 
   getOccupiedNeighborIds(x: number, y: number, radius: number, excludeId?: string): string[] {
     return this.grid.getOccupiedNeighborIds(x, y, radius, excludeId);
+  }
+
+  getMapObjectsAt(x: number, y: number): TownMapObjectData[] {
+    return this.grid.getMapObjectsAt(x, y);
   }
 
   placeCharacter(character: TownMapCharacter): boolean {
@@ -239,7 +436,9 @@ export class FabricTownMapWidget {
     if (token) {
       const pos = this.getCharacterPosition(target);
       token.set({ left: pos.x, top: pos.y });
+      this.updateEntitySortMetadata(token, pos.y);
       token.setCoords();
+      this.sortEntityLayer();
       this.canvas.requestRenderAll();
     }
 
@@ -286,6 +485,8 @@ export class FabricTownMapWidget {
         selectable: false,
         evented: false,
       });
+      bubble.set('sortBottomY', Number.POSITIVE_INFINITY);
+      bubble.set('entityLayerRank', FLOATING_UI_LAYER_RANK);
       this.characterBubbles.set(characterId, bubble);
       this.canvas.add(bubble);
     }
@@ -375,8 +576,8 @@ export class FabricTownMapWidget {
     const waypoints = path.map(p => this.getCharacterPosition(p));
     const startPos = { x: token.left ?? 0, y: token.top ?? 0 };
     const allPoints = [startPos, ...waypoints];
-
     const segmentLengths: number[] = [];
+
     for (let i = 0; i < allPoints.length - 1; i++) {
       const dx = allPoints[i + 1].x - allPoints[i].x;
       const dy = allPoints[i + 1].y - allPoints[i].y;
@@ -408,6 +609,119 @@ export class FabricTownMapWidget {
     }
   }
 
+  getCell(x: number, y: number): TownMapCellData | null {
+    return this.grid.getTile(x, y)?.cell ?? null;
+  }
+
+  destroy(): Promise<boolean> {
+    this.stopAnimationLoop();
+    this.walkers.clear();
+    this.bubbleTimers.forEach(timer => window.clearTimeout(timer));
+    this.bubbleTimers.clear();
+    this.characterBubbles.clear();
+    this.mapObjectShapes.clear();
+    return this.canvas.dispose();
+  }
+
+  private bindPointerEvents(): void {
+    this.canvas.on('mouse:down', event => {
+      const characterId = this.getCharacterIdFromTarget(event.target);
+
+      if (characterId) {
+        this.onCharacterPickUp?.(characterId);
+        return;
+      }
+
+      const pointer = this.canvas.getScenePoint(event.e);
+      const tile = this.grid.getTile(Math.floor(pointer.x / this.cellSize), Math.floor(pointer.y / this.cellSize));
+
+      if (tile) {
+        this.onTileClick?.(tile);
+      }
+    });
+
+    this.canvas.on('mouse:up', event => {
+      const characterId = this.getCharacterIdFromTarget(event.target ?? this.canvas.getActiveObject());
+
+      if (!characterId) {
+        return;
+      }
+
+      const pointer = this.canvas.getScenePoint(event.e);
+      const tile = this.grid.getTile(Math.floor(pointer.x / this.cellSize), Math.floor(pointer.y / this.cellSize));
+      this.onCharacterDrop?.(characterId, tile ? { x: tile.x, y: tile.y } : null);
+      this.snapCharacterToGrid(characterId);
+    });
+  }
+
+  private prepareBaseCanvas(): void {
+    const width = this.grid.width * this.cellSize;
+    const height = this.grid.height * this.cellSize;
+    this.baseCanvasElement.width = width;
+    this.baseCanvasElement.height = height;
+    this.baseCanvasElement.style.position = 'absolute';
+    this.baseCanvasElement.style.inset = '0';
+    this.baseCanvasElement.style.width = `${width}px`;
+    this.baseCanvasElement.style.height = `${height}px`;
+    this.baseCanvasElement.style.zIndex = '0';
+    this.baseCanvasElement.style.pointerEvents = 'none';
+  }
+
+  private attachBaseCanvas(entityCanvasElement: HTMLCanvasElement): void {
+    if (this.baseCanvasElement.isConnected) {
+      return;
+    }
+
+    entityCanvasElement.parentElement?.insertBefore(this.baseCanvasElement, entityCanvasElement);
+  }
+
+  private prepareEntityCanvas(): void {
+    this.canvas.wrapperEl.style.position = 'absolute';
+    this.canvas.wrapperEl.style.inset = '0';
+    this.canvas.wrapperEl.style.zIndex = '1';
+  }
+
+  private draw(): void {
+    this.drawTerrainLayer();
+
+    this.grid.getMapObjects().forEach(object => {
+      const shape = this.objectGlyphFactory.create(object, this.cellSize);
+      this.mapObjectShapes.set(object.id, shape);
+      this.canvas.add(shape);
+    });
+
+    this.grid.getTiles().forEach(tile => {
+      if (tile.cell.occupantId) {
+        this.renderCharacter({
+          id: tile.cell.occupantId,
+          x: tile.x,
+          y: tile.y,
+          color: '#f0cc5f',
+        });
+      }
+    });
+
+    this.sortEntityLayer();
+    this.canvas.requestRenderAll();
+  }
+
+  private drawTerrainLayer(): void {
+    this.baseContext.fillStyle = '#f4ecd8';
+    this.baseContext.fillRect(0, 0, this.baseCanvasElement.width, this.baseCanvasElement.height);
+
+    this.grid.getTiles().forEach(tile => {
+      const style = this.terrainStyles.get(tile.cell.terrain);
+      const x = tile.x * this.cellSize;
+      const y = tile.y * this.cellSize;
+
+      this.baseContext.fillStyle = style.fill;
+      this.baseContext.fillRect(x, y, this.cellSize, this.cellSize);
+      this.baseContext.strokeStyle = style.stroke;
+      this.baseContext.lineWidth = 1;
+      this.baseContext.strokeRect(x + 0.5, y + 0.5, this.cellSize, this.cellSize);
+    });
+  }
+
   private startAnimationLoop(): void {
     if (this.animationFrameId !== null) {
       return;
@@ -429,6 +743,8 @@ export class FabricTownMapWidget {
           this.walkers.delete(id);
         }
       });
+
+      this.sortEntityLayer();
 
       if (this.walkers.size > 0) {
         this.canvas.requestRenderAll();
@@ -456,9 +772,7 @@ export class FabricTownMapWidget {
 
     const delta = timestamp - walker.lastTimestamp;
     walker.lastTimestamp = timestamp;
-
-    const distanceThisFrame = walker.speed * delta;
-    walker.segmentProgress += distanceThisFrame;
+    walker.segmentProgress += walker.speed * delta;
 
     while (
       walker.currentSegment < walker.segmentLengths.length
@@ -473,6 +787,7 @@ export class FabricTownMapWidget {
         if (!nextMoved) {
           const snapPoint = walker.allPoints[walker.currentSegment];
           walker.token.set({ left: snapPoint.x, top: snapPoint.y });
+          this.updateEntitySortMetadata(walker.token, snapPoint.y);
           walker.token.setCoords();
           const currentTile = this.getCharacterTile(walker.characterId);
           walker.onBlocked(currentTile ?? walker.path[walker.currentSegment]);
@@ -484,6 +799,7 @@ export class FabricTownMapWidget {
     if (walker.currentSegment >= walker.segmentLengths.length) {
       const final = walker.allPoints[walker.allPoints.length - 1];
       walker.token.set({ left: final.x, top: final.y });
+      this.updateEntitySortMetadata(walker.token, final.y);
       walker.token.setCoords();
       walker.onArrive(walker.path[walker.path.length - 1]);
       return 'done';
@@ -496,80 +812,28 @@ export class FabricTownMapWidget {
     const y = from.y + (to.y - from.y) * t;
 
     walker.token.set({ left: x, top: y });
+    this.updateEntitySortMetadata(walker.token, y);
     walker.token.setCoords();
-
     return 'continue';
   }
 
-  getCell(x: number, y: number): TownMapCellData | null {
-    return this.grid.getTile(x, y)?.cell ?? null;
-  }
-
-  destroy(): Promise<boolean> {
-    this.stopAnimationLoop();
-    this.walkers.clear();
-    this.bubbleTimers.forEach(timer => window.clearTimeout(timer));
-    this.bubbleTimers.clear();
-    this.characterBubbles.clear();
-    return this.canvas.dispose();
-  }
-
-  private draw(): void {
-    this.grid.getTiles().forEach(tile => {
-      this.canvas.add(this.createTileRect(tile));
-
-      if (tile.cell.interactableObject) {
-        this.canvas.add(this.objectGlyphFactory.create(
-          tile.cell.interactableObject,
-          tile.x * this.cellSize,
-          tile.y * this.cellSize,
-          this.cellSize
-        ));
-      }
-
-      if (tile.cell.occupantId) {
-        this.renderCharacter({
-          id: tile.cell.occupantId,
-          x: tile.x,
-          y: tile.y,
-          color: '#f0cc5f',
-        });
-      }
-    });
-  }
-
-  private createTileRect(tile: TownMapTile): Rect {
-    const style = this.terrainStyles.get(tile.cell.terrain);
-    return new Rect({
-      left: tile.x * this.cellSize,
-      top: tile.y * this.cellSize,
-      width: this.cellSize,
-      height: this.cellSize,
-      originX: 'left',
-      originY: 'top',
-      fill: style.fill,
-      stroke: style.stroke,
-      strokeWidth: 1,
-      selectable: false,
-      evented: false,
-      objectCaching: true,
-    });
-  }
-
   private renderCharacter(character: TownMapCharacter): void {
+    const pos = this.getCharacterPosition(character);
     const existing = this.characterTokens.get(character.id);
-    if (existing) {
-      const pos = this.getCharacterPosition(character);
-      existing.set({ left: pos.x, top: pos.y });
-    }
 
-    if (this.characterTokens.has(character.id)) {
+    if (existing) {
+      existing.set({ left: pos.x, top: pos.y });
+      this.updateEntitySortMetadata(existing, pos.y);
+      existing.setCoords();
+      this.sortEntityLayer();
       return;
     }
 
-    const token = this.characterTokenFactory.create(character, this.getCharacterPosition(character), this.cellSize);
+    const token = this.characterTokenFactory.create(character, pos, this.cellSize);
+    this.updateEntitySortMetadata(token, pos.y);
     this.characterTokens.set(character.id, token);
     this.canvas.add(token);
+    this.sortEntityLayer();
   }
 
   private snapCharacterToGrid(characterId: string): void {
@@ -582,8 +846,38 @@ export class FabricTownMapWidget {
 
     const pos = this.getCharacterPosition(currentTile);
     token.set({ left: pos.x, top: pos.y });
+    this.updateEntitySortMetadata(token, pos.y);
     token.setCoords();
+    this.sortEntityLayer();
     this.canvas.requestRenderAll();
+  }
+
+  private sortEntityLayer(): void {
+    const sortedObjects = [...this.canvas.getObjects()].sort((first, second) => {
+      const firstBottomY = this.getNumericFabricValue(first, 'sortBottomY');
+      const secondBottomY = this.getNumericFabricValue(second, 'sortBottomY');
+      const bottomDelta = firstBottomY - secondBottomY;
+
+      if (bottomDelta !== 0) {
+        return bottomDelta;
+      }
+
+      return this.getNumericFabricValue(first, 'entityLayerRank') - this.getNumericFabricValue(second, 'entityLayerRank');
+    });
+
+    sortedObjects.forEach((object, index) => {
+      this.canvas.moveObjectTo(object, index);
+    });
+  }
+
+  private updateEntitySortMetadata(object: FabricObject, bottomY: number): void {
+    object.set('sortBottomY', bottomY);
+    object.set('entityLayerRank', object.get('entityLayerRank') ?? DEFAULT_ENTITY_LAYER_RANK);
+  }
+
+  private getNumericFabricValue(object: FabricObject, key: string): number {
+    const value = object.get(key);
+    return typeof value === 'number' ? value : 0;
   }
 
   private getCharacterPosition(coordinate: GridCoordinate): GridCoordinate {

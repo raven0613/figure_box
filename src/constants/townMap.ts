@@ -6,6 +6,30 @@ export interface InteractableObjectData {
   label: string;
 }
 
+export type TownMapObjectType =
+  | InteractableObjectData['type']
+  | 'chair'
+  | 'table'
+  | 'bookcase'
+  | 'statue'
+  | 'noticeBoard'
+  | 'gate';
+
+export type TownMapObjectLayer = 'floorObject' | 'wallObject' | 'decoration';
+
+export interface TownMapObjectData {
+  id: string;
+  type: TownMapObjectType;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  layer: TownMapObjectLayer;
+  blocksMovement: boolean;
+  interactable: boolean;
+}
+
 export interface TownMapCellData {
   walkable: boolean;
   terrain: TerrainType;
@@ -74,6 +98,117 @@ export const DESTINATION_MAP: Record<string, readonly Destination[]> = {
     { name: '火鍋店', serviceTiles: [{ x: 3, y: 66 }, { x: 4, y: 66 }, { x: 5, y: 66 }] },
   ],
 };
+
+export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
+  {
+    id: 'test-tall-bookcase',
+    type: 'bookcase',
+    label: '高書櫃',
+    x: 21,
+    y: 20,
+    width: 2,
+    height: 4,
+    layer: 'wallObject',
+    blocksMovement: true,
+    interactable: true,
+  },
+  {
+    id: 'test-town-statue',
+    type: 'statue',
+    label: '廣場雕像',
+    x: 43,
+    y: 21,
+    width: 2,
+    height: 3,
+    layer: 'decoration',
+    blocksMovement: true,
+    interactable: true,
+  },
+  {
+    id: 'test-market-gate',
+    type: 'gate',
+    label: '市集門架',
+    x: 43,
+    y: 5,
+    width: 5,
+    height: 3,
+    layer: 'decoration',
+    blocksMovement: false,
+    interactable: false,
+  },
+  {
+    id: 'test-cafe-table',
+    type: 'table',
+    label: '露天桌',
+    x: 6,
+    y: 48,
+    width: 2,
+    height: 2,
+    layer: 'floorObject',
+    blocksMovement: true,
+    interactable: true,
+  },
+  {
+    id: 'test-cafe-chair-a',
+    type: 'chair',
+    label: '露天椅 A',
+    x: 5,
+    y: 49,
+    width: 1,
+    height: 2,
+    layer: 'floorObject',
+    blocksMovement: true,
+    interactable: true,
+  },
+  {
+    id: 'test-cafe-chair-b',
+    type: 'chair',
+    label: '露天椅 B',
+    x: 8,
+    y: 49,
+    width: 1,
+    height: 2,
+    layer: 'floorObject',
+    blocksMovement: true,
+    interactable: true,
+  },
+  {
+    id: 'test-school-board',
+    type: 'noticeBoard',
+    label: '校園公告板',
+    x: 63,
+    y: 40,
+    width: 2,
+    height: 3,
+    layer: 'wallObject',
+    blocksMovement: true,
+    interactable: true,
+  },
+  {
+    id: 'test-tree',
+    type: 'tree',
+    label: '樹',
+    x: 0,
+    y: 0,
+    width: 3,
+    height: 3,
+    layer: 'decoration',
+    blocksMovement: true,
+    interactable: true,
+  },
+  {
+    id: 'test-streetlight',
+    type: 'lamp',
+    label: '燈',
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 3,
+    layer: 'decoration',
+    blocksMovement: true,
+    interactable: true,
+  },
+];
 
 // 70x70 town map. Roads are 4 cells wide. Blocks separated by road grid.
 export const TOWN_MAP_GRID: TownMapCellData[][] = [

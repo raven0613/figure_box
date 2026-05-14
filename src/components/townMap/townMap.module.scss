@@ -22,6 +22,12 @@
   height: 700px;
 }
 
+.canvasHost canvas,
+.canvasHost :global(.canvas-container) {
+  position: absolute !important;
+  inset: 0;
+}
+
 .info {
   display: flex;
   flex-direction: column;

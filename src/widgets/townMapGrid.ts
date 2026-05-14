@@ -1,4 +1,4 @@
-import { TOWN_MAP_GRID, type TownMapCellData } from '~/constants/townMap';
+import { TOWN_MAP_GRID, TOWN_MAP_OBJECTS, type TownMapCellData, type TownMapObjectData } from '~/constants/townMap';
 
 export interface GridCoordinate {
   x: number;
@@ -18,14 +18,16 @@ export class TownMapGrid {
   readonly width: number;
   readonly height: number;
   private readonly tiles: TownMapTile[];
+  private readonly mapObjects: TownMapObjectData[];
   private readonly occupantToTile = new Map<string, number>();
   private readonly tileToOccupant = new Map<number, string>();
 
-  constructor(rows: TownMapCellData[][] = TOWN_MAP_GRID) {
+  constructor(rows: TownMapCellData[][] = TOWN_MAP_GRID, mapObjects: readonly TownMapObjectData[] = TOWN_MAP_OBJECTS) {
     const gridRows = this.cloneRows(rows);
     this.height = gridRows.length;
     this.width = gridRows[0]?.length ?? 0;
     this.tiles = this.createFlatTiles(gridRows);
+    this.mapObjects = this.createMapObjects(gridRows, mapObjects);
   }
 
   getTiles(): readonly TownMapTile[] {
@@ -38,6 +40,14 @@ export class TownMapGrid {
     }
 
     return this.tiles[this.toIndex(x, y)];
+  }
+
+  getMapObjects(): readonly TownMapObjectData[] {
+    return this.mapObjects;
+  }
+
+  getMapObjectsAt(x: number, y: number): TownMapObjectData[] {
+    return this.mapObjects.filter(object => this.isObjectOccupyingTile(object, x, y));
   }
 
   getOccupantTile(occupantId: string): GridCoordinate | null {
@@ -104,7 +114,7 @@ export class TownMapGrid {
   moveOccupant(occupantId: string, target: GridCoordinate): boolean {
     const targetTile = this.getTile(target.x, target.y);
 
-    if (!targetTile || !targetTile.cell.walkable) {
+    if (!targetTile || !this.isTileWalkableForOccupant(targetTile.x, targetTile.y)) {
       return false;
     }
 
@@ -146,7 +156,7 @@ export class TownMapGrid {
 
     const targetTile = this.getTile(to.x, to.y);
 
-    if (!targetTile || !targetTile.cell.walkable) {
+    if (!targetTile || !this.isTileWalkableForOccupant(targetTile.x, targetTile.y)) {
       return null;
     }
 
@@ -180,7 +190,7 @@ export class TownMapGrid {
 
         const tile = this.tiles[neighborIndex];
 
-        if (!tile.cell.walkable) {
+        if (!this.isTileWalkableForOccupant(tile.x, tile.y)) {
           continue;
         }
 
@@ -218,10 +228,7 @@ export class TownMapGrid {
 
       if (currentIndex === endKey) {
         const idealPath = this.reconstructPath(cameFrom, endKey);
-        return idealPath.filter(coord => {
-          const tile = this.getTile(coord.x, coord.y);
-          return tile !== null && !tile.cell.walkable;
-        });
+        return idealPath.filter(coord => !this.isTileWalkableForOccupant(coord.x, coord.y));
       }
 
       const currentX = currentIndex % this.width;
@@ -285,6 +292,73 @@ export class TownMapGrid {
       ...cell,
       interactableObject: cell.interactableObject ? { ...cell.interactableObject } : null,
     })));
+  }
+
+  private createMapObjects(rows: TownMapCellData[][], mapObjects: readonly TownMapObjectData[]): TownMapObjectData[] {
+    const treeTemplate = mapObjects.find(object => object.id === 'test-tree');
+    const lampTemplate = mapObjects.find(object => object.id === 'test-streetlight');
+    const templateIds = new Set(['test-tree', 'test-streetlight']);
+
+    return [
+      ...rows.flatMap((row, y) => row.flatMap((cell, x) => {
+        if (!cell.interactableObject) {
+          return [];
+        }
+
+        if (cell.interactableObject.type === 'tree' && treeTemplate) {
+          return [{
+            ...treeTemplate,
+            id: cell.interactableObject.id,
+            label: cell.interactableObject.label,
+            x,
+            y,
+          }];
+        }
+
+        if (cell.interactableObject.type === 'lamp' && lampTemplate) {
+          return [{
+            ...lampTemplate,
+            id: cell.interactableObject.id,
+            label: cell.interactableObject.label,
+            x,
+            y,
+          }];
+        }
+
+        return [{
+          id: cell.interactableObject.id,
+          type: cell.interactableObject.type,
+          label: cell.interactableObject.label,
+          x,
+          y,
+          width: 1,
+          height: 1,
+          layer: 'decoration' as const,
+          blocksMovement: !cell.walkable,
+          interactable: true,
+        }];
+      })),
+      ...mapObjects
+        .filter(object => !templateIds.has(object.id))
+        .map(object => ({ ...object })),
+    ];
+  }
+
+  private isTileWalkableForOccupant(x: number, y: number): boolean {
+    const tile = this.getTile(x, y);
+
+    if (!tile?.cell.walkable) {
+      return false;
+    }
+
+    return !this.mapObjects.some(object => object.blocksMovement && this.isObjectOccupyingTile(object, x, y));
+  }
+
+  private isObjectOccupyingTile(object: TownMapObjectData, x: number, y: number): boolean {
+    return x >= object.x
+      && x < object.x + object.width
+      && y >= object.y
+      && y < object.y + object.height;
   }
 
   private toIndex(x: number, y: number): number {

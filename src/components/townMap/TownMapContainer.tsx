@@ -23,6 +23,7 @@ export function TownMapContainer() {
   const characterControllerRef = useRef<TownCharacterController | null>(null);
   const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(createRelationshipStore);
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
+  const [selectedMapObjects, setSelectedMapObjects] = useState<string[]>([]);
   // const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
   const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
@@ -38,6 +39,7 @@ export function TownMapContainer() {
       cellSize: 10,
       onTileClick: tile => {
         setSelectedTile(tile);
+        setSelectedMapObjects(widget.getMapObjectsAt(tile.x, tile.y).map(object => object.label));
         // setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
       },
       onCharacterPickUp: characterId => {
@@ -69,6 +71,7 @@ export function TownMapContainer() {
       characterControllerRef.current = null;
       setCharacterSnapshots({});
       setDialogueSnapshot(null);
+      setSelectedMapObjects([]);
       void widget.destroy();
       canvasHost.replaceChildren();
     };
@@ -101,7 +104,7 @@ export function TownMapContainer() {
           </div>
           <div className={styles.detailRow}>
             <span>Object</span>
-            <strong>{selectedTile?.cell.interactableObject?.label ?? '-'}</strong>
+            <strong>{selectedMapObjects.length > 0 ? selectedMapObjects.join(', ') : '-'}</strong>
           </div>
           {/* <div className={styles.neighborList}>
           {nearbyTiles.map(tile => (
