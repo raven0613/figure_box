@@ -17,191 +17,12 @@ import {
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterEvent, DialogueManagerEmittedEvent } from '~/stateMachines/gameFlow/events';
-import { MemoryType, SocialStatus } from '~/constants/character';
+import { CHARACTER_SEEDS, MemoryType, SocialStatus } from '~/constants/character';
 import type { TownMapTile, GridCoordinate } from '~/widgets/townMapGrid';
 import { DESTINATION_MAP } from '~/constants/townMap';
 
 import styles from './townMap.module.scss';
 import { INVITATION_DIALOGUE } from '~/constants/dialogue';
-
-const CHARACTER_SEEDS = [
-  {
-    id: 'friend-01',
-    name: 'Tezuka',
-    label: 'T',
-    color: '#413636',
-    position: { x: 10, y: 16 },
-    saturation: 58,
-  },
-  {
-    id: 'friend-02',
-    name: 'Fuji',
-    label: 'F',
-    color: '#e57070',
-    position: { x: 16, y: 16 },
-    saturation: 32,
-  },
-  {
-    id: 'friend-03',
-    name: 'Eiji',
-    label: 'E',
-    color: '#ff9900',
-    position: { x: 7, y: 1 },
-    saturation: 80,
-  },
-  {
-    id: 'friend-04',
-    name: 'Oishi',
-    label: 'O',
-    color: '#33cc33',
-    position: { x: 10, y: 1 },
-    saturation: 60,
-  },
-  {
-    id: 'friend-05',
-    name: 'Kikumaru',
-    label: 'K',
-    color: '#ff3333',
-    position: { x: 16, y: 1 },
-    saturation: 90,
-  },
-  {
-    id: 'friend-06',
-    name: 'Inui',
-    label: 'I',
-    color: '#333399',
-    position: { x: 19, y: 1 },
-    saturation: 50,
-  },
-  {
-    id: 'friend-07',
-    name: 'Kawamura',
-    label: 'Ka',
-    color: '#996633',
-    position: { x: 4, y: 4 },
-    saturation: 75,
-  },
-  {
-    id: 'friend-08',
-    name: 'Momoshiro',
-    label: 'M',
-    color: '#ff66cc',
-    position: { x: 7, y: 4 },
-    saturation: 85,
-  },
-  {
-    id: 'friend-09',
-    name: 'Kaidoh',
-    label: 'Kd',
-    color: '#339933',
-    position: { x: 10, y: 4 },
-    saturation: 65,
-  },
-  {
-    id: 'friend-10',
-    name: 'Atobe',
-    label: 'A',
-    color: '#cc99ff',
-    position: { x: 16, y: 4 },
-    saturation: 95,
-  },
-  {
-    id: 'friend-11',
-    name: 'Oshitari',
-    label: 'Os',
-    color: '#0066cc',
-    position: { x: 1, y: 7 },
-    saturation: 55,
-  },
-  {
-    id: 'friend-12',
-    name: 'Mukahi',
-    label: 'Mu',
-    color: '#ff0066',
-    position: { x: 4, y: 7 },
-    saturation: 70,
-  },
-  {
-    id: 'friend-13',
-    name: 'Shishido',
-    label: 'S',
-    color: '#ffcc00',
-    position: { x: 10, y: 7 },
-    saturation: 65,
-  },
-  {
-    id: 'friend-14',
-    name: 'Akutagawa',
-    label: 'Ak',
-    color: '#ff99cc',
-    position: { x: 16, y: 7 },
-    saturation: 80,
-  },
-  {
-    id: 'friend-15',
-    name: 'Jiro',
-    label: 'J',
-    color: '#ffcc99',
-    position: { x: 19, y: 7 },
-    saturation: 85,
-  },
-  {
-    id: 'friend-16',
-    name: 'Niou',
-    label: 'N',
-    color: '#99ccff',
-    position: { x: 22, y: 7 },
-    saturation: 45,
-  },
-  {
-    id: 'friend-17',
-    name: 'Yagyu',
-    label: 'Y',
-    color: '#cc6699',
-    position: { x: 25, y: 7 },
-    saturation: 40,
-  },
-  {
-    id: 'friend-18',
-    name: 'Marui',
-    label: 'Ma',
-    color: '#ff3399',
-    position: { x: 28, y: 7 },
-    saturation: 90,
-  },
-  {
-    id: 'friend-19',
-    name: 'Sanada',
-    label: 'Sa',
-    color: '#333333',
-    position: { x: 1, y: 10 },
-    saturation: 60,
-  },
-  {
-    id: 'friend-20',
-    name: 'Yukimura',
-    label: 'Yu',
-    color: '#6699ff',
-    position: { x: 10, y: 10 },
-    saturation: 80,
-  },
-  {
-    id: 'friend-21',
-    name: 'Kirihara',
-    label: 'Ki',
-    color: '#660000',
-    position: { x: 16, y: 10 },
-    saturation: 75,
-  },
-  {
-    id: 'friend-22',
-    name: 'Ryoma',
-    label: 'R',
-    color: '#cc0000',
-    position: { x: 28, y: 10 },
-    saturation: 100,
-  },
-] as const;
 
 type CharacterActor = ActorRefFrom<typeof characterMachine>;
 type CharacterSnapshot = SnapshotFrom<typeof characterMachine>;
@@ -235,7 +56,7 @@ export function TownMapContainer() {
     const canvasHost = canvasHostRef.current;
     const characterSubscriptions = new Map<string, CharacterSubscription>();
     const widget = FabricTownMapWidget.mount(canvasHost, {
-      cellSize: 20,
+      cellSize: 10,
       onTileClick: tile => {
         setSelectedTile(tile);
         // setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));

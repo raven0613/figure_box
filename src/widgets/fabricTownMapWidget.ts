@@ -22,6 +22,7 @@ interface TerrainStyle {
 
 const DEFAULT_CELL_SIZE = 20;
 const CHARACTER_RADIUS_RATIO = 0.28;
+const CHARACTER_SCALE = 2;
 
 class TerrainStyleCatalog {
   private readonly styles: Record<TerrainType, TerrainStyle> = {
@@ -70,8 +71,9 @@ class MapObjectGlyphFactory {
 
 class CharacterTokenFactory {
   create(character: TownMapCharacter, center: GridCoordinate, cellSize: number): Group {
+    const renderSize = cellSize * CHARACTER_SCALE;
     const token = new Circle({
-      radius: cellSize * CHARACTER_RADIUS_RATIO,
+      radius: renderSize * CHARACTER_RADIUS_RATIO,
       fill: character.color ?? '#f2d16b',
       stroke: '#2d2d2d',
       strokeWidth: 2,
@@ -81,7 +83,7 @@ class CharacterTokenFactory {
       evented: false,
     });
     const label = new Text(character.label ?? character.id.slice(0, 1).toUpperCase(), {
-      fontSize: cellSize * 0.28,
+      fontSize: renderSize * 0.28,
       fontWeight: '700',
       fontFamily: 'Arial, sans-serif',
       fill: '#1f1f1f',
@@ -91,7 +93,7 @@ class CharacterTokenFactory {
       evented: false,
     });
     const status = new Text(character.statusText ?? '', {
-      top: -cellSize * 0.48,
+      top: -renderSize * 0.48,
       fontSize: 10,
       fontFamily: 'Arial, sans-serif',
       fill: '#20252b',
@@ -291,7 +293,7 @@ export class FabricTownMapWidget {
     bubble.set({
       text,
       left: token.left ?? 0,
-      top: (token.top ?? 0) - this.cellSize * 0.46,
+      top: (token.top ?? 0) - this.cellSize * CHARACTER_SCALE * 0.46,
     });
     this.canvas.bringObjectToFront(bubble);
     this.canvas.requestRenderAll();
