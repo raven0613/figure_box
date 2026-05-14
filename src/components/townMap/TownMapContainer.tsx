@@ -1,60 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
-import { createActor, ActorRefFrom, SnapshotFrom } from 'xstate';
-import { gameFlowMachine } from '~/stateMachines/gameFlow';
 import {
-  characterMachine,
   getCharacterStateSummary,
 } from '~/stateMachines/gameFlow/children/character';
 import {
-  dialogueManagerMachine,
-} from '~/stateMachines/gameFlow/children/dialogue';
-import {
   createRelationshipStore,
   normalizeRelationshipPair,
-  recordPassByPair,
-  RelationshipStore,
+  type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
+import {
+  TownCharacterController,
+  type CharacterSnapshot,
+  type DialogueSnapshot,
+} from '~/services/townCharacterController';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
-import { EventType } from '~/stateMachines/gameFlow/events';
-import type { CharacterEvent, DialogueManagerEmittedEvent } from '~/stateMachines/gameFlow/events';
 import { CHARACTER_SEEDS, MemoryType, SocialStatus } from '~/constants/character';
-import type { TownMapTile, GridCoordinate } from '~/widgets/townMapGrid';
-import { DESTINATION_MAP } from '~/constants/townMap';
+import type { TownMapTile } from '~/widgets/townMapGrid';
 
 import styles from './townMap.module.scss';
-import { INVITATION_DIALOGUE } from '~/constants/dialogue';
-
-type CharacterActor = ActorRefFrom<typeof characterMachine>;
-type CharacterSnapshot = SnapshotFrom<typeof characterMachine>;
-type GameFlowActor = ActorRefFrom<typeof gameFlowMachine>;
-type DialogueActor = ActorRefFrom<typeof dialogueManagerMachine>;
-type DialogueSnapshot = SnapshotFrom<typeof dialogueManagerMachine>;
-type CharacterSubscription = {
-  unsubscribe: () => void;
-};
 
 export function TownMapContainer() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
-  const widgetRef = useRef<FabricTownMapWidget | null>(null);
-  const characterActorsRef = useRef<Map<string, CharacterActor>>(new Map());
-  const gameFlowActorRef = useRef<GameFlowActor | null>(null);
-  const dialogueActorRef = useRef<DialogueActor | null>(null);
+  const characterControllerRef = useRef<TownCharacterController | null>(null);
   const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(createRelationshipStore);
-  const walkingCharactersRef = useRef<Set<string>>(new Set());
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
   // const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
   const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
   const [dialogueSnapshot, setDialogueSnapshot] = useState<DialogueSnapshot | null>(null);
 
-  // TODO: 把角色相關的狀態移出去，react只負責渲染
   useEffect(() => {
     if (!canvasHostRef.current) {
       return;
     }
 
     const canvasHost = canvasHostRef.current;
-    const characterSubscriptions = new Map<string, CharacterSubscription>();
     const widget = FabricTownMapWidget.mount(canvasHost, {
       cellSize: 10,
       onTileClick: tile => {
@@ -62,206 +41,34 @@ export function TownMapContainer() {
         // setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
       },
       onCharacterPickUp: characterId => {
-        if (isCharacterBodyFrozen(characterActorsRef.current.get(characterId))) {
-          widget.showCharacterBubble(characterId, '對話中...');
-          return;
-        }
-
         setSelectedCharacterId(characterId);
-        sendToCharacter(characterActorsRef.current, characterId, { type: EventType.PickUp });
+        characterControllerRef.current?.pickUpCharacter(characterId);
       },
       onCharacterDrop: (characterId, tile) => {
-        const actor = characterActorsRef.current.get(characterId);
-
-        if (!actor) {
-          return;
-        }
-
-        if (isCharacterBodyFrozen(actor)) {
-          widget.showCharacterBubble(characterId, '等一下...');
-          return;
-        }
-
-        if (tile && widget.moveCharacter(characterId, tile)) {
-          sendToCharacter(characterActorsRef.current, characterId, { type: EventType.Drop, position: tile });
-          return;
-        }
-
-        sendToCharacter(characterActorsRef.current, characterId, { type: EventType.Drop });
+        characterControllerRef.current?.dropCharacter(characterId, tile);
       },
     });
 
-    widgetRef.current = widget;
-
-    const spawnCharacterActor = (character: typeof CHARACTER_SEEDS[number], previousActor?: CharacterActor) => {
-      characterSubscriptions.get(character.id)?.unsubscribe();
-
-      const previousContext = previousActor?.getSnapshot().context;
-
-      widget.placeCharacter({
-        id: character.id,
-        x: previousContext?.position.x ?? character.position.x,
-        y: previousContext?.position.y ?? character.position.y,
-        color: character.color,
-        label: character.label,
-      });
-
-      const actor = createActor(characterMachine, {
-        input: {
-          id: character.id,
-          name: character.name,
-          position: previousContext?.position ?? character.position,
-          saturation: previousContext?.status.saturation ?? character.saturation,
-          relationships: previousContext?.relationships,
-        },
-      });
-
-      characterActorsRef.current.set(character.id, actor);
-
-      const subscription = actor.subscribe(snapshot => {
+    const characterController = new TownCharacterController({
+      widget,
+      onCharacterSnapshot: (characterId, snapshot) => {
         setCharacterSnapshots(current => ({
           ...current,
-          [character.id]: snapshot,
+          [characterId]: snapshot,
         }));
-
-        widget.updateCharacterStatus(character.id, snapshot.context.currentMotivation);
-
-        const summary = getCharacterStateSummary(snapshot.value);
-        const target = snapshot.context.target;
-
-        if (summary.bodyMove !== 'walking' || !target) {
-          if (walkingCharactersRef.current.has(character.id)) {
-            widget.cancelWalk(character.id);
-            walkingCharactersRef.current.delete(character.id);
-          }
-          return;
-        }
-
-        if (walkingCharactersRef.current.has(character.id)) {
-          return;
-        }
-
-        const currentPos = snapshot.context.position;
-        const path = widget.findPath(currentPos, target, character.id);
-
-        if (!path) {
-          // const blockingTiles = widget.findBlockingTiles(currentPos, target);
-          // blockingTiles.forEach(tile => {
-          //   console.log('最短距離受到阻擋，阻擋格子為', tile);
-          // });
-          sendToCharacter(characterActorsRef.current, character.id, { type: EventType.MoveBlocked });
-          return;
-        }
-
-        if (path.length === 0) {
-          sendToCharacter(characterActorsRef.current, character.id, { type: EventType.Arrive, position: target });
-          return;
-        }
-
-        walkingCharactersRef.current.add(character.id);
-
-        widget.walkCharacterAlongPath(
-          character.id,
-          path,
-          arrivedPosition => {
-            walkingCharactersRef.current.delete(character.id);
-            const currentActor = characterActorsRef.current.get(character.id);
-            const motivation = currentActor?.getSnapshot().context.currentMotivation ?? '';
-
-            sendToCharacter(characterActorsRef.current, character.id, { type: EventType.Arrive, position: arrivedPosition });
-
-            if (DESTINATION_MAP[motivation]) {
-              const dispersalTarget = findNearbyEmptyTile(widget, arrivedPosition, character.id, 4); // 4格內附近
-              if (dispersalTarget) {
-                sendToCharacter(characterActorsRef.current, character.id, { type: EventType.MoveTo, target: dispersalTarget });
-              }
-            }
-          },
-          blockedPosition => {
-            walkingCharactersRef.current.delete(character.id);
-            sendToCharacter(characterActorsRef.current, character.id, { type: EventType.MoveBlocked, position: blockedPosition });
-          },
-        );
-      });
-
-      actor.start();
-      const characterSubscription = {
-        unsubscribe: () => {
-          subscription.unsubscribe();
-        },
-      };
-
-      characterSubscriptions.set(character.id, characterSubscription);
-      return actor;
-    };
-
-    CHARACTER_SEEDS.forEach(character => {
-      spawnCharacterActor(character);
+      },
+      onRelationshipStoreChange: setRelationshipStore,
+      onDialogueSnapshot: setDialogueSnapshot,
     });
 
-    const gameFlowActor = createActor(gameFlowMachine);
-    gameFlowActorRef.current = gameFlowActor;
-    gameFlowActor.start();
-
-    const dialogueActor = gameFlowActor.getSnapshot().children.dialogueManager as DialogueActor | undefined;
-
-    if (!dialogueActor) {
-      throw new Error('Dialogue manager actor was not created by gameFlowMachine.');
-    }
-
-    dialogueActorRef.current = dialogueActor;
-
-    const dialogueSubscription = dialogueActor.subscribe(snapshot => {
-      setDialogueSnapshot(snapshot);
-    });
-
-    const emittedSubscription = dialogueActor.on('*', event => {
-      handleDialogueEmission(
-        event as DialogueManagerEmittedEvent,
-        characterActorsRef.current,
-        widget,
-      );
-    });
-    const tickTimer = window.setInterval(() => {
-      const timestamp = Date.now();
-
-      CHARACTER_SEEDS.forEach(character => {
-        const actor = characterActorsRef.current.get(character.id);
-
-        if (!actor || actor.getSnapshot().status !== 'active') {
-          spawnCharacterActor(character, actor);
-        }
-
-        sendToCharacter(characterActorsRef.current, character.id, { type: EventType.Tick });
-      });
-
-      setRelationshipStore(current => triggerPassByRelationships(
-        widget,
-        characterActorsRef.current,
-        current,
-        timestamp,
-      ));
-    }, 1000);
+    characterControllerRef.current = characterController;
+    characterController.start();
 
     return () => {
-      window.clearInterval(tickTimer);
-      walkingCharactersRef.current.forEach(id => widget.cancelWalk(id));
-      walkingCharactersRef.current.clear();
-      characterSubscriptions.forEach(subscription => {
-        subscription.unsubscribe();
-      });
-      characterSubscriptions.clear();
-      dialogueSubscription.unsubscribe();
-      emittedSubscription.unsubscribe();
-      gameFlowActor.stop();
-      gameFlowActorRef.current = null;
-      dialogueActorRef.current = null;
-      characterActorsRef.current.forEach(actor => {
-        actor.stop();
-      });
-      characterActorsRef.current.clear();
-      setRelationshipStore(createRelationshipStore);
-      widgetRef.current = null;
+      characterController.dispose();
+      characterControllerRef.current = null;
+      setCharacterSnapshots({});
+      setDialogueSnapshot(null);
       void widget.destroy();
       canvasHost.replaceChildren();
     };
@@ -309,22 +116,7 @@ export function TownMapContainer() {
               className={styles.dialogueButton}
               type="button"
               onClick={() => {
-                gameFlowActorRef.current?.send({
-                  type: 'START_DIALOGUE',
-                  script: INVITATION_DIALOGUE,
-                  participants: [
-                    {
-                      id: CHARACTER_SEEDS[0].id,
-                      role: 'initiator',
-                      name: CHARACTER_SEEDS[0].name,
-                    },
-                    {
-                      id: CHARACTER_SEEDS[1].id,
-                      role: 'target',
-                      name: CHARACTER_SEEDS[1].name,
-                    },
-                  ],
-                });
+                characterControllerRef.current?.startInvitationDialogue();
               }}
             >
               Start Invite
@@ -338,10 +130,7 @@ export function TownMapContainer() {
                     key={choice.id}
                     type="button"
                     onClick={() => {
-                      gameFlowActorRef.current?.send({
-                        type: 'RESOLVE',
-                        choiceId: choice.id,
-                      });
+                      characterControllerRef.current?.resolveDialogueChoice(choice.id);
                     }}
                   >
                     {choice.label}
@@ -380,52 +169,6 @@ export function TownMapContainer() {
       </aside>
     </section>
   );
-}
-
-function handleDialogueEmission(
-  event: DialogueManagerEmittedEvent,
-  characterActors: Map<string, CharacterActor>,
-  widget: FabricTownMapWidget,
-): void {
-  switch (event.type) {
-    case 'DIALOGUE_CHARACTER_EVENT':
-      sendToCharacter(characterActors, event.characterId, event.event);
-      return;
-    case 'DIALOGUE_LINE':
-      widget.showCharacterBubble(event.speakerId, event.text, 1800);
-      return;
-    case 'DIALOGUE_CHOICE_REQUESTED':
-      if (event.choice.text) {
-        event.participantIds.forEach(characterId => {
-          widget.showCharacterBubble(characterId, event.choice.text ?? '', 4200);
-        });
-      }
-      return;
-    case 'DIALOGUE_CHOICE_RESOLVED':
-    case 'DIALOGUE_ENDED':
-      return;
-  }
-}
-
-function isCharacterBodyFrozen(actor: CharacterActor | undefined): boolean {
-  if (actor?.getSnapshot().status !== 'active') return false;
-  const locks = actor.getSnapshot().context.locks;
-  return locks.bodyAction.length > 0 || locks.bodyMove.length > 0;
-}
-
-function sendToCharacter(
-  characterActors: Map<string, CharacterActor>,
-  characterId: string,
-  event: CharacterEvent,
-): boolean {
-  const actor = characterActors.get(characterId);
-
-  if (!actor || actor.getSnapshot().status !== 'active') {
-    return false;
-  }
-
-  actor.send(event);
-  return true;
 }
 
 function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
@@ -505,67 +248,4 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
       })}
     </div>
   );
-}
-
-function triggerPassByRelationships(
-  widget: FabricTownMapWidget,
-  characterActors: Map<string, CharacterActor>,
-  relationshipStore: RelationshipStore,
-  timestamp: number,
-): RelationshipStore {
-  let nextRelationshipStore = relationshipStore;
-  const processedPairs = new Set<string>();
-
-  characterActors.forEach((_actor, characterId) => {
-    const tile = widget.getCharacterTile(characterId);
-
-    if (!tile) {
-      return;
-    }
-
-    const nearbyIds = widget.getOccupiedNeighborIds(tile.x, tile.y, 2, characterId);
-
-    nearbyIds.forEach(targetCharId => {
-      const pairKey = characterId < targetCharId
-        ? `${characterId}::${targetCharId}`
-        : `${targetCharId}::${characterId}`;
-
-      if (processedPairs.has(pairKey)) {
-        return;
-      }
-
-      processedPairs.add(pairKey);
-
-      sendToCharacter(characterActors, characterId, { type: EventType.PassBy, targetCharId, timestamp });
-      sendToCharacter(characterActors, targetCharId, { type: EventType.PassBy, targetCharId: characterId, timestamp });
-
-      nextRelationshipStore = recordPassByPair(
-        nextRelationshipStore,
-        characterId,
-        targetCharId,
-        timestamp,
-      );
-    });
-  });
-
-  return nextRelationshipStore;
-}
-
-function findNearbyEmptyTile(
-  widget: FabricTownMapWidget,
-  position: GridCoordinate,
-  occupantId: string,
-  range: number
-): GridCoordinate | null {
-  const neighbors = widget.getNeighbors(position.x, position.y, range);
-  const candidates = neighbors.filter(tile =>
-    tile.cell.walkable && (!tile.cell.occupantId || tile.cell.occupantId === occupantId)
-  );
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-  return { x: chosen.x, y: chosen.y };
 }
