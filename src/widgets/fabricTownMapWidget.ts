@@ -1,5 +1,7 @@
 import { Canvas, Circle, Ellipse, FabricObject, Group, Rect, Text } from 'fabric';
 import { TownMapGrid, type CharacterPlacement, type GridCoordinate, type TownMapTile } from './townMapGrid';
+import { TownMapCamera } from './townMapCamera';
+import { TownMapCharacterTracker } from './townMapCharacterTracker';
 import type { TerrainType, TownMapCellData, TownMapObjectData, TownMapObjectType } from '~/constants/townMap';
 
 export interface TownMapCharacter extends CharacterPlacement {
@@ -341,6 +343,8 @@ export class FabricTownMapWidget {
   private readonly baseCanvasElement: HTMLCanvasElement;
   private readonly baseContext: CanvasRenderingContext2D;
   private readonly canvas: Canvas;
+  private readonly camera: TownMapCamera;
+  private readonly characterTracker: TownMapCharacterTracker;
   private readonly grid = new TownMapGrid();
   private readonly terrainStyles = new TerrainStyleCatalog();
   private readonly objectGlyphFactory = new MapObjectGlyphFactory();
@@ -352,6 +356,7 @@ export class FabricTownMapWidget {
   private readonly bubbleTimers = new Map<string, number>();
   private readonly walkers = new Map<string, WalkState>();
   private animationFrameId: number | null = null;
+  private pendingTileClick: TownMapTile | null = null;
   private readonly onTileClick?: (tile: TownMapTile) => void;
   private readonly onCharacterPickUp?: (characterId: string) => void;
   private readonly onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
@@ -385,9 +390,22 @@ export class FabricTownMapWidget {
       height: this.grid.height * this.cellSize,
       backgroundColor: 'transparent',
       selection: false,
-      allowTouchScrolling: true,
+      allowTouchScrolling: false,
     });
     this.prepareEntityCanvas();
+    this.camera = new TownMapCamera({
+      canvas: this.canvas,
+      baseCanvasElement: this.baseCanvasElement,
+      mapWidth: this.grid.width * this.cellSize,
+      mapHeight: this.grid.height * this.cellSize,
+      viewportWidth: this.grid.width * this.cellSize,
+      viewportHeight: this.grid.height * this.cellSize,
+    });
+    this.characterTracker = new TownMapCharacterTracker({
+      canvas: this.canvas,
+      camera: this.camera,
+      getCharacterCenter: characterId => this.getCharacterCenter(characterId),
+    });
     this.bindPointerEvents();
     this.draw();
   }
@@ -439,6 +457,7 @@ export class FabricTownMapWidget {
       this.updateEntitySortMetadata(token, pos.y);
       token.setCoords();
       this.sortEntityLayer();
+      this.characterTracker.update();
       this.canvas.requestRenderAll();
     }
 
@@ -521,6 +540,7 @@ export class FabricTownMapWidget {
   removeCharacter(characterId: string): void {
     const token = this.characterTokens.get(characterId);
     this.grid.removeOccupant(characterId);
+    this.characterTracker.removeCharacter(characterId);
 
     if (token) {
       this.canvas.remove(token);
@@ -624,24 +644,57 @@ export class FabricTownMapWidget {
   }
 
   private bindPointerEvents(): void {
+    this.canvas.on('mouse:wheel', event => {
+      this.camera.handleWheel(event.e);
+    });
+
     this.canvas.on('mouse:down', event => {
+      this.pendingTileClick = null;
+
+      if (this.camera.isZoomControl(event.target)) {
+        return;
+      }
+
+      if (this.characterTracker.isTrackingControl(event.target)) {
+        return;
+      }
+
       const characterId = this.getCharacterIdFromTarget(event.target);
 
       if (characterId) {
+        this.characterTracker.selectCharacter(characterId);
         this.onCharacterPickUp?.(characterId);
         return;
       }
 
       const pointer = this.canvas.getScenePoint(event.e);
-      const tile = this.grid.getTile(Math.floor(pointer.x / this.cellSize), Math.floor(pointer.y / this.cellSize));
+      this.pendingTileClick = this.grid.getTile(Math.floor(pointer.x / this.cellSize), Math.floor(pointer.y / this.cellSize));
+      this.camera.startPan(event.e, event.target);
+    });
 
-      if (tile) {
-        this.onTileClick?.(tile);
-      }
+    this.canvas.on('mouse:move', event => {
+      this.camera.pan(event.e);
     });
 
     this.canvas.on('mouse:up', event => {
+      if (this.characterTracker.handlePointerTarget(event.target)) {
+        this.pendingTileClick = null;
+        return;
+      }
+
+      if (this.camera.handleZoomControl(event.target)) {
+        this.pendingTileClick = null;
+        return;
+      }
+
+      const didPan = this.camera.endPan();
       const characterId = this.getCharacterIdFromTarget(event.target ?? this.canvas.getActiveObject());
+
+      if (!characterId && this.pendingTileClick && !didPan) {
+        this.onTileClick?.(this.pendingTileClick);
+      }
+
+      this.pendingTileClick = null;
 
       if (!characterId) {
         return;
@@ -679,6 +732,9 @@ export class FabricTownMapWidget {
     this.canvas.wrapperEl.style.position = 'absolute';
     this.canvas.wrapperEl.style.inset = '0';
     this.canvas.wrapperEl.style.zIndex = '1';
+    this.canvas.wrapperEl.style.touchAction = 'none';
+    this.canvas.lowerCanvasEl.style.touchAction = 'none';
+    this.canvas.upperCanvasEl.style.touchAction = 'none';
   }
 
   private draw(): void {
@@ -702,6 +758,7 @@ export class FabricTownMapWidget {
     });
 
     this.sortEntityLayer();
+    this.camera.addControls();
     this.canvas.requestRenderAll();
   }
 
@@ -789,6 +846,7 @@ export class FabricTownMapWidget {
           walker.token.set({ left: snapPoint.x, top: snapPoint.y });
           this.updateEntitySortMetadata(walker.token, snapPoint.y);
           walker.token.setCoords();
+          this.characterTracker.update();
           const currentTile = this.getCharacterTile(walker.characterId);
           walker.onBlocked(currentTile ?? walker.path[walker.currentSegment]);
           return 'done';
@@ -801,6 +859,7 @@ export class FabricTownMapWidget {
       walker.token.set({ left: final.x, top: final.y });
       this.updateEntitySortMetadata(walker.token, final.y);
       walker.token.setCoords();
+      this.characterTracker.update();
       walker.onArrive(walker.path[walker.path.length - 1]);
       return 'done';
     }
@@ -814,6 +873,7 @@ export class FabricTownMapWidget {
     walker.token.set({ left: x, top: y });
     this.updateEntitySortMetadata(walker.token, y);
     walker.token.setCoords();
+    this.characterTracker.update();
     return 'continue';
   }
 
@@ -826,6 +886,7 @@ export class FabricTownMapWidget {
       this.updateEntitySortMetadata(existing, pos.y);
       existing.setCoords();
       this.sortEntityLayer();
+      this.characterTracker.update();
       return;
     }
 
@@ -834,6 +895,7 @@ export class FabricTownMapWidget {
     this.characterTokens.set(character.id, token);
     this.canvas.add(token);
     this.sortEntityLayer();
+    this.characterTracker.update();
   }
 
   private snapCharacterToGrid(characterId: string): void {
@@ -849,6 +911,7 @@ export class FabricTownMapWidget {
     this.updateEntitySortMetadata(token, pos.y);
     token.setCoords();
     this.sortEntityLayer();
+    this.characterTracker.update();
     this.canvas.requestRenderAll();
   }
 
@@ -884,6 +947,19 @@ export class FabricTownMapWidget {
     return {
       x: coordinate.x * this.cellSize + this.cellSize / 2,
       y: coordinate.y * this.cellSize + this.cellSize / 2,
+    };
+  }
+
+  private getCharacterCenter(characterId: string): GridCoordinate | null {
+    const token = this.characterTokens.get(characterId);
+
+    if (!token) {
+      return null;
+    }
+
+    return {
+      x: token.left ?? 0,
+      y: token.top ?? 0,
     };
   }
 

@@ -181,7 +181,7 @@ export class TownMapGrid {
       const currentX = currentIndex % this.width;
       const currentY = Math.floor(currentIndex / this.width);
 
-      for (const neighbor of this.getCardinalNeighborCoords(currentX, currentY)) {
+      for (const neighbor of this.getNeighborCoords(currentX, currentY)) {
         const neighborIndex = this.toIndex(neighbor.x, neighbor.y);
 
         if (visited.has(neighborIndex)) {
@@ -234,7 +234,7 @@ export class TownMapGrid {
       const currentX = currentIndex % this.width;
       const currentY = Math.floor(currentIndex / this.width);
 
-      for (const neighbor of this.getCardinalNeighborCoords(currentX, currentY)) {
+      for (const neighbor of this.getNeighborCoords(currentX, currentY)) {
         const neighborIndex = this.toIndex(neighbor.x, neighbor.y);
 
         if (visited.has(neighborIndex)) {
@@ -264,18 +264,50 @@ export class TownMapGrid {
 
     return path;
   }
-
-  private getCardinalNeighborCoords(x: number, y: number): GridCoordinate[] {
-    const directions: GridCoordinate[] = [
+  // 尋路：可以走斜的
+  private getNeighborCoords(x: number, y: number): GridCoordinate[] {
+    const cardinals: GridCoordinate[] = [
       { x: 0, y: -1 },
       { x: 1, y: 0 },
       { x: 0, y: 1 },
       { x: -1, y: 0 },
     ];
 
-    return directions
-      .map(dir => ({ x: x + dir.x, y: y + dir.y }))
-      .filter(coord => this.isInside(coord.x, coord.y));
+    const diagonals: { x: number; y: number; adjA: GridCoordinate; adjB: GridCoordinate }[] = [
+      { x: 1, y: -1, adjA: { x: 1, y: 0 }, adjB: { x: 0, y: -1 } },
+      { x: 1, y: 1, adjA: { x: 1, y: 0 }, adjB: { x: 0, y: 1 } },
+      { x: -1, y: 1, adjA: { x: -1, y: 0 }, adjB: { x: 0, y: 1 } },
+      { x: -1, y: -1, adjA: { x: -1, y: 0 }, adjB: { x: 0, y: -1 } },
+    ];
+
+    const results: GridCoordinate[] = [];
+
+    for (const dir of cardinals) {
+      const nx = x + dir.x;
+      const ny = y + dir.y;
+
+      if (this.isInside(nx, ny)) {
+        results.push({ x: nx, y: ny });
+      }
+    }
+
+    for (const diag of diagonals) {
+      const nx = x + diag.x;
+      const ny = y + diag.y;
+
+      if (!this.isInside(nx, ny)) {
+        continue;
+      }
+
+      const adjAWalkable = this.isTileWalkableForOccupant(x + diag.adjA.x, y + diag.adjA.y);
+      const adjBWalkable = this.isTileWalkableForOccupant(x + diag.adjB.x, y + diag.adjB.y);
+
+      if (adjAWalkable && adjBWalkable) {
+        results.push({ x: nx, y: ny });
+      }
+    }
+
+    return results;
   }
 
   private createFlatTiles(rows: TownMapCellData[][]): TownMapTile[] {
