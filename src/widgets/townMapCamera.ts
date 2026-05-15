@@ -24,6 +24,13 @@ export interface TownMapCameraPoint {
   y: number;
 }
 
+interface PinchGestureState {
+  startCenter: PointerPosition;
+  startDistance: number;
+  startViewport: ViewportTransform;
+  startZoom: number;
+}
+
 const DEFAULT_MIN_ZOOM = 1;
 const DEFAULT_MAX_ZOOM = 4;
 const WHEEL_ZOOM_FACTOR = 0.0018;
@@ -46,6 +53,7 @@ export class TownMapCamera {
   private panStart: PointerPosition | null = null;
   private viewportStart: ViewportTransform | null = null;
   private hasPannedSincePointerDown = false;
+  private pinchGesture: PinchGestureState | null = null;
 
   constructor(options: TownMapCameraOptions) {
     this.canvas = options.canvas;
@@ -59,6 +67,7 @@ export class TownMapCamera {
     this.zoomControls = this.createZoomControls();
 
     this.applyViewport([1, 0, 0, 1, 0, 0]);
+    this.bindTouchGestures();
   }
 
   getZoom(): number {
@@ -155,6 +164,78 @@ export class TownMapCamera {
     this.canvas.defaultCursor = 'default';
     return didPan;
   }
+
+  dispose(): void {
+    this.canvas.upperCanvasEl.removeEventListener('touchstart', this.handleTouchStart);
+    this.canvas.upperCanvasEl.removeEventListener('touchmove', this.handleTouchMove);
+    this.canvas.upperCanvasEl.removeEventListener('touchend', this.handleTouchEnd);
+    this.canvas.upperCanvasEl.removeEventListener('touchcancel', this.handleTouchEnd);
+  }
+
+  private bindTouchGestures(): void {
+    this.canvas.upperCanvasEl.addEventListener('touchstart', this.handleTouchStart, { passive: false });
+    this.canvas.upperCanvasEl.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+    this.canvas.upperCanvasEl.addEventListener('touchend', this.handleTouchEnd, { passive: false });
+    this.canvas.upperCanvasEl.addEventListener('touchcancel', this.handleTouchEnd, { passive: false });
+  }
+
+  private handleTouchStart = (event: TouchEvent): void => {
+    if (event.touches.length !== 2) {
+      return;
+    }
+
+    event.preventDefault();
+    const touches = this.getTouchPair(event);
+
+    if (!touches) {
+      return;
+    }
+
+    this.endPan();
+    this.pinchGesture = {
+      startCenter: this.getTouchCenter(touches),
+      startDistance: this.getTouchDistance(touches),
+      startViewport: this.getViewportTransform(),
+      startZoom: this.zoom,
+    };
+  };
+
+  private handleTouchMove = (event: TouchEvent): void => {
+    if (event.touches.length !== 2 || !this.pinchGesture) {
+      return;
+    }
+
+    event.preventDefault();
+    const touches = this.getTouchPair(event);
+
+    if (!touches || this.pinchGesture.startDistance === 0) {
+      return;
+    }
+
+    const center = this.getTouchCenter(touches);
+    const distance = this.getTouchDistance(touches);
+    const nextZoom = this.clampZoom(this.pinchGesture.startZoom * (distance / this.pinchGesture.startDistance));
+    const sceneX = (this.pinchGesture.startCenter.x - this.pinchGesture.startViewport[4]) / this.pinchGesture.startZoom;
+    const sceneY = (this.pinchGesture.startCenter.y - this.pinchGesture.startViewport[5]) / this.pinchGesture.startZoom;
+
+    this.zoom = nextZoom;
+    this.applyViewport(this.clampViewport([
+      nextZoom,
+      0,
+      0,
+      nextZoom,
+      center.x - sceneX * nextZoom,
+      center.y - sceneY * nextZoom,
+    ]));
+  };
+
+  private handleTouchEnd = (event: TouchEvent): void => {
+    if (event.touches.length >= 2) {
+      return;
+    }
+
+    this.pinchGesture = null;
+  };
 
   private zoomToCenter(nextZoom: number): void {
     this.zoomToPoint(
@@ -301,6 +382,31 @@ export class TownMapCamera {
     }
 
     return this.normalizeCanvasPoint({ x: event.clientX, y: event.clientY });
+  }
+
+  private getTouchPair(event: TouchEvent): [Touch, Touch] | null {
+    const firstTouch = event.touches[0];
+    const secondTouch = event.touches[1];
+
+    if (!firstTouch || !secondTouch) {
+      return null;
+    }
+
+    return [firstTouch, secondTouch];
+  }
+
+  private getTouchCenter([firstTouch, secondTouch]: [Touch, Touch]): PointerPosition {
+    return this.normalizeCanvasPoint({
+      x: (firstTouch.clientX + secondTouch.clientX) / 2,
+      y: (firstTouch.clientY + secondTouch.clientY) / 2,
+    });
+  }
+
+  private getTouchDistance([firstTouch, secondTouch]: [Touch, Touch]): number {
+    const deltaX = firstTouch.clientX - secondTouch.clientX;
+    const deltaY = firstTouch.clientY - secondTouch.clientY;
+
+    return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   }
 
   private normalizeCanvasPoint(point: PointerPosition): PointerPosition {

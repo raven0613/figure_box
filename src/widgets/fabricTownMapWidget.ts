@@ -635,6 +635,7 @@ export class FabricTownMapWidget {
 
   destroy(): Promise<boolean> {
     this.stopAnimationLoop();
+    this.camera.dispose();
     this.walkers.clear();
     this.bubbleTimers.forEach(timer => window.clearTimeout(timer));
     this.bubbleTimers.clear();
