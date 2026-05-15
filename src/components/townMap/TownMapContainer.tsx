@@ -14,15 +14,22 @@ import {
 } from '~/services/townCharacterController';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
+import { INVITATION_DIALOGUE } from '~/constants/dialogue';
+import { createDialogueViewScriptFromDocument } from '~/services/dialogueViewAdapter';
 import type { TownMapTile } from '~/widgets/townMapGrid';
+import type { DialogueViewScript } from '~/typing/dialogueView';
 
 import styles from './townMap.module.scss';
 
 interface TownMapContainerProps {
   expressionByCharacterId?: Partial<Record<string, Expression>>;
+  onDialogueRequested?: (script: DialogueViewScript) => void;
 }
 
-export function TownMapContainer({ expressionByCharacterId = {} }: TownMapContainerProps) {
+export function TownMapContainer({
+  expressionByCharacterId = {},
+  onDialogueRequested,
+}: TownMapContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const characterControllerRef = useRef<TownCharacterController | null>(null);
   const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(createRelationshipStore);
@@ -131,7 +138,21 @@ export function TownMapContainer({ expressionByCharacterId = {} }: TownMapContai
               className={styles.dialogueButton}
               type="button"
               onClick={() => {
-                characterControllerRef.current?.startInvitationDialogue();
+                onDialogueRequested?.(createDialogueViewScriptFromDocument(
+                  INVITATION_DIALOGUE,
+                  [
+                    {
+                      id: CHARACTER_SEEDS[0].id,
+                      role: 'initiator',
+                      name: CHARACTER_SEEDS[0].name,
+                    },
+                    {
+                      id: CHARACTER_SEEDS[1].id,
+                      role: 'target',
+                      name: CHARACTER_SEEDS[1].name,
+                    },
+                  ],
+                ));
               }}
             >
               Start Invite

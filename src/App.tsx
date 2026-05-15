@@ -3,12 +3,13 @@ import { I18nextProvider } from 'react-i18next';
 import { Expression } from '~/constants/character';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
 import i18n from '~/i18n';
+import type { DialogueViewScript } from '~/typing/dialogueView';
 import { DialogueWindow } from './components/dialogue/DialogueWindow';
 import styles from './App.module.scss';
 import { TownMapContainer } from './components/townMap/TownMapContainer';
 
 function App() {
-  const [isDialogueDemoOpen, setIsDialogueDemoOpen] = useState(false);
+  const [activeDialogueScript, setActiveDialogueScript] = useState<DialogueViewScript | null>(null);
   const [dialogueExpressionByCharacterId, setDialogueExpressionByCharacterId] = useState<Partial<Record<string, Expression>>>({});
   const handleDialogueLineChange = useCallback((line: { speakerId: string; expression: Expression }) => {
     setDialogueExpressionByCharacterId(current => {
@@ -29,7 +30,7 @@ function App() {
         <button
           className={styles.dialogueDemoButton}
           type="button"
-          onClick={() => setIsDialogueDemoOpen(true)}
+          onClick={() => setActiveDialogueScript(DIALOGUE_DEMO_SCRIPT)}
         >
           Test Dialogue
         </button>
@@ -40,13 +41,16 @@ function App() {
           onClose={() => { }}
         /> */}
         {/* <AvatarEditorContainer /> */}
-        <TownMapContainer expressionByCharacterId={dialogueExpressionByCharacterId} />
-        {isDialogueDemoOpen ? (
+        <TownMapContainer
+          expressionByCharacterId={dialogueExpressionByCharacterId}
+          onDialogueRequested={setActiveDialogueScript}
+        />
+        {activeDialogueScript ? (
           <DialogueWindow
-            script={DIALOGUE_DEMO_SCRIPT}
+            script={activeDialogueScript}
             onLineChange={handleDialogueLineChange}
             onClose={() => {
-              setIsDialogueDemoOpen(false);
+              setActiveDialogueScript(null);
             }}
           />
         ) : null}
