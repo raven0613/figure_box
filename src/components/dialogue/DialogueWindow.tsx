@@ -4,7 +4,7 @@ import type {
   DialogueViewLine,
   DialogueViewInstruction,
   DialogueViewScript,
-} from '~/constants/dialogueDemo';
+} from '~/typing/dialogueView';
 import { resolveDialogueChoiceResult } from '~/utils/dialogueFlow';
 import { DialogueAvatarStage } from './DialogueAvatarStage';
 
@@ -13,6 +13,7 @@ import styles from './dialogue.module.scss';
 interface DialogueWindowProps {
   script: DialogueViewScript;
   onClose: () => void;
+  onLineChange?: (line: DialogueViewLine) => void;
 }
 
 interface IdleDialogueFlow {
@@ -22,7 +23,7 @@ interface IdleDialogueFlow {
 
 const IDLE_DIALOGUE_LINE_DURATION_MS = 2200;
 
-export function DialogueWindow({ script, onClose }: DialogueWindowProps) {
+export function DialogueWindow({ script, onClose, onLineChange }: DialogueWindowProps) {
   const [instructions, setInstructions] = useState<DialogueViewInstruction[]>(script.lines);
   const [lineIndex, setLineIndex] = useState(0);
   const [idleDialogueFlow, setIdleDialogueFlow] = useState<IdleDialogueFlow | null>(null);
@@ -66,6 +67,16 @@ export function DialogueWindow({ script, onClose }: DialogueWindowProps) {
     setIdleDialogueFlow(null);
     setIdleBubbleBySpeakerId({});
   }, [script.id, script.lines]);
+
+  useEffect(() => {
+    onLineChange?.({
+      id: currentLine.id,
+      type: 'SAY',
+      speakerId: currentLine.speakerId,
+      text: currentLine.text,
+      expression: currentLine.expression,
+    });
+  }, [currentLine.expression, currentLine.id, currentLine.speakerId, currentLine.text, onLineChange]);
 
   useEffect(() => {
     setIdleDialogueFlow(null);

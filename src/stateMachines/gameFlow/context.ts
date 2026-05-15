@@ -1,4 +1,4 @@
-import { DirectedRelationship, Mood, Position } from "~/constants/character";
+import { DirectedRelationship, Expression, Mood, Position } from "~/constants/character";
 import { Item } from "~/constants/data";
 import type { RelationshipStore } from "./relationships";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
@@ -15,6 +15,7 @@ export interface CharacterContext {
   ownItems: Item[],
   status: {
     mood: Mood;
+    expression: Expression;
     saturation: number; // 飽足度：用長條圖顯示
     moodValue: number;
     hungerThreshold: number;

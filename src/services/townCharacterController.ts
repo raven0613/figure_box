@@ -1,5 +1,5 @@
 import { createActor, type ActorRefFrom, type SnapshotFrom } from 'xstate';
-import { CHARACTER_SEEDS, type Position } from '~/constants/character';
+import { CHARACTER_SEEDS, Expression, type Position } from '~/constants/character';
 import { INVITATION_DIALOGUE } from '~/constants/dialogue';
 import { DESTINATION_MAP } from '~/constants/townMap';
 import { gameFlowMachine } from '~/stateMachines/gameFlow';
@@ -137,6 +137,13 @@ export class TownCharacterController {
     });
   }
 
+  setCharacterExpression(characterId: string, expression: Expression): void {
+    this.sendToCharacter(characterId, {
+      type: EventType.SetExpression,
+      expression,
+    });
+  }
+
   dispose(): void {
     if (this.tickTimer !== null) {
       window.clearInterval(this.tickTimer);
@@ -179,6 +186,7 @@ export class TownCharacterController {
       y: previousContext?.position.y ?? character.position.y,
       color: character.color,
       label: character.label,
+      expression: previousContext?.status.expression ?? Expression.Normal,
     });
 
     const actor = createActor(characterMachine, {
@@ -205,6 +213,7 @@ export class TownCharacterController {
 
   private syncCharacterWithWidget(characterId: string, snapshot: CharacterSnapshot): void {
     this.widget.updateCharacterStatus(characterId, snapshot.context.currentMotivation);
+    this.widget.updateCharacterExpression(characterId, snapshot.context.status.expression);
 
     const summary = getCharacterStateSummary(snapshot.value);
     const target = snapshot.context.target;
@@ -320,6 +329,10 @@ export class TownCharacterController {
         this.sendToCharacter(event.characterId, event.event);
         return;
       case 'DIALOGUE_LINE':
+        this.sendToCharacter(event.speakerId, {
+          type: EventType.SetExpression,
+          expression: event.expression ?? Expression.Normal,
+        });
         this.widget.showCharacterBubble(event.speakerId, event.text, 1800);
         return;
       case 'DIALOGUE_CHOICE_REQUESTED':

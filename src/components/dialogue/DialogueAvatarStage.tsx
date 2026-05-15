@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { DialogueViewParticipant } from '~/constants/dialogueDemo';
+import type { DialogueViewParticipant } from '~/typing/dialogueView';
 import { DialogueAvatarRenderer, type DialogueAvatarState } from './DialogueAvatarRenderer';
 
 import styles from './dialogue.module.scss';

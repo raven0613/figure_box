@@ -13,12 +13,16 @@ import {
   type DialogueSnapshot,
 } from '~/services/townCharacterController';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
-import { CHARACTER_SEEDS, MemoryType, SocialStatus } from '~/constants/character';
+import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
 import type { TownMapTile } from '~/widgets/townMapGrid';
 
 import styles from './townMap.module.scss';
 
-export function TownMapContainer() {
+interface TownMapContainerProps {
+  expressionByCharacterId?: Partial<Record<string, Expression>>;
+}
+
+export function TownMapContainer({ expressionByCharacterId = {} }: TownMapContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const characterControllerRef = useRef<TownCharacterController | null>(null);
   const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(createRelationshipStore);
@@ -76,6 +80,14 @@ export function TownMapContainer() {
       canvasHost.replaceChildren();
     };
   }, []);
+
+  useEffect(() => {
+    Object.entries(expressionByCharacterId).forEach(([characterId, expression]) => {
+      if (expression) {
+        characterControllerRef.current?.setCharacterExpression(characterId, expression);
+      }
+    });
+  }, [expressionByCharacterId]);
 
   return (
     <section className={styles.container}>

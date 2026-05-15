@@ -6,7 +6,7 @@ import type {
   DialogueJumpTarget,
   DialogueViewInstruction,
   DialogueViewScript,
-} from '~/constants/dialogueDemo';
+} from '~/typing/dialogueView';
 
 export interface DialogueChoiceResolution {
   instructions: DialogueViewInstruction[];

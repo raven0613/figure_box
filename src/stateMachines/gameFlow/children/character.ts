@@ -1,5 +1,5 @@
 import { assign, createMachine, enqueueActions, StateValue } from 'xstate';
-import { Mood, Position } from '~/constants/character';
+import { Expression, Mood, Position } from '~/constants/character';
 import { TOWN_MAP_WIDTH, TOWN_MAP_HEIGHT, DESTINATION_MAP } from '~/constants/townMap';
 import {
     CharacterBodyActionState,
@@ -36,6 +36,7 @@ export const characterMachine = createMachine(
             ownItems: [],
             status: {
                 mood: Mood.Happy,
+                expression: Expression.Normal,
                 saturation: input.saturation ?? 70,
                 moodValue: 65,
                 hungerThreshold: LOW_SATURATION_THRESHOLD,
@@ -155,6 +156,9 @@ export const characterMachine = createMachine(
                 guard: 'canReceiveLogicCommand',
                 target: '.mind.null',
             },
+            [EventType.SetExpression]: {
+                actions: 'setExpression',
+            },
             [EventType.AddLock]: {
                 actions: 'addLock',
             },
@@ -223,6 +227,15 @@ export const characterMachine = createMachine(
             ),
         },
         actions: {
+            setExpression: assign({
+                status: ({ context, event }) => {
+                    if (event.type !== EventType.SetExpression) return context.status;
+                    return {
+                        ...context.status,
+                        expression: event.expression,
+                    };
+                },
+            }),
             addLock: assign({
                 locks: ({ context, event }) => {
                     if (event.type !== EventType.AddLock) return context.locks;

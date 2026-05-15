@@ -1,137 +1,6 @@
-import { CHARACTER_SEEDS, Expression, type CharacterBaseSetting } from './character';
-
-export type DialogueAvatarSlot = 'left' | 'center-left' | 'center-right' | 'right';
-
-export interface DialogueViewParticipant {
-  id: string;
-  name: string;
-  color: string;
-  label: string;
-  slot: DialogueAvatarSlot;
-  avatar?: CharacterBaseSetting['avatar'];
-}
-
-export interface DialogueViewLine {
-  id?: string;
-  type: 'SAY';
-  speakerId: string;
-  text: string;
-  expression: Expression;
-}
-
-export interface DialogueViewChoice {
-  id: string;
-  label: string;
-  result: DialogueChoiceResult;
-}
-
-export type DialogueChoiceResult =
-  | {
-    type: 'appendLines';
-    lines: DialogueViewInstruction[];
-  }
-  | {
-    type: 'replaceRemaining';
-    lines: DialogueViewInstruction[];
-  }
-  | {
-    type: 'jumpTo';
-    target: DialogueJumpTarget;
-  }
-  | {
-    type: 'branch';
-    branchGroupId: string;
-  }
-  | {
-    type: 'end';
-  };
-
-export type DialogueJumpTarget =
-  | {
-    type: 'index';
-    index: number;
-  }
-  | {
-    type: 'anchor';
-    anchorId: string;
-  };
-
-export interface DialogueDemoCharacterState {
-  id: string;
-  traits: string[];
-}
-
-export interface DialogueDemoRelationshipState {
-  sourceId: string;
-  targetId: string;
-  intimacy: number;
-}
-
-export interface DialogueBranchContext {
-  characters: DialogueDemoCharacterState[];
-  relationships: DialogueDemoRelationshipState[];
-  recentBranchIds?: string[];
-  random?: () => number;
-}
-
-export type DialogueCondition =
-  | {
-    type: 'intimacyRange';
-    sourceId: string;
-    targetId: string;
-    min?: number;
-    max?: number;
-  }
-  | {
-    type: 'traitIncludes';
-    characterId: string;
-    trait: string;
-  };
-
-export interface DialogueScoreRule {
-  when: DialogueCondition;
-  add: number;
-  multiplier?: number;
-}
-
-export interface DialogueBranchCandidate {
-  id: string;
-  selectionMode: 'required' | 'weighted';
-  priority?: number;
-  baseWeight: number;
-  conditions?: DialogueCondition[];
-  scoreRules?: DialogueScoreRule[];
-  lines: DialogueViewInstruction[];
-}
-
-export interface DialogueBranchGroup {
-  id: string;
-  selectionStrategy: 'scoreWeighted' | 'rankWeighted';
-  rankWeights?: number[];
-  candidates: DialogueBranchCandidate[];
-}
-
-export interface DialogueViewChoiceLine {
-  id?: string;
-  type: 'CHOICE';
-  speakerId: string;
-  text: string;
-  expression: Expression;
-  idlePrompt?: string;
-  idlePromptLines?: DialogueViewLine[];
-  timeoutMs: number;
-  choices: DialogueViewChoice[];
-}
-
-export type DialogueViewInstruction = DialogueViewLine | DialogueViewChoiceLine;
-
-export interface DialogueViewScript {
-  id: string;
-  participants: DialogueViewParticipant[];
-  lines: DialogueViewInstruction[];
-  branchGroups?: Record<string, DialogueBranchGroup>;
-  branchContext?: DialogueBranchContext;
-}
+import { CHARACTER_SEEDS, Expression } from './character';
+import { getCharacterAppearance } from '~/services/characterAvatarCatalogService';
+import type { DialogueViewScript } from '~/typing/dialogueView';
 
 const demoSeeds = CHARACTER_SEEDS.slice(0, 4);
 
@@ -144,6 +13,7 @@ export const DIALOGUE_DEMO_SCRIPT: DialogueViewScript = {
       color: demoSeeds[0].color,
       label: demoSeeds[0].label,
       slot: 'left',
+      appearance: getCharacterAppearance(demoSeeds[0].id) ?? undefined,
     },
     {
       id: demoSeeds[1].id,
@@ -151,6 +21,7 @@ export const DIALOGUE_DEMO_SCRIPT: DialogueViewScript = {
       color: demoSeeds[1].color,
       label: demoSeeds[1].label,
       slot: 'right',
+      appearance: getCharacterAppearance(demoSeeds[1].id) ?? undefined,
     },
     {
       id: demoSeeds[2].id,
@@ -158,6 +29,7 @@ export const DIALOGUE_DEMO_SCRIPT: DialogueViewScript = {
       color: demoSeeds[2].color,
       label: demoSeeds[2].label,
       slot: 'center-left',
+      appearance: getCharacterAppearance(demoSeeds[2].id) ?? undefined,
     },
     {
       id: demoSeeds[3].id,
@@ -165,6 +37,7 @@ export const DIALOGUE_DEMO_SCRIPT: DialogueViewScript = {
       color: demoSeeds[3].color,
       label: demoSeeds[3].label,
       slot: 'center-right',
+      appearance: getCharacterAppearance(demoSeeds[3].id) ?? undefined,
     },
   ],
   lines: [

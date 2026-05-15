@@ -2,12 +2,14 @@ import { Canvas, Circle, Ellipse, FabricObject, Group, Rect, Text } from 'fabric
 import { TownMapGrid, type CharacterPlacement, type GridCoordinate, type TownMapTile } from './townMapGrid';
 import { TownMapCamera } from './townMapCamera';
 import { TownMapCharacterTracker } from './townMapCharacterTracker';
+import { Expression } from '~/constants/character';
 import type { TerrainType, TownMapCellData, TownMapObjectData, TownMapObjectType } from '~/constants/townMap';
 
 export interface TownMapCharacter extends CharacterPlacement {
   color?: string;
   label?: string;
   statusText?: string;
+  expression?: Expression;
 }
 
 export interface FabricTownMapOptions {
@@ -303,7 +305,18 @@ class CharacterTokenFactory {
       selectable: false,
       evented: false,
     });
-    const group = new Group([status, token, label], {
+    const expression = new Text(character.expression ?? Expression.Normal, {
+      top: -renderSize * 0.82,
+      fontSize: 10,
+      fontFamily: 'Arial, sans-serif',
+      fill: '#24313a',
+      backgroundColor: 'rgba(174, 230, 204, 0.9)',
+      originX: 'center',
+      originY: 'bottom',
+      selectable: false,
+      evented: false,
+    });
+    const group = new Group([expression, status, token, label], {
       left: center.x,
       top: center.y,
       originX: 'center',
@@ -321,6 +334,7 @@ class CharacterTokenFactory {
 
     group.set('characterId', character.id);
     group.set('statusObject', status);
+    group.set('expressionObject', expression);
     return group;
   }
 }
@@ -473,6 +487,19 @@ export class FabricTownMapWidget {
     }
 
     status.set('text', statusText);
+    token.setCoords();
+    this.canvas.requestRenderAll();
+  }
+
+  updateCharacterExpression(characterId: string, expressionText: Expression): void {
+    const token = this.characterTokens.get(characterId);
+    const expression = token?.get('expressionObject') as Text | undefined;
+
+    if (!token || !expression || expression.text === expressionText) {
+      return;
+    }
+
+    expression.set('text', expressionText);
     token.setCoords();
     this.canvas.requestRenderAll();
   }

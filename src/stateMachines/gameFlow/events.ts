@@ -1,4 +1,4 @@
-import { Position } from "~/constants/character";
+import { Expression, Position } from "~/constants/character";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
 
 export enum WidgetEventType {
@@ -29,6 +29,7 @@ export type CharacterEvent =
   | { type: EventType.MoveBlocked; position?: Position }
   | { type: EventType.StartThinking }
   | { type: EventType.StopThinking }
+  | { type: EventType.SetExpression; expression: Expression }
   | { type: EventType.AddLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: string }
   | { type: EventType.RemoveLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: string };
 
@@ -58,6 +59,7 @@ export enum EventType {
   MoveBlocked = "moveBlocked",
   StartThinking = "startThinking",
   StopThinking = "stopThinking",
+  SetExpression = "setExpression",
   AddLock = "addLock",
   RemoveLock = "removeLock",
 }
@@ -81,6 +83,7 @@ export type DialogueManagerEmittedEvent =
     type: 'DIALOGUE_LINE';
     speakerId: string;
     text: string;
+    expression?: Expression;
   }
   | {
     type: 'DIALOGUE_CHOICE_REQUESTED';

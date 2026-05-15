@@ -1,6 +1,8 @@
 import { Canvas, Circle, Group, Rect, Text, Textbox } from 'fabric';
-import type { Expression } from '~/constants/character';
-import type { DialogueAvatarSlot, DialogueViewParticipant } from '~/constants/dialogueDemo';
+import { Expression } from '~/constants/character';
+import { getAvatarExpressionPreset } from '~/services/characterAvatarCatalogService';
+import type { AvatarExpressionPreset } from '~/typing/characterAvatar';
+import type { DialogueAvatarSlot, DialogueViewParticipant } from '~/typing/dialogueView';
 
 const STAGE_WIDTH = 960;
 const STAGE_HEIGHT = 300;
@@ -25,6 +27,10 @@ export interface DialogueAvatarState {
 export class DialogueAvatarRenderer {
   private readonly canvas: Canvas;
   private readonly avatarGroups = new Map<string, Group>();
+  private readonly faceShapes = new Map<string, Circle>();
+  private readonly leftEyeShapes = new Map<string, Circle>();
+  private readonly rightEyeShapes = new Map<string, Circle>();
+  private readonly mouthShapes = new Map<string, Rect>();
   private readonly expressionLabels = new Map<string, Text>();
   private readonly statusLabels = new Map<string, Text>();
   private readonly bubbleLabels = new Map<string, Textbox>();
@@ -49,6 +55,10 @@ export class DialogueAvatarRenderer {
     this.participants = participants;
     this.canvas.clear();
     this.avatarGroups.clear();
+    this.faceShapes.clear();
+    this.leftEyeShapes.clear();
+    this.rightEyeShapes.clear();
+    this.mouthShapes.clear();
     this.expressionLabels.clear();
     this.statusLabels.clear();
     this.bubbleLabels.clear();
@@ -87,10 +97,15 @@ export class DialogueAvatarRenderer {
       const expressionLabel = this.expressionLabels.get(participant.id);
       const statusLabel = this.statusLabels.get(participant.id);
       const bubbleLabel = this.bubbleLabels.get(participant.id);
+      const expressionPreset = state.expression && isActive
+        ? getAvatarExpressionPreset(state.expression)
+        : null;
 
       if (expressionLabel) {
         expressionLabel.set({ text: isActive && state.expression ? state.expression : '' });
       }
+
+      this.applyExpressionPreset(participant.id, expressionPreset);
 
       if (statusLabel) {
         statusLabel.set({ text: isThinking ? 'thinking' : '' });
@@ -111,9 +126,12 @@ export class DialogueAvatarRenderer {
 
   private createAvatarGroup(participant: DialogueViewParticipant): Group {
     const position = SLOT_POSITION_BY_NAME[participant.slot];
+    const avatar = participant.appearance?.avatar;
+    const eyePreset = getAvatarExpressionPreset(Expression.Normal).eyes;
+    const mouthPreset = getAvatarExpressionPreset(Expression.Normal).mouth;
     const face = new Circle({
       radius: AVATAR_RADIUS,
-      fill: '#f1c8aa',
+      fill: avatar?.face.color ?? '#f1c8aa',
       stroke: participant.color,
       strokeWidth: 5,
       originX: 'center',
@@ -126,38 +144,48 @@ export class DialogueAvatarRenderer {
       height: 26,
       rx: 12,
       ry: 12,
-      fill: participant.color,
+      fill: avatar?.hair.topHair.color ?? participant.color,
       originX: 'center',
       originY: 'center',
       left: 0,
       top: -30,
+      angle: avatar?.hair.topHair.rotate ?? 0,
+      scaleX: avatar?.hair.topHair.scale ?? 1,
+      scaleY: avatar?.hair.topHair.scale ?? 1,
     });
     const leftEye = new Circle({
       radius: 5,
-      fill: '#302b2b',
+      fill: avatar?.eyes.color ?? '#302b2b',
       originX: 'center',
       originY: 'center',
-      left: -16,
-      top: -5,
+      left: -16 + (avatar?.eyes.offsetX ?? 0) + (eyePreset?.offsetX ?? 0),
+      top: -5 + (avatar?.eyes.offsetY ?? 0) + (eyePreset?.offsetY ?? 0),
+      scaleX: (avatar?.eyes.scale ?? 1) * (eyePreset?.scale ?? 1),
+      scaleY: (avatar?.eyes.scale ?? 1) * (eyePreset?.scale ?? 1),
     });
     const rightEye = new Circle({
       radius: 5,
-      fill: '#302b2b',
+      fill: avatar?.eyes.color ?? '#302b2b',
       originX: 'center',
       originY: 'center',
-      left: 16,
-      top: -5,
+      left: 16 + (avatar?.eyes.offsetX ?? 0) + (eyePreset?.offsetX ?? 0),
+      top: -5 + (avatar?.eyes.offsetY ?? 0) + (eyePreset?.offsetY ?? 0),
+      scaleX: (avatar?.eyes.scale ?? 1) * (eyePreset?.scale ?? 1),
+      scaleY: (avatar?.eyes.scale ?? 1) * (eyePreset?.scale ?? 1),
     });
     const mouth = new Rect({
       width: 30,
       height: 5,
       rx: 3,
       ry: 3,
-      fill: '#8b4141',
+      fill: avatar?.mouth.color ?? '#8b4141',
       originX: 'center',
       originY: 'center',
-      left: 0,
-      top: 22,
+      left: avatar?.mouth.offsetX ?? 0,
+      top: 22 + (avatar?.mouth.offsetY ?? 0) + (mouthPreset?.offsetY ?? 0),
+      angle: (avatar?.mouth.rotate ?? 0) + (mouthPreset?.rotate ?? 0),
+      scaleX: (avatar?.mouth.scale ?? 1) * (mouthPreset?.scale ?? 1),
+      scaleY: avatar?.mouth.scale ?? 1,
     });
     const label = new Text(participant.label, {
       fill: '#1f2428',
@@ -209,6 +237,10 @@ export class DialogueAvatarRenderer {
       top: 80,
     });
     this.expressionLabels.set(participant.id, expressionLabel);
+    this.faceShapes.set(participant.id, face);
+    this.leftEyeShapes.set(participant.id, leftEye);
+    this.rightEyeShapes.set(participant.id, rightEye);
+    this.mouthShapes.set(participant.id, mouth);
     this.bubbleLabels.set(participant.id, bubbleLabel);
     this.statusLabels.set(participant.id, statusLabel);
 
@@ -219,6 +251,50 @@ export class DialogueAvatarRenderer {
       originY: 'center',
       selectable: false,
       evented: false,
+    });
+  }
+
+  private applyExpressionPreset(characterId: string, preset: AvatarExpressionPreset | null): void {
+    const participant = this.participants.find(entry => entry.id === characterId);
+    const avatar = participant?.appearance?.avatar;
+    const leftEye = this.leftEyeShapes.get(characterId);
+    const rightEye = this.rightEyeShapes.get(characterId);
+    const mouth = this.mouthShapes.get(characterId);
+    const face = this.faceShapes.get(characterId);
+    const eyes = preset?.eyes;
+    const mouthPreset = preset?.mouth;
+    const facePreset = preset?.face;
+    const eyeScale = (avatar?.eyes.scale ?? 1) * (eyes?.scale ?? 1);
+    const mouthScale = (avatar?.mouth.scale ?? 1) * (mouthPreset?.scale ?? 1);
+
+    face?.set({
+      top: facePreset?.offsetY ?? 0,
+      scaleX: facePreset?.scale ?? 1,
+      scaleY: facePreset?.scale ?? 1,
+    });
+
+    leftEye?.set({
+      left: -16 + (avatar?.eyes.offsetX ?? 0) + (eyes?.offsetX ?? 0),
+      top: -5 + (avatar?.eyes.offsetY ?? 0) + (eyes?.offsetY ?? 0),
+      angle: (avatar?.eyes.rotate ?? 0) + (eyes?.rotate ?? 0),
+      scaleX: eyeScale,
+      scaleY: eyeScale,
+    });
+
+    rightEye?.set({
+      left: 16 + (avatar?.eyes.offsetX ?? 0) - (eyes?.offsetX ?? 0),
+      top: -5 + (avatar?.eyes.offsetY ?? 0) + (eyes?.offsetY ?? 0),
+      angle: (avatar?.eyes.rotate ?? 0) - (eyes?.rotate ?? 0),
+      scaleX: eyeScale,
+      scaleY: eyeScale,
+    });
+
+    mouth?.set({
+      left: (avatar?.mouth.offsetX ?? 0) + (mouthPreset?.offsetX ?? 0),
+      top: 22 + (avatar?.mouth.offsetY ?? 0) + (mouthPreset?.offsetY ?? 0),
+      angle: (avatar?.mouth.rotate ?? 0) + (mouthPreset?.rotate ?? 0),
+      scaleX: mouthScale,
+      scaleY: avatar?.mouth.scale ?? 1,
     });
   }
 }
