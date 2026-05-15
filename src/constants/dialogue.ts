@@ -1,5 +1,5 @@
 import { DialogueScriptDocument } from "~/typing/dialogue";
-import { Mood, DirectedRelationship } from "./character";
+import { Mood, DirectedRelationship, Expression } from "./character";
 import { ClauseMode, RuleClause, EventActor, EventBlackboard, ParticipantRole } from "./event";
 
 export interface DialogueBank {
@@ -41,6 +41,7 @@ export interface WeightModifier extends RuleClause {
 export interface DialogueLine {
     speaker: ParticipantRole;
     text: string;
+    expression?: Expression;
 }
 
 export interface SelectedDialogue {
@@ -58,16 +59,19 @@ export const INVITATION_DIALOGUE: DialogueScriptDocument = {
             type: 'SAY',
             speaker: 'initiator',
             text: 'Fuji，現在去球場吧！今天的發球一定能燃起來！',
+            expression: Expression.Normal,
         },
         {
             type: 'SAY',
             speaker: 'target',
             text: '你每次都這麼有精神耶，Tezuka。',
+            expression: Expression.Laugh,
         },
         {
             type: 'CHOICE',
             speaker: 'target',
             text: '要接受 Tezuka 的邀請嗎？',
+            expression: Expression.Normal,
             choices: [
                 {
                     id: 'accept',
@@ -77,11 +81,13 @@ export const INVITATION_DIALOGUE: DialogueScriptDocument = {
                             type: 'SAY',
                             speaker: 'target',
                             text: '好啊，我陪你打一下。',
+                            expression: Expression.Normal,
                         },
                         {
                             type: 'SAY',
                             speaker: 'initiator',
                             text: '太好了，走吧！',
+                            expression: Expression.Laugh,
                         },
                     ],
                 },
@@ -93,11 +99,13 @@ export const INVITATION_DIALOGUE: DialogueScriptDocument = {
                             type: 'SAY',
                             speaker: 'target',
                             text: '今天先不要，我想休息一下。',
+                            expression: Expression.Cry,
                         },
                         {
                             type: 'SAY',
                             speaker: 'initiator',
                             text: '了解，那下次再約。',
+                            expression: Expression.Normal,
                         },
                     ],
                 },

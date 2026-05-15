@@ -9,3 +9,13 @@
   padding: 16px;
   box-sizing: border-box;
 }
+
+.dialogueDemoButton {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 10;
+  color: #1f2428;
+  background: #ffd36a;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
