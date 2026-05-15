@@ -11,8 +11,14 @@ import {
   TownCharacterController,
   type CharacterSnapshot,
 } from '~/services/townCharacterController';
+import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/services/characterEvents/definitions';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
+import {
+  CharacterBodyActionState,
+  CharacterBodyMoveState,
+  type CharacterStateSummary,
+} from '~/stateMachines/gameFlow/states';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { TownMapTile } from '~/widgets/townMapGrid';
 
@@ -176,6 +182,11 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
   relationshipStore: RelationshipStore;
 }) {
   const summary = getCharacterStateSummary(snapshot.value);
+  const inviteAvailability = getInviteAvailabilityDebugText(snapshot, summary);
+  const chatMoodAcceptance = getMoodAcceptanceDebugText('environment.nearbyCharacter.chat', snapshot.context.status.moodValue);
+  const playMoodAcceptance = getMoodAcceptanceDebugText('environment.nearbyCharacter.play', snapshot.context.status.moodValue);
+  const chatFinalAcceptance = getFinalAcceptanceDebugText(inviteAvailability.isAvailable, chatMoodAcceptance);
+  const playFinalAcceptance = getFinalAcceptanceDebugText(inviteAvailability.isAvailable, playMoodAcceptance);
 
   return (
     <div className={styles.characterPanel}>
@@ -201,8 +212,56 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
         <strong>{snapshot.context.currentMotivation}</strong>
       </div>
       <div className={styles.detailRow}>
+        <span>Interaction</span>
+        <strong>{snapshot.context.currentInteraction?.partnerCharId ?? '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Event bucket</span>
+        <strong>{snapshot.context.lastEventDecision?.selectedBucketId ?? '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Event picked</span>
+        <strong>{snapshot.context.lastEventDecision?.selectedCandidateId ?? '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Variant</span>
+        <strong>{snapshot.context.lastEventDecision?.selectedPresentationVariantId ?? '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Tags</span>
+        <strong>{snapshot.context.lastEventDecision?.selectedPresentationTags.join(', ') || '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Candidates</span>
+        <strong>{snapshot.context.lastEventDecision?.candidateCount ?? 0}</strong>
+      </div>
+      <div className={styles.detailRow}>
         <span>Saturation</span>
         <strong>{snapshot.context.status.saturation}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Mood</span>
+        <strong>{snapshot.context.status.moodValue}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Invite ready</span>
+        <strong>{inviteAvailability.text}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Chat mood</span>
+        <strong>{chatMoodAcceptance.text}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Chat final</span>
+        <strong>{chatFinalAcceptance}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Play mood</span>
+        <strong>{playMoodAcceptance.text}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Play final</span>
+        <strong>{playFinalAcceptance}</strong>
       </div>
       <div className={styles.detailRow}>
         <span>Eat score</span>
@@ -215,6 +274,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
       <div className={styles.detailRow}>
         <span>Rest score</span>
         <strong>{snapshot.context.utilityScores.rest}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Chat score</span>
+        <strong>{snapshot.context.utilityScores.chat}</strong>
       </div>
       {snapshot.context.relationships.map(relationship => {
         const targetName = allSnapshots[relationship.targetCharId]?.context.name ?? relationship.targetCharId;
@@ -247,4 +310,64 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
       })}
     </div>
   );
+}
+
+function getMoodAcceptanceDebugText(eventId: string, moodValue: number): { isGuaranteed: boolean; text: string } {
+  const acceptance = CHARACTER_EVENT_DEFINITIONS_BY_ID[eventId]?.acceptance;
+
+  if (!acceptance) {
+    return { isGuaranteed: false, text: '-' };
+  }
+
+  const minMoodValue = acceptance.minMoodValue ?? 30;
+  const fallbackPercent = Math.round((acceptance.fallbackChance ?? 0.3) * 100);
+  const isGuaranteed = moodValue >= minMoodValue;
+  const state = isGuaranteed ? 'yes' : `${fallbackPercent}%`;
+
+  return {
+    isGuaranteed,
+    text: `${state} (mood >= ${minMoodValue}, fallback ${fallbackPercent}%)`,
+  };
+}
+
+function getFinalAcceptanceDebugText(
+  isAvailable: boolean,
+  moodAcceptance: { isGuaranteed: boolean; text: string },
+): string {
+  if (!isAvailable) {
+    return 'no (busy)';
+  }
+
+  return moodAcceptance.isGuaranteed ? 'yes' : moodAcceptance.text;
+}
+
+function getInviteAvailabilityDebugText(
+  snapshot: CharacterSnapshot,
+  summary: CharacterStateSummary,
+): { isAvailable: boolean; text: string } {
+  if (snapshot.context.target) {
+    return { isAvailable: false, text: 'no (has target)' };
+  }
+
+  if (snapshot.context.pendingInteractionProposal) {
+    return { isAvailable: false, text: 'no (pending invite)' };
+  }
+
+  if (snapshot.context.currentInteraction) {
+    return { isAvailable: false, text: 'no (interacting)' };
+  }
+
+  if (snapshot.context.currentMotivation !== 'idle') {
+    return { isAvailable: false, text: `no (${snapshot.context.currentMotivation})` };
+  }
+
+  if (summary.bodyAction !== CharacterBodyActionState.Idle || summary.bodyMove !== CharacterBodyMoveState.Stand) {
+    return { isAvailable: false, text: `no (${summary.bodyMove}/${summary.bodyAction})` };
+  }
+
+  if (snapshot.context.locks.bodyAction.length > 0 || snapshot.context.locks.bodyMove.length > 0) {
+    return { isAvailable: false, text: 'no (locked)' };
+  }
+
+  return { isAvailable: true, text: 'yes' };
 }

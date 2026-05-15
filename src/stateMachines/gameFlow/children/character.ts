@@ -1,6 +1,5 @@
 import { assign, createMachine, enqueueActions, StateValue } from 'xstate';
-import { Expression, Mood, Position } from '~/constants/character';
-import { TOWN_MAP_WIDTH, TOWN_MAP_HEIGHT, DESTINATION_MAP } from '~/constants/townMap';
+import { Expression, Mood } from '~/constants/character';
 import {
     CharacterBodyActionState,
     CharacterBodyMoveState,
@@ -9,17 +8,27 @@ import {
     CharacterStateSummary,
 } from '../states';
 import { CharacterEvent, EventType } from '../events';
-import { CharacterContext, CharacterMachineInput, CharacterUtilityScores, UtilityDrivenMotivation } from '../context';
+import { CharacterContext, CharacterMachineInput, CharacterUtilityScores } from '../context';
 import { rememberPassBy } from '../relationships';
-const SATURATION_LOSS_PER_TICK = 1;
-const SATURATION_GAIN_AFTER_EATING = 36;
-const LOW_SATURATION_THRESHOLD = 5;
+import { decideCharacterEvent } from '~/services/characterEvents/decision';
+import {
+    calculateCharacterUtilityScores,
+    LOW_SATURATION_THRESHOLD,
+    SATURATION_GAIN_AFTER_EATING,
+    SATURATION_LOSS_PER_TICK,
+} from '~/services/characterEvents/utility';
+import { getRandomMapTarget } from '~/services/characterEvents/targets';
+import {
+    applyInteractionCooldowns,
+    createEmptyInteractionCooldowns,
+} from '~/services/characterEvents/interactionCooldowns';
 
 const INITIAL_UTILITY_SCORES: CharacterUtilityScores = {
     idle: 10,
     findFood: 0,
     rest: 20,
     play: 35,
+    chat: 15,
 };
 
 export const characterMachine = createMachine(
@@ -42,7 +51,11 @@ export const characterMachine = createMachine(
                 hungerThreshold: LOW_SATURATION_THRESHOLD,
             },
             utilityScores: INITIAL_UTILITY_SCORES,
+            lastEventDecision: null,
             currentMotivation: 'idle',
+            pendingInteractionProposal: null,
+            currentInteraction: null,
+            interactionCooldowns: createEmptyInteractionCooldowns(),
             position: input.position,
             target: null,
             relationships: input.relationships ?? [],
@@ -57,7 +70,7 @@ export const characterMachine = createMachine(
         on: {
             [EventType.Tick]: {
                 guard: 'canReceiveLogicCommand',
-                actions: ['tickStatus', 'calculateUtilityScores', 'raiseBestUtilityEvent'],
+                actions: ['tickStatus', 'updateUtilityScores', 'decideAndRaiseEvent'],
             },
             [EventType.PassBy]: {
                 guard: 'canReceiveLogicCommand',
@@ -92,6 +105,103 @@ export const characterMachine = createMachine(
                     '.communication.null',
                 ],
                 actions: ['setPlayMotivation', 'chooseRandomTarget'],
+            },
+            [EventType.ProposeChat]: {
+                guard: 'shouldProposeChat',
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.requesting',
+                ],
+                actions: ['setChatMotivation', 'setPendingChatProposal'],
+            },
+            [EventType.ProposePlay]: {
+                guard: 'shouldProposePlay',
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.requesting',
+                ],
+                actions: ['setPlayMotivation', 'setPendingPlayProposal'],
+            },
+            [EventType.ChatProposalAccepted]: {
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.null',
+                ],
+                actions: ['confirmInitiatedChat'],
+            },
+            [EventType.ChatProposalRejected]: {
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                ],
+                actions: ['rejectInitiatedChat', 'setIdleMotivation'],
+            },
+            [EventType.PlayProposalAccepted]: {
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.null',
+                ],
+                actions: ['confirmInitiatedPlay'],
+            },
+            [EventType.PlayProposalRejected]: {
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                ],
+                actions: ['rejectInitiatedPlay', 'setIdleMotivation'],
+            },
+            [EventType.AcceptChatProposal]: {
+                guard: 'shouldAcceptChatProposal',
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.null',
+                ],
+                actions: ['setChatMotivation', 'acceptIncomingChat'],
+            },
+            [EventType.AcceptPlayProposal]: {
+                guard: 'shouldAcceptPlayProposal',
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.null',
+                ],
+                actions: ['setPlayMotivation', 'acceptIncomingPlay'],
+            },
+            [EventType.EndChatInteraction]: {
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                ],
+                actions: ['clearInteraction', 'setIdleMotivation'],
+            },
+            [EventType.EndPlayInteraction]: {
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                ],
+                actions: ['completePlayInteraction'],
+            },
+            [EventType.RecordInteractionCooldown]: {
+                actions: 'recordInteractionCooldown',
             },
             [EventType.GoIdle]: {
                 guard: 'shouldChangeToIdle',
@@ -221,6 +331,34 @@ export const characterMachine = createMachine(
                 context.currentMotivation !== 'controllingByGod' &&
                 (context.currentMotivation !== 'play' || context.target === null)
             ),
+            shouldProposeChat: ({ context }) => (
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                context.currentMotivation !== 'controllingByGod' &&
+                context.target === null &&
+                context.currentInteraction === null &&
+                context.pendingInteractionProposal === null
+            ),
+            shouldProposePlay: ({ context }) => (
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                context.currentMotivation !== 'controllingByGod' &&
+                context.target === null &&
+                context.currentInteraction === null &&
+                context.pendingInteractionProposal === null
+            ),
+            shouldAcceptChatProposal: ({ context }) => (
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                context.currentMotivation === 'idle' &&
+                context.target === null &&
+                context.currentInteraction === null &&
+                context.pendingInteractionProposal === null
+            ),
+            shouldAcceptPlayProposal: ({ context }) => (
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                context.currentMotivation === 'idle' &&
+                context.target === null &&
+                context.currentInteraction === null &&
+                context.pendingInteractionProposal === null
+            ),
             shouldChangeToIdle: ({ context }) => (
                 !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
                 context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'idle'
@@ -265,11 +403,33 @@ export const characterMachine = createMachine(
                     moodValue: Math.max(0, context.status.moodValue - 1),
                 }),
             }),
-            calculateUtilityScores: assign({
-                utilityScores: ({ context }) => calculateUtilityScores(context),
+            updateUtilityScores: assign({
+                utilityScores: ({ context }) => calculateCharacterUtilityScores(context),
             }),
-            raiseBestUtilityEvent: enqueueActions(({ context, enqueue }) => {
-                enqueue.raise(getUtilityEvent(getTopMotivation(calculateUtilityScores(context))));
+            decideAndRaiseEvent: enqueueActions(({ context, event, enqueue }) => {
+                if (event.type !== EventType.Tick) {
+                    return;
+                }
+
+                if (event.allowAutonomousDecision === false) {
+                    return;
+                }
+
+                if (!canMakeAutonomousDecision(context)) {
+                    return;
+                }
+
+                const decision = decideCharacterEvent(context, {
+                    nearbyCharacterIds: event.nearbyCharacterIds,
+                    globalEventTags: event.globalEventTags,
+                    timestamp: event.timestamp,
+                });
+
+                enqueue.assign({
+                    utilityScores: decision.utilityScores,
+                    lastEventDecision: decision.decision,
+                });
+                enqueue.raise(decision.event);
             }),
             setFoodMotivation: assign({
                 currentMotivation: () => 'findFood',
@@ -280,6 +440,9 @@ export const characterMachine = createMachine(
             setPlayMotivation: assign({
                 currentMotivation: () => 'play',
             }),
+            setChatMotivation: assign({
+                currentMotivation: () => 'chat',
+            }),
             setIdleMotivation: assign({
                 currentMotivation: () => 'idle',
             }),
@@ -287,13 +450,225 @@ export const characterMachine = createMachine(
                 currentMotivation: () => 'controllingByGod',
             }),
             chooseRandomTarget: assign({
-                target: ({ context }) => {
-                    if (context.name === "Momo") {
-                        console.log(context.name, context.currentMotivation)
-                        console.log(context.name, getRandomTarget(context.position))
+                target: ({ context }) => getRandomMapTarget(context.position),
+            }),
+            setPendingChatProposal: assign({
+                pendingInteractionProposal: ({ event }) => (
+                    event.type === EventType.ProposeChat
+                        ? {
+                            id: event.proposalId,
+                            type: 'chat',
+                            targetCharId: event.targetCharId,
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+                currentInteraction: ({ event }) => (
+                    event.type === EventType.ProposeChat
+                        ? {
+                            id: event.proposalId,
+                            type: 'chat',
+                            partnerCharId: event.targetCharId,
+                            role: 'initiator',
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+            }),
+            setPendingPlayProposal: assign({
+                pendingInteractionProposal: ({ event }) => (
+                    event.type === EventType.ProposePlay
+                        ? {
+                            id: event.proposalId,
+                            type: 'play',
+                            targetCharId: event.targetCharId,
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+                currentInteraction: ({ event }) => (
+                    event.type === EventType.ProposePlay
+                        ? {
+                            id: event.proposalId,
+                            type: 'play',
+                            partnerCharId: event.targetCharId,
+                            role: 'initiator',
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+            }),
+            confirmInitiatedChat: assign({
+                pendingInteractionProposal: ({ context, event }) => (
+                    event.type === EventType.ChatProposalAccepted &&
+                        context.pendingInteractionProposal?.id === event.proposalId
+                        ? null
+                        : context.pendingInteractionProposal
+                ),
+            }),
+            confirmInitiatedPlay: assign({
+                pendingInteractionProposal: ({ context, event }) => (
+                    event.type === EventType.PlayProposalAccepted &&
+                        context.pendingInteractionProposal?.id === event.proposalId
+                        ? null
+                        : context.pendingInteractionProposal
+                ),
+            }),
+            rejectInitiatedChat: assign({
+                interactionCooldowns: ({ context, event }) => (
+                    event.type === EventType.ChatProposalRejected &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? applyInteractionCooldowns(
+                            context.interactionCooldowns,
+                            context.currentInteraction,
+                            event.timestamp ?? Date.now(),
+                            context.currentInteraction.role,
+                        )
+                        : context.interactionCooldowns
+                ),
+                pendingInteractionProposal: ({ context, event }) => (
+                    event.type === EventType.ChatProposalRejected &&
+                        context.pendingInteractionProposal?.id === event.proposalId
+                        ? null
+                        : context.pendingInteractionProposal
+                ),
+                currentInteraction: ({ context, event }) => (
+                    event.type === EventType.ChatProposalRejected &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? null
+                        : context.currentInteraction
+                ),
+            }),
+            rejectInitiatedPlay: assign({
+                interactionCooldowns: ({ context, event }) => (
+                    event.type === EventType.PlayProposalRejected &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? applyInteractionCooldowns(
+                            context.interactionCooldowns,
+                            context.currentInteraction,
+                            event.timestamp ?? Date.now(),
+                            context.currentInteraction.role,
+                        )
+                        : context.interactionCooldowns
+                ),
+                pendingInteractionProposal: ({ context, event }) => (
+                    event.type === EventType.PlayProposalRejected &&
+                        context.pendingInteractionProposal?.id === event.proposalId
+                        ? null
+                        : context.pendingInteractionProposal
+                ),
+                currentInteraction: ({ context, event }) => (
+                    event.type === EventType.PlayProposalRejected &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? null
+                        : context.currentInteraction
+                ),
+            }),
+            acceptIncomingChat: assign({
+                currentInteraction: ({ event }) => (
+                    event.type === EventType.AcceptChatProposal
+                        ? {
+                            id: event.proposalId,
+                            type: 'chat',
+                            partnerCharId: event.fromCharacterId,
+                            role: 'target',
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+            }),
+            acceptIncomingPlay: assign({
+                currentInteraction: ({ event }) => (
+                    event.type === EventType.AcceptPlayProposal
+                        ? {
+                            id: event.proposalId,
+                            type: 'play',
+                            partnerCharId: event.fromCharacterId,
+                            role: 'target',
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+            }),
+            clearInteraction: assign({
+                interactionCooldowns: ({ context, event }) => (
+                    event.type === EventType.EndChatInteraction &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? applyInteractionCooldowns(
+                            context.interactionCooldowns,
+                            context.currentInteraction,
+                            event.timestamp ?? Date.now(),
+                            context.currentInteraction.role,
+                        )
+                        : context.interactionCooldowns
+                ),
+                pendingInteractionProposal: ({ context, event }) => (
+                    event.type === EventType.EndChatInteraction &&
+                        context.pendingInteractionProposal?.id === event.proposalId
+                        ? null
+                        : context.pendingInteractionProposal
+                ),
+                currentInteraction: ({ context, event }) => (
+                    event.type === EventType.EndChatInteraction &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? null
+                        : context.currentInteraction
+                ),
+            }),
+            completePlayInteraction: assign({
+                interactionCooldowns: ({ context, event }) => (
+                    event.type === EventType.EndPlayInteraction &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? applyInteractionCooldowns(
+                            context.interactionCooldowns,
+                            context.currentInteraction,
+                            event.timestamp ?? Date.now(),
+                            context.currentInteraction.role,
+                        )
+                        : context.interactionCooldowns
+                ),
+                status: ({ context, event }) => (
+                    event.type === EventType.EndPlayInteraction &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? {
+                            ...context.status,
+                            moodValue: Math.min(100, context.status.moodValue + 14),
+                        }
+                        : context.status
+                ),
+                pendingInteractionProposal: ({ context, event }) => (
+                    event.type === EventType.EndPlayInteraction &&
+                        context.pendingInteractionProposal?.id === event.proposalId
+                        ? null
+                        : context.pendingInteractionProposal
+                ),
+                currentInteraction: ({ context, event }) => (
+                    event.type === EventType.EndPlayInteraction &&
+                        context.currentInteraction?.id === event.proposalId
+                        ? null
+                        : context.currentInteraction
+                ),
+                currentMotivation: () => 'idle',
+            }),
+            recordInteractionCooldown: assign({
+                interactionCooldowns: ({ context, event }) => {
+                    if (event.type !== EventType.RecordInteractionCooldown) {
+                        return context.interactionCooldowns;
                     }
-                    return getRandomTarget(context.position)
-                }
+
+                    return applyInteractionCooldowns(
+                        context.interactionCooldowns,
+                        {
+                            id: event.proposalId,
+                            type: event.interactionType,
+                            partnerCharId: event.partnerCharId,
+                            role: event.role,
+                            sourceEventId: event.sourceEventId,
+                        },
+                        event.timestamp ?? Date.now(),
+                        event.role,
+                    );
+                },
             }),
             clearTarget: assign({
                 target: () => null,
@@ -377,68 +752,18 @@ export function formatCharacterStateValue(value: StateValue): string {
     ].join(' | ');
 }
 
-function calculateUtilityScores(context: CharacterContext): CharacterUtilityScores {
-    const saturationNeed = 100 - context.status.saturation;
-    const hungerScore = context.status.saturation <= context.status.hungerThreshold
-        ? Math.min(100, saturationNeed + 25)
-        : saturationNeed;
-    const moodNeed = 100 - context.status.moodValue;
-    const restScore = Math.min(100, 18 + moodNeed * 0.35);
-    const playScore = Math.min(100, 28 + moodNeed * 0.8);
-    const idleScore = context.status.saturation > 70 && context.status.moodValue > 70 ? 45 : 8;
-
-    return {
-        idle: Math.round(idleScore),
-        findFood: Math.round(hungerScore),
-        rest: Math.round(restScore),
-        play: Math.round(playScore),
-    };
-}
-
-function getTopMotivation(scores: CharacterUtilityScores): UtilityDrivenMotivation {
-    return (Object.entries(scores) as [UtilityDrivenMotivation, number][])
-        .sort((left, right) => right[1] - left[1])[0][0];
-}
-
-function getRandomDestinationTarget(motivation: string): Position | null {
-    const destinations = DESTINATION_MAP[motivation];
-
-    if (!destinations || destinations.length === 0) {
-        return null;
-    }
-
-    const destination = destinations[Math.floor(Math.random() * destinations.length)];
-    const tiles = destination.serviceTiles;
-    return tiles[Math.floor(Math.random() * tiles.length)];
-}
-
-function getUtilityEvent(motivation: UtilityDrivenMotivation): CharacterEvent {
-    const foodTarget = getRandomDestinationTarget('findFood');
-    const eventByMotivation: Record<UtilityDrivenMotivation, CharacterEvent> = {
-        idle: { type: EventType.GoIdle },
-        findFood: { type: EventType.GoEat, target: foodTarget ?? { x: 1, y: 20 } },
-        rest: { type: EventType.GoRest },
-        play: { type: EventType.GoPlay },
-    };
-
-    return eventByMotivation[motivation];
-}
-
-function getRandomTarget(position: Position): Position {
-    const target = {
-        x: Math.floor(Math.random() * TOWN_MAP_WIDTH),
-        y: Math.floor(Math.random() * TOWN_MAP_HEIGHT),
-    };
-
-    if (target.x === position.x && target.y === position.y) {
-        return {
-            x: (target.x + 1) % TOWN_MAP_WIDTH,
-            y: target.y,
-        };
-    }
-    return target;
-}
-
 function isLocked(context: CharacterContext, part: keyof CharacterContext['locks']) {
     return context.locks[part].length > 0;
+}
+
+function canMakeAutonomousDecision(context: CharacterContext): boolean {
+    return (
+        context.target === null &&
+        context.pendingInteractionProposal === null &&
+        context.currentInteraction === null &&
+        context.currentMotivation !== 'controllingByGod' &&
+        !isLocked(context, 'bodyAction') &&
+        !isLocked(context, 'bodyMove') &&
+        !isLocked(context, 'mind')
+    );
 }

@@ -16,11 +16,36 @@ export type GameFlowEvents =
   | DialogueManagerEvent;
 
 export type CharacterEvent =
-  | { type: EventType.Tick }
+  | {
+    type: EventType.Tick;
+    nearbyCharacterIds?: string[];
+    globalEventTags?: string[];
+    timestamp?: number;
+    allowAutonomousDecision?: boolean;
+  }
   | { type: EventType.PassBy; targetCharId: string; timestamp?: number }
   | { type: EventType.GoEat; target: Position }
   | { type: EventType.GoRest }
   | { type: EventType.GoPlay }
+  | { type: EventType.ProposeChat; targetCharId: string; proposalId: string; sourceEventId: string }
+  | { type: EventType.ProposePlay; targetCharId: string; proposalId: string; sourceEventId: string }
+  | { type: EventType.ChatProposalAccepted; targetCharId: string; proposalId: string; sourceEventId: string }
+  | { type: EventType.ChatProposalRejected; targetCharId: string; proposalId: string; timestamp?: number }
+  | { type: EventType.AcceptChatProposal; fromCharacterId: string; proposalId: string; sourceEventId: string }
+  | { type: EventType.PlayProposalAccepted; targetCharId: string; proposalId: string; sourceEventId: string }
+  | { type: EventType.PlayProposalRejected; targetCharId: string; proposalId: string; timestamp?: number }
+  | { type: EventType.AcceptPlayProposal; fromCharacterId: string; proposalId: string; sourceEventId: string }
+  | { type: EventType.EndChatInteraction; proposalId: string; timestamp?: number }
+  | { type: EventType.EndPlayInteraction; proposalId: string; timestamp?: number }
+  | {
+    type: EventType.RecordInteractionCooldown;
+    interactionType: 'chat' | 'play';
+    partnerCharId: string;
+    proposalId: string;
+    role: 'initiator' | 'target';
+    sourceEventId: string;
+    timestamp?: number;
+  }
   | { type: EventType.GoIdle }
   | { type: EventType.PickUp }
   | { type: EventType.Drop; position?: Position }
@@ -51,6 +76,17 @@ export enum EventType {
   GoEat = "goEat",
   GoRest = "goRest",
   GoPlay = "goPlay",
+  ProposeChat = "proposeChat",
+  ProposePlay = "proposePlay",
+  ChatProposalAccepted = "chatProposalAccepted",
+  ChatProposalRejected = "chatProposalRejected",
+  AcceptChatProposal = "acceptChatProposal",
+  PlayProposalAccepted = "playProposalAccepted",
+  PlayProposalRejected = "playProposalRejected",
+  AcceptPlayProposal = "acceptPlayProposal",
+  EndChatInteraction = "endChatInteraction",
+  EndPlayInteraction = "endPlayInteraction",
+  RecordInteractionCooldown = "recordInteractionCooldown",
   GoIdle = "goIdle",
   PickUp = "pickUp",
   Drop = "drop",

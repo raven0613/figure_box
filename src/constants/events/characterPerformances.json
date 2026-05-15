@@ -1,0 +1,76 @@
+[
+  {
+    "id": "social.chat.casual",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "{initiator}：要不要聊一下？",
+        "durationMs": 3200
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：好啊，聊一下。",
+        "durationMs": 3200
+      },
+      {
+        "phase": "rejected",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：現在有點不想說話。",
+        "durationMs": 3200
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "both",
+        "text": "聊完了。",
+        "durationMs": 1800
+      }
+    ]
+  },
+  {
+    "id": "social.playTogether.active",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "{initiator}：一起玩嗎？",
+        "durationMs": 2600
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：好，一起玩！",
+        "durationMs": 2600
+      },
+      {
+        "phase": "rejected",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：我現在不想玩。",
+        "durationMs": 2600
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "正在一起玩",
+        "delayMs": 1200,
+        "durationMs": 5000
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "both",
+        "text": "一起玩完了。",
+        "durationMs": 1800
+      }
+    ]
+  }
+]

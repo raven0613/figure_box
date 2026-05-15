@@ -1,0 +1,230 @@
+[
+  {
+    "id": "baseline.idle",
+    "bucketId": "baseline",
+    "motivation": "idle",
+    "characterEvent": {
+      "type": "goIdle"
+    },
+    "baseWeight": 1,
+    "weightSource": "idle",
+    "interruptPolicy": "always",
+    "commitment": 0
+  },
+  {
+    "id": "need.findFood",
+    "bucketId": "need",
+    "motivation": "findFood",
+    "characterEvent": {
+      "type": "goEat",
+      "target": "randomDestination.findFood"
+    },
+    "baseWeight": 0,
+    "weightSource": "findFood",
+    "interruptPolicy": "soft",
+    "commitment": 35,
+    "onInterrupted": [
+      {
+        "id": "food.interrupted_by_distraction",
+        "baseWeight": 10,
+        "conditions": [
+          {
+            "path": "character.status.saturation",
+            "operator": ">",
+            "value": 25
+          }
+        ],
+        "dialogueGroupId": "changed_mind_from_food",
+        "presentationTags": ["emote.surprised", "motion.turn"]
+      }
+    ],
+    "onInterruptRejected": [
+      {
+        "id": "food.reject_interrupt_hungry",
+        "baseWeight": 10,
+        "conditions": [
+          {
+            "path": "character.status.saturation",
+            "operator": "<=",
+            "value": 25
+          }
+        ],
+        "dialogueGroupId": "too_hungry_to_stop",
+        "presentationTags": ["emote.determined"]
+      }
+    ]
+  },
+  {
+    "id": "need.rest",
+    "bucketId": "need",
+    "motivation": "rest",
+    "characterEvent": {
+      "type": "goRest"
+    },
+    "baseWeight": 0,
+    "weightSource": "rest",
+    "interruptPolicy": "soft",
+    "commitment": 20,
+    "weightModifiers": [
+      {
+        "path": "character.status.moodValue",
+        "operator": "<",
+        "value": 25,
+        "add": 12
+      }
+    ]
+  },
+  {
+    "id": "need.play",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "goPlay"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "interruptPolicy": "soft",
+    "commitment": 18,
+    "weightModifiers": [
+      {
+        "path": "character.status.moodValue",
+        "operator": "<",
+        "value": 35,
+        "add": 8
+      }
+    ],
+    "presentationVariants": [
+      {
+        "id": "play.cheerful",
+        "baseWeight": 10,
+        "conditions": [
+          {
+            "path": "character.status.moodValue",
+            "operator": ">=",
+            "value": 45
+          }
+        ],
+        "presentationTags": ["emote.laugh", "motion.walk"]
+      },
+      {
+        "id": "play.low_mood",
+        "baseWeight": 8,
+        "conditions": [
+          {
+            "path": "character.status.moodValue",
+            "operator": "<",
+            "value": 45
+          }
+        ],
+        "presentationTags": ["emote.sigh", "mapEffect.lowSaturation"]
+      }
+    ]
+  },
+  {
+    "id": "environment.nearbyCharacter.chat",
+    "bucketId": "environment",
+    "motivation": "chat",
+    "characterEvent": {
+      "type": "proposeChat",
+      "target": "randomNearbyCharacter"
+    },
+    "baseWeight": 18,
+    "weightSource": "chat",
+    "maxWeight": 100,
+    "interruptPolicy": "soft",
+    "commitment": 12,
+    "requiresNearbyCharacter": true,
+    "conditions": [
+      {
+        "path": "input.nearbyCharacterCount",
+        "operator": ">",
+        "value": 0
+      }
+    ],
+    "weightModifiers": [
+      {
+        "path": "character.status.moodValue",
+        "operator": ">=",
+        "value": 45,
+        "add": 8
+      }
+    ],
+    "acceptance": {
+      "minMoodValue": 10,
+      "fallbackChance": 0.82
+    },
+    "cooldowns": {
+      "selfMs": 10000,
+      "targetMs": 8000,
+      "pairMs": 28000,
+      "category": "social",
+      "repeatPenalty": {
+        "windowMs": 120000,
+        "weightMultiplierPerRepeat": 0.45,
+        "maxRepeats": 3
+      }
+    },
+    "presentationVariants": [
+      {
+        "id": "chat.casual_approach",
+        "baseWeight": 10,
+        "presentationTags": ["emote.talk", "motion.turn"],
+        "performanceId": "social.chat.casual"
+      }
+    ]
+  },
+  {
+    "id": "environment.nearbyCharacter.play",
+    "bucketId": "environment",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "proposePlay",
+      "target": "randomNearbyCharacter"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 8,
+    "maxWeight": 100,
+    "interruptPolicy": "soft",
+    "commitment": 14,
+    "requiresNearbyCharacter": true,
+    "conditions": [
+      {
+        "path": "input.nearbyCharacterCount",
+        "operator": ">",
+        "value": 0
+      }
+    ],
+    "weightModifiers": [
+      {
+        "path": "character.status.moodValue",
+        "operator": ">=",
+        "value": 40,
+        "add": 4
+      }
+    ],
+    "acceptance": {
+      "minMoodValue": 14,
+      "fallbackChance": 0.75
+    },
+    "cooldowns": {
+      "selfMs": 12000,
+      "targetMs": 9000,
+      "pairMs": 35000,
+      "category": "social",
+      "repeatPenalty": {
+        "windowMs": 120000,
+        "weightMultiplierPerRepeat": 0.4,
+        "maxRepeats": 3
+      }
+    },
+    "presentationVariants": [
+      {
+        "id": "play_together.active",
+        "baseWeight": 10,
+        "presentationTags": ["emote.play", "motion.stand"],
+        "performanceId": "social.playTogether.active"
+      }
+    ]
+  }
+]

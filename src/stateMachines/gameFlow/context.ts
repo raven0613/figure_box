@@ -21,9 +21,13 @@ export interface CharacterContext {
     hungerThreshold: number;
   },
   utilityScores: CharacterUtilityScores;
+  lastEventDecision: CharacterEventDecision | null;
   target: Position | null;
   position: Position;
   currentMotivation: CharacterMotivation;
+  pendingInteractionProposal: CharacterInteractionProposal | null;
+  currentInteraction: CharacterInteraction | null;
+  interactionCooldowns: CharacterInteractionCooldowns;
   relationships: DirectedRelationship[];
   locks: {
     bodyAction: string[];
@@ -42,9 +46,46 @@ export interface CharacterMachineInput {
   relationships?: DirectedRelationship[];
 }
 
-export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'controllingByGod';
+export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'chat' | 'controllingByGod';
 export type UtilityDrivenMotivation = Exclude<CharacterMotivation, 'controllingByGod'>;
 export type CharacterUtilityScores = Record<UtilityDrivenMotivation, number>;
+
+export interface CharacterInteractionProposal {
+  id: string;
+  type: 'chat' | 'play';
+  targetCharId: string;
+  sourceEventId: string;
+}
+
+export interface CharacterInteraction {
+  id: string;
+  type: 'chat' | 'play';
+  partnerCharId: string;
+  role: 'initiator' | 'target';
+  sourceEventId: string;
+}
+
+export interface CharacterInteractionCooldowns {
+  categoryUntilByKey: Record<string, number>;
+  pairUntilByKey: Record<string, number>;
+  repeatByKey: Record<string, CharacterInteractionRepeatRecord>;
+}
+
+export interface CharacterInteractionRepeatRecord {
+  count: number;
+  lastAt: number;
+}
+
+export type CharacterEventBucketId = 'baseline' | 'need' | 'environment' | 'global';
+
+export interface CharacterEventDecision {
+  selectedCandidateId: string | null;
+  selectedBucketId: CharacterEventBucketId | null;
+  selectedPresentationVariantId: string | null;
+  selectedPresentationTags: string[];
+  candidateCount: number;
+  bucketIds: CharacterEventBucketId[];
+}
 
 export interface DialogueManagerContext {
   script: DialogueScriptDocument | null;
