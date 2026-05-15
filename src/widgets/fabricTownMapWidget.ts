@@ -3,6 +3,8 @@ import { TownMapGrid, type CharacterPlacement, type GridCoordinate, type TownMap
 import { TownMapCamera } from './townMapCamera';
 import { TownMapCharacterTracker } from './townMapCharacterTracker';
 import { Expression } from '~/constants/character';
+import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
+import type { MapDialogueBubbleAnimation } from '~/constants/event';
 import type { TerrainType, TownMapCellData, TownMapObjectData, TownMapObjectType } from '~/constants/townMap';
 
 export interface TownMapCharacter extends CharacterPlacement {
@@ -353,6 +355,16 @@ interface WalkState {
   onBlocked: (position: GridCoordinate) => void;
 }
 
+interface BubbleAnimationState {
+  bubble: Text;
+  animation: MapDialogueBubbleAnimation;
+  startedAt: number | null;
+  durationMs: number;
+  startLeft: number;
+  startTop: number;
+  direction: 1 | -1;
+}
+
 export class FabricTownMapWidget {
   private readonly baseCanvasElement: HTMLCanvasElement;
   private readonly baseContext: CanvasRenderingContext2D;
@@ -368,6 +380,9 @@ export class FabricTownMapWidget {
   private readonly characterTokens = new Map<string, Group>();
   private readonly characterBubbles = new Map<string, Text>();
   private readonly bubbleTimers = new Map<string, number>();
+  private readonly bubbleAnimations = new Map<string, BubbleAnimationState>();
+  private readonly mapActivityLabels = new Map<string, Text>();
+  private readonly mapActivityTimers = new Map<string, number>();
   private readonly walkers = new Map<string, WalkState>();
   private animationFrameId: number | null = null;
   private pendingTileClick: TownMapTile | null = null;
@@ -504,7 +519,12 @@ export class FabricTownMapWidget {
     this.canvas.requestRenderAll();
   }
 
-  showCharacterBubble(characterId: string, text: string, durationMs = 2600): void {
+  showCharacterBubble(
+    characterId: string,
+    text: string,
+    durationMs = 2600,
+    animation: MapDialogueBubbleAnimation = 'fade',
+  ): void {
     const token = this.characterTokens.get(characterId);
 
     if (!token) {
@@ -517,6 +537,7 @@ export class FabricTownMapWidget {
       window.clearTimeout(existingTimer);
       this.bubbleTimers.delete(characterId);
     }
+    this.bubbleAnimations.delete(characterId);
 
     let bubble = this.characterBubbles.get(characterId);
 
@@ -541,23 +562,118 @@ export class FabricTownMapWidget {
       text,
       left: token.left ?? 0,
       top: (token.top ?? 0) - this.cellSize * CHARACTER_SCALE * 0.46,
+      opacity: animation === 'fade' ? 0 : 1,
     });
     this.canvas.bringObjectToFront(bubble);
+    this.bubbleAnimations.set(characterId, {
+      bubble,
+      animation,
+      startedAt: null,
+      durationMs,
+      startLeft: token.left ?? 0,
+      startTop: (token.top ?? 0) - this.cellSize * CHARACTER_SCALE * 0.46,
+      direction: Math.random() > 0.5 ? 1 : -1,
+    });
+    this.startAnimationLoop();
     this.canvas.requestRenderAll();
 
     const timer = window.setTimeout(() => {
-      const currentBubble = this.characterBubbles.get(characterId);
-
-      if (currentBubble) {
-        this.canvas.remove(currentBubble);
-        this.characterBubbles.delete(characterId);
-        this.canvas.requestRenderAll();
-      }
-
-      this.bubbleTimers.delete(characterId);
+      this.removeCharacterBubble(characterId);
     }, durationMs);
 
     this.bubbleTimers.set(characterId, timer);
+  }
+
+  playMapBubbleSequence(
+    sequence: MapBubbleSequence,
+    onLine?: (line: MapBubbleSequenceLine) => void,
+  ): () => void {
+    if (sequence.visibleAtZoom !== undefined && this.getZoom() < sequence.visibleAtZoom) {
+      return () => undefined;
+    }
+
+    const timers = sequence.lines.map((line, index) => window.setTimeout(() => {
+      onLine?.(line);
+      this.showMapBubbleSequenceLine(line, sequence);
+    }, index * sequence.intervalMs));
+
+    return () => {
+      timers.forEach(timer => window.clearTimeout(timer));
+    };
+  }
+
+  showMapActivity(activity: MapActivityView, durationMs = 4800): void {
+    if (activity.visibleAtZoom !== undefined && this.getZoom() < activity.visibleAtZoom) {
+      return;
+    }
+
+    const points = activity.participantIds
+      .map(characterId => this.getCharacterCenter(characterId))
+      .filter((point): point is GridCoordinate => point !== null);
+
+    if (points.length === 0) {
+      return;
+    }
+
+    const existingTimer = this.mapActivityTimers.get(activity.id);
+
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      this.mapActivityTimers.delete(activity.id);
+    }
+
+    const center = points.reduce(
+      (sum, point) => ({
+        x: sum.x + point.x / points.length,
+        y: sum.y + point.y / points.length,
+      }),
+      { x: 0, y: 0 },
+    );
+    let label = this.mapActivityLabels.get(activity.id);
+
+    if (!label) {
+      label = new Text(activity.label, {
+        fontSize: 12,
+        fontFamily: 'Arial, sans-serif',
+        fontWeight: '700',
+        fill: '#24313a',
+        backgroundColor: 'rgba(246, 232, 184, 0.94)',
+        originX: 'center',
+        originY: 'bottom',
+        selectable: false,
+        evented: false,
+      });
+      label.set('sortBottomY', Number.POSITIVE_INFINITY);
+      label.set('entityLayerRank', FLOATING_UI_LAYER_RANK);
+      this.mapActivityLabels.set(activity.id, label);
+      this.canvas.add(label);
+    }
+
+    label.set({
+      text: activity.label,
+      left: center.x,
+      top: center.y - this.cellSize * CHARACTER_SCALE * 1.1,
+    });
+    this.canvas.bringObjectToFront(label);
+    this.canvas.requestRenderAll();
+
+    const timer = window.setTimeout(() => {
+      const currentLabel = this.mapActivityLabels.get(activity.id);
+
+      if (currentLabel) {
+        this.canvas.remove(currentLabel);
+        this.mapActivityLabels.delete(activity.id);
+        this.canvas.requestRenderAll();
+      }
+
+      this.mapActivityTimers.delete(activity.id);
+    }, durationMs);
+
+    this.mapActivityTimers.set(activity.id, timer);
+  }
+
+  getZoom(): number {
+    return this.camera.getZoom();
   }
 
   getCharacterTile(characterId: string): GridCoordinate | null {
@@ -580,6 +696,7 @@ export class FabricTownMapWidget {
       this.canvas.remove(bubble);
       this.characterBubbles.delete(characterId);
     }
+    this.bubbleAnimations.delete(characterId);
 
     const timer = this.bubbleTimers.get(characterId);
     if (timer) {
@@ -651,7 +768,7 @@ export class FabricTownMapWidget {
   cancelWalk(characterId: string): void {
     this.walkers.delete(characterId);
 
-    if (this.walkers.size === 0) {
+    if (!this.hasActiveAnimations()) {
       this.stopAnimationLoop();
     }
   }
@@ -664,9 +781,13 @@ export class FabricTownMapWidget {
     this.stopAnimationLoop();
     this.camera.dispose();
     this.walkers.clear();
+    this.bubbleAnimations.clear();
     this.bubbleTimers.forEach(timer => window.clearTimeout(timer));
     this.bubbleTimers.clear();
+    this.mapActivityTimers.forEach(timer => window.clearTimeout(timer));
+    this.mapActivityTimers.clear();
     this.characterBubbles.clear();
+    this.mapActivityLabels.clear();
     this.mapObjectShapes.clear();
     return this.canvas.dispose();
   }
@@ -828,10 +949,11 @@ export class FabricTownMapWidget {
           this.walkers.delete(id);
         }
       });
+      this.advanceBubbleAnimations(timestamp);
 
       this.sortEntityLayer();
 
-      if (this.walkers.size > 0) {
+      if (this.hasActiveAnimations()) {
         this.canvas.requestRenderAll();
         this.animationFrameId = requestAnimationFrame(animateAll);
       } else {
@@ -848,6 +970,10 @@ export class FabricTownMapWidget {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+  }
+
+  private hasActiveAnimations(): boolean {
+    return this.walkers.size > 0 || this.bubbleAnimations.size > 0;
   }
 
   private advanceWalker(walker: WalkState, timestamp: number): 'continue' | 'done' {
@@ -903,6 +1029,93 @@ export class FabricTownMapWidget {
     walker.token.setCoords();
     this.characterTracker.update();
     return 'continue';
+  }
+
+  private advanceBubbleAnimations(timestamp: number): void {
+    const completedCharacterIds: string[] = [];
+
+    this.bubbleAnimations.forEach((state, characterId) => {
+      if (state.startedAt === null) {
+        state.startedAt = timestamp;
+      }
+
+      const progress = Math.min(1, (timestamp - state.startedAt) / state.durationMs);
+
+      if (state.animation === 'fade') {
+        this.applyFadeBubbleAnimation(state, progress);
+      } else {
+        this.applyBounceAwayBubbleAnimation(state, progress);
+      }
+
+      if (progress >= 1) {
+        completedCharacterIds.push(characterId);
+      }
+    });
+
+    completedCharacterIds.forEach(characterId => {
+      this.removeCharacterBubble(characterId);
+    });
+  }
+
+  private applyFadeBubbleAnimation(state: BubbleAnimationState, progress: number): void {
+    const opacity = progress < 0.18
+      ? progress / 0.18
+      : progress > 0.78
+        ? Math.max(0, (1 - progress) / 0.22)
+        : 1;
+
+    state.bubble.set({
+      opacity,
+      left: state.startLeft,
+      top: state.startTop - easeOutCubic(progress) * this.cellSize * 0.35,
+    });
+  }
+
+  private applyBounceAwayBubbleAnimation(state: BubbleAnimationState, progress: number): void {
+    const travel = easeOutBack(progress) * this.cellSize * 1.35 * state.direction;
+    const hop = Math.sin(progress * Math.PI) * this.cellSize * 0.34;
+    const opacity = progress < 0.62 ? 1 : Math.max(0, (1 - progress) / 0.38);
+
+    state.bubble.set({
+      opacity,
+      left: state.startLeft + travel,
+      top: state.startTop - hop,
+      angle: state.direction * progress * 7,
+    });
+  }
+
+  private showMapBubbleSequenceLine(line: MapBubbleSequenceLine, sequence: MapBubbleSequence): void {
+    if (line.expression) {
+      this.updateCharacterExpression(line.characterId, line.expression);
+    }
+
+    this.showCharacterBubble(
+      line.characterId,
+      line.text,
+      sequence.bubbleDurationMs,
+      sequence.animation,
+    );
+  }
+
+  private removeCharacterBubble(characterId: string): void {
+    const timer = this.bubbleTimers.get(characterId);
+
+    if (timer) {
+      window.clearTimeout(timer);
+      this.bubbleTimers.delete(characterId);
+    }
+
+    const currentBubble = this.characterBubbles.get(characterId);
+
+    if (!currentBubble) {
+      this.bubbleAnimations.delete(characterId);
+      return;
+    }
+
+    this.canvas.remove(currentBubble);
+    this.characterBubbles.delete(characterId);
+    this.bubbleAnimations.delete(characterId);
+    this.canvas.requestRenderAll();
   }
 
   private renderCharacter(character: TownMapCharacter): void {
@@ -1001,4 +1214,15 @@ export class FabricTownMapWidget {
 
     return typeof characterId === 'string' ? characterId : null;
   }
+}
+
+function easeOutCubic(progress: number): number {
+  return 1 - Math.pow(1 - progress, 3);
+}
+
+function easeOutBack(progress: number): number {
+  const overshoot = 1.45;
+  const shifted = progress - 1;
+
+  return 1 + (overshoot + 1) * Math.pow(shifted, 3) + overshoot * Math.pow(shifted, 2);
 }

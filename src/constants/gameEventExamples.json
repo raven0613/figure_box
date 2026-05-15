@@ -1,55 +1,6 @@
 {
   "events": [
     {
-      "id": "invite_tennis",
-      "name": "A 約 B 去打網球",
-      "type": "auto",
-      "limitChar": 2,
-      "baseWeight": 10,
-      "condition": {
-        "locationIds": ["park", "school_court", "sports_center"],
-        "timeOfDay": ["morning", "afternoon"],
-        "mutualStatuses": ["acquaintance", "friend", "lovers", "married"],
-        "minIntimacy": 20
-      },
-      "commands": [
-        {
-          "type": "PLAY_DIALOGUE",
-          "dialogueGroupId": "invite_tennis"
-        },
-        {
-          "type": "CHANGE_STAT",
-          "target": "initiator",
-          "statPath": "status.stamina",
-          "operation": "add",
-          "value": -10
-        },
-        {
-          "type": "CHANGE_STAT",
-          "target": "target",
-          "statPath": "status.stamina",
-          "operation": "add",
-          "value": -10
-        },
-        {
-          "type": "PLAY_ANIM",
-          "target": "both",
-          "animId": "play_tennis",
-          "actionTag": "sport.tennis",
-          "durationMs": 5000
-        },
-        {
-          "type": "SET_BLACKBOARD",
-          "scope": "local",
-          "key": "activity.current",
-          "value": {
-            "state": "playing_tennis",
-            "participantIds": ["${initiator.id}", "${target.id}"]
-          }
-        }
-      ]
-    },
-    {
       "id": "passerby_bump",
       "name": "路人 A 撞到 B",
       "type": "auto",

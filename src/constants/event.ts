@@ -6,6 +6,8 @@ export type ComparisonOperator = '==' | '!=' | '>' | '>=' | '<' | '<=' | 'in' | 
 export type ClauseMode = 'all' | 'some';
 export type ParticipantRole = 'initiator' | 'target';
 export type CommandTarget = ParticipantRole | 'relationship' | 'blackboard';
+export type EventDialogueDisplayMode = 'preview' | 'ambient';
+export type MapDialogueBubbleAnimation = 'fade' | 'bounceAway';
 export type ValuePath =
     | `initiator.${string}`
     | `target.${string}`
@@ -78,6 +80,12 @@ export interface PlayDialogueCommand {
     type: 'PLAY_DIALOGUE';
     dialogueGroupId?: string;
     scriptId?: string;
+    displayMode?: EventDialogueDisplayMode;
+    mapLabel?: string;
+    mapBubbleAnimation?: MapDialogueBubbleAnimation;
+    mapPreviewLineCount?: number;
+    mapBubbleIntervalMs?: number;
+    mapVisibleAtZoom?: number;
 }
 
 export interface ChangeStatCommand {

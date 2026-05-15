@@ -10,25 +10,22 @@ import {
 import {
   TownCharacterController,
   type CharacterSnapshot,
-  type DialogueSnapshot,
 } from '~/services/townCharacterController';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
-import { INVITATION_DIALOGUE } from '~/constants/dialogue';
-import { createDialogueViewScriptFromDocument } from '~/services/dialogueViewAdapter';
+import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { TownMapTile } from '~/widgets/townMapGrid';
-import type { DialogueViewScript } from '~/typing/dialogueView';
 
 import styles from './townMap.module.scss';
 
 interface TownMapContainerProps {
   expressionByCharacterId?: Partial<Record<string, Expression>>;
-  onDialogueRequested?: (script: DialogueViewScript) => void;
+  mapDialoguePresentation?: EventDialoguePresentation | null;
 }
 
 export function TownMapContainer({
   expressionByCharacterId = {},
-  onDialogueRequested,
+  mapDialoguePresentation = null,
 }: TownMapContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const characterControllerRef = useRef<TownCharacterController | null>(null);
@@ -38,7 +35,6 @@ export function TownMapContainer({
   // const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
   const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
-  const [dialogueSnapshot, setDialogueSnapshot] = useState<DialogueSnapshot | null>(null);
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -71,7 +67,6 @@ export function TownMapContainer({
         }));
       },
       onRelationshipStoreChange: setRelationshipStore,
-      onDialogueSnapshot: setDialogueSnapshot,
     });
 
     characterControllerRef.current = characterController;
@@ -81,7 +76,6 @@ export function TownMapContainer({
       characterController.dispose();
       characterControllerRef.current = null;
       setCharacterSnapshots({});
-      setDialogueSnapshot(null);
       setSelectedMapObjects([]);
       void widget.destroy();
       canvasHost.replaceChildren();
@@ -95,6 +89,16 @@ export function TownMapContainer({
       }
     });
   }, [expressionByCharacterId]);
+
+  useEffect(() => {
+    const characterController = characterControllerRef.current;
+
+    if (!characterController || !mapDialoguePresentation) {
+      return undefined;
+    }
+
+    return characterController.showMapDialoguePresentation(mapDialoguePresentation);
+  }, [mapDialoguePresentation]);
 
   return (
     <section className={styles.container}>
@@ -131,50 +135,9 @@ export function TownMapContainer({
               {tile.x},{tile.y}
             </span>
           ))}
-        </div> */}
+          </div> */}
 
           <div className={styles.characterList}>
-            <button
-              className={styles.dialogueButton}
-              type="button"
-              onClick={() => {
-                onDialogueRequested?.(createDialogueViewScriptFromDocument(
-                  INVITATION_DIALOGUE,
-                  [
-                    {
-                      id: CHARACTER_SEEDS[0].id,
-                      role: 'initiator',
-                      name: CHARACTER_SEEDS[0].name,
-                    },
-                    {
-                      id: CHARACTER_SEEDS[1].id,
-                      role: 'target',
-                      name: CHARACTER_SEEDS[1].name,
-                    },
-                  ],
-                ));
-              }}
-            >
-              Start Invite
-            </button>
-
-            {dialogueSnapshot?.context.activeChoice ? (
-              <div className={styles.choicePanel}>
-                <strong>{dialogueSnapshot.context.activeChoice.text}</strong>
-                {dialogueSnapshot.context.activeChoice.choices.map(choice => (
-                  <button
-                    key={choice.id}
-                    type="button"
-                    onClick={() => {
-                      characterControllerRef.current?.resolveDialogueChoice(choice.id);
-                    }}
-                  >
-                    {choice.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
             {CHARACTER_SEEDS.map(character => {
               const snapshot = characterSnapshots[character.id];
               const summary = snapshot ? getCharacterStateSummary(snapshot.value) : null;

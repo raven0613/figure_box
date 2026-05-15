@@ -1,38 +1,32 @@
 import { createActor, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 import { CHARACTER_SEEDS, Expression, type Position } from '~/constants/character';
-import { INVITATION_DIALOGUE } from '~/constants/dialogue';
 import { DESTINATION_MAP } from '~/constants/townMap';
-import { gameFlowMachine } from '~/stateMachines/gameFlow';
 import {
   characterMachine,
   getCharacterStateSummary,
 } from '~/stateMachines/gameFlow/children/character';
-import { dialogueManagerMachine } from '~/stateMachines/gameFlow/children/dialogue';
-import { EventType, type CharacterEvent, type DialogueManagerEmittedEvent } from '~/stateMachines/gameFlow/events';
+import { EventType, type CharacterEvent } from '~/stateMachines/gameFlow/events';
 import {
   createRelationshipStore,
   recordPassByPair,
   type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
+import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import type { GridCoordinate } from '~/widgets/townMapGrid';
 
 type CharacterActor = ActorRefFrom<typeof characterMachine>;
-type GameFlowActor = ActorRefFrom<typeof gameFlowMachine>;
-type DialogueActor = ActorRefFrom<typeof dialogueManagerMachine>;
 type CharacterSeed = typeof CHARACTER_SEEDS[number];
 type Subscription = {
   unsubscribe: () => void;
 };
 
 export type CharacterSnapshot = SnapshotFrom<typeof characterMachine>;
-export type DialogueSnapshot = SnapshotFrom<typeof dialogueManagerMachine>;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
   onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
-  onDialogueSnapshot?: (snapshot: DialogueSnapshot) => void;
 }
 
 export class TownCharacterController {
@@ -41,45 +35,39 @@ export class TownCharacterController {
   private readonly characterSubscriptions = new Map<string, Subscription>();
   private readonly walkingCharacterIds = new Set<string>();
   private relationshipStore = createRelationshipStore();
-  private gameFlowActor: GameFlowActor | null = null;
-  private dialogueSubscription: Subscription | null = null;
-  private emittedSubscription: Subscription | null = null;
   private tickTimer: number | null = null;
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
-  private readonly onDialogueSnapshot?: (snapshot: DialogueSnapshot) => void;
 
   constructor(options: TownCharacterControllerOptions) {
     this.widget = options.widget;
     this.onCharacterSnapshot = options.onCharacterSnapshot;
     this.onRelationshipStoreChange = options.onRelationshipStoreChange;
-    this.onDialogueSnapshot = options.onDialogueSnapshot;
   }
 
   start(): void {
     CHARACTER_SEEDS.forEach(character => {
       this.spawnCharacterActor(character);
     });
-
-    this.gameFlowActor = createActor(gameFlowMachine);
-    this.gameFlowActor.start();
-
-    const dialogueActor = this.gameFlowActor.getSnapshot().children.dialogueManager as DialogueActor | undefined;
-
-    if (!dialogueActor) {
-      throw new Error('Dialogue manager actor was not created by gameFlowMachine.');
-    }
-
-    this.dialogueSubscription = dialogueActor.subscribe(snapshot => {
-      this.onDialogueSnapshot?.(snapshot);
-    });
-    this.emittedSubscription = dialogueActor.on('*', event => {
-      this.handleDialogueEmission(event as DialogueManagerEmittedEvent);
-    });
-
     this.tickTimer = window.setInterval(() => {
       this.tick();
     }, 1000);
+  }
+
+  showMapDialoguePresentation(presentation: EventDialoguePresentation): (() => void) | undefined {
+    if (presentation.activity) {
+      this.widget.showMapActivity(presentation.activity);
+    }
+
+    if (!presentation.bubbleSequence) {
+      return undefined;
+    }
+
+    return this.widget.playMapBubbleSequence(presentation.bubbleSequence, line => {
+      if (line.expression) {
+        this.setCharacterExpression(line.characterId, line.expression);
+      }
+    });
   }
 
   pickUpCharacter(characterId: string): void {
@@ -111,32 +99,6 @@ export class TownCharacterController {
     this.sendToCharacter(characterId, { type: EventType.Drop });
   }
 
-  startInvitationDialogue(): void {
-    this.gameFlowActor?.send({
-      type: 'START_DIALOGUE',
-      script: INVITATION_DIALOGUE,
-      participants: [
-        {
-          id: CHARACTER_SEEDS[0].id,
-          role: 'initiator',
-          name: CHARACTER_SEEDS[0].name,
-        },
-        {
-          id: CHARACTER_SEEDS[1].id,
-          role: 'target',
-          name: CHARACTER_SEEDS[1].name,
-        },
-      ],
-    });
-  }
-
-  resolveDialogueChoice(choiceId: string): void {
-    this.gameFlowActor?.send({
-      type: 'RESOLVE',
-      choiceId,
-    });
-  }
-
   setCharacterExpression(characterId: string, expression: Expression): void {
     this.sendToCharacter(characterId, {
       type: EventType.SetExpression,
@@ -157,14 +119,6 @@ export class TownCharacterController {
       subscription.unsubscribe();
     });
     this.characterSubscriptions.clear();
-
-    this.dialogueSubscription?.unsubscribe();
-    this.dialogueSubscription = null;
-    this.emittedSubscription?.unsubscribe();
-    this.emittedSubscription = null;
-
-    this.gameFlowActor?.stop();
-    this.gameFlowActor = null;
 
     this.characterActors.forEach(actor => {
       actor.stop();
@@ -321,31 +275,6 @@ export class TownCharacterController {
     });
 
     return nextRelationshipStore;
-  }
-
-  private handleDialogueEmission(event: DialogueManagerEmittedEvent): void {
-    switch (event.type) {
-      case 'DIALOGUE_CHARACTER_EVENT':
-        this.sendToCharacter(event.characterId, event.event);
-        return;
-      case 'DIALOGUE_LINE':
-        this.sendToCharacter(event.speakerId, {
-          type: EventType.SetExpression,
-          expression: event.expression ?? Expression.Normal,
-        });
-        this.widget.showCharacterBubble(event.speakerId, event.text, 1800);
-        return;
-      case 'DIALOGUE_CHOICE_REQUESTED':
-        if (event.choice.text) {
-          event.participantIds.forEach(characterId => {
-            this.widget.showCharacterBubble(characterId, event.choice.text ?? '', 4200);
-          });
-        }
-        return;
-      case 'DIALOGUE_CHOICE_RESOLVED':
-      case 'DIALOGUE_ENDED':
-        return;
-    }
   }
 
   private sendToCharacter(characterId: string, event: CharacterEvent): boolean {
