@@ -9,8 +9,8 @@ import {
   type CharacterEventDefinitionRecord,
 } from './schemaReaders';
 
-const VALID_ACTIVITY_TYPES = ['playWithItem', 'playAtLocation'] as const;
-const VALID_ACTIVITY_START_PHASES = ['active', 'traveling'] as const;
+const VALID_ACTIVITY_TYPES = ['chat', 'playWithItem', 'playAtLocation'] as const;
+const VALID_ACTIVITY_START_PHASES = ['inviting', 'active', 'traveling'] as const;
 const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
 
 // activity / joinRequirements parser
@@ -33,12 +33,40 @@ export function readOptionalActivity(
     type: readActivityType(value, index),
     startPhase: readOptionalStartPhase(value, index),
     destination: readOptionalDestination(value, index),
+    invite: readOptionalInvite(value, index),
     group: readOptionalGroupActivity(value, index),
     joinable: readOptionalBoolean(value, 'joinable', index),
     durationMs: readRequiredNonNegativeNumber(value, 'durationMs', index),
     refreshDurationOnJoin: readOptionalBoolean(value, 'refreshDurationOnJoin', index),
     joinWindowMs: readOptionalNonNegativeNumber(value, 'joinWindowMs', index),
     joinRequirements: readOptionalJoinRequirement(value, index),
+  };
+}
+
+function readOptionalInvite(
+  activity: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['invite'] {
+  const value = activity.invite;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.invite.`);
+  }
+
+  const target = readRequiredString(value, 'target', index);
+
+  if (target !== 'randomNearbyCharacter') {
+    throw new Error(`Character event definition at index ${index} has invalid activity.invite.target.`);
+  }
+
+  return {
+    target,
+    range: readOptionalNonNegativeNumber(value, 'range', index),
+    requiredAcceptCount: readOptionalNonNegativeNumber(value, 'requiredAcceptCount', index),
   };
 }
 

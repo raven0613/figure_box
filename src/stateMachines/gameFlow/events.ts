@@ -29,26 +29,14 @@ export type CharacterEvent =
   | { type: EventType.GoEat; target: Position }
   | { type: EventType.GoRest }
   | { type: EventType.GoPlay }
-  | { type: EventType.ProposeChat; targetCharId: string; proposalId: string; sourceEventId: string }
-  | { type: EventType.ProposePlay; targetCharId: string; proposalId: string; sourceEventId: string }
   | { type: EventType.StartActivity; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivity; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivityAccepted; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivityRejected; activityId: string }
   | { type: EventType.EndJoinedActivity; activityId: string; timestamp?: number }
-  | { type: EventType.ChatProposalAccepted; targetCharId: string; proposalId: string; sourceEventId: string }
-  | { type: EventType.ChatProposalRejected; targetCharId: string; proposalId: string; timestamp?: number }
-  | { type: EventType.AcceptChatProposal; fromCharacterId: string; proposalId: string; sourceEventId: string }
-  | { type: EventType.PlayProposalAccepted; targetCharId: string; proposalId: string; sourceEventId: string }
-  | { type: EventType.PlayProposalRejected; targetCharId: string; proposalId: string; timestamp?: number }
-  | { type: EventType.AcceptPlayProposal; fromCharacterId: string; proposalId: string; sourceEventId: string }
-  | { type: EventType.EndChatInteraction; proposalId: string; timestamp?: number }
-  | { type: EventType.EndPlayInteraction; proposalId: string; timestamp?: number }
   | {
-    type: EventType.RecordInteractionCooldown;
-    interactionType: 'chat' | 'play';
-    partnerCharId: string;
-    proposalId: string;
+    type: EventType.RecordActivityCooldown;
+    partnerCharIds: string[];
     role: 'initiator' | 'target';
     sourceEventId: string;
     timestamp?: number;
@@ -83,22 +71,12 @@ export enum EventType {
   GoEat = "goEat",
   GoRest = "goRest",
   GoPlay = "goPlay",
-  ProposeChat = "proposeChat",
-  ProposePlay = "proposePlay",
   StartActivity = "startActivity",
   JoinActivity = "joinActivity",
   JoinActivityAccepted = "joinActivityAccepted",
   JoinActivityRejected = "joinActivityRejected",
   EndJoinedActivity = "endJoinedActivity",
-  ChatProposalAccepted = "chatProposalAccepted",
-  ChatProposalRejected = "chatProposalRejected",
-  AcceptChatProposal = "acceptChatProposal",
-  PlayProposalAccepted = "playProposalAccepted",
-  PlayProposalRejected = "playProposalRejected",
-  AcceptPlayProposal = "acceptPlayProposal",
-  EndChatInteraction = "endChatInteraction",
-  EndPlayInteraction = "endPlayInteraction",
-  RecordInteractionCooldown = "recordInteractionCooldown",
+  RecordActivityCooldown = "recordActivityCooldown",
   GoIdle = "goIdle",
   PickUp = "pickUp",
   Drop = "drop",

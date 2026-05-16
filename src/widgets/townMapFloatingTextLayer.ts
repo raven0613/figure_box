@@ -186,16 +186,27 @@ export class TownMapFloatingTextLayer {
     this.canvas.requestRenderAll();
 
     this.mapActivityTimers.set(activity.id, window.setTimeout(() => {
-      const currentLabel = this.mapActivityLabels.get(activity.id);
-
-      if (currentLabel) {
-        this.canvas.remove(currentLabel);
-        this.mapActivityLabels.delete(activity.id);
-        this.canvas.requestRenderAll();
-      }
-
+      this.removeMapActivity(activity.id);
       this.mapActivityTimers.delete(activity.id);
     }, durationMs));
+  }
+
+  removeMapActivity(activityId: string): void {
+    const currentLabel = this.mapActivityLabels.get(activityId);
+
+    if (!currentLabel) {
+      this.clearTimer(this.mapActivityTimers, activityId);
+      return;
+    }
+
+    this.canvas.remove(currentLabel);
+    this.mapActivityLabels.delete(activityId);
+    this.clearTimer(this.mapActivityTimers, activityId);
+    this.canvas.requestRenderAll();
+  }
+
+  removeCharacterBubbleById(characterId: string): void {
+    this.removeCharacterBubble(characterId);
   }
 
   removeCharacterUi(characterId: string): void {
@@ -413,4 +424,3 @@ function easeOutBack(progress: number): number {
 
   return 1 + (overshoot + 1) * Math.pow(shifted, 3) + overshoot * Math.pow(shifted, 2);
 }
-

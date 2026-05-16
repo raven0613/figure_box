@@ -18,9 +18,9 @@ import {
 } from './rules';
 import { createCharacterEventFromAction } from './eventFactory';
 import {
-  getAvailableInteractionTargetIds,
-  getInteractionRepeatWeightMultiplier,
-} from './interactionCooldowns';
+  getActivityRepeatWeightMultiplier,
+  getAvailableActivityTargetIds,
+} from './activityCooldowns';
 
 interface CharacterEventBucket {
   id: CharacterEventBucketId;
@@ -142,7 +142,7 @@ function calculateDefinitionWeight(
     definition.weightModifiers,
     createCharacterEventRuleContext(params.context, params.utilityScores, params.input),
   );
-  const repeatMultiplier = calculateInteractionRepeatMultiplier(definition, params);
+  const repeatMultiplier = calculateActivityRepeatMultiplier(definition, params);
   const weightedValue = modifiedWeight * repeatMultiplier;
 
   return definition.maxWeight === undefined
@@ -154,13 +154,13 @@ function createEventFactoryInput(
   definition: CharacterEventDefinition,
   params: CharacterEventBucketParams,
 ): CharacterEventDecisionInput {
-  if (!isInteractionAction(definition)) {
+  if (!isActivityInviteAction(definition)) {
     return params.input;
   }
 
   return {
     ...params.input,
-    nearbyCharacterIds: getAvailableInteractionTargetIds(
+    nearbyCharacterIds: getAvailableActivityTargetIds(
       params.context,
       definition,
       params.input.nearbyCharacterIds ?? [],
@@ -169,22 +169,26 @@ function createEventFactoryInput(
   };
 }
 
-function calculateInteractionRepeatMultiplier(
+function calculateActivityRepeatMultiplier(
   definition: CharacterEventDefinition,
   params: CharacterEventBucketParams,
 ): number {
-  if (!isInteractionAction(definition)) {
+  if (!isActivityInviteAction(definition)) {
     return 1;
   }
 
-  const availableTargetIds = getAvailableInteractionTargetIds(
+  const availableTargetIds = getAvailableActivityTargetIds(
     params.context,
     definition,
     params.input.nearbyCharacterIds ?? [],
     params.input.timestamp ?? Date.now(),
   );
 
-  return getInteractionRepeatWeightMultiplier(
+  if (availableTargetIds.length === 0) {
+    return 0;
+  }
+
+  return getActivityRepeatWeightMultiplier(
     params.context,
     definition,
     availableTargetIds,
@@ -192,6 +196,7 @@ function calculateInteractionRepeatMultiplier(
   );
 }
 
-function isInteractionAction(definition: CharacterEventDefinition): boolean {
-  return definition.characterEvent.type === 'proposeChat' || definition.characterEvent.type === 'proposePlay';
+function isActivityInviteAction(definition: CharacterEventDefinition): boolean {
+  return definition.characterEvent.type === 'startActivity' &&
+    definition.presentationVariants?.some(variant => variant.activity?.invite) === true;
 }

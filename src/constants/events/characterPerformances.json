@@ -82,6 +82,35 @@
         "durationMs": 20000
       },
       {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "motion",
+        "target": "both",
+        "motionId": "face.bottom",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "chatTogether",
+        "label": "愣住了",
+        "durationMs": 5000
+      },
+      {
         "phase": "end",
         "type": "bubble",
         "target": "both",
@@ -152,6 +181,50 @@
         "durationMs": 20000
       },
       {
+        "phase": "participantLeftSolo",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playTogether",
+        "label": "自己玩中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "participantLeftSolo",
+        "type": "bubble",
+        "target": "both",
+        "text": "剩下自己玩",
+        "durationMs": 2400
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "motion",
+        "target": "both",
+        "motionId": "face.bottom",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playTogether",
+        "label": "愣住了",
+        "durationMs": 5000
+      },
+      {
         "phase": "end",
         "type": "bubble",
         "target": "both",
@@ -174,6 +247,9 @@
         "phase": "active",
         "type": "mapEffect",
         "target": "both",
+        "participantCount": {
+          "max": 1
+        },
         "effectId": "playAtLocation",
         "label": "在這邊玩得很開心",
         "durationMs": 20000
@@ -182,9 +258,78 @@
         "phase": "active",
         "type": "bubble",
         "target": "both",
+        "participantCount": {
+          "max": 1
+        },
         "text": "正在玩",
         "delayMs": 1200,
         "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "effectId": "playAtLocation",
+        "label": "一起玩",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "text": "正在一起玩",
+        "delayMs": 1200,
+        "durationMs": 20000
+      },
+      {
+        "phase": "participantLeftSolo",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playAtLocation",
+        "label": "自己玩中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "participantLeftSolo",
+        "type": "bubble",
+        "target": "both",
+        "text": "剩下自己玩",
+        "durationMs": 2400
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "motion",
+        "target": "both",
+        "motionId": "face.bottom",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playAtLocation",
+        "label": "愣住了",
+        "durationMs": 5000
       },
       {
         "phase": "end",
@@ -246,6 +391,50 @@
         },
         "text": "正在一起玩球",
         "durationMs": 20000
+      },
+      {
+        "phase": "participantLeftSolo",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playToyBall",
+        "label": "自己玩球中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "participantLeftSolo",
+        "type": "bubble",
+        "target": "both",
+        "text": "剩下自己玩球",
+        "durationMs": 2400
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "motion",
+        "target": "both",
+        "motionId": "face.bottom",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playToyBall",
+        "label": "愣住了",
+        "durationMs": 5000
       }
     ]
   },
@@ -300,6 +489,50 @@
         },
         "text": "正在一起玩牌",
         "durationMs": 20000
+      },
+      {
+        "phase": "participantLeftSolo",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playCards",
+        "label": "自己玩牌中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "participantLeftSolo",
+        "type": "bubble",
+        "target": "both",
+        "text": "剩下自己玩牌",
+        "durationMs": 2400
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "motion",
+        "target": "both",
+        "motionId": "face.bottom",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playCards",
+        "label": "愣住了",
+        "durationMs": 5000
       }
     ]
   }

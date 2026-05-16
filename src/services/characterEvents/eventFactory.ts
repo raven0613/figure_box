@@ -1,5 +1,10 @@
 import { EventType, type CharacterEvent } from '~/stateMachines/gameFlow/events';
-import type { CharacterEventAction, CharacterEventTarget } from '../../constants/charactarEventsDefinitions';
+import {
+  CHARACTER_EVENT_DEFINITIONS_BY_ID,
+  type CharacterEventAction,
+  type CharacterEventTarget,
+} from '../../constants/charactarEventsDefinitions';
+import type { JoinableActivity } from './joinableActivities';
 import { getRandomDestinationTarget } from './targets';
 import type { CharacterEventDecisionInput } from './types';
 
@@ -21,34 +26,6 @@ export function createCharacterEventFromAction(
         type: EventType.GoEat,
         target: resolveCharacterEventTarget(action.target),
       };
-    case 'proposeChat': {
-      const targetCharId = selectRandomNearbyCharacterId(input.nearbyCharacterIds ?? [], random);
-
-      if (!targetCharId) {
-        return null;
-      }
-
-      return {
-        type: EventType.ProposeChat,
-        targetCharId,
-        proposalId: createProposalId(random),
-        sourceEventId,
-      };
-    }
-    case 'proposePlay': {
-      const targetCharId = selectRandomNearbyCharacterId(input.nearbyCharacterIds ?? [], random);
-
-      if (!targetCharId) {
-        return null;
-      }
-
-      return {
-        type: EventType.ProposePlay,
-        targetCharId,
-        proposalId: createProposalId(random),
-        sourceEventId,
-      };
-    }
     case 'startActivity':
       return {
         type: EventType.StartActivity,
@@ -56,7 +33,11 @@ export function createCharacterEventFromAction(
         sourceEventId,
       };
     case 'joinActivity': {
-      const activity = selectRandomNearbyJoinableActivity(input.nearbyJoinableActivities ?? [], random);
+      const activities = filterJoinableActivitiesByMotivation(
+        input.nearbyJoinableActivities ?? [],
+        action.motivation,
+      );
+      const activity = selectRandomNearbyJoinableActivity(activities, random);
 
       if (!activity) {
         return null;
@@ -71,27 +52,25 @@ export function createCharacterEventFromAction(
   }
 }
 
+function filterJoinableActivitiesByMotivation(
+  activities: readonly JoinableActivity[],
+  motivation: Extract<CharacterEventAction, { type: 'joinActivity' }>['motivation'],
+): readonly JoinableActivity[] {
+  if (!motivation) {
+    return activities;
+  }
+
+  return activities.filter(activity => (
+    CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId]?.motivation === motivation
+  ));
+}
+
 function resolveCharacterEventTarget(target: CharacterEventTarget) {
   if (target === 'randomDestination.findFood') {
     return getRandomDestinationTarget('findFood') ?? { x: 1, y: 20 };
   }
 
   return target;
-}
-
-function selectRandomNearbyCharacterId(
-  nearbyCharacterIds: string[],
-  random: () => number,
-): string | null {
-  if (nearbyCharacterIds.length === 0) {
-    return null;
-  }
-
-  return nearbyCharacterIds[Math.floor(random() * nearbyCharacterIds.length)];
-}
-
-function createProposalId(random: () => number): string {
-  return `interaction-${Date.now()}-${Math.floor(random() * 1_000_000)}`;
 }
 
 function createActivityId(random: () => number): string {

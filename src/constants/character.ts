@@ -129,7 +129,8 @@ export enum Expression {
     Normal = "normal", // 玩家設定好的
     Laugh = "laugh", // 系統大笑臉
     Cry = "cry", // 系統哭臉
-    Mad = "mad" // 系統生氣臉
+    Mad = "mad", // 系統生氣臉
+    Surprised = "surprised" // 系統驚訝臉
 }
 
 

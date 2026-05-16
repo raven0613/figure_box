@@ -1,12 +1,12 @@
 import type {
   CharacterEventAction,
   CharacterEventActivityTarget,
-  CharacterEventInteractionTarget,
   CharacterEventTarget,
 } from '../../constants/charactarEventsDefinitions';
 import {
   includesString,
   isRecord,
+  readOptionalMotivation,
   readRequiredString,
   type CharacterEventDefinitionRecord,
 } from './schemaReaders';
@@ -16,8 +16,6 @@ const VALID_CHARACTER_EVENT_TYPES = [
   'goRest',
   'goPlay',
   'goEat',
-  'proposeChat',
-  'proposePlay',
   'startActivity',
   'joinActivity',
 ] as const;
@@ -46,17 +44,11 @@ export function readCharacterEventAction(
     };
   }
 
-  if (type === 'proposeChat' || type === 'proposePlay') {
-    return {
-      type,
-      target: readCharacterEventInteractionTarget(rawAction, index),
-    };
-  }
-
   if (type === 'joinActivity') {
     return {
       type,
       target: readCharacterEventActivityTarget(rawAction, index),
+      motivation: readOptionalMotivation(rawAction, 'motivation', index),
     };
   }
 
@@ -96,19 +88,6 @@ function readCharacterEventActivityTarget(
   const target = action.target;
 
   if (target === 'nearbyJoinableActivity') {
-    return target;
-  }
-
-  throw new Error(`Character event definition at index ${index} has invalid characterEvent.target.`);
-}
-
-function readCharacterEventInteractionTarget(
-  action: CharacterEventDefinitionRecord,
-  index: number,
-): CharacterEventInteractionTarget {
-  const target = action.target;
-
-  if (target === 'randomNearbyCharacter') {
     return target;
   }
 

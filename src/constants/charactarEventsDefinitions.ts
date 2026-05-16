@@ -41,16 +41,18 @@ export type CharacterEventAction =
   | { type: 'goRest' }
   | { type: 'goPlay' }
   | { type: 'goEat'; target: CharacterEventTarget }
-  | { type: 'proposeChat'; target: CharacterEventInteractionTarget }
-  | { type: 'proposePlay'; target: CharacterEventInteractionTarget }
   | { type: 'startActivity' }
-  | { type: 'joinActivity'; target: CharacterEventActivityTarget };
+  | {
+    type: 'joinActivity';
+    target: CharacterEventActivityTarget;
+    motivation?: UtilityDrivenMotivation;
+  };
 
 export type CharacterEventTarget =
   | 'randomDestination.findFood'
   | Position;
 
-export type CharacterEventInteractionTarget = 'randomNearbyCharacter';
+export type CharacterEventInviteTarget = 'randomNearbyCharacter';
 export type CharacterEventActivityTarget = 'nearbyJoinableActivity';
 
 export interface CharacterEventPresentationVariant {
@@ -85,6 +87,7 @@ export interface CharacterEventActivity {
   type: CharacterEventActivityType;
   startPhase?: CharacterEventActivityStartPhase;
   destination?: CharacterEventActivityDestination;
+  invite?: CharacterEventActivityInvite;
   group?: CharacterEventGroupActivity;
   joinable?: boolean;
   durationMs: number;
@@ -93,11 +96,17 @@ export interface CharacterEventActivity {
   joinRequirements?: CharacterEventJoinRequirement;
 }
 
-export type CharacterEventActivityType = 'playWithItem' | 'playAtLocation';
-export type CharacterEventActivityStartPhase = 'active' | 'traveling';
+export type CharacterEventActivityType = 'chat' | 'playWithItem' | 'playAtLocation';
+export type CharacterEventActivityStartPhase = 'inviting' | 'active' | 'traveling';
 export type CharacterEventActivityDestination =
   | 'randomDestination.play'
   | Position;
+
+export interface CharacterEventActivityInvite {
+  target: CharacterEventInviteTarget;
+  range?: number;
+  requiredAcceptCount?: number;
+}
 
 export interface CharacterEventGroupActivity {
   inviteNearbyRange?: number;

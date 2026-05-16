@@ -9,6 +9,8 @@ export type CharacterPerformancePhase =
   | 'rejectedBusy'
   | 'rejectedMood'
   | 'active'
+  | 'participantLeftSolo'
+  | 'participantLeftGroup'
   | 'end';
 export type CharacterPerformanceTarget = 'initiator' | 'target' | 'both';
 
@@ -22,7 +24,8 @@ export type CharacterPerformanceStep =
   | CharacterPerformanceExpressionStep
   | CharacterPerformanceEmoteStep
   | CharacterPerformanceMapEffectStep
-  | CharacterPerformanceMotionStep;
+  | CharacterPerformanceMotionStep
+  | CharacterPerformanceDialogueStep;
 
 export interface CharacterPerformanceBubbleStep {
   type: 'bubble';
@@ -71,6 +74,18 @@ export interface CharacterPerformanceMotionStep {
   target: CharacterPerformanceTarget;
   participantCount?: CharacterPerformanceParticipantCountCondition;
   motionId: string;
+  delayMs?: number;
+  durationMs?: number;
+}
+
+export interface CharacterPerformanceDialogueStep {
+  type: 'dialogue';
+  phase: CharacterPerformancePhase;
+  target: CharacterPerformanceTarget;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
+  dialogueGroupId?: string;
+  scriptId?: string;
+  displayMode?: 'preview' | 'ambient';
   delayMs?: number;
   durationMs?: number;
 }

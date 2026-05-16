@@ -46,4 +46,16 @@ export const AVATAR_EXPRESSION_PRESETS: AvatarExpressionPresetCatalog = {
       scale: 1.05,
     },
   },
+  [Expression.Surprised]: {
+    expression: Expression.Surprised,
+    label: 'surprised',
+    eyes: {
+      offsetY: -4,
+      scale: 1.08,
+    },
+    mouth: {
+      offsetY: 5,
+      scale: 0.82,
+    },
+  },
 };

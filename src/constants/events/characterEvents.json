@@ -244,8 +244,7 @@
     "bucketId": "environment",
     "motivation": "chat",
     "characterEvent": {
-      "type": "proposeChat",
-      "target": "randomNearbyCharacter"
+      "type": "startActivity"
     },
     "baseWeight": 18,
     "weightSource": "chat",
@@ -288,7 +287,24 @@
         "id": "chat.casual_approach",
         "baseWeight": 10,
         "presentationTags": ["emote.talk", "motion.turn"],
-        "performanceId": "social.chat.casual"
+        "performanceId": "social.chat.casual",
+        "activity": {
+          "key": "chat.casual",
+          "type": "chat",
+          "startPhase": "inviting",
+          "invite": {
+            "target": "randomNearbyCharacter",
+            "range": 2,
+            "requiredAcceptCount": 1
+          },
+          "joinable": true,
+          "durationMs": 20000,
+          "refreshDurationOnJoin": true,
+          "joinWindowMs": 8000,
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
       }
     ]
   },
@@ -297,8 +313,7 @@
     "bucketId": "environment",
     "motivation": "play",
     "characterEvent": {
-      "type": "proposePlay",
-      "target": "randomNearbyCharacter"
+      "type": "startActivity"
     },
     "baseWeight": 0,
     "weightSource": "play",
@@ -346,6 +361,12 @@
         "activity": {
           "key": "play.location.casual",
           "type": "playAtLocation",
+          "startPhase": "inviting",
+          "invite": {
+            "target": "randomNearbyCharacter",
+            "range": 2,
+            "requiredAcceptCount": 1
+          },
           "joinable": true,
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
@@ -358,12 +379,36 @@
     ]
   },
   {
+    "id": "environment.nearbyActivity.joinChat",
+    "bucketId": "environment",
+    "motivation": "chat",
+    "characterEvent": {
+      "type": "joinActivity",
+      "target": "nearbyJoinableActivity",
+      "motivation": "chat"
+    },
+    "baseWeight": 0,
+    "weightSource": "chat",
+    "addWeight": 5,
+    "maxWeight": 70,
+    "interruptPolicy": "soft",
+    "commitment": 8,
+    "conditions": [
+      {
+        "path": "input.nearbyJoinableActivityCount",
+        "operator": ">",
+        "value": 0
+      }
+    ]
+  },
+  {
     "id": "environment.nearbyActivity.joinPlay",
     "bucketId": "environment",
     "motivation": "play",
     "characterEvent": {
       "type": "joinActivity",
-      "target": "nearbyJoinableActivity"
+      "target": "nearbyJoinableActivity",
+      "motivation": "play"
     },
     "baseWeight": 0,
     "weightSource": "play",

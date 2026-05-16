@@ -1,13 +1,19 @@
 import type {
+  CharacterActivityCooldowns,
   CharacterContext,
-  CharacterInteraction,
-  CharacterInteractionCooldowns,
 } from '~/stateMachines/gameFlow/context';
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID, type CharacterEventDefinition } from '../../constants/charactarEventsDefinitions';
 
-const DEFAULT_COOLDOWN_CATEGORY = 'interaction';
+export interface ActivityCooldownRecordInput {
+  partnerCharIds: readonly string[];
+  role: 'initiator' | 'target';
+  sourceEventId: string;
+  timestamp: number;
+}
 
-export function createEmptyInteractionCooldowns(): CharacterInteractionCooldowns {
+const DEFAULT_COOLDOWN_CATEGORY = 'activity';
+
+export function createEmptyActivityCooldowns(): CharacterActivityCooldowns {
   return {
     categoryUntilByKey: {},
     pairUntilByKey: {},
@@ -15,7 +21,7 @@ export function createEmptyInteractionCooldowns(): CharacterInteractionCooldowns
   };
 }
 
-export function getAvailableInteractionTargetIds(
+export function getAvailableActivityTargetIds(
   context: CharacterContext,
   eventDefinition: CharacterEventDefinition,
   targetIds: readonly string[],
@@ -23,25 +29,16 @@ export function getAvailableInteractionTargetIds(
 ): string[] {
   const category = getCooldownCategory(eventDefinition);
 
-  if (isCategoryCoolingDown(context.interactionCooldowns, category, timestamp)) {
+  if (isCategoryCoolingDown(context.activityCooldowns, category, timestamp)) {
     return [];
   }
 
   return targetIds.filter(targetId => (
-    !isPairCoolingDown(context.interactionCooldowns, targetId, category, timestamp)
+    !isPairCoolingDown(context.activityCooldowns, targetId, category, timestamp)
   ));
 }
 
-export function canStartInteractionWithTarget(
-  context: CharacterContext,
-  eventDefinition: CharacterEventDefinition,
-  targetId: string,
-  timestamp: number,
-): boolean {
-  return getAvailableInteractionTargetIds(context, eventDefinition, [targetId], timestamp).length > 0;
-}
-
-export function getInteractionRepeatWeightMultiplier(
+export function getActivityRepeatWeightMultiplier(
   context: CharacterContext,
   eventDefinition: CharacterEventDefinition,
   targetIds: readonly string[],
@@ -56,7 +53,7 @@ export function getInteractionRepeatWeightMultiplier(
   const category = getCooldownCategory(eventDefinition);
   const multipliers = targetIds.map(targetId => {
     const repeatKey = createPairCategoryKey(targetId, category);
-    const repeatRecord = context.interactionCooldowns.repeatByKey[repeatKey];
+    const repeatRecord = context.activityCooldowns.repeatByKey[repeatKey];
 
     if (!repeatRecord || timestamp - repeatRecord.lastAt > repeatPenalty.windowMs) {
       return 1;
@@ -72,50 +69,55 @@ export function getInteractionRepeatWeightMultiplier(
   return multipliers.reduce((sum, multiplier) => sum + multiplier, 0) / multipliers.length;
 }
 
-export function applyInteractionCooldowns(
-  cooldowns: CharacterInteractionCooldowns,
-  interaction: CharacterInteraction | null,
-  timestamp: number,
-  role: 'initiator' | 'target',
-): CharacterInteractionCooldowns {
-  if (!interaction) {
-    return cooldowns;
-  }
+export function recordActivityCooldowns(
+  cooldowns: CharacterActivityCooldowns,
+  input: ActivityCooldownRecordInput,
+): CharacterActivityCooldowns {
+  const eventDefinition = CHARACTER_EVENT_DEFINITIONS_BY_ID[input.sourceEventId];
 
-  const eventDefinition = CHARACTER_EVENT_DEFINITIONS_BY_ID[interaction.sourceEventId];
-
-  if (!eventDefinition?.cooldowns) {
+  if (!eventDefinition?.cooldowns || input.partnerCharIds.length === 0) {
     return cooldowns;
   }
 
   const category = getCooldownCategory(eventDefinition);
-  const ownCooldownMs = role === 'initiator'
+  const ownCooldownMs = input.role === 'initiator'
     ? eventDefinition.cooldowns.selfMs
     : eventDefinition.cooldowns.targetMs;
-  const nextCategoryUntilByKey = ownCooldownMs
+  const categoryUntilByKey = ownCooldownMs
     ? {
       ...cooldowns.categoryUntilByKey,
-      [category]: timestamp + ownCooldownMs,
+      [category]: input.timestamp + ownCooldownMs,
     }
     : cooldowns.categoryUntilByKey;
-  const pairKey = createPairCategoryKey(interaction.partnerCharId, category);
-  const nextPairUntilByKey = eventDefinition.cooldowns.pairMs
-    ? {
-      ...cooldowns.pairUntilByKey,
-      [pairKey]: timestamp + eventDefinition.cooldowns.pairMs,
-    }
+  const pairCooldownMs = eventDefinition.cooldowns.pairMs;
+  const pairUntilByKey = pairCooldownMs
+    ? input.partnerCharIds.reduce<Record<string, number>>(
+      (nextPairUntilByKey, partnerCharId) => ({
+        ...nextPairUntilByKey,
+        [createPairCategoryKey(partnerCharId, category)]: input.timestamp + pairCooldownMs,
+      }),
+      cooldowns.pairUntilByKey,
+    )
     : cooldowns.pairUntilByKey;
-  const nextRepeatByKey = updateRepeatRecord(cooldowns, pairKey, timestamp, eventDefinition);
+  const repeatByKey = input.partnerCharIds.reduce(
+    (nextRepeatByKey, partnerCharId) => updateRepeatRecord(
+      nextRepeatByKey,
+      createPairCategoryKey(partnerCharId, category),
+      input.timestamp,
+      eventDefinition,
+    ),
+    cooldowns.repeatByKey,
+  );
 
   return {
-    categoryUntilByKey: nextCategoryUntilByKey,
-    pairUntilByKey: nextPairUntilByKey,
-    repeatByKey: nextRepeatByKey,
+    categoryUntilByKey,
+    pairUntilByKey,
+    repeatByKey,
   };
 }
 
 function updateRepeatRecord(
-  cooldowns: CharacterInteractionCooldowns,
+  repeatByKey: CharacterActivityCooldowns['repeatByKey'],
   pairKey: string,
   timestamp: number,
   eventDefinition: CharacterEventDefinition,
@@ -123,16 +125,16 @@ function updateRepeatRecord(
   const repeatPenalty = eventDefinition.cooldowns?.repeatPenalty;
 
   if (!repeatPenalty) {
-    return cooldowns.repeatByKey;
+    return repeatByKey;
   }
 
-  const previousRecord = cooldowns.repeatByKey[pairKey];
+  const previousRecord = repeatByKey[pairKey];
   const nextCount = previousRecord && timestamp - previousRecord.lastAt <= repeatPenalty.windowMs
     ? previousRecord.count + 1
     : 1;
 
   return {
-    ...cooldowns.repeatByKey,
+    ...repeatByKey,
     [pairKey]: {
       count: nextCount,
       lastAt: timestamp,
@@ -141,7 +143,7 @@ function updateRepeatRecord(
 }
 
 function isCategoryCoolingDown(
-  cooldowns: CharacterInteractionCooldowns,
+  cooldowns: CharacterActivityCooldowns,
   category: string,
   timestamp: number,
 ): boolean {
@@ -149,7 +151,7 @@ function isCategoryCoolingDown(
 }
 
 function isPairCoolingDown(
-  cooldowns: CharacterInteractionCooldowns,
+  cooldowns: CharacterActivityCooldowns,
   targetId: string,
   category: string,
   timestamp: number,

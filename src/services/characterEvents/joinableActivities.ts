@@ -5,7 +5,7 @@ import type {
   CharacterEventJoinRequirement,
 } from '../../constants/charactarEventsDefinitions';
 
-export type JoinableActivityPhase = 'forming' | 'traveling' | 'active';
+export type JoinableActivityPhase = 'inviting' | 'forming' | 'traveling' | 'active';
 
 export interface JoinableActivity {
   id: string;
@@ -240,6 +240,10 @@ function getActivityDurationForPhase(
   activity: CharacterEventActivity,
   phase: JoinableActivityPhase,
 ): number {
+  if (phase === 'inviting') {
+    return activity.joinWindowMs ?? activity.durationMs;
+  }
+
   if (phase === 'traveling') {
     return Math.max(activity.joinWindowMs ?? 0, TRAVELING_ACTIVITY_TIMEOUT_MS);
   }

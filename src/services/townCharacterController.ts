@@ -13,7 +13,6 @@ import {
   type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
 import { TownActivityCoordinator } from '~/services/townActivityCoordinator';
-import { TownInteractionProposalHandler } from '~/services/townInteractionProposalHandler';
 import { TownMovementCoordinator } from '~/services/townMovementCoordinator';
 import { TownRelationshipTicker } from '~/services/townRelationshipTicker';
 import type {
@@ -50,7 +49,6 @@ export class TownCharacterController {
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly activityManager: JoinableActivityManager;
   private readonly activityCoordinator: TownActivityCoordinator;
-  private readonly interactionProposalHandler: TownInteractionProposalHandler;
   private readonly movementCoordinator: TownMovementCoordinator;
   private readonly relationshipTicker: TownRelationshipTicker;
   private readonly nextDecisionAtByCharacterId = new Map<string, number>();
@@ -64,17 +62,24 @@ export class TownCharacterController {
     this.widget = options.widget;
     this.activityManager = createJoinableActivityManager();
     this.performanceRunner = new CharacterPerformanceRunner({
+      getCharacterName: characterId => this.getCharacterName(characterId),
       setCharacterExpression: (characterId, expression) => {
         this.setCharacterExpression(characterId, expression);
       },
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
       },
+      removeCharacterBubble: characterId => {
+        this.widget.removeCharacterBubble(characterId);
+      },
       showCharacterEmote: (characterId, text, durationMs) => {
         this.widget.showCharacterEmote(characterId, text, durationMs);
       },
       showMapActivity: (activity, durationMs) => {
         this.widget.showMapActivity(activity, durationMs);
+      },
+      removeMapActivity: activityId => {
+        this.widget.removeMapActivity(activityId);
       },
     });
     this.movementCoordinator = new TownMovementCoordinator({
@@ -102,19 +107,6 @@ export class TownCharacterController {
         this.widget.showCharacterBubble(characterId, text, durationMs);
       },
       notifyActivitiesChanged: () => this.notifyJoinableActivitiesChanged(),
-    });
-    this.interactionProposalHandler = new TownInteractionProposalHandler({
-      performanceRunner: this.performanceRunner,
-      activityManager: this.activityManager,
-      getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
-      getCharacterName: characterId => this.getCharacterName(characterId),
-      getCharacterPosition: characterId => this.getCharacterPosition(characterId),
-      isCharacterBodyFrozen: characterId => this.isCharacterBodyFrozen(characterId),
-      notifyActivitiesChanged: () => this.notifyJoinableActivitiesChanged(),
-      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
-      showCharacterBubble: (characterId, text, durationMs) => {
-        this.widget.showCharacterBubble(characterId, text, durationMs);
-      },
     });
     this.onCharacterSnapshot = options.onCharacterSnapshot;
     this.onRelationshipStoreChange = options.onRelationshipStoreChange;
@@ -151,6 +143,8 @@ export class TownCharacterController {
       this.widget.showCharacterBubble(characterId, '對話中...');
       return;
     }
+
+    this.activityCoordinator.handleCharacterPickedUp(characterId);
 
     this.sendToCharacter(characterId, { type: EventType.PickUp });
   }
@@ -189,7 +183,6 @@ export class TownCharacterController {
     }
 
     this.movementCoordinator.dispose();
-    this.interactionProposalHandler.dispose();
     this.performanceRunner.dispose();
     this.activityManager.clear();
     this.nextDecisionAtByCharacterId.clear();
@@ -240,7 +233,6 @@ export class TownCharacterController {
     const subscription = actor.subscribe(snapshot => {
       this.onCharacterSnapshot?.(character.id, snapshot);
       this.movementCoordinator.syncCharacterWithWidget(character.id, snapshot);
-      this.interactionProposalHandler.handlePendingInteractionProposal(character.id, snapshot);
       this.activityCoordinator.handleCurrentActivity(character.id, snapshot);
       this.activityCoordinator.handlePendingActivityJoin(character.id, snapshot);
       this.activityCoordinator.handleActivityTravelProgress(character.id, snapshot);

@@ -14,10 +14,12 @@ const VALID_PERFORMANCE_PHASES = [
   'rejectedBusy',
   'rejectedMood',
   'active',
+  'participantLeftSolo',
+  'participantLeftGroup',
   'end',
 ] as const;
 const VALID_PERFORMANCE_TARGETS = ['initiator', 'target', 'both'] as const;
-const VALID_PERFORMANCE_STEP_TYPES = ['bubble', 'expression', 'emote', 'mapEffect', 'motion'] as const;
+const VALID_PERFORMANCE_STEP_TYPES = ['bubble', 'expression', 'emote', 'mapEffect', 'motion', 'dialogue'] as const;
 const VALID_EXPRESSIONS = Object.values(Expression);
 
 type CharacterPerformanceRecord = Record<string, unknown>;
@@ -117,11 +119,47 @@ function readPerformanceStep(
     };
   }
 
+  if (type === 'dialogue') {
+    const dialogueGroupId = readOptionalString(rawStep, 'dialogueGroupId', definitionIndex);
+    const scriptId = readOptionalString(rawStep, 'scriptId', definitionIndex);
+
+    if (!dialogueGroupId && !scriptId) {
+      throw new Error(
+        `Character performance definition at index ${definitionIndex} has dialogue step without dialogueGroupId or scriptId.`,
+      );
+    }
+
+    return {
+      ...baseStep,
+      type,
+      dialogueGroupId,
+      scriptId,
+      displayMode: readOptionalDialogueDisplayMode(rawStep, definitionIndex),
+    };
+  }
+
   return {
     ...baseStep,
     type,
     motionId: readRequiredString(rawStep, 'motionId', definitionIndex),
   };
+}
+
+function readOptionalDialogueDisplayMode(
+  definition: CharacterPerformanceRecord,
+  index: number,
+): 'preview' | 'ambient' | undefined {
+  const value = definition.displayMode;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value !== 'preview' && value !== 'ambient') {
+    throw new Error(`Character performance definition at index ${index} has invalid displayMode.`);
+  }
+
+  return value;
 }
 
 function readBasePerformanceStep(

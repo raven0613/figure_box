@@ -26,11 +26,9 @@ export interface CharacterContext {
   target: Position | null;
   position: Position;
   currentMotivation: CharacterMotivation;
-  pendingInteractionProposal: CharacterInteractionProposal | null;
-  currentInteraction: CharacterInteraction | null;
   pendingActivityJoin: CharacterActivityJoinRequest | null;
   currentActivity: CharacterActivityParticipation | null;
-  interactionCooldowns: CharacterInteractionCooldowns;
+  activityCooldowns: CharacterActivityCooldowns;
   relationships: DirectedRelationship[];
   locks: {
     bodyAction: string[];
@@ -54,21 +52,6 @@ export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'chat'
 export type UtilityDrivenMotivation = Exclude<CharacterMotivation, 'controllingByGod'>;
 export type CharacterUtilityScores = Record<UtilityDrivenMotivation, number>;
 
-export interface CharacterInteractionProposal {
-  id: string;
-  type: 'chat' | 'play';
-  targetCharId: string;
-  sourceEventId: string;
-}
-
-export interface CharacterInteraction {
-  id: string;
-  type: 'chat' | 'play';
-  partnerCharId: string;
-  role: 'initiator' | 'target';
-  sourceEventId: string;
-}
-
 export interface CharacterActivityJoinRequest {
   id: string;
   activityId: string;
@@ -81,13 +64,13 @@ export interface CharacterActivityParticipation {
   sourceEventId: string;
 }
 
-export interface CharacterInteractionCooldowns {
+export interface CharacterActivityCooldowns {
   categoryUntilByKey: Record<string, number>;
   pairUntilByKey: Record<string, number>;
-  repeatByKey: Record<string, CharacterInteractionRepeatRecord>;
+  repeatByKey: Record<string, CharacterActivityRepeatRecord>;
 }
 
-export interface CharacterInteractionRepeatRecord {
+export interface CharacterActivityRepeatRecord {
   count: number;
   lastAt: number;
 }

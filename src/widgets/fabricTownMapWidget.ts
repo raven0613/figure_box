@@ -196,6 +196,10 @@ export class FabricTownMapWidget {
     this.floatingTextLayer.showCharacterEmote(characterId, text, durationMs);
   }
 
+  removeCharacterBubble(characterId: string): void {
+    this.floatingTextLayer.removeCharacterBubbleById(characterId);
+  }
+
   playMapBubbleSequence(
     sequence: MapBubbleSequence,
     onLine?: (line: MapBubbleSequenceLine) => void,
@@ -205,6 +209,10 @@ export class FabricTownMapWidget {
 
   showMapActivity(activity: MapActivityView, durationMs = 4800): void {
     this.floatingTextLayer.showMapActivity(activity, durationMs);
+  }
+
+  removeMapActivity(activityId: string): void {
+    this.floatingTextLayer.removeMapActivity(activityId);
   }
 
   getZoom(): number {

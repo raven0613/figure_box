@@ -310,10 +310,6 @@ function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationship
         <strong>{snapshot.context.currentMotivation}</strong>
       </div>
       <div className={styles.detailRow}>
-        <span>Interaction</span>
-        <strong>{snapshot.context.currentInteraction?.partnerCharId ?? '-'}</strong>
-      </div>
-      <div className={styles.detailRow}>
         <span>Activity</span>
         <strong>{snapshot.context.currentActivity?.activityId ?? snapshot.context.pendingActivityJoin?.activityId ?? '-'}</strong>
       </div>
@@ -457,14 +453,6 @@ function getInviteAvailabilityDebugText(
 ): { isAvailable: boolean; text: string } {
   if (snapshot.context.target) {
     return { isAvailable: false, text: 'no (has target)' };
-  }
-
-  if (snapshot.context.pendingInteractionProposal) {
-    return { isAvailable: false, text: 'no (pending invite)' };
-  }
-
-  if (snapshot.context.currentInteraction) {
-    return { isAvailable: false, text: 'no (interacting)' };
   }
 
   if (snapshot.context.currentMotivation !== 'idle') {

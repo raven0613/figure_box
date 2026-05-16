@@ -24,9 +24,13 @@ interface TownActivityCoordinatorOptions {
   notifyActivitiesChanged: () => void;
 }
 
+const DEFAULT_ACTIVITY_RESPONSE_DELAY_MS = 1200;
+const DEFAULT_ACTIVITY_END_DURATION_MS = 1000;
+
 // joinable activity 加入、查找、過期清理
 export class TownActivityCoordinator {
   private readonly arrivedCharacterIdsByActivityId = new Map<string, Set<string>>();
+  private readonly endingActivityIds = new Set<string>();
   private readonly activityManager: JoinableActivityManager;
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
@@ -52,7 +56,11 @@ export class TownActivityCoordinator {
   handleCurrentActivity(characterId: string, snapshot: CharacterSnapshot): void {
     const currentActivity = snapshot.context.currentActivity;
 
-    if (!currentActivity || this.activityManager.getActivity(currentActivity.activityId)) {
+    if (
+      !currentActivity ||
+      this.activityManager.getActivity(currentActivity.activityId) ||
+      this.endingActivityIds.has(currentActivity.activityId)
+    ) {
       return;
     }
 
@@ -74,6 +82,22 @@ export class TownActivityCoordinator {
     const phase = activityDefinition.startPhase ?? 'active';
     const participantIds = this.getInitialParticipantIds(characterId, activityDefinition);
 
+    if (participantIds.length < 2 && activityDefinition.invite) {
+      this.playRejectedBusyInvite(
+        characterId,
+        currentActivity.activityId,
+        currentActivity.sourceEventId,
+        activityDefinition,
+        timestamp,
+      );
+      this.sendToCharacter(characterId, {
+        type: EventType.EndJoinedActivity,
+        activityId: currentActivity.activityId,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
     const activity = this.activityManager.createActivity({
       id: currentActivity.activityId,
       sourceEventId: currentActivity.sourceEventId,
@@ -84,6 +108,12 @@ export class TownActivityCoordinator {
       phase,
       location,
     });
+
+    if (phase === 'inviting') {
+      this.handleInvitingActivity(activity, characterId);
+      this.notifyActivitiesChanged();
+      return;
+    }
 
     this.acceptInvitedParticipants(activity, characterId);
 
@@ -189,9 +219,64 @@ export class TownActivityCoordinator {
     this.notifyActivitiesChanged();
   }
 
+  handleCharacterPickedUp(characterId: string): boolean {
+    const activity = this.activityManager.getActivities()
+      .find(candidate => candidate.participantIds.includes(characterId));
+
+    if (!activity) {
+      return false;
+    }
+
+    const previousParticipantCount = activity.participantIds.length;
+    const nextActivity = this.activityManager.leaveActivity(activity.id, characterId);
+
+    this.arrivedCharacterIdsByActivityId.get(activity.id)?.delete(characterId);
+    this.performanceRunner.clearActivityActiveVisuals(
+      this.getActivityPerformanceSelection(activity),
+      activity.id,
+      activity.participantIds,
+      activity.hostCharacterIds,
+    );
+
+    if (activity.phase === 'inviting') {
+      const endedActivity = this.activityManager.endActivity(activity.id) ?? activity;
+
+      this.clearActivityVisuals(endedActivity);
+      endedActivity.participantIds
+        .filter(participantId => participantId !== characterId)
+        .forEach(participantId => {
+          this.sendToCharacter(participantId, {
+            type: EventType.EndJoinedActivity,
+            activityId: activity.id,
+            timestamp: Date.now(),
+          });
+        });
+      this.notifyActivitiesChanged();
+      return true;
+    }
+
+    if (!nextActivity) {
+      this.clearActivityVisuals(activity);
+      this.notifyActivitiesChanged();
+      return true;
+    }
+
+    nextActivity.participantIds.forEach(participantId => {
+      this.sendToCharacter(participantId, {
+        type: EventType.JoinActivityAccepted,
+        activityId: nextActivity.id,
+        sourceEventId: nextActivity.sourceEventId,
+      });
+    });
+    this.playParticipantLeftPerformance(nextActivity, previousParticipantCount);
+    this.notifyActivitiesChanged();
+    return true;
+  }
+
   removeStaleActivityParticipations(characterId: string, snapshot: CharacterSnapshot): void {
     const staleActivities = this.activityManager.getActivities()
       .filter(activity => (
+        activity.phase !== 'inviting' &&
         activity.participantIds.includes(characterId) &&
         snapshot.context.currentActivity?.activityId !== activity.id &&
         snapshot.context.pendingActivityJoin?.activityId !== activity.id
@@ -233,13 +318,7 @@ export class TownActivityCoordinator {
     }
 
     endedActivities.forEach(activity => {
-      activity.participantIds.forEach(participantId => {
-        this.sendToCharacter(participantId, {
-          type: EventType.EndJoinedActivity,
-          activityId: activity.id,
-          timestamp,
-        });
-      });
+      this.playActivityEndPerformance(activity, timestamp);
       this.arrivedCharacterIdsByActivityId.delete(activity.id);
     });
     this.notifyActivitiesChanged();
@@ -274,6 +353,16 @@ export class TownActivityCoordinator {
   }
 
   private getInitialParticipantIds(hostCharacterId: string, activityDefinition: CharacterEventActivity): string[] {
+    if (activityDefinition.invite) {
+      const inviteRange = activityDefinition.invite.range ?? 2;
+      const maxInvitees = activityDefinition.invite.requiredAcceptCount ?? 1;
+      const invitedParticipantIds = this.getNearbyCharacterIds(hostCharacterId, inviteRange)
+        .filter(characterId => this.canInviteCharacterToActivity(characterId, activityDefinition))
+        .slice(0, maxInvitees);
+
+      return [hostCharacterId, ...invitedParticipantIds];
+    }
+
     if (!activityDefinition.group) {
       return [hostCharacterId];
     }
@@ -285,6 +374,20 @@ export class TownActivityCoordinator {
       .slice(0, Math.max(0, maxParticipants - 1));
 
     return [hostCharacterId, ...invitedParticipantIds];
+  }
+
+  private getRejectedBusyInviteeId(
+    hostCharacterId: string,
+    activityDefinition: CharacterEventActivity,
+  ): string | null {
+    if (!activityDefinition.invite) {
+      return null;
+    }
+
+    const inviteRange = activityDefinition.invite.range ?? 2;
+
+    return this.getNearbyCharacterIds(hostCharacterId, inviteRange)
+      .find(characterId => !this.canInviteCharacterToActivity(characterId, activityDefinition)) ?? null;
   }
 
   private canInviteCharacterToActivity(
@@ -300,9 +403,7 @@ export class TownActivityCoordinator {
     if (
       context.currentMotivation !== 'idle' ||
       context.target ||
-      context.currentInteraction ||
       context.currentActivity ||
-      context.pendingInteractionProposal ||
       context.pendingActivityJoin
     ) {
       return false;
@@ -315,6 +416,190 @@ export class TownActivityCoordinator {
     const requiredItemId = activityDefinition.joinRequirements.itemId;
 
     return context.ownItems.some(item => item.id === requiredItemId);
+  }
+
+  private handleInvitingActivity(activity: JoinableActivity, hostCharacterId: string): void {
+    this.performanceRunner.playActivityPerformanceSteps({
+      selection: this.getActivityPerformanceSelection(activity),
+      phase: 'proposal',
+      activityId: activity.id,
+      participantIds: activity.participantIds,
+      hostCharacterIds: activity.hostCharacterIds,
+    });
+
+    const inviteeIds = activity.participantIds.filter(participantId => participantId !== hostCharacterId);
+    const acceptedInviteeIds = inviteeIds.filter(inviteeId => this.canInviteeAcceptActivity(inviteeId, activity));
+
+    if (acceptedInviteeIds.length === 0) {
+      this.recordInviteCooldowns(activity, hostCharacterId, inviteeIds);
+      this.performanceRunner.playActivityPerformanceSteps({
+        selection: this.getActivityPerformanceSelection(activity),
+        phase: 'rejectedMood',
+        activityId: activity.id,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+      });
+      window.setTimeout(() => {
+        const endedActivity = this.activityManager.endActivity(activity.id);
+
+        if (endedActivity) {
+          this.clearActivityVisuals(endedActivity);
+        }
+
+        this.sendToCharacter(hostCharacterId, {
+          type: EventType.EndJoinedActivity,
+          activityId: activity.id,
+          timestamp: Date.now(),
+        });
+        this.notifyActivitiesChanged();
+      }, DEFAULT_ACTIVITY_RESPONSE_DELAY_MS);
+      return;
+    }
+
+    this.recordInviteCooldowns(activity, hostCharacterId, inviteeIds);
+
+    const acceptedInviteeIdSet = new Set(acceptedInviteeIds);
+    const acceptedActivity = inviteeIds
+      .filter(inviteeId => !acceptedInviteeIdSet.has(inviteeId))
+      .reduce<JoinableActivity>(
+        (nextActivity, rejectedInviteeId) => (
+          this.activityManager.leaveActivity(nextActivity.id, rejectedInviteeId) ?? nextActivity
+        ),
+        activity,
+      );
+
+    this.performanceRunner.playActivityPerformanceSteps({
+      selection: this.getActivityPerformanceSelection(acceptedActivity),
+      phase: 'accepted',
+      activityId: acceptedActivity.id,
+      participantIds: acceptedActivity.participantIds,
+      hostCharacterIds: acceptedActivity.hostCharacterIds,
+    });
+
+    window.setTimeout(() => {
+      const activeActivity = this.activityManager.updateActivityPhase(
+        acceptedActivity.id,
+        'active',
+        acceptedActivity.location,
+      );
+      const refreshedActivity = activeActivity
+        ? this.activityManager.refreshActivityDuration(activeActivity.id, Date.now())
+        : null;
+
+      if (!refreshedActivity) {
+        return;
+      }
+
+      refreshedActivity.participantIds.forEach(participantId => {
+        this.sendToCharacter(participantId, {
+          type: EventType.JoinActivityAccepted,
+          activityId: refreshedActivity.id,
+          sourceEventId: refreshedActivity.sourceEventId,
+        });
+      });
+      this.playActivityPerformance(refreshedActivity);
+      this.notifyActivitiesChanged();
+    }, DEFAULT_ACTIVITY_RESPONSE_DELAY_MS);
+  }
+
+  private canInviteeAcceptActivity(inviteeId: string, activity: JoinableActivity): boolean {
+    const context = this.getCharacterContext(inviteeId);
+    const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId];
+
+    if (!context || !definition) {
+      return false;
+    }
+
+    const minMoodValue = definition.acceptance?.minMoodValue;
+
+    if (minMoodValue !== undefined && context.status.moodValue < minMoodValue) {
+      return false;
+    }
+
+    const fallbackChance = definition.acceptance?.fallbackChance ?? 1;
+
+    return Math.random() <= fallbackChance;
+  }
+
+  private playRejectedBusyInvite(
+    hostCharacterId: string,
+    activityId: string,
+    sourceEventId: string,
+    activityDefinition: CharacterEventActivity,
+    timestamp: number,
+  ): void {
+    const rejectedInviteeId = this.getRejectedBusyInviteeId(hostCharacterId, activityDefinition);
+
+    if (!rejectedInviteeId) {
+      return;
+    }
+
+    const activity = this.activityManager.createActivity({
+      id: activityId,
+      sourceEventId,
+      activity: activityDefinition,
+      hostCharacterIds: [hostCharacterId],
+      participantIds: [hostCharacterId, rejectedInviteeId],
+      timestamp,
+      phase: 'inviting',
+      location: this.getCharacterPosition(hostCharacterId) ?? undefined,
+    });
+
+    this.performanceRunner.playActivityPerformanceSteps({
+      selection: this.getActivityPerformanceSelection(activity),
+      phase: 'proposal',
+      activityId: activity.id,
+      participantIds: activity.participantIds,
+      hostCharacterIds: activity.hostCharacterIds,
+    });
+    const durationMs = this.performanceRunner.playActivityPerformanceSteps({
+      selection: this.getActivityPerformanceSelection(activity),
+      phase: 'rejectedBusy',
+      activityId: activity.id,
+      participantIds: activity.participantIds,
+      hostCharacterIds: activity.hostCharacterIds,
+    });
+    this.recordInviteCooldowns(activity, hostCharacterId, [rejectedInviteeId]);
+
+    window.setTimeout(() => {
+      const endedActivity = this.activityManager.endActivity(activity.id);
+
+      if (endedActivity) {
+        this.clearActivityVisuals(endedActivity);
+      }
+
+      this.notifyActivitiesChanged();
+    }, durationMs || DEFAULT_ACTIVITY_RESPONSE_DELAY_MS);
+    this.notifyActivitiesChanged();
+  }
+
+  private recordInviteCooldowns(
+    activity: JoinableActivity,
+    hostCharacterId: string,
+    inviteeIds: readonly string[],
+  ): void {
+    if (inviteeIds.length === 0) {
+      return;
+    }
+
+    const timestamp = Date.now();
+
+    this.sendToCharacter(hostCharacterId, {
+      type: EventType.RecordActivityCooldown,
+      partnerCharIds: [...inviteeIds],
+      role: 'initiator',
+      sourceEventId: activity.sourceEventId,
+      timestamp,
+    });
+    inviteeIds.forEach(inviteeId => {
+      this.sendToCharacter(inviteeId, {
+        type: EventType.RecordActivityCooldown,
+        partnerCharIds: [hostCharacterId],
+        role: 'target',
+        sourceEventId: activity.sourceEventId,
+        timestamp,
+      });
+    });
   }
 
   private acceptInvitedParticipants(activity: JoinableActivity, hostCharacterId: string): void {
@@ -372,6 +657,89 @@ export class TownActivityCoordinator {
       participantIds: activity.participantIds,
       hostCharacterIds: activity.hostCharacterIds,
     });
+  }
+
+  private clearActivityVisuals(activity: JoinableActivity): void {
+    this.performanceRunner.clearActivityVisuals(
+      this.getActivityPerformanceSelection(activity),
+      activity.id,
+      activity.participantIds,
+      activity.hostCharacterIds,
+    );
+  }
+
+  private playActivityEndPerformance(activity: JoinableActivity, timestamp: number): void {
+    this.endingActivityIds.add(activity.id);
+    this.performanceRunner.clearActivityActiveVisuals(
+      this.getActivityPerformanceSelection(activity),
+      activity.id,
+      activity.participantIds,
+      activity.hostCharacterIds,
+    );
+
+    const durationMs = this.performanceRunner.playActivityPerformanceSteps({
+      selection: this.getActivityPerformanceSelection(activity),
+      phase: 'end',
+      activityId: activity.id,
+      participantIds: activity.participantIds,
+      hostCharacterIds: activity.hostCharacterIds,
+    });
+    const cleanupDelayMs = durationMs || DEFAULT_ACTIVITY_END_DURATION_MS;
+
+    window.setTimeout(() => {
+      this.clearActivityVisuals(activity);
+      activity.participantIds.forEach(participantId => {
+        this.sendToCharacter(participantId, {
+          type: EventType.EndJoinedActivity,
+          activityId: activity.id,
+          timestamp,
+        });
+      });
+      this.endingActivityIds.delete(activity.id);
+      this.notifyActivitiesChanged();
+    }, cleanupDelayMs);
+  }
+
+  private playParticipantLeftPerformance(
+    activity: JoinableActivity,
+    previousParticipantCount: number,
+  ): void {
+    const phase = previousParticipantCount > 1
+      ? 'participantLeftGroup'
+      : 'participantLeftSolo';
+
+    this.performanceRunner.playActivityPerformanceSteps({
+      selection: this.getActivityPerformanceSelection(activity),
+      phase,
+      activityId: activity.id,
+      participantIds: activity.participantIds,
+      hostCharacterIds: activity.hostCharacterIds,
+    });
+
+    if (phase === 'participantLeftSolo') {
+      return;
+    }
+
+    window.setTimeout(() => {
+      const currentActivity = this.activityManager.getActivity(activity.id);
+
+      if (!currentActivity || currentActivity.phase !== 'active') {
+        return;
+      }
+
+      if (currentActivity.participantIds.length === 1) {
+        this.performanceRunner.playActivityPerformanceSteps({
+          selection: this.getActivityPerformanceSelection(currentActivity),
+          phase: 'participantLeftSolo',
+          activityId: currentActivity.id,
+          participantIds: currentActivity.participantIds,
+          hostCharacterIds: currentActivity.hostCharacterIds,
+        });
+        return;
+      }
+
+      this.playActivityPerformance(currentActivity);
+    }, 5000);
   }
 
   private getActivityPerformanceSelection(activity: JoinableActivity) {
