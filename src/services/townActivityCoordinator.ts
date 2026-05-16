@@ -256,11 +256,14 @@ export class TownActivityCoordinator {
       return false;
     }
 
-    if (activity.joinRequirements.type === 'none') {
-      return true;
-    }
+    const joinRequirements = activity.joinRequirements;
 
-    return context.ownItems.some(item => item.id === activity.joinRequirements.itemId);
+    switch (joinRequirements.type) {
+      case 'none':
+        return true;
+      case 'hasItem':
+        return context.ownItems.some(item => item.id === joinRequirements.itemId);
+    }
   }
 
   private rejectActivityJoin(characterId: string, activityId: string): void {

@@ -336,9 +336,12 @@ export class TownInteractionProposalHandler {
   }
 
   private getPerformanceSelection(snapshot: CharacterSnapshot): CharacterPerformanceSelection {
+    const definitionId = snapshot.context.lastEventDecision?.selectedCandidateId ?? undefined;
+    const variantId = snapshot.context.lastEventDecision?.selectedPresentationVariantId ?? undefined;
+
     return {
-      definitionId: snapshot.context.lastEventDecision?.selectedCandidateId,
-      variantId: snapshot.context.lastEventDecision?.selectedPresentationVariantId,
+      definitionId,
+      variantId,
     };
   }
 
@@ -397,40 +400,6 @@ export class TownInteractionProposalHandler {
   ): void {
     this.showCharacterBubble(initiatorId, bubble.text, bubble.durationMs);
     this.showCharacterBubble(targetId, bubble.text, bubble.durationMs);
-  }
-
-  private endInteractionForPair(
-    initiatorId: string,
-    targetId: string,
-    proposalId: string,
-    interactionType: InteractionType,
-  ): void {
-    const timestamp = Date.now();
-
-    if (interactionType === 'chat') {
-      this.sendToCharacter(initiatorId, { type: EventType.EndChatInteraction, proposalId, timestamp });
-      this.sendToCharacter(targetId, { type: EventType.EndChatInteraction, proposalId, timestamp });
-      return;
-    }
-
-    this.sendToCharacter(initiatorId, { type: EventType.EndPlayInteraction, proposalId, timestamp });
-    this.sendToCharacter(targetId, { type: EventType.EndPlayInteraction, proposalId, timestamp });
-  }
-
-  private clearTimerMap(timerMap: Map<string, number>): void {
-    timerMap.forEach(timerId => window.clearTimeout(timerId));
-    timerMap.clear();
-  }
-
-  private clearTimer(timerMap: Map<string, number>, timerKey: string): void {
-    const timerId = timerMap.get(timerKey);
-
-    if (!timerId) {
-      return;
-    }
-
-    window.clearTimeout(timerId);
-    timerMap.delete(timerKey);
   }
 }
 

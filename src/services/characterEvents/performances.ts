@@ -101,16 +101,22 @@ export function getCharacterPerformanceBubbleStep(
   }
 
   const steps = CHARACTER_PERFORMANCE_DEFINITIONS_BY_ID[performanceId]?.steps ?? [];
+  const matchesBubbleStep = (
+    step: CharacterPerformanceStep,
+    stepTarget: CharacterPerformanceTarget,
+  ): step is CharacterPerformanceBubbleStep => (
+    step.type === 'bubble' &&
+    step.phase === phase &&
+    step.target === stepTarget
+  );
+  const matchesTargetBubbleStep = (step: CharacterPerformanceStep): step is CharacterPerformanceBubbleStep => (
+    matchesBubbleStep(step, target)
+  );
+  const matchesFallbackBubbleStep = (step: CharacterPerformanceStep): step is CharacterPerformanceBubbleStep => (
+    matchesBubbleStep(step, 'both')
+  );
 
-  return steps.find(step => (
-    step.type === 'bubble' &&
-    step.phase === phase &&
-    step.target === target
-  )) ?? steps.find(step => (
-    step.type === 'bubble' &&
-    step.phase === phase &&
-    step.target === 'both'
-  ));
+  return steps.find(matchesTargetBubbleStep) ?? steps.find(matchesFallbackBubbleStep);
 }
 
 export function getCharacterPerformanceSteps(

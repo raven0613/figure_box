@@ -247,6 +247,8 @@ function formatActivityArrivalDebug(
     return '-';
   }
 
+  const activityLocation = activity.location;
+
   return activity.participantIds
     .map(characterId => {
       const snapshot = allSnapshots[characterId];
@@ -258,7 +260,7 @@ function formatActivityArrivalDebug(
 
       const position = snapshot.context.position;
       const target = snapshot.context.target;
-      const isArrived = isNearPosition(position, activity.location, 2);
+      const isArrived = isNearPosition(position, activityLocation, 2);
       const status = isArrived ? 'arrived' : 'not yet';
       const targetText = target ? ` -> ${target.x},${target.y}` : '';
 

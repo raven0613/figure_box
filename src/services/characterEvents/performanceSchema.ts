@@ -1,5 +1,4 @@
 import type {
-  CharacterPerformanceBubbleStep,
   CharacterPerformanceDefinition,
   CharacterPerformanceParticipantCountCondition,
   CharacterPerformancePhase,
@@ -267,8 +266,8 @@ function assertUniquePerformanceIds(definitions: readonly CharacterPerformanceDe
   });
 }
 
-function includesString(values: readonly string[], value: string): boolean {
-  return values.includes(value);
+function includesString<T extends string>(values: readonly T[], value: string): value is T {
+  return values.some(validValue => validValue === value);
 }
 
 function isRecord(value: unknown): value is CharacterPerformanceRecord {
