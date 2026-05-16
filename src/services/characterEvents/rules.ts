@@ -34,6 +34,8 @@ interface CharacterEventRuleInputSnapshot {
   nearbyCharacterIds: string[];
   nearbyCharacterCount: number;
   nearbyJoinableActivityCount: number;
+  ownItemIds: string[];
+  ownItemCount: number;
   globalEventTags: string[];
 }
 
@@ -45,6 +47,7 @@ export function createCharacterEventRuleContext(
   const nearbyCharacterIds = input.nearbyCharacterIds ?? [];
   const nearbyJoinableActivities = input.nearbyJoinableActivities ?? [];
   const globalEventTags = input.globalEventTags ?? [];
+  const ownItemIds = character.ownItems.map(item => item.id);
 
   return {
     character,
@@ -53,6 +56,8 @@ export function createCharacterEventRuleContext(
       nearbyCharacterIds,
       nearbyCharacterCount: nearbyCharacterIds.length,
       nearbyJoinableActivityCount: nearbyJoinableActivities.length,
+      ownItemIds,
+      ownItemCount: ownItemIds.length,
       globalEventTags,
     },
   };

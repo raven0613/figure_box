@@ -18,6 +18,7 @@ const VALID_CHARACTER_EVENT_TYPES = [
   'goEat',
   'proposeChat',
   'proposePlay',
+  'startActivity',
   'joinActivity',
 ] as const;
 
@@ -113,4 +114,3 @@ function readCharacterEventInteractionTarget(
 
   throw new Error(`Character event definition at index ${index} has invalid characterEvent.target.`);
 }
-

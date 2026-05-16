@@ -1,6 +1,11 @@
 import type { Position } from '~/constants/character';
+import {
+  CHARACTER_EVENT_DEFINITIONS_BY_ID,
+  type CharacterEventActivity,
+} from '~/constants/charactarEventsDefinitions';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
+import type { CharacterPerformanceRunner } from '~/services/characterEvents/characterPerformanceRunner';
 import type {
   JoinableActivity,
   JoinableActivityManager,
@@ -8,6 +13,7 @@ import type {
 
 interface TownActivityCoordinatorOptions {
   activityManager: JoinableActivityManager;
+  performanceRunner: CharacterPerformanceRunner;
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   getCharacterPosition: (characterId: string) => Position | null;
   sendToCharacter: SendCharacterEvent;
@@ -18,6 +24,7 @@ interface TownActivityCoordinatorOptions {
 // joinable activity 加入、查找、過期清理
 export class TownActivityCoordinator {
   private readonly activityManager: JoinableActivityManager;
+  private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   private readonly getCharacterPosition: (characterId: string) => Position | null;
   private readonly sendToCharacter: SendCharacterEvent;
@@ -26,11 +33,47 @@ export class TownActivityCoordinator {
 
   constructor(options: TownActivityCoordinatorOptions) {
     this.activityManager = options.activityManager;
+    this.performanceRunner = options.performanceRunner;
     this.getCharacterContext = options.getCharacterContext;
     this.getCharacterPosition = options.getCharacterPosition;
     this.sendToCharacter = options.sendToCharacter;
     this.showCharacterBubble = options.showCharacterBubble;
     this.notifyActivitiesChanged = options.notifyActivitiesChanged;
+  }
+
+  handleCurrentActivity(characterId: string, snapshot: CharacterSnapshot): void {
+    const currentActivity = snapshot.context.currentActivity;
+
+    if (!currentActivity || this.activityManager.getActivity(currentActivity.activityId)) {
+      return;
+    }
+
+    const activityDefinition = this.getSelectedActivityDefinition(snapshot);
+
+    if (!activityDefinition?.joinable) {
+      this.sendToCharacter(characterId, {
+        type: EventType.EndJoinedActivity,
+        activityId: currentActivity.activityId,
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    const timestamp = Date.now();
+    const location = this.getCharacterPosition(characterId) ?? snapshot.context.position;
+
+    const activity = this.activityManager.createActivity({
+      id: currentActivity.activityId,
+      sourceEventId: currentActivity.sourceEventId,
+      activity: activityDefinition,
+      hostCharacterIds: [characterId],
+      participantIds: [characterId],
+      timestamp,
+      phase: 'active',
+      location,
+    });
+    this.playActivityPerformance(activity);
+    this.notifyActivitiesChanged();
   }
 
   handlePendingActivityJoin(characterId: string, snapshot: CharacterSnapshot): void {
@@ -60,7 +103,8 @@ export class TownActivityCoordinator {
       activityId: joinedActivity.id,
       sourceEventId: activityJoin.sourceEventId,
     });
-    this.showCharacterBubble(characterId, '我也要一起玩！', 2200);
+    this.showCharacterBubble(characterId, this.getJoinBubbleText(joinedActivity), 2200);
+    this.playActivityPerformance(joinedActivity);
     this.notifyActivitiesChanged();
   }
 
@@ -124,5 +168,44 @@ export class TownActivityCoordinator {
       activityId,
     });
   }
-}
 
+  private getSelectedActivityDefinition(snapshot: CharacterSnapshot): CharacterEventActivity | undefined {
+    const definitionId = snapshot.context.lastEventDecision?.selectedCandidateId;
+    const variantId = snapshot.context.lastEventDecision?.selectedPresentationVariantId;
+
+    if (!definitionId || !variantId) {
+      return undefined;
+    }
+
+    return CHARACTER_EVENT_DEFINITIONS_BY_ID[definitionId]?.presentationVariants
+      ?.find(variant => variant.id === variantId)
+      ?.activity;
+  }
+
+  private playActivityPerformance(activity: JoinableActivity): void {
+    this.performanceRunner.playActivityPerformanceSteps({
+      selection: this.getActivityPerformanceSelection(activity),
+      phase: 'active',
+      activityId: activity.id,
+      participantIds: activity.participantIds,
+      hostCharacterIds: activity.hostCharacterIds,
+    });
+  }
+
+  private getActivityPerformanceSelection(activity: JoinableActivity) {
+    return {
+      definitionId: activity.sourceEventId,
+      variantId: CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId]?.presentationVariants
+        ?.find(variant => variant.activity?.key === activity.activityKey)
+        ?.id,
+    };
+  }
+
+  private getJoinBubbleText(activity: JoinableActivity): string {
+    if (activity.type === 'playWithItem') {
+      return '我也有，加入！';
+    }
+
+    return '我也要一起玩！';
+  }
+}

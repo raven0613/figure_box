@@ -45,7 +45,7 @@ export const characterMachine = createMachine(
         context: ({ input }) => ({
             id: input.id,
             name: input.name,
-            ownItems: [],
+            ownItems: [...(input.ownItems ?? [])],
             status: {
                 mood: Mood.Happy,
                 expression: Expression.Normal,
@@ -131,6 +131,16 @@ export const characterMachine = createMachine(
                     '.communication.requesting',
                 ],
                 actions: ['setPlayMotivation', 'setPendingPlayProposal'],
+            },
+            [EventType.StartActivity]: {
+                guard: 'shouldStartActivity',
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.null',
+                ],
+                actions: ['setPlayMotivation', 'startOwnActivity'],
             },
             [EventType.JoinActivity]: {
                 guard: 'shouldJoinActivity',
@@ -393,6 +403,15 @@ export const characterMachine = createMachine(
                 context.pendingInteractionProposal === null &&
                 context.pendingActivityJoin === null
             ),
+            shouldStartActivity: ({ context }) => (
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                context.currentMotivation !== 'controllingByGod' &&
+                context.target === null &&
+                context.currentInteraction === null &&
+                context.currentActivity === null &&
+                context.pendingInteractionProposal === null &&
+                context.pendingActivityJoin === null
+            ),
             shouldJoinActivity: ({ context }) => (
                 !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
                 context.currentMotivation !== 'controllingByGod' &&
@@ -490,6 +509,7 @@ export const characterMachine = createMachine(
 
                 const decision = decideCharacterEvent(context, {
                     nearbyCharacterIds: event.nearbyCharacterIds,
+                    nearbyJoinableActivities: event.nearbyJoinableActivities,
                     globalEventTags: event.globalEventTags,
                     timestamp: event.timestamp,
                 });
@@ -562,6 +582,17 @@ export const characterMachine = createMachine(
                             type: 'play',
                             partnerCharId: event.targetCharId,
                             role: 'initiator',
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+            }),
+            startOwnActivity: assign({
+                currentActivity: ({ event }) => (
+                    event.type === EventType.StartActivity
+                        ? {
+                            id: `activity-${event.activityId}`,
+                            activityId: event.activityId,
                             sourceEventId: event.sourceEventId,
                         }
                         : null

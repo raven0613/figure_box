@@ -32,8 +32,17 @@ export interface CharacterPerformanceBubbleInput {
   legacyPresentation?: CharacterEventInteractionPresentation;
 }
 
+interface CharacterActivityPerformanceInput {
+  selection: CharacterPerformanceSelection;
+  phase: CharacterPerformancePhase;
+  activityId: string;
+  participantIds: readonly string[];
+  hostCharacterIds?: readonly string[];
+}
+
 interface CharacterPerformanceRunnerPorts {
   setCharacterExpression: (characterId: string, expression: Expression) => void;
+  showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   showCharacterEmote: (characterId: string, text: string, durationMs?: number) => void;
   showMapActivity: (activity: MapActivityView, durationMs?: number) => void;
 }
@@ -80,6 +89,15 @@ export class CharacterPerformanceRunner {
     });
   }
 
+  playActivityPerformanceSteps(input: CharacterActivityPerformanceInput): void {
+    const performanceId = this.getSelectedPerformanceId(input.selection);
+    const steps = getCharacterPerformanceSteps(performanceId, input.phase);
+
+    steps.forEach(step => {
+      this.scheduleActivityPerformanceStep(step, input);
+    });
+  }
+
   private getSelectedPerformanceId(selection: CharacterPerformanceSelection): string | undefined {
     if (!selection.definitionId || !selection.variantId) {
       return undefined;
@@ -98,6 +116,18 @@ export class CharacterPerformanceRunner {
     const runStep = () => {
       this.timers.delete(timerId);
       this.playPerformanceStep(step, initiatorId, targetId);
+    };
+    const timerId = window.setTimeout(runStep, step.delayMs ?? 0);
+    this.timers.add(timerId);
+  }
+
+  private scheduleActivityPerformanceStep(
+    step: CharacterPerformanceStep,
+    input: CharacterActivityPerformanceInput,
+  ): void {
+    const runStep = () => {
+      this.timers.delete(timerId);
+      this.playActivityPerformanceStep(step, input);
     };
     const timerId = window.setTimeout(runStep, step.delayMs ?? 0);
     this.timers.add(timerId);
@@ -136,6 +166,66 @@ export class CharacterPerformanceRunner {
       this.ports.showMapActivity(
         {
           id: `${step.effectId}-${initiatorId}-${targetId}`,
+          label: step.label ?? step.effectId,
+          participantIds: characterIds,
+        },
+        step.durationMs,
+      );
+      return;
+    }
+
+    if (step.type === 'motion') {
+      return;
+    }
+  }
+
+  private playActivityPerformanceStep(
+    step: CharacterPerformanceStep,
+    input: CharacterActivityPerformanceInput,
+  ): void {
+    const characterIds = resolveActivityPerformanceTargetIds(
+      step.target,
+      input.participantIds,
+      input.hostCharacterIds,
+    );
+
+    if (characterIds.length === 0) {
+      return;
+    }
+
+    if (step.type === 'bubble') {
+      characterIds.forEach(characterId => {
+        this.ports.showCharacterBubble(characterId, step.text, step.durationMs);
+      });
+      return;
+    }
+
+    if (step.type === 'expression') {
+      characterIds.forEach(characterId => {
+        this.ports.setCharacterExpression(characterId, step.expression);
+
+        if (step.durationMs !== undefined) {
+          this.scheduleExpressionReset(characterId, step.durationMs);
+        }
+      });
+      return;
+    }
+
+    if (step.type === 'emote') {
+      characterIds.forEach(characterId => {
+        this.ports.showCharacterEmote(
+          characterId,
+          getEmoteLabel(step.emoteId),
+          step.durationMs ?? 1200,
+        );
+      });
+      return;
+    }
+
+    if (step.type === 'mapEffect') {
+      this.ports.showMapActivity(
+        {
+          id: `${step.effectId}-${input.activityId}`,
           label: step.label ?? step.effectId,
           participantIds: characterIds,
         },
@@ -206,6 +296,29 @@ function resolvePerformanceTargetIds(
   }
 
   return [initiatorId, targetId];
+}
+
+function resolveActivityPerformanceTargetIds(
+  target: CharacterPerformanceTarget,
+  participantIds: readonly string[],
+  hostCharacterIds: readonly string[] = [],
+): string[] {
+  if (target === 'both') {
+    return [...participantIds];
+  }
+
+  if (target === 'initiator') {
+    return hostCharacterIds.length > 0
+      ? [...hostCharacterIds]
+      : participantIds.slice(0, 1);
+  }
+
+  const hostIds = new Set(hostCharacterIds);
+  const nonHostParticipantIds = participantIds.filter(characterId => !hostIds.has(characterId));
+
+  return nonHostParticipantIds.length > 0
+    ? nonHostParticipantIds
+    : participantIds.slice(1);
 }
 
 function getEmoteLabel(emoteId: string): string {

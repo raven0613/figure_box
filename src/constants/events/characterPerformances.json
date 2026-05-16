@@ -159,5 +159,59 @@
         "durationMs": 1800
       }
     ]
+  },
+  {
+    "id": "item.play.toyBall",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "initiator",
+        "emoteId": "play",
+        "durationMs": 900
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "initiator",
+        "effectId": "playToyBall",
+        "label": "玩球中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "正在玩球",
+        "durationMs": 20000
+      }
+    ]
+  },
+  {
+    "id": "item.play.cards",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "initiator",
+        "emoteId": "play",
+        "durationMs": 900
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "initiator",
+        "effectId": "playCards",
+        "label": "玩牌中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "正在玩牌",
+        "durationMs": 20000
+      }
+    ]
   }
 ]

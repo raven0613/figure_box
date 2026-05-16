@@ -167,13 +167,14 @@ export function TownMapContainer({
             })}
           </div>
 
-          <ActivityDebugPanel activities={joinableActivities} />
+          <ActivityDebugPanel activities={joinableActivities} allSnapshots={characterSnapshots} />
         </div>
 
         {characterSnapshots[selectedCharacterId] ? (
           <CharacterStatusPanel
             snapshot={characterSnapshots[selectedCharacterId]}
             allSnapshots={characterSnapshots}
+            activities={joinableActivities}
             relationshipStore={relationshipStore}
           />
         ) : null}
@@ -182,7 +183,13 @@ export function TownMapContainer({
   );
 }
 
-function ActivityDebugPanel({ activities }: { activities: readonly JoinableActivity[] }) {
+function ActivityDebugPanel({
+  activities,
+  allSnapshots,
+}: {
+  activities: readonly JoinableActivity[];
+  allSnapshots: Record<string, CharacterSnapshot>;
+}) {
   return (
     <div className={styles.activityPanel}>
       <div className={styles.panelTitle}>Activities</div>
@@ -203,11 +210,7 @@ function ActivityDebugPanel({ activities }: { activities: readonly JoinableActiv
           </div>
           <div className={styles.detailRow}>
             <span>People</span>
-            <strong>{activity.participantIds.join(', ')}</strong>
-          </div>
-          <div className={styles.detailRow}>
-            <span>Location</span>
-            <strong>{activity.location ? `${activity.location.x}, ${activity.location.y}` : '-'}</strong>
+            <strong>{formatActivityParticipantNames(activity, allSnapshots)}</strong>
           </div>
           <div className={styles.detailRow}>
             <span>Ends in</span>
@@ -219,9 +222,19 @@ function ActivityDebugPanel({ activities }: { activities: readonly JoinableActiv
   );
 }
 
-function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
+function formatActivityParticipantNames(
+  activity: JoinableActivity,
+  allSnapshots: Record<string, CharacterSnapshot>,
+): string {
+  return activity.participantIds
+    .map(characterId => allSnapshots[characterId]?.context.name ?? characterId)
+    .join(', ');
+}
+
+function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationshipStore }: {
   snapshot: CharacterSnapshot;
   allSnapshots: Record<string, CharacterSnapshot>;
+  activities: readonly JoinableActivity[];
   relationshipStore: RelationshipStore;
 }) {
   const summary = getCharacterStateSummary(snapshot.value);
@@ -230,6 +243,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
   const playMoodAcceptance = getMoodAcceptanceDebugText('environment.nearbyCharacter.play', snapshot.context.status.moodValue);
   const chatFinalAcceptance = getFinalAcceptanceDebugText(inviteAvailability.isAvailable, chatMoodAcceptance);
   const playFinalAcceptance = getFinalAcceptanceDebugText(inviteAvailability.isAvailable, playMoodAcceptance);
+  const currentActivityId = snapshot.context.currentActivity?.activityId ?? snapshot.context.pendingActivityJoin?.activityId;
+  const currentActivity = currentActivityId
+    ? activities.find(activity => activity.id === currentActivityId)
+    : undefined;
 
   return (
     <div className={styles.characterPanel}>
@@ -261,6 +278,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
       <div className={styles.detailRow}>
         <span>Activity</span>
         <strong>{snapshot.context.currentActivity?.activityId ?? snapshot.context.pendingActivityJoin?.activityId ?? '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Activity members</span>
+        <strong>{currentActivity ? formatActivityParticipantNames(currentActivity, allSnapshots) : '-'}</strong>
       </div>
       <div className={styles.detailRow}>
         <span>Event bucket</span>

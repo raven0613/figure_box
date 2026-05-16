@@ -121,6 +121,79 @@
     ]
   },
   {
+    "id": "need.playWithItem",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 10,
+    "maxWeight": 100,
+    "interruptPolicy": "soft",
+    "commitment": 14,
+    "conditions": [
+      {
+        "path": "input.ownItemCount",
+        "operator": ">",
+        "value": 0
+      }
+    ],
+    "presentationVariants": [
+      {
+        "id": "play_with_item.toy_ball",
+        "baseWeight": 10,
+        "conditions": [
+          {
+            "path": "input.ownItemIds",
+            "operator": "includes",
+            "value": "toy-ball"
+          }
+        ],
+        "presentationTags": ["emote.play", "motion.stand"],
+        "performanceId": "item.play.toyBall",
+        "activity": {
+          "key": "play.item.toy-ball",
+          "type": "playWithItem",
+          "joinable": true,
+          "durationMs": 20000,
+          "refreshDurationOnJoin": true,
+          "joinWindowMs": 20000,
+          "joinRequirements": {
+            "type": "hasItem",
+            "itemId": "toy-ball"
+          }
+        }
+      },
+      {
+        "id": "play_with_item.cards",
+        "baseWeight": 10,
+        "conditions": [
+          {
+            "path": "input.ownItemIds",
+            "operator": "includes",
+            "value": "cards"
+          }
+        ],
+        "presentationTags": ["emote.play", "motion.stand"],
+        "performanceId": "item.play.cards",
+        "activity": {
+          "key": "play.item.cards",
+          "type": "playWithItem",
+          "joinable": true,
+          "durationMs": 20000,
+          "refreshDurationOnJoin": true,
+          "joinWindowMs": 20000,
+          "joinRequirements": {
+            "type": "hasItem",
+            "itemId": "cards"
+          }
+        }
+      }
+    ]
+  },
+  {
     "id": "environment.nearbyCharacter.chat",
     "bucketId": "environment",
     "motivation": "chat",

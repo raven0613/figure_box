@@ -176,25 +176,14 @@ export class TownInteractionScheduler {
 
     this.playStartTimers.set(proposalId, startTimerId);
 
-    const timerId = window.setTimeout(() => {
-      const endSnapshot = this.getCharacterSnapshot(initiatorId);
-      const endBubble = this.getBubbleOrFallback(
-        endSnapshot,
-        'end',
-        config.copy.endTemplate,
-        END_BUBBLE_DURATION_MS,
-        initiatorId,
-        targetId,
-      );
-
-      this.playPhaseIfSnapshotExists(endSnapshot, 'end', initiatorId, targetId);
-      this.showSameBubbleToPair(initiatorId, targetId, endBubble);
-      this.endJoinableActivityForPlay(activityId, initiatorId, targetId);
-      this.playEndTimers.delete(proposalId);
-      this.endInteractionForPair(initiatorId, targetId, proposalId, config.interactionType);
-    }, playDurationMs);
-
-    this.playEndTimers.set(proposalId, timerId);
+    this.schedulePlayEndTimer(
+      proposalId,
+      initiatorId,
+      targetId,
+      config,
+      activityId,
+      playDurationMs,
+    );
   }
 
   private createJoinableActivityForInteraction(
@@ -248,6 +237,62 @@ export class TownInteractionScheduler {
         });
       });
     this.notifyActivitiesChanged();
+  }
+
+  private schedulePlayEndTimer(
+    proposalId: string,
+    initiatorId: string,
+    targetId: string,
+    config: InteractionProposalConfig,
+    activityId: string | null,
+    delayMs: number,
+  ): void {
+    const timerId = window.setTimeout(() => {
+      this.handlePlayEndTimer(proposalId, initiatorId, targetId, config, activityId);
+    }, delayMs);
+
+    this.playEndTimers.set(proposalId, timerId);
+  }
+
+  private handlePlayEndTimer(
+    proposalId: string,
+    initiatorId: string,
+    targetId: string,
+    config: InteractionProposalConfig,
+    activityId: string | null,
+  ): void {
+    const activity = activityId ? this.activityManager.getActivity(activityId) : null;
+    const remainingActivityMs = activity
+      ? activity.endsAt - Date.now()
+      : 0;
+
+    if (remainingActivityMs > 0) {
+      this.schedulePlayEndTimer(
+        proposalId,
+        initiatorId,
+        targetId,
+        config,
+        activityId,
+        remainingActivityMs,
+      );
+      return;
+    }
+
+    const endSnapshot = this.getCharacterSnapshot(initiatorId);
+    const endBubble = this.getBubbleOrFallback(
+      endSnapshot,
+      'end',
+      config.copy.endTemplate,
+      END_BUBBLE_DURATION_MS,
+      initiatorId,
+      targetId,
+    );
+
+    this.playPhaseIfSnapshotExists(endSnapshot, 'end', initiatorId, targetId);
+    this.showSameBubbleToPair(initiatorId, targetId, endBubble);
+    this.endJoinableActivityForPlay(activityId, initiatorId, targetId);
+    this.playEndTimers.delete(proposalId);
+    this.endInteractionForPair(initiatorId, targetId, proposalId, config.interactionType);
   }
 
   private endInteractionForPair(

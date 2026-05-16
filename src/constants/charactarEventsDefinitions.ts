@@ -43,6 +43,7 @@ export type CharacterEventAction =
   | { type: 'goEat'; target: CharacterEventTarget }
   | { type: 'proposeChat'; target: CharacterEventInteractionTarget }
   | { type: 'proposePlay'; target: CharacterEventInteractionTarget }
+  | { type: 'startActivity' }
   | { type: 'joinActivity'; target: CharacterEventActivityTarget };
 
 export type CharacterEventTarget =

@@ -67,6 +67,9 @@ export class TownCharacterController {
       setCharacterExpression: (characterId, expression) => {
         this.setCharacterExpression(characterId, expression);
       },
+      showCharacterBubble: (characterId, text, durationMs) => {
+        this.widget.showCharacterBubble(characterId, text, durationMs);
+      },
       showCharacterEmote: (characterId, text, durationMs) => {
         this.widget.showCharacterEmote(characterId, text, durationMs);
       },
@@ -85,6 +88,7 @@ export class TownCharacterController {
     });
     this.activityCoordinator = new TownActivityCoordinator({
       activityManager: this.activityManager,
+      performanceRunner: this.performanceRunner,
       getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
       getCharacterPosition: characterId => this.getCharacterPosition(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
@@ -219,6 +223,7 @@ export class TownCharacterController {
         id: character.id,
         name: character.name,
         position: previousContext?.position ?? character.position,
+        ownItems: previousContext?.ownItems ?? ('ownItems' in character ? character.ownItems : undefined),
         saturation: previousContext?.status.saturation ?? character.saturation,
         relationships: previousContext?.relationships,
       },
@@ -230,6 +235,7 @@ export class TownCharacterController {
       this.onCharacterSnapshot?.(character.id, snapshot);
       this.movementCoordinator.syncCharacterWithWidget(character.id, snapshot);
       this.interactionProposalHandler.handlePendingInteractionProposal(character.id, snapshot);
+      this.activityCoordinator.handleCurrentActivity(character.id, snapshot);
       this.activityCoordinator.handlePendingActivityJoin(character.id, snapshot);
     });
 

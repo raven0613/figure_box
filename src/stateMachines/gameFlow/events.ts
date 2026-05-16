@@ -31,6 +31,7 @@ export type CharacterEvent =
   | { type: EventType.GoPlay }
   | { type: EventType.ProposeChat; targetCharId: string; proposalId: string; sourceEventId: string }
   | { type: EventType.ProposePlay; targetCharId: string; proposalId: string; sourceEventId: string }
+  | { type: EventType.StartActivity; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivity; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivityAccepted; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivityRejected; activityId: string }
@@ -84,6 +85,7 @@ export enum EventType {
   GoPlay = "goPlay",
   ProposeChat = "proposeChat",
   ProposePlay = "proposePlay",
+  StartActivity = "startActivity",
   JoinActivity = "joinActivity",
   JoinActivityAccepted = "joinActivityAccepted",
   JoinActivityRejected = "joinActivityRejected",

@@ -45,6 +45,7 @@ export interface CharacterMachineInput {
   id: string;
   name: string;
   position: Position;
+  ownItems?: readonly Item[];
   saturation?: number;
   relationships?: DirectedRelationship[];
 }

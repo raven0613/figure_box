@@ -49,6 +49,12 @@ export function createCharacterEventFromAction(
         sourceEventId,
       };
     }
+    case 'startActivity':
+      return {
+        type: EventType.StartActivity,
+        activityId: createActivityId(random),
+        sourceEventId,
+      };
     case 'joinActivity': {
       const activity = selectRandomNearbyJoinableActivity(input.nearbyJoinableActivities ?? [], random);
 
@@ -86,6 +92,10 @@ function selectRandomNearbyCharacterId(
 
 function createProposalId(random: () => number): string {
   return `interaction-${Date.now()}-${Math.floor(random() * 1_000_000)}`;
+}
+
+function createActivityId(random: () => number): string {
+  return `activity-${Date.now()}-${Math.floor(random() * 1_000_000)}`;
 }
 
 function selectRandomNearbyJoinableActivity<T>(
