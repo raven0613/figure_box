@@ -7,12 +7,22 @@ import {
 } from '~/stateMachines/gameFlow/children/character';
 import {
   CHARACTER_EVENT_DEFINITIONS_BY_ID,
+  type CharacterEventActivity,
   type CharacterEventDefinition,
 } from '~/services/characterEvents/definitions';
+import {
+  CharacterPerformanceRunner,
+  type CharacterPerformanceBubble,
+  type CharacterPerformanceSelection,
+} from '~/services/characterEvents/characterPerformanceRunner';
 import { shouldAcceptInteraction } from '~/services/characterEvents/interactionAcceptance';
 import { canStartInteractionWithTarget } from '~/services/characterEvents/interactionCooldowns';
 import {
-  getCharacterPerformanceBubbleStep,
+  createJoinableActivityManager,
+  type JoinableActivity,
+  type JoinableActivityManager,
+} from '~/services/characterEvents/joinableActivities';
+import {
   type CharacterPerformancePhase,
   type CharacterPerformanceTarget,
 } from '~/services/characterEvents/performances';
@@ -31,11 +41,9 @@ type CharacterSeed = typeof CHARACTER_SEEDS[number];
 type Subscription = {
   unsubscribe: () => void;
 };
-type InteractionBubble = {
-  text: string;
-  delayMs?: number;
-  durationMs: number;
-};
+type InteractionAcceptanceDecision =
+  | { accepted: true }
+  | { accepted: false; reason: 'busy' | 'mood' };
 
 export type CharacterSnapshot = SnapshotFrom<typeof characterMachine>;
 
@@ -43,11 +51,13 @@ const INITIAL_DECISION_STAGGER_MIN_MS = 500;
 const INITIAL_DECISION_STAGGER_MAX_MS = 4500;
 const DECISION_INTERVAL_MIN_MS = 2500;
 const DECISION_INTERVAL_MAX_MS = 5500;
+const CHAT_INTERACTION_DURATION_MS = 20000;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
   onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
+  onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
 }
 
 export class TownCharacterController {
@@ -59,16 +69,32 @@ export class TownCharacterController {
   private readonly chatEndTimers = new Map<string, number>();
   private readonly playStartTimers = new Map<string, number>();
   private readonly playEndTimers = new Map<string, number>();
+  private readonly performanceRunner: CharacterPerformanceRunner;
+  private readonly activityManager: JoinableActivityManager;
   private readonly nextDecisionAtByCharacterId = new Map<string, number>();
   private relationshipStore = createRelationshipStore();
   private tickTimer: number | null = null;
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
+  private readonly onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
 
   constructor(options: TownCharacterControllerOptions) {
     this.widget = options.widget;
+    this.activityManager = createJoinableActivityManager();
+    this.performanceRunner = new CharacterPerformanceRunner({
+      setCharacterExpression: (characterId, expression) => {
+        this.setCharacterExpression(characterId, expression);
+      },
+      showCharacterEmote: (characterId, text, durationMs) => {
+        this.widget.showCharacterEmote(characterId, text, durationMs);
+      },
+      showMapActivity: (activity, durationMs) => {
+        this.widget.showMapActivity(activity, durationMs);
+      },
+    });
     this.onCharacterSnapshot = options.onCharacterSnapshot;
     this.onRelationshipStoreChange = options.onRelationshipStoreChange;
+    this.onJoinableActivitiesChange = options.onJoinableActivitiesChange;
   }
 
   start(): void {
@@ -146,6 +172,8 @@ export class TownCharacterController {
     this.playStartTimers.clear();
     this.playEndTimers.forEach(timerId => window.clearTimeout(timerId));
     this.playEndTimers.clear();
+    this.performanceRunner.dispose();
+    this.activityManager.clear();
     this.processedInteractionProposalIds.clear();
     this.nextDecisionAtByCharacterId.clear();
 
@@ -161,6 +189,7 @@ export class TownCharacterController {
 
     this.relationshipStore = createRelationshipStore();
     this.onRelationshipStoreChange?.(this.relationshipStore);
+    this.notifyJoinableActivitiesChanged();
   }
 
   private spawnCharacterActor(character: CharacterSeed, previousActor?: CharacterActor): CharacterActor {
@@ -201,6 +230,7 @@ export class TownCharacterController {
       this.onCharacterSnapshot?.(character.id, snapshot);
       this.syncCharacterWithWidget(character.id, snapshot);
       this.handlePendingInteractionProposal(character.id, snapshot);
+      this.handlePendingActivityJoin(character.id, snapshot);
     });
 
     actor.start();
@@ -279,6 +309,7 @@ export class TownCharacterController {
       this.sendToCharacter(character.id, {
         type: EventType.Tick,
         nearbyCharacterIds: this.getNearbyCharacterIds(character.id, 2),
+        nearbyJoinableActivities: this.getNearbyJoinableActivities(character.id, timestamp, 3),
         timestamp,
         allowAutonomousDecision,
       });
@@ -286,6 +317,7 @@ export class TownCharacterController {
 
     this.relationshipStore = this.triggerPassByRelationships(timestamp);
     this.onRelationshipStoreChange?.(this.relationshipStore);
+    this.pruneEndedActivities(timestamp);
   }
 
   private canCharacterDecideNow(characterId: string, timestamp: number): boolean {
@@ -369,7 +401,9 @@ export class TownCharacterController {
       targetName,
     );
 
-    if (this.shouldAcceptChatProposal(proposal.targetCharId, characterId, proposal.sourceEventId)) {
+    const acceptanceDecision = this.evaluateChatProposal(proposal.targetCharId, characterId, proposal.sourceEventId);
+
+    if (acceptanceDecision.accepted) {
       this.sendToCharacter(characterId, {
         type: EventType.ChatProposalAccepted,
         targetCharId: proposal.targetCharId,
@@ -382,6 +416,8 @@ export class TownCharacterController {
         proposalId: proposal.id,
         sourceEventId: proposal.sourceEventId,
       });
+      this.playNonBubblePerformanceSteps(snapshot, 'proposal', characterId, proposal.targetCharId);
+      this.playNonBubblePerformanceSteps(snapshot, 'accepted', characterId, proposal.targetCharId);
       const acceptedBubble = this.getInteractionBubble(
         snapshot,
         'accepted',
@@ -413,17 +449,59 @@ export class TownCharacterController {
       sourceEventId: proposal.sourceEventId,
       timestamp: rejectedAt,
     });
+    const rejectedPhase = getRejectedPerformancePhase(acceptanceDecision.reason);
+    this.playNonBubblePerformanceSteps(snapshot, 'proposal', characterId, proposal.targetCharId);
+    this.playNonBubblePerformanceSteps(snapshot, rejectedPhase, characterId, proposal.targetCharId);
     const rejectedBubble = this.getInteractionBubble(
       snapshot,
-      'rejected',
+      rejectedPhase,
       'target',
-      '{target}：現在不太想聊。',
+      acceptanceDecision.reason === 'busy'
+        ? '{target}：抱歉，現在有事。'
+        : '{target}：現在有點不想聊。',
       3200,
       initiatorName,
       targetName,
     );
     this.widget.showCharacterBubble(characterId, proposalBubble.text, proposalBubble.durationMs);
     this.widget.showCharacterBubble(proposal.targetCharId, rejectedBubble.text, rejectedBubble.durationMs);
+  }
+
+  private handlePendingActivityJoin(characterId: string, snapshot: CharacterSnapshot): void {
+    const activityJoin = snapshot.context.pendingActivityJoin;
+
+    if (!activityJoin) {
+      return;
+    }
+
+    const timestamp = Date.now();
+    const activity = this.activityManager.getActivity(activityJoin.activityId);
+
+    if (!activity || activity.endsAt <= timestamp || !this.canCharacterJoinActivity(characterId, activity)) {
+      this.sendToCharacter(characterId, {
+        type: EventType.JoinActivityRejected,
+        activityId: activityJoin.activityId,
+      });
+      return;
+    }
+
+    const joinedActivity = this.activityManager.joinActivity(activityJoin.activityId, characterId, timestamp);
+
+    if (!joinedActivity) {
+      this.sendToCharacter(characterId, {
+        type: EventType.JoinActivityRejected,
+        activityId: activityJoin.activityId,
+      });
+      return;
+    }
+
+    this.sendToCharacter(characterId, {
+      type: EventType.JoinActivityAccepted,
+      activityId: joinedActivity.id,
+      sourceEventId: activityJoin.sourceEventId,
+    });
+    this.widget.showCharacterBubble(characterId, '我也要一起玩！', 2200);
+    this.notifyJoinableActivitiesChanged();
   }
 
   private handlePlayProposal(characterId: string, snapshot: CharacterSnapshot): void {
@@ -445,7 +523,9 @@ export class TownCharacterController {
       targetName,
     );
 
-    if (this.shouldAcceptPlayProposal(proposal.targetCharId, characterId, proposal.sourceEventId)) {
+    const acceptanceDecision = this.evaluatePlayProposal(proposal.targetCharId, characterId, proposal.sourceEventId);
+
+    if (acceptanceDecision.accepted) {
       this.sendToCharacter(characterId, {
         type: EventType.PlayProposalAccepted,
         targetCharId: proposal.targetCharId,
@@ -458,6 +538,8 @@ export class TownCharacterController {
         proposalId: proposal.id,
         sourceEventId: proposal.sourceEventId,
       });
+      this.playNonBubblePerformanceSteps(snapshot, 'proposal', characterId, proposal.targetCharId);
+      this.playNonBubblePerformanceSteps(snapshot, 'accepted', characterId, proposal.targetCharId);
       const acceptedBubble = this.getInteractionBubble(
         snapshot,
         'accepted',
@@ -489,11 +571,16 @@ export class TownCharacterController {
       sourceEventId: proposal.sourceEventId,
       timestamp: rejectedAt,
     });
+    const rejectedPhase = getRejectedPerformancePhase(acceptanceDecision.reason);
+    this.playNonBubblePerformanceSteps(snapshot, 'proposal', characterId, proposal.targetCharId);
+    this.playNonBubblePerformanceSteps(snapshot, rejectedPhase, characterId, proposal.targetCharId);
     const rejectedBubble = this.getInteractionBubble(
       snapshot,
-      'rejected',
+      rejectedPhase,
       'target',
-      '{target}：我現在不想玩。',
+      acceptanceDecision.reason === 'busy'
+        ? '{target}：抱歉，現在有事。'
+        : '{target}：我現在不想玩。',
       2600,
       initiatorName,
       targetName,
@@ -520,19 +607,27 @@ export class TownCharacterController {
     fallbackDurationMs: number,
     initiatorName: string,
     targetName: string,
-  ): InteractionBubble {
-    const performanceId = this.getSelectedPerformanceId(snapshot);
-    const step = getCharacterPerformanceBubbleStep(performanceId, phase, target);
-    const template = step?.text ?? this.getLegacyInteractionLine(snapshot, phase) ?? fallbackTemplate;
+  ): CharacterPerformanceBubble {
+    return this.performanceRunner.getInteractionBubble({
+      selection: this.getPerformanceSelection(snapshot),
+      phase,
+      target,
+      fallbackTemplate,
+      fallbackDurationMs,
+      initiatorName,
+      targetName,
+      legacyPresentation: this.getInteractionPresentation(snapshot),
+    });
+  }
 
+  private getPerformanceSelection(snapshot: CharacterSnapshot): CharacterPerformanceSelection {
     return {
-      text: formatInteractionLine(template, initiatorName, targetName),
-      delayMs: step?.delayMs,
-      durationMs: step?.durationMs ?? fallbackDurationMs,
+      definitionId: snapshot.context.lastEventDecision?.selectedCandidateId,
+      variantId: snapshot.context.lastEventDecision?.selectedPresentationVariantId,
     };
   }
 
-  private getSelectedPerformanceId(snapshot: CharacterSnapshot): string | undefined {
+  private getSelectedActivityDefinition(snapshot: CharacterSnapshot): CharacterEventActivity | undefined {
     const definitionId = snapshot.context.lastEventDecision?.selectedCandidateId;
     const variantId = snapshot.context.lastEventDecision?.selectedPresentationVariantId;
 
@@ -542,43 +637,36 @@ export class TownCharacterController {
 
     return CHARACTER_EVENT_DEFINITIONS_BY_ID[definitionId]?.presentationVariants
       ?.find(variant => variant.id === variantId)
-      ?.performanceId;
+      ?.activity;
   }
 
-  private getLegacyInteractionLine(
+  private playNonBubblePerformanceSteps(
     snapshot: CharacterSnapshot,
     phase: CharacterPerformancePhase,
-  ): string | undefined {
-    const presentation = this.getInteractionPresentation(snapshot);
-
-    if (phase === 'proposal') {
-      return presentation?.proposalLine;
-    }
-
-    if (phase === 'accepted') {
-      return presentation?.acceptedLine;
-    }
-
-    if (phase === 'rejected') {
-      return presentation?.rejectedLine;
-    }
-
-    if (phase === 'end') {
-      return presentation?.endLine;
-    }
-
-    return undefined;
+    initiatorId: string,
+    targetId: string,
+  ): void {
+    this.performanceRunner.playNonBubblePerformanceSteps(
+      this.getPerformanceSelection(snapshot),
+      phase,
+      initiatorId,
+      targetId,
+    );
   }
 
   private getCharacterName(characterId: string): string {
     return this.characterActors.get(characterId)?.getSnapshot().context.name ?? characterId;
   }
 
-  private shouldAcceptChatProposal(targetCharId: string, initiatorId: string, sourceEventId: string): boolean {
+  private evaluateChatProposal(
+    targetCharId: string,
+    initiatorId: string,
+    sourceEventId: string,
+  ): InteractionAcceptanceDecision {
     const actor = this.characterActors.get(targetCharId);
 
     if (actor?.getSnapshot().status !== 'active') {
-      return false;
+      return { accepted: false, reason: 'busy' };
     }
 
     const context = actor.getSnapshot().context;
@@ -590,23 +678,29 @@ export class TownCharacterController {
       context.currentMotivation !== 'idle' ||
       this.isCharacterBodyFrozen(targetCharId)
     ) {
-      return false;
+      return { accepted: false, reason: 'busy' };
     }
 
     const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[sourceEventId];
 
     if (!definition || !this.canTargetStartInteraction(context, initiatorId, definition)) {
-      return false;
+      return { accepted: false, reason: 'busy' };
     }
 
-    return shouldAcceptInteraction(context, definition);
+    return shouldAcceptInteraction(context, definition)
+      ? { accepted: true }
+      : { accepted: false, reason: 'mood' };
   }
 
-  private shouldAcceptPlayProposal(targetCharId: string, initiatorId: string, sourceEventId: string): boolean {
+  private evaluatePlayProposal(
+    targetCharId: string,
+    initiatorId: string,
+    sourceEventId: string,
+  ): InteractionAcceptanceDecision {
     const actor = this.characterActors.get(targetCharId);
 
     if (actor?.getSnapshot().status !== 'active') {
-      return false;
+      return { accepted: false, reason: 'busy' };
     }
 
     const context = actor.getSnapshot().context;
@@ -618,16 +712,18 @@ export class TownCharacterController {
       context.currentMotivation !== 'idle' ||
       this.isCharacterBodyFrozen(targetCharId)
     ) {
-      return false;
+      return { accepted: false, reason: 'busy' };
     }
 
     const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[sourceEventId];
 
     if (!definition || !this.canTargetStartInteraction(context, initiatorId, definition)) {
-      return false;
+      return { accepted: false, reason: 'busy' };
     }
 
-    return shouldAcceptInteraction(context, definition);
+    return shouldAcceptInteraction(context, definition)
+      ? { accepted: true }
+      : { accepted: false, reason: 'mood' };
   }
 
   private canTargetStartInteraction(
@@ -638,7 +734,64 @@ export class TownCharacterController {
     return canStartInteractionWithTarget(context, definition, initiatorId, Date.now());
   }
 
+  private createJoinableActivityForInteraction(
+    proposalId: string,
+    snapshot: CharacterSnapshot,
+    initiatorId: string,
+    targetId: string,
+  ): string | null {
+    const sourceEventId = snapshot.context.lastEventDecision?.selectedCandidateId;
+    const activity = this.getSelectedActivityDefinition(snapshot);
+
+    if (!sourceEventId || !activity?.joinable) {
+      return null;
+    }
+
+    const activityId = `interaction.${proposalId}`;
+
+    this.activityManager.createActivity({
+      id: activityId,
+      sourceEventId,
+      activity,
+      hostCharacterIds: [initiatorId],
+      participantIds: [initiatorId, targetId],
+      timestamp: Date.now(),
+      phase: 'forming',
+      location: this.getCharacterPosition(initiatorId) ?? snapshot.context.position,
+    });
+    this.notifyJoinableActivitiesChanged();
+
+    return activityId;
+  }
+
   private scheduleChatEnd(proposalId: string, initiatorId: string, targetId: string): void {
+    const initiatorSnapshot = this.characterActors.get(initiatorId)?.getSnapshot();
+    const initiatorName = this.getCharacterName(initiatorId);
+    const targetName = this.getCharacterName(targetId);
+    const activeBubble = initiatorSnapshot
+      ? this.getInteractionBubble(
+        initiatorSnapshot,
+        'active',
+        'both',
+        '正在聊天',
+        CHAT_INTERACTION_DURATION_MS,
+        initiatorName,
+        targetName,
+      )
+      : { text: '正在聊天', delayMs: 1200, durationMs: CHAT_INTERACTION_DURATION_MS };
+
+    const startTimerId = window.setTimeout(() => {
+      this.chatEndTimers.delete(`${proposalId}.active`);
+
+      if (initiatorSnapshot) {
+        this.playNonBubblePerformanceSteps(initiatorSnapshot, 'active', initiatorId, targetId);
+      }
+      this.widget.showCharacterBubble(initiatorId, activeBubble.text, activeBubble.durationMs);
+      this.widget.showCharacterBubble(targetId, activeBubble.text, activeBubble.durationMs);
+    }, activeBubble.delayMs ?? 1200);
+
+    this.chatEndTimers.set(`${proposalId}.active`, startTimerId);
+
     const timerId = window.setTimeout(() => {
       const initiatorSnapshot = this.characterActors.get(initiatorId)?.getSnapshot();
       const initiatorName = this.getCharacterName(initiatorId);
@@ -655,16 +808,24 @@ export class TownCharacterController {
         )
         : null;
 
-      if (endBubble) {
+      if (endBubble && initiatorSnapshot) {
+        this.playNonBubblePerformanceSteps(initiatorSnapshot, 'end', initiatorId, targetId);
         this.widget.showCharacterBubble(initiatorId, endBubble.text, endBubble.durationMs);
         this.widget.showCharacterBubble(targetId, endBubble.text, endBubble.durationMs);
+      }
+
+      const activeTimerId = this.chatEndTimers.get(`${proposalId}.active`);
+
+      if (activeTimerId) {
+        window.clearTimeout(activeTimerId);
+        this.chatEndTimers.delete(`${proposalId}.active`);
       }
 
       this.chatEndTimers.delete(proposalId);
       const timestamp = Date.now();
       this.sendToCharacter(initiatorId, { type: EventType.EndChatInteraction, proposalId, timestamp });
       this.sendToCharacter(targetId, { type: EventType.EndChatInteraction, proposalId, timestamp });
-    }, 4000);
+    }, CHAT_INTERACTION_DURATION_MS);
 
     this.chatEndTimers.set(proposalId, timerId);
   }
@@ -673,6 +834,12 @@ export class TownCharacterController {
     const initiatorSnapshot = this.characterActors.get(initiatorId)?.getSnapshot();
     const initiatorName = this.getCharacterName(initiatorId);
     const targetName = this.getCharacterName(targetId);
+    const activityId = initiatorSnapshot
+      ? this.createJoinableActivityForInteraction(proposalId, initiatorSnapshot, initiatorId, targetId)
+      : null;
+    const playDurationMs = initiatorSnapshot
+      ? this.getSelectedActivityDefinition(initiatorSnapshot)?.durationMs ?? 20000
+      : 20000;
     const activeBubble = initiatorSnapshot
       ? this.getInteractionBubble(
         initiatorSnapshot,
@@ -687,6 +854,17 @@ export class TownCharacterController {
 
     const startTimerId = window.setTimeout(() => {
       this.playStartTimers.delete(proposalId);
+      if (initiatorSnapshot) {
+        if (activityId) {
+          this.activityManager.updateActivityPhase(
+            activityId,
+            'active',
+            this.getCharacterPosition(initiatorId) ?? initiatorSnapshot.context.position,
+          );
+          this.notifyJoinableActivitiesChanged();
+        }
+        this.playNonBubblePerformanceSteps(initiatorSnapshot, 'active', initiatorId, targetId);
+      }
       this.widget.showCharacterBubble(initiatorId, activeBubble.text, activeBubble.durationMs);
       this.widget.showCharacterBubble(targetId, activeBubble.text, activeBubble.durationMs);
     }, activeBubble.delayMs ?? 1200);
@@ -707,16 +885,31 @@ export class TownCharacterController {
         )
         : null;
 
-      if (endBubble) {
+      if (endBubble && endSnapshot) {
+        this.playNonBubblePerformanceSteps(endSnapshot, 'end', initiatorId, targetId);
         this.widget.showCharacterBubble(initiatorId, endBubble.text, endBubble.durationMs);
         this.widget.showCharacterBubble(targetId, endBubble.text, endBubble.durationMs);
+      }
+
+      if (activityId) {
+        const endedActivity = this.activityManager.endActivity(activityId);
+        endedActivity?.participantIds
+          .filter(participantId => participantId !== initiatorId && participantId !== targetId)
+          .forEach(participantId => {
+            this.sendToCharacter(participantId, {
+              type: EventType.EndJoinedActivity,
+              activityId,
+              timestamp: Date.now(),
+            });
+          });
+        this.notifyJoinableActivitiesChanged();
       }
 
       this.playEndTimers.delete(proposalId);
       const timestamp = Date.now();
       this.sendToCharacter(initiatorId, { type: EventType.EndPlayInteraction, proposalId, timestamp });
       this.sendToCharacter(targetId, { type: EventType.EndPlayInteraction, proposalId, timestamp });
-    }, 6200);
+    }, playDurationMs);
 
     this.playEndTimers.set(proposalId, timerId);
   }
@@ -729,6 +922,72 @@ export class TownCharacterController {
     }
 
     return this.widget.getOccupiedNeighborIds(tile.x, tile.y, range, characterId);
+  }
+
+  private getNearbyJoinableActivities(
+    characterId: string,
+    timestamp: number,
+  ): readonly JoinableActivity[] {
+    const position = this.getCharacterPosition(characterId);
+
+    if (!position) {
+      return [];
+    }
+
+    return this.activityManager.findNearbyActivities({
+      position,
+      timestamp,
+      phases: ['forming', 'active'],
+    }).filter(activity => this.canCharacterJoinActivity(characterId, activity));
+  }
+
+  private getCharacterPosition(characterId: string): Position | null {
+    const tile = this.widget.getCharacterTile(characterId);
+
+    if (!tile) {
+      return null;
+    }
+
+    return { x: tile.x, y: tile.y };
+  }
+
+  private pruneEndedActivities(timestamp: number): void {
+    const endedActivities = this.activityManager.pruneEndedActivities(timestamp);
+
+    if (endedActivities.length > 0) {
+      endedActivities.forEach(activity => {
+        activity.participantIds.forEach(participantId => {
+          this.sendToCharacter(participantId, {
+            type: EventType.EndJoinedActivity,
+            activityId: activity.id,
+            timestamp,
+          });
+        });
+      });
+      this.notifyJoinableActivitiesChanged();
+    }
+  }
+
+  private notifyJoinableActivitiesChanged(): void {
+    this.onJoinableActivitiesChange?.(this.activityManager.getActivities());
+  }
+
+  private canCharacterJoinActivity(characterId: string, activity: JoinableActivity): boolean {
+    if (activity.participantIds.includes(characterId)) {
+      return false;
+    }
+
+    const context = this.characterActors.get(characterId)?.getSnapshot().context;
+
+    if (!context) {
+      return false;
+    }
+
+    if (activity.joinRequirements.type === 'none') {
+      return true;
+    }
+
+    return context.ownItems.some(item => item.id === activity.joinRequirements.itemId);
   }
 
   private sendToCharacter(characterId: string, event: CharacterEvent): boolean {
@@ -777,16 +1036,10 @@ export class TownCharacterController {
   }
 }
 
-function formatInteractionLine(
-  template: string,
-  initiatorName: string,
-  targetName: string,
-): string {
-  return template
-    .replaceAll('{initiator}', initiatorName)
-    .replaceAll('{target}', targetName);
-}
-
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
+}
+
+function getRejectedPerformancePhase(reason: 'busy' | 'mood'): CharacterPerformancePhase {
+  return reason === 'busy' ? 'rejectedBusy' : 'rejectedMood';
 }

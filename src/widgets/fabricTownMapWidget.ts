@@ -379,7 +379,9 @@ export class FabricTownMapWidget {
   private readonly mapObjectShapes = new Map<string, Group>();
   private readonly characterTokens = new Map<string, Group>();
   private readonly characterBubbles = new Map<string, Text>();
+  private readonly characterEmotes = new Map<string, Text>();
   private readonly bubbleTimers = new Map<string, number>();
+  private readonly emoteTimers = new Map<string, number>();
   private readonly bubbleAnimations = new Map<string, BubbleAnimationState>();
   private readonly mapActivityLabels = new Map<string, Text>();
   private readonly mapActivityTimers = new Map<string, number>();
@@ -584,6 +586,64 @@ export class FabricTownMapWidget {
     this.bubbleTimers.set(characterId, timer);
   }
 
+  showCharacterEmote(characterId: string, text: string, durationMs = 1200): void {
+    const token = this.characterTokens.get(characterId);
+
+    if (!token) {
+      return;
+    }
+
+    const existingTimer = this.emoteTimers.get(characterId);
+
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      this.emoteTimers.delete(characterId);
+    }
+
+    let emote = this.characterEmotes.get(characterId);
+
+    if (!emote) {
+      emote = new Text(text, {
+        fontSize: 15,
+        fontFamily: 'Arial, sans-serif',
+        fontWeight: '700',
+        fill: '#24313a',
+        backgroundColor: 'rgba(255, 236, 153, 0.92)',
+        originX: 'center',
+        originY: 'bottom',
+        selectable: false,
+        evented: false,
+      });
+      emote.set('sortBottomY', Number.POSITIVE_INFINITY);
+      emote.set('entityLayerRank', FLOATING_UI_LAYER_RANK);
+      this.characterEmotes.set(characterId, emote);
+      this.canvas.add(emote);
+    }
+
+    emote.set({
+      text,
+      left: (token.left ?? 0) + this.cellSize * CHARACTER_SCALE * 0.42,
+      top: (token.top ?? 0) - this.cellSize * CHARACTER_SCALE * 0.72,
+      opacity: 1,
+    });
+    this.canvas.bringObjectToFront(emote);
+    this.canvas.requestRenderAll();
+
+    const timer = window.setTimeout(() => {
+      const currentEmote = this.characterEmotes.get(characterId);
+
+      if (currentEmote) {
+        this.canvas.remove(currentEmote);
+        this.characterEmotes.delete(characterId);
+        this.canvas.requestRenderAll();
+      }
+
+      this.emoteTimers.delete(characterId);
+    }, durationMs);
+
+    this.emoteTimers.set(characterId, timer);
+  }
+
   playMapBubbleSequence(
     sequence: MapBubbleSequence,
     onLine?: (line: MapBubbleSequenceLine) => void,
@@ -696,12 +756,22 @@ export class FabricTownMapWidget {
       this.canvas.remove(bubble);
       this.characterBubbles.delete(characterId);
     }
+    const emote = this.characterEmotes.get(characterId);
+    if (emote) {
+      this.canvas.remove(emote);
+      this.characterEmotes.delete(characterId);
+    }
     this.bubbleAnimations.delete(characterId);
 
     const timer = this.bubbleTimers.get(characterId);
     if (timer) {
       window.clearTimeout(timer);
       this.bubbleTimers.delete(characterId);
+    }
+    const emoteTimer = this.emoteTimers.get(characterId);
+    if (emoteTimer) {
+      window.clearTimeout(emoteTimer);
+      this.emoteTimers.delete(characterId);
     }
   }
 
@@ -784,9 +854,12 @@ export class FabricTownMapWidget {
     this.bubbleAnimations.clear();
     this.bubbleTimers.forEach(timer => window.clearTimeout(timer));
     this.bubbleTimers.clear();
+    this.emoteTimers.forEach(timer => window.clearTimeout(timer));
+    this.emoteTimers.clear();
     this.mapActivityTimers.forEach(timer => window.clearTimeout(timer));
     this.mapActivityTimers.clear();
     this.characterBubbles.clear();
+    this.characterEmotes.clear();
     this.mapActivityLabels.clear();
     this.mapObjectShapes.clear();
     return this.canvas.dispose();

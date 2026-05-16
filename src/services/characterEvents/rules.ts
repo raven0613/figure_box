@@ -33,6 +33,7 @@ export interface CharacterEventRuleContext {
 interface CharacterEventRuleInputSnapshot {
   nearbyCharacterIds: string[];
   nearbyCharacterCount: number;
+  nearbyJoinableActivityCount: number;
   globalEventTags: string[];
 }
 
@@ -42,6 +43,7 @@ export function createCharacterEventRuleContext(
   input: CharacterEventDecisionInput,
 ): CharacterEventRuleContext {
   const nearbyCharacterIds = input.nearbyCharacterIds ?? [];
+  const nearbyJoinableActivities = input.nearbyJoinableActivities ?? [];
   const globalEventTags = input.globalEventTags ?? [];
 
   return {
@@ -50,6 +52,7 @@ export function createCharacterEventRuleContext(
     input: {
       nearbyCharacterIds,
       nearbyCharacterCount: nearbyCharacterIds.length,
+      nearbyJoinableActivityCount: nearbyJoinableActivities.length,
       globalEventTags,
     },
   };

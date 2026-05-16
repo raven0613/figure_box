@@ -18,6 +18,7 @@ export interface CharacterContext {
     expression: Expression;
     saturation: number; // 飽足度：用長條圖顯示
     moodValue: number;
+    playNeed: number;
     hungerThreshold: number;
   },
   utilityScores: CharacterUtilityScores;
@@ -27,6 +28,8 @@ export interface CharacterContext {
   currentMotivation: CharacterMotivation;
   pendingInteractionProposal: CharacterInteractionProposal | null;
   currentInteraction: CharacterInteraction | null;
+  pendingActivityJoin: CharacterActivityJoinRequest | null;
+  currentActivity: CharacterActivityParticipation | null;
   interactionCooldowns: CharacterInteractionCooldowns;
   relationships: DirectedRelationship[];
   locks: {
@@ -62,6 +65,18 @@ export interface CharacterInteraction {
   type: 'chat' | 'play';
   partnerCharId: string;
   role: 'initiator' | 'target';
+  sourceEventId: string;
+}
+
+export interface CharacterActivityJoinRequest {
+  id: string;
+  activityId: string;
+  sourceEventId: string;
+}
+
+export interface CharacterActivityParticipation {
+  id: string;
+  activityId: string;
   sourceEventId: string;
 }
 

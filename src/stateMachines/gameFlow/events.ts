@@ -1,4 +1,5 @@
 import { Expression, Position } from "~/constants/character";
+import type { JoinableActivity } from "~/services/characterEvents/joinableActivities";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
 
 export enum WidgetEventType {
@@ -19,6 +20,7 @@ export type CharacterEvent =
   | {
     type: EventType.Tick;
     nearbyCharacterIds?: string[];
+    nearbyJoinableActivities?: readonly JoinableActivity[];
     globalEventTags?: string[];
     timestamp?: number;
     allowAutonomousDecision?: boolean;
@@ -29,6 +31,10 @@ export type CharacterEvent =
   | { type: EventType.GoPlay }
   | { type: EventType.ProposeChat; targetCharId: string; proposalId: string; sourceEventId: string }
   | { type: EventType.ProposePlay; targetCharId: string; proposalId: string; sourceEventId: string }
+  | { type: EventType.JoinActivity; activityId: string; sourceEventId: string }
+  | { type: EventType.JoinActivityAccepted; activityId: string; sourceEventId: string }
+  | { type: EventType.JoinActivityRejected; activityId: string }
+  | { type: EventType.EndJoinedActivity; activityId: string; timestamp?: number }
   | { type: EventType.ChatProposalAccepted; targetCharId: string; proposalId: string; sourceEventId: string }
   | { type: EventType.ChatProposalRejected; targetCharId: string; proposalId: string; timestamp?: number }
   | { type: EventType.AcceptChatProposal; fromCharacterId: string; proposalId: string; sourceEventId: string }
@@ -78,6 +84,10 @@ export enum EventType {
   GoPlay = "goPlay",
   ProposeChat = "proposeChat",
   ProposePlay = "proposePlay",
+  JoinActivity = "joinActivity",
+  JoinActivityAccepted = "joinActivityAccepted",
+  JoinActivityRejected = "joinActivityRejected",
+  EndJoinedActivity = "endJoinedActivity",
   ChatProposalAccepted = "chatProposalAccepted",
   ChatProposalRejected = "chatProposalRejected",
   AcceptChatProposal = "acceptChatProposal",

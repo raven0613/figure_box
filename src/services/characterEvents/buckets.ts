@@ -94,6 +94,10 @@ function canUseDefinition(
     return false;
   }
 
+  if (definition.characterEvent.type === 'joinActivity' && !params.input.nearbyJoinableActivities?.length) {
+    return false;
+  }
+
   return matchesCharacterEventClauses(
     definition.conditions,
     definition.conditionMode,

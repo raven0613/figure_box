@@ -14,6 +14,9 @@ import { decideCharacterEvent } from '~/services/characterEvents/decision';
 import {
     calculateCharacterUtilityScores,
     LOW_SATURATION_THRESHOLD,
+    PLAY_NEED_GAIN_PER_TICK,
+    PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
+    PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY,
     SATURATION_GAIN_AFTER_EATING,
     SATURATION_LOSS_PER_TICK,
 } from '~/services/characterEvents/utility';
@@ -48,6 +51,7 @@ export const characterMachine = createMachine(
                 expression: Expression.Normal,
                 saturation: input.saturation ?? 70,
                 moodValue: 65,
+                playNeed: 35,
                 hungerThreshold: LOW_SATURATION_THRESHOLD,
             },
             utilityScores: INITIAL_UTILITY_SCORES,
@@ -55,6 +59,8 @@ export const characterMachine = createMachine(
             currentMotivation: 'idle',
             pendingInteractionProposal: null,
             currentInteraction: null,
+            pendingActivityJoin: null,
+            currentActivity: null,
             interactionCooldowns: createEmptyInteractionCooldowns(),
             position: input.position,
             target: null,
@@ -125,6 +131,44 @@ export const characterMachine = createMachine(
                     '.communication.requesting',
                 ],
                 actions: ['setPlayMotivation', 'setPendingPlayProposal'],
+            },
+            [EventType.JoinActivity]: {
+                guard: 'shouldJoinActivity',
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.null',
+                ],
+                actions: ['setPlayMotivation', 'setPendingActivityJoin'],
+            },
+            [EventType.JoinActivityAccepted]: {
+                target: [
+                    '.bodyAction.socializing',
+                    '.bodyMove.stand',
+                    '.mind.thinking',
+                    '.communication.null',
+                ],
+                actions: 'acceptActivityJoin',
+            },
+            [EventType.JoinActivityRejected]: {
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                ],
+                actions: ['rejectActivityJoin', 'setIdleMotivation'],
+            },
+            [EventType.EndJoinedActivity]: {
+                guard: 'shouldEndJoinedActivity',
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                ],
+                actions: 'completeJoinedActivity',
             },
             [EventType.ChatProposalAccepted]: {
                 target: [
@@ -336,28 +380,52 @@ export const characterMachine = createMachine(
                 context.currentMotivation !== 'controllingByGod' &&
                 context.target === null &&
                 context.currentInteraction === null &&
-                context.pendingInteractionProposal === null
+                context.currentActivity === null &&
+                context.pendingInteractionProposal === null &&
+                context.pendingActivityJoin === null
             ),
             shouldProposePlay: ({ context }) => (
                 !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
                 context.currentMotivation !== 'controllingByGod' &&
                 context.target === null &&
                 context.currentInteraction === null &&
-                context.pendingInteractionProposal === null
+                context.currentActivity === null &&
+                context.pendingInteractionProposal === null &&
+                context.pendingActivityJoin === null
+            ),
+            shouldJoinActivity: ({ context }) => (
+                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                context.currentMotivation !== 'controllingByGod' &&
+                context.target === null &&
+                context.currentInteraction === null &&
+                context.currentActivity === null &&
+                context.pendingInteractionProposal === null &&
+                context.pendingActivityJoin === null
             ),
             shouldAcceptChatProposal: ({ context }) => (
                 !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
                 context.currentMotivation === 'idle' &&
                 context.target === null &&
                 context.currentInteraction === null &&
-                context.pendingInteractionProposal === null
+                context.currentActivity === null &&
+                context.pendingInteractionProposal === null &&
+                context.pendingActivityJoin === null
             ),
             shouldAcceptPlayProposal: ({ context }) => (
                 !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
                 context.currentMotivation === 'idle' &&
                 context.target === null &&
                 context.currentInteraction === null &&
-                context.pendingInteractionProposal === null
+                context.currentActivity === null &&
+                context.pendingInteractionProposal === null &&
+                context.pendingActivityJoin === null
+            ),
+            shouldEndJoinedActivity: ({ context, event }) => (
+                event.type === EventType.EndJoinedActivity &&
+                (
+                    context.currentActivity?.activityId === event.activityId ||
+                    context.pendingActivityJoin?.activityId === event.activityId
+                )
             ),
             shouldChangeToIdle: ({ context }) => (
                 !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
@@ -401,6 +469,7 @@ export const characterMachine = createMachine(
                     ...context.status,
                     saturation: Math.max(0, context.status.saturation - SATURATION_LOSS_PER_TICK),
                     moodValue: Math.max(0, context.status.moodValue - 1),
+                    playNeed: Math.min(100, context.status.playNeed + PLAY_NEED_GAIN_PER_TICK),
                 }),
             }),
             updateUtilityScores: assign({
@@ -590,6 +659,70 @@ export const characterMachine = createMachine(
                         : null
                 ),
             }),
+            setPendingActivityJoin: assign({
+                pendingActivityJoin: ({ event }) => (
+                    event.type === EventType.JoinActivity
+                        ? {
+                            id: `join-${event.activityId}`,
+                            activityId: event.activityId,
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+            }),
+            acceptActivityJoin: assign({
+                pendingActivityJoin: ({ context, event }) => (
+                    event.type === EventType.JoinActivityAccepted &&
+                        context.pendingActivityJoin?.activityId === event.activityId
+                        ? null
+                        : context.pendingActivityJoin
+                ),
+                currentActivity: ({ event }) => (
+                    event.type === EventType.JoinActivityAccepted
+                        ? {
+                            id: `activity-${event.activityId}`,
+                            activityId: event.activityId,
+                            sourceEventId: event.sourceEventId,
+                        }
+                        : null
+                ),
+            }),
+            rejectActivityJoin: assign({
+                pendingActivityJoin: ({ context, event }) => (
+                    event.type === EventType.JoinActivityRejected &&
+                        context.pendingActivityJoin?.activityId === event.activityId
+                        ? null
+                        : context.pendingActivityJoin
+                ),
+            }),
+            completeJoinedActivity: assign({
+                status: ({ context, event }) => (
+                    event.type === EventType.EndJoinedActivity &&
+                        context.currentActivity?.activityId === event.activityId
+                        ? {
+                            ...context.status,
+                            moodValue: Math.min(100, context.status.moodValue + 10),
+                            playNeed: Math.max(
+                                0,
+                                context.status.playNeed - PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
+                            ),
+                        }
+                        : context.status
+                ),
+                pendingActivityJoin: ({ context, event }) => (
+                    event.type === EventType.EndJoinedActivity &&
+                        context.pendingActivityJoin?.activityId === event.activityId
+                        ? null
+                        : context.pendingActivityJoin
+                ),
+                currentActivity: ({ context, event }) => (
+                    event.type === EventType.EndJoinedActivity &&
+                        context.currentActivity?.activityId === event.activityId
+                        ? null
+                        : context.currentActivity
+                ),
+                currentMotivation: () => 'idle',
+            }),
             clearInteraction: assign({
                 interactionCooldowns: ({ context, event }) => (
                     event.type === EventType.EndChatInteraction &&
@@ -633,6 +766,10 @@ export const characterMachine = createMachine(
                         ? {
                             ...context.status,
                             moodValue: Math.min(100, context.status.moodValue + 14),
+                            playNeed: Math.max(
+                                0,
+                                context.status.playNeed - PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
+                            ),
                         }
                         : context.status
                 ),
@@ -698,6 +835,7 @@ export const characterMachine = createMachine(
                         return {
                             ...context.status,
                             moodValue: Math.min(100, context.status.moodValue + 18),
+                            playNeed: Math.max(0, context.status.playNeed - PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY),
                         };
                     }
 
@@ -760,7 +898,9 @@ function canMakeAutonomousDecision(context: CharacterContext): boolean {
     return (
         context.target === null &&
         context.pendingInteractionProposal === null &&
+        context.pendingActivityJoin === null &&
         context.currentInteraction === null &&
+        context.currentActivity === null &&
         context.currentMotivation !== 'controllingByGod' &&
         !isLocked(context, 'bodyAction') &&
         !isLocked(context, 'bodyMove') &&

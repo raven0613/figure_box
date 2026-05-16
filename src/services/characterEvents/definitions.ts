@@ -42,13 +42,15 @@ export type CharacterEventAction =
   | { type: 'goPlay' }
   | { type: 'goEat'; target: CharacterEventTarget }
   | { type: 'proposeChat'; target: CharacterEventInteractionTarget }
-  | { type: 'proposePlay'; target: CharacterEventInteractionTarget };
+  | { type: 'proposePlay'; target: CharacterEventInteractionTarget }
+  | { type: 'joinActivity'; target: CharacterEventActivityTarget };
 
 export type CharacterEventTarget =
   | 'randomDestination.findFood'
   | Position;
 
 export type CharacterEventInteractionTarget = 'randomNearbyCharacter';
+export type CharacterEventActivityTarget = 'nearbyJoinableActivity';
 
 export interface CharacterEventPresentationVariant {
   id: string;
@@ -58,6 +60,7 @@ export interface CharacterEventPresentationVariant {
   weightModifiers?: readonly CharacterEventWeightModifier[];
   presentationTags?: readonly string[];
   performanceId?: string;
+  activity?: CharacterEventActivity;
 }
 
 export interface CharacterEventTransitionPresentation extends CharacterEventPresentationVariant {
@@ -75,6 +78,22 @@ export interface CharacterEventAcceptance {
   minMoodValue?: number;
   fallbackChance?: number;
 }
+
+export interface CharacterEventActivity {
+  key: string;
+  type: CharacterEventActivityType;
+  joinable?: boolean;
+  durationMs: number;
+  refreshDurationOnJoin?: boolean;
+  joinWindowMs?: number;
+  joinRequirements?: CharacterEventJoinRequirement;
+}
+
+export type CharacterEventActivityType = 'playWithItem' | 'playAtLocation';
+
+export type CharacterEventJoinRequirement =
+  | { type: 'none' }
+  | { type: 'hasItem'; itemId: string };
 
 export interface CharacterEventCooldowns {
   selfMs?: number;

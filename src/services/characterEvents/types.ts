@@ -1,4 +1,5 @@
 import type { CharacterEvent } from '~/stateMachines/gameFlow/events';
+import type { JoinableActivity } from './joinableActivities';
 import type {
   CharacterEventBucketId,
   CharacterEventDecision,
@@ -8,6 +9,7 @@ import type {
 
 export interface CharacterEventDecisionInput {
   nearbyCharacterIds?: string[];
+  nearbyJoinableActivities?: readonly JoinableActivity[];
   globalEventTags?: string[];
   timestamp?: number;
   random?: () => number;

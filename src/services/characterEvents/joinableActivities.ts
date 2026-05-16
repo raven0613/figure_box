@@ -1,0 +1,199 @@
+import type { Position } from '~/constants/character';
+import type {
+  CharacterEventActivity,
+  CharacterEventActivityType,
+  CharacterEventJoinRequirement,
+} from './definitions';
+
+export type JoinableActivityPhase = 'forming' | 'traveling' | 'active';
+
+export interface JoinableActivity {
+  id: string;
+  activityKey: string;
+  type: CharacterEventActivityType;
+  sourceEventId: string;
+  hostCharacterIds: readonly string[];
+  participantIds: readonly string[];
+  joinRequirements: CharacterEventJoinRequirement;
+  phase: JoinableActivityPhase;
+  startedAt: number;
+  endsAt: number;
+  location?: Position;
+}
+
+export interface JoinableActivityStore {
+  activities: readonly JoinableActivity[];
+}
+
+export interface CreateJoinableActivityInput {
+  id: string;
+  sourceEventId: string;
+  activity: CharacterEventActivity;
+  hostCharacterIds: readonly string[];
+  participantIds: readonly string[];
+  timestamp: number;
+  phase?: JoinableActivityPhase;
+  location?: Position;
+}
+
+export interface FindNearbyJoinableActivitiesInput {
+  position: Position;
+  timestamp: number;
+  phases?: readonly JoinableActivityPhase[];
+}
+
+const DETECT_RANGE = 10;
+
+export interface JoinableActivityManager {
+  getStore: () => JoinableActivityStore;
+  getActivity: (activityId: string) => JoinableActivity | null;
+  getActivities: (timestamp?: number) => readonly JoinableActivity[];
+  createActivity: (input: CreateJoinableActivityInput) => JoinableActivity;
+  joinActivity: (activityId: string, characterId: string, timestamp: number) => JoinableActivity | null;
+  updateActivityPhase: (
+    activityId: string,
+    phase: JoinableActivityPhase,
+    location?: Position,
+  ) => JoinableActivity | null;
+  findNearbyActivities: (input: FindNearbyJoinableActivitiesInput) => readonly JoinableActivity[];
+  endActivity: (activityId: string) => JoinableActivity | null;
+  pruneEndedActivities: (timestamp: number) => readonly JoinableActivity[];
+  clear: () => void;
+}
+
+export function createJoinableActivity(input: CreateJoinableActivityInput): JoinableActivity {
+  return {
+    id: input.id,
+    activityKey: input.activity.key,
+    type: input.activity.type,
+    sourceEventId: input.sourceEventId,
+    hostCharacterIds: [...input.hostCharacterIds],
+    participantIds: [...input.participantIds],
+    joinRequirements: input.activity.joinRequirements ?? { type: 'none' },
+    phase: input.phase ?? 'active',
+    startedAt: input.timestamp,
+    endsAt: input.timestamp + input.activity.durationMs,
+    location: input.location,
+  };
+}
+
+export function refreshJoinableActivityOnJoin(
+  activityState: JoinableActivity,
+  activityDefinition: CharacterEventActivity,
+  characterId: string,
+  timestamp: number,
+): JoinableActivity {
+  const participantIds = activityState.participantIds.includes(characterId)
+    ? activityState.participantIds
+    : [...activityState.participantIds, characterId];
+
+  return {
+    ...activityState,
+    participantIds,
+    endsAt: activityDefinition.refreshDurationOnJoin
+      ? timestamp + activityDefinition.durationMs
+      : activityState.endsAt,
+  };
+}
+
+export function createJoinableActivityManager(): JoinableActivityManager {
+  const activitiesById = new Map<string, JoinableActivity>();
+  const activityDefinitionsById = new Map<string, CharacterEventActivity>();
+
+  function getActivities(timestamp?: number): readonly JoinableActivity[] {
+    return Array.from(activitiesById.values())
+      .filter(activity => timestamp === undefined || activity.endsAt > timestamp);
+  }
+
+  return {
+    getStore: () => ({
+      activities: getActivities(),
+    }),
+    getActivity: activityId => activitiesById.get(activityId) ?? null,
+    getActivities,
+    createActivity: input => {
+      const activity = createJoinableActivity(input);
+
+      activitiesById.set(activity.id, activity);
+      activityDefinitionsById.set(activity.id, input.activity);
+
+      return activity;
+    },
+    joinActivity: (activityId, characterId, timestamp) => {
+      const activity = activitiesById.get(activityId);
+      const activityDefinition = activityDefinitionsById.get(activityId);
+
+      if (!activity || !activityDefinition || activity.endsAt <= timestamp) {
+        return null;
+      }
+
+      const nextActivity = refreshJoinableActivityOnJoin(
+        activity,
+        activityDefinition,
+        characterId,
+        timestamp,
+      );
+
+      activitiesById.set(activityId, nextActivity);
+      return nextActivity;
+    },
+    updateActivityPhase: (activityId, phase, location) => {
+      const activity = activitiesById.get(activityId);
+
+      if (!activity) {
+        return null;
+      }
+
+      const nextActivity = {
+        ...activity,
+        phase,
+        location: location ?? activity.location,
+      };
+
+      activitiesById.set(activityId, nextActivity);
+      return nextActivity;
+    },
+    findNearbyActivities: input => getActivities(input.timestamp).filter(activity => (
+      activity.location !== undefined &&
+      isWithinRange(activity.location, input.position, DETECT_RANGE) &&
+      (input.phases === undefined || input.phases.includes(activity.phase))
+    )),
+    endActivity: activityId => {
+      const activity = activitiesById.get(activityId) ?? null;
+
+      if (!activity) {
+        return null;
+      }
+
+      activitiesById.delete(activityId);
+      activityDefinitionsById.delete(activityId);
+      return activity;
+    },
+    pruneEndedActivities: timestamp => {
+      const endedActivities = Array.from(activitiesById.values())
+        .filter(activity => activity.endsAt <= timestamp);
+
+      endedActivities.forEach(activity => {
+        activitiesById.delete(activity.id);
+        activityDefinitionsById.delete(activity.id);
+      });
+
+      return endedActivities;
+    },
+    clear: () => {
+      activitiesById.clear();
+      activityDefinitionsById.clear();
+    },
+  };
+}
+
+function isWithinRange(
+  activityLocation: Position,
+  characterPosition: Position,
+  range: number,
+): boolean {
+  return Math.max(
+    Math.abs(activityLocation.x - characterPosition.x),
+    Math.abs(activityLocation.y - characterPosition.y),
+  ) <= range;
+}

@@ -4,10 +4,31 @@
     "steps": [
       {
         "phase": "proposal",
+        "type": "expression",
+        "target": "initiator",
+        "expression": "normal",
+        "durationMs": 1800
+      },
+      {
+        "phase": "proposal",
         "type": "bubble",
         "target": "initiator",
         "text": "{initiator}：要不要聊一下？",
         "durationMs": 3200
+      },
+      {
+        "phase": "accepted",
+        "type": "expression",
+        "target": "target",
+        "expression": "laugh",
+        "durationMs": 1800
+      },
+      {
+        "phase": "accepted",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "talk",
+        "durationMs": 900
       },
       {
         "phase": "accepted",
@@ -17,11 +38,48 @@
         "durationMs": 3200
       },
       {
-        "phase": "rejected",
+        "phase": "rejectedBusy",
+        "type": "expression",
+        "target": "target",
+        "expression": "normal",
+        "durationMs": 1200
+      },
+      {
+        "phase": "rejectedBusy",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：抱歉，現在有事。",
+        "durationMs": 3200
+      },
+      {
+        "phase": "rejectedMood",
+        "type": "expression",
+        "target": "target",
+        "expression": "normal",
+        "durationMs": 1200
+      },
+      {
+        "phase": "rejectedMood",
         "type": "bubble",
         "target": "target",
         "text": "{target}：現在有點不想說話。",
         "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "chatTogether",
+        "label": "聊天中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "正在聊天",
+        "delayMs": 1200,
+        "durationMs": 20000
       },
       {
         "phase": "end",
@@ -37,10 +95,24 @@
     "steps": [
       {
         "phase": "proposal",
+        "type": "emote",
+        "target": "initiator",
+        "emoteId": "play",
+        "durationMs": 900
+      },
+      {
+        "phase": "proposal",
         "type": "bubble",
         "target": "initiator",
         "text": "{initiator}：一起玩嗎？",
         "durationMs": 2600
+      },
+      {
+        "phase": "accepted",
+        "type": "expression",
+        "target": "both",
+        "expression": "laugh",
+        "durationMs": 1800
       },
       {
         "phase": "accepted",
@@ -50,7 +122,14 @@
         "durationMs": 2600
       },
       {
-        "phase": "rejected",
+        "phase": "rejectedBusy",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：抱歉，現在有事。",
+        "durationMs": 2600
+      },
+      {
+        "phase": "rejectedMood",
         "type": "bubble",
         "target": "target",
         "text": "{target}：我現在不想玩。",
@@ -58,11 +137,19 @@
       },
       {
         "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "playTogether",
+        "label": "一起玩",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
         "type": "bubble",
         "target": "both",
         "text": "正在一起玩",
         "delayMs": 1200,
-        "durationMs": 5000
+        "durationMs": 20000
       },
       {
         "phase": "end",

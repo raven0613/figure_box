@@ -1,7 +1,15 @@
 import rawCharacterPerformanceDefinitions from '~/constants/events/characterPerformances.json';
+import type { Expression } from '~/constants/character';
 import { loadCharacterPerformanceDefinitions } from './performanceSchema';
 
-export type CharacterPerformancePhase = 'proposal' | 'accepted' | 'rejected' | 'active' | 'end';
+export type CharacterPerformancePhase =
+  | 'proposal'
+  | 'accepted'
+  | 'rejected'
+  | 'rejectedBusy'
+  | 'rejectedMood'
+  | 'active'
+  | 'end';
 export type CharacterPerformanceTarget = 'initiator' | 'target' | 'both';
 
 export interface CharacterPerformanceDefinition {
@@ -9,13 +17,55 @@ export interface CharacterPerformanceDefinition {
   steps: readonly CharacterPerformanceStep[];
 }
 
-export type CharacterPerformanceStep = CharacterPerformanceBubbleStep;
+export type CharacterPerformanceStep =
+  | CharacterPerformanceBubbleStep
+  | CharacterPerformanceExpressionStep
+  | CharacterPerformanceEmoteStep
+  | CharacterPerformanceMapEffectStep
+  | CharacterPerformanceMotionStep;
 
 export interface CharacterPerformanceBubbleStep {
   type: 'bubble';
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
   text: string;
+  delayMs?: number;
+  durationMs?: number;
+}
+
+export interface CharacterPerformanceExpressionStep {
+  type: 'expression';
+  phase: CharacterPerformancePhase;
+  target: CharacterPerformanceTarget;
+  expression: Expression;
+  delayMs?: number;
+  durationMs?: number;
+}
+
+export interface CharacterPerformanceEmoteStep {
+  type: 'emote';
+  phase: CharacterPerformancePhase;
+  target: CharacterPerformanceTarget;
+  emoteId: string;
+  delayMs?: number;
+  durationMs?: number;
+}
+
+export interface CharacterPerformanceMapEffectStep {
+  type: 'mapEffect';
+  phase: CharacterPerformancePhase;
+  target: CharacterPerformanceTarget;
+  effectId: string;
+  label?: string;
+  delayMs?: number;
+  durationMs?: number;
+}
+
+export interface CharacterPerformanceMotionStep {
+  type: 'motion';
+  phase: CharacterPerformancePhase;
+  target: CharacterPerformanceTarget;
+  motionId: string;
   delayMs?: number;
   durationMs?: number;
 }
@@ -51,4 +101,15 @@ export function getCharacterPerformanceBubbleStep(
     step.phase === phase &&
     step.target === 'both'
   ));
+}
+
+export function getCharacterPerformanceSteps(
+  performanceId: string | undefined,
+  phase: CharacterPerformancePhase,
+): readonly CharacterPerformanceStep[] {
+  if (!performanceId) {
+    return [];
+  }
+
+  return CHARACTER_PERFORMANCE_DEFINITIONS_BY_ID[performanceId]?.steps.filter(step => step.phase === phase) ?? [];
 }

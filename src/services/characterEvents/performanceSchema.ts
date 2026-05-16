@@ -2,14 +2,31 @@ import type {
   CharacterPerformanceBubbleStep,
   CharacterPerformanceDefinition,
   CharacterPerformancePhase,
+  CharacterPerformanceStep,
   CharacterPerformanceTarget,
 } from './performances';
+import { Expression } from '~/constants/character';
 
-const VALID_PERFORMANCE_PHASES = ['proposal', 'accepted', 'rejected', 'active', 'end'] as const;
+const VALID_PERFORMANCE_PHASES = [
+  'proposal',
+  'accepted',
+  'rejected',
+  'rejectedBusy',
+  'rejectedMood',
+  'active',
+  'end',
+] as const;
 const VALID_PERFORMANCE_TARGETS = ['initiator', 'target', 'both'] as const;
-const VALID_PERFORMANCE_STEP_TYPES = ['bubble'] as const;
+const VALID_PERFORMANCE_STEP_TYPES = ['bubble', 'expression', 'emote', 'mapEffect', 'motion'] as const;
+const VALID_EXPRESSIONS = Object.values(Expression);
 
 type CharacterPerformanceRecord = Record<string, unknown>;
+interface BasePerformanceStep {
+  phase: CharacterPerformancePhase;
+  target: CharacterPerformanceTarget;
+  delayMs?: number;
+  durationMs?: number;
+}
 
 export function loadCharacterPerformanceDefinitions(rawDefinitions: unknown): CharacterPerformanceDefinition[] {
   if (!Array.isArray(rawDefinitions)) {
@@ -39,7 +56,7 @@ function parseCharacterPerformanceDefinition(
 function readPerformanceSteps(
   definition: CharacterPerformanceRecord,
   index: number,
-): CharacterPerformanceBubbleStep[] {
+): CharacterPerformanceStep[] {
   const value = definition.steps;
 
   if (!Array.isArray(value)) {
@@ -53,7 +70,7 @@ function readPerformanceStep(
   rawStep: unknown,
   definitionIndex: number,
   stepIndex: number,
-): CharacterPerformanceBubbleStep {
+): CharacterPerformanceStep {
   if (!isRecord(rawStep)) {
     throw new Error(`Character performance definition at index ${definitionIndex} has invalid steps[${stepIndex}].`);
   }
@@ -64,13 +81,57 @@ function readPerformanceStep(
     throw new Error(`Character performance definition at index ${definitionIndex} has invalid step type "${type}".`);
   }
 
+  const baseStep = readBasePerformanceStep(rawStep, definitionIndex);
+
+  if (type === 'bubble') {
+    return {
+      ...baseStep,
+      type,
+      text: readRequiredString(rawStep, 'text', definitionIndex),
+    };
+  }
+
+  if (type === 'expression') {
+    return {
+      ...baseStep,
+      type,
+      expression: readExpression(rawStep, definitionIndex),
+    };
+  }
+
+  if (type === 'emote') {
+    return {
+      ...baseStep,
+      type,
+      emoteId: readRequiredString(rawStep, 'emoteId', definitionIndex),
+    };
+  }
+
+  if (type === 'mapEffect') {
+    return {
+      ...baseStep,
+      type,
+      effectId: readRequiredString(rawStep, 'effectId', definitionIndex),
+      label: readOptionalString(rawStep, 'label', definitionIndex),
+    };
+  }
+
   return {
+    ...baseStep,
     type,
-    phase: readPerformancePhase(rawStep, definitionIndex),
-    target: readPerformanceTarget(rawStep, definitionIndex),
-    text: readRequiredString(rawStep, 'text', definitionIndex),
-    delayMs: readOptionalNonNegativeNumber(rawStep, 'delayMs', definitionIndex),
-    durationMs: readOptionalNonNegativeNumber(rawStep, 'durationMs', definitionIndex),
+    motionId: readRequiredString(rawStep, 'motionId', definitionIndex),
+  };
+}
+
+function readBasePerformanceStep(
+  step: CharacterPerformanceRecord,
+  index: number,
+): BasePerformanceStep {
+  return {
+    phase: readPerformancePhase(step, index),
+    target: readPerformanceTarget(step, index),
+    delayMs: readOptionalNonNegativeNumber(step, 'delayMs', index),
+    durationMs: readOptionalNonNegativeNumber(step, 'durationMs', index),
   };
 }
 
@@ -84,7 +145,7 @@ function readPerformancePhase(
     throw new Error(`Character performance definition at index ${index} has invalid phase "${value}".`);
   }
 
-  return value;
+  return value as CharacterPerformancePhase;
 }
 
 function readPerformanceTarget(
@@ -97,7 +158,7 @@ function readPerformanceTarget(
     throw new Error(`Character performance definition at index ${index} has invalid target "${value}".`);
   }
 
-  return value;
+  return value as CharacterPerformanceTarget;
 }
 
 function readRequiredString(
@@ -112,6 +173,37 @@ function readRequiredString(
   }
 
   return value;
+}
+
+function readOptionalString(
+  definition: CharacterPerformanceRecord,
+  key: string,
+  index: number,
+): string | undefined {
+  const value = definition[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`Character performance definition at index ${index} has invalid ${key}.`);
+  }
+
+  return value;
+}
+
+function readExpression(
+  step: CharacterPerformanceRecord,
+  index: number,
+): Expression {
+  const value = readRequiredString(step, 'expression', index);
+
+  if (!includesString(VALID_EXPRESSIONS, value)) {
+    throw new Error(`Character performance definition at index ${index} has invalid expression "${value}".`);
+  }
+
+  return value as Expression;
 }
 
 function readOptionalNonNegativeNumber(
@@ -144,7 +236,7 @@ function assertUniquePerformanceIds(definitions: readonly CharacterPerformanceDe
   });
 }
 
-function includesString<T extends readonly string[]>(values: T, value: string): value is T[number] {
+function includesString(values: readonly string[], value: string): boolean {
   return values.includes(value);
 }
 

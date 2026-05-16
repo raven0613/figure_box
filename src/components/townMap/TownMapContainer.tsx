@@ -12,6 +12,7 @@ import {
   type CharacterSnapshot,
 } from '~/services/townCharacterController';
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/services/characterEvents/definitions';
+import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
 import {
@@ -41,6 +42,7 @@ export function TownMapContainer({
   // const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
   const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
+  const [joinableActivities, setJoinableActivities] = useState<readonly JoinableActivity[]>([]);
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -73,6 +75,7 @@ export function TownMapContainer({
         }));
       },
       onRelationshipStoreChange: setRelationshipStore,
+      onJoinableActivitiesChange: setJoinableActivities,
     });
 
     characterControllerRef.current = characterController;
@@ -82,6 +85,7 @@ export function TownMapContainer({
       characterController.dispose();
       characterControllerRef.current = null;
       setCharacterSnapshots({});
+      setJoinableActivities([]);
       setSelectedMapObjects([]);
       void widget.destroy();
       canvasHost.replaceChildren();
@@ -162,6 +166,8 @@ export function TownMapContainer({
               );
             })}
           </div>
+
+          <ActivityDebugPanel activities={joinableActivities} />
         </div>
 
         {characterSnapshots[selectedCharacterId] ? (
@@ -173,6 +179,43 @@ export function TownMapContainer({
         ) : null}
       </aside>
     </section>
+  );
+}
+
+function ActivityDebugPanel({ activities }: { activities: readonly JoinableActivity[] }) {
+  return (
+    <div className={styles.activityPanel}>
+      <div className={styles.panelTitle}>Activities</div>
+      {activities.length === 0 ? (
+        <div className={styles.detailRow}>
+          <span>Active</span>
+          <strong>-</strong>
+        </div>
+      ) : activities.map(activity => (
+        <div className={styles.activityRow} key={activity.id}>
+          <div className={styles.detailRow}>
+            <span>{activity.activityKey}</span>
+            <strong>{activity.phase}</strong>
+          </div>
+          <div className={styles.detailRow}>
+            <span>Type</span>
+            <strong>{activity.type}</strong>
+          </div>
+          <div className={styles.detailRow}>
+            <span>People</span>
+            <strong>{activity.participantIds.join(', ')}</strong>
+          </div>
+          <div className={styles.detailRow}>
+            <span>Location</span>
+            <strong>{activity.location ? `${activity.location.x}, ${activity.location.y}` : '-'}</strong>
+          </div>
+          <div className={styles.detailRow}>
+            <span>Ends in</span>
+            <strong>{Math.max(0, Math.ceil((activity.endsAt - Date.now()) / 1000))}s</strong>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -216,6 +259,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
         <strong>{snapshot.context.currentInteraction?.partnerCharId ?? '-'}</strong>
       </div>
       <div className={styles.detailRow}>
+        <span>Activity</span>
+        <strong>{snapshot.context.currentActivity?.activityId ?? snapshot.context.pendingActivityJoin?.activityId ?? '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
         <span>Event bucket</span>
         <strong>{snapshot.context.lastEventDecision?.selectedBucketId ?? '-'}</strong>
       </div>
@@ -242,6 +289,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, relationshipStore }: {
       <div className={styles.detailRow}>
         <span>Mood</span>
         <strong>{snapshot.context.status.moodValue}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Play need</span>
+        <strong>{Math.round(snapshot.context.status.playNeed)}</strong>
       </div>
       <div className={styles.detailRow}>
         <span>Invite ready</span>

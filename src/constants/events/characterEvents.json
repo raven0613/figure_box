@@ -223,7 +223,40 @@
         "id": "play_together.active",
         "baseWeight": 10,
         "presentationTags": ["emote.play", "motion.stand"],
-        "performanceId": "social.playTogether.active"
+        "performanceId": "social.playTogether.active",
+        "activity": {
+          "key": "play.location.casual",
+          "type": "playAtLocation",
+          "joinable": true,
+          "durationMs": 20000,
+          "refreshDurationOnJoin": true,
+          "joinWindowMs": 20000,
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "environment.nearbyActivity.joinPlay",
+    "bucketId": "environment",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "joinActivity",
+      "target": "nearbyJoinableActivity"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 6,
+    "maxWeight": 80,
+    "interruptPolicy": "soft",
+    "commitment": 10,
+    "conditions": [
+      {
+        "path": "input.nearbyJoinableActivityCount",
+        "operator": ">",
+        "value": 0
       }
     ]
   }

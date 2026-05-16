@@ -4,7 +4,9 @@ import type {
 } from '~/stateMachines/gameFlow/context';
 import type {
   CharacterEventAcceptance,
+  CharacterEventActivity,
   CharacterEventAction,
+  CharacterEventActivityTarget,
   CharacterEventCooldowns,
   CharacterEventDefinition,
   CharacterEventInteractionPresentation,
@@ -27,8 +29,18 @@ const VALID_BUCKET_IDS = ['baseline', 'need', 'environment', 'global'] as const;
 const VALID_MOTIVATIONS = ['idle', 'findFood', 'rest', 'play', 'chat'] as const;
 const VALID_OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'includes'] as const;
 const VALID_CLAUSE_MODES = ['all', 'some'] as const;
-const VALID_CHARACTER_EVENT_TYPES = ['goIdle', 'goRest', 'goPlay', 'goEat', 'proposeChat', 'proposePlay'] as const;
+const VALID_CHARACTER_EVENT_TYPES = [
+  'goIdle',
+  'goRest',
+  'goPlay',
+  'goEat',
+  'proposeChat',
+  'proposePlay',
+  'joinActivity',
+] as const;
 const VALID_INTERRUPT_POLICIES = ['none', 'soft', 'always', 'critical'] as const;
+const VALID_ACTIVITY_TYPES = ['playWithItem', 'playAtLocation'] as const;
+const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
 
 type CharacterEventDefinitionRecord = Record<string, unknown>;
 
@@ -152,6 +164,13 @@ function readCharacterEventAction(
     };
   }
 
+  if (type === 'joinActivity') {
+    return {
+      type,
+      target: readCharacterEventActivityTarget(rawAction, index),
+    };
+  }
+
   return { type };
 }
 
@@ -176,6 +195,19 @@ function readCharacterEventTarget(
       x: target.x,
       y: target.y,
     };
+  }
+
+  throw new Error(`Character event definition at index ${index} has invalid characterEvent.target.`);
+}
+
+function readCharacterEventActivityTarget(
+  action: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivityTarget {
+  const target = action.target;
+
+  if (target === 'nearbyJoinableActivity') {
+    return target;
   }
 
   throw new Error(`Character event definition at index ${index} has invalid characterEvent.target.`);
@@ -549,6 +581,75 @@ function readPresentationVariant(
     weightModifiers: readOptionalWeightModifiers(rawVariant, 'weightModifiers', definitionIndex),
     presentationTags: readOptionalStringList(rawVariant, 'presentationTags', definitionIndex),
     performanceId: readOptionalString(rawVariant, 'performanceId', definitionIndex),
+    activity: readOptionalActivity(rawVariant, definitionIndex),
+  };
+}
+
+function readOptionalActivity(
+  variant: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity | undefined {
+  const value = variant.activity;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid presentationVariants.activity.`);
+  }
+
+  return {
+    key: readRequiredString(value, 'key', index),
+    type: readActivityType(value, index),
+    joinable: readOptionalBoolean(value, 'joinable', index),
+    durationMs: readRequiredNonNegativeNumber(value, 'durationMs', index),
+    refreshDurationOnJoin: readOptionalBoolean(value, 'refreshDurationOnJoin', index),
+    joinWindowMs: readOptionalNonNegativeNumber(value, 'joinWindowMs', index),
+    joinRequirements: readOptionalJoinRequirement(value, index),
+  };
+}
+
+function readActivityType(
+  activity: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['type'] {
+  const value = readRequiredString(activity, 'type', index);
+
+  if (!includesString(VALID_ACTIVITY_TYPES, value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.type "${value}".`);
+  }
+
+  return value;
+}
+
+function readOptionalJoinRequirement(
+  activity: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['joinRequirements'] {
+  const value = activity.joinRequirements;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.joinRequirements.`);
+  }
+
+  const type = readRequiredString(value, 'type', index);
+
+  if (!includesString(VALID_JOIN_REQUIREMENT_TYPES, type)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.joinRequirements.type "${type}".`);
+  }
+
+  if (type === 'none') {
+    return { type };
+  }
+
+  return {
+    type,
+    itemId: readRequiredString(value, 'itemId', index),
   };
 }
 

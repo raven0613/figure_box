@@ -49,6 +49,19 @@ export function createCharacterEventFromAction(
         sourceEventId,
       };
     }
+    case 'joinActivity': {
+      const activity = selectRandomNearbyJoinableActivity(input.nearbyJoinableActivities ?? [], random);
+
+      if (!activity) {
+        return null;
+      }
+
+      return {
+        type: EventType.JoinActivity,
+        activityId: activity.id,
+        sourceEventId,
+      };
+    }
   }
 }
 
@@ -73,4 +86,15 @@ function selectRandomNearbyCharacterId(
 
 function createProposalId(random: () => number): string {
   return `interaction-${Date.now()}-${Math.floor(random() * 1_000_000)}`;
+}
+
+function selectRandomNearbyJoinableActivity<T>(
+  activities: readonly T[],
+  random: () => number,
+): T | null {
+  if (activities.length === 0) {
+    return null;
+  }
+
+  return activities[Math.floor(random() * activities.length)];
 }
