@@ -1,5 +1,5 @@
 import { EventType, type CharacterEvent } from '~/stateMachines/gameFlow/events';
-import type { CharacterEventAction, CharacterEventTarget } from './definitions';
+import type { CharacterEventAction, CharacterEventTarget } from '../../constants/charactarEventsDefinitions';
 import { getRandomDestinationTarget } from './targets';
 import type { CharacterEventDecisionInput } from './types';
 

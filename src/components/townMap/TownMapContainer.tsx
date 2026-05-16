@@ -11,7 +11,7 @@ import {
   TownCharacterController,
   type CharacterSnapshot,
 } from '~/services/townCharacterController';
-import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/services/characterEvents/definitions';
+import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDefinitions';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';

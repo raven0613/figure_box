@@ -4,12 +4,12 @@ import type {
 } from '~/stateMachines/gameFlow/context';
 import type { Position } from '~/constants/character';
 import rawCharacterEventDefinitions from '~/constants/events/characterEvents.json';
-import { loadCharacterEventDefinitions } from './definitionSchema';
+import { loadCharacterEventDefinitions } from '../utils/jsonParser/definitionSchema';
 import type {
   CharacterEventClauseMode,
   CharacterEventRuleClause,
   CharacterEventWeightModifier,
-} from './rules';
+} from '../services/characterEvents/rules';
 
 export interface CharacterEventDefinition {
   id: string;

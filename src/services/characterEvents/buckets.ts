@@ -10,7 +10,7 @@ import type {
 import {
   CHARACTER_EVENT_DEFINITIONS_BY_BUCKET,
   type CharacterEventDefinition,
-} from './definitions';
+} from '../../constants/charactarEventsDefinitions';
 import {
   applyCharacterEventWeightModifiers,
   createCharacterEventRuleContext,

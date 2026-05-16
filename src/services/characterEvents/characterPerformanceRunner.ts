@@ -1,6 +1,6 @@
 import { Expression } from '~/constants/character';
-import type { CharacterEventInteractionPresentation } from './definitions';
-import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from './definitions';
+import type { CharacterEventInteractionPresentation } from '../../constants/charactarEventsDefinitions';
+import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '../../constants/charactarEventsDefinitions';
 import {
   getCharacterPerformanceBubbleStep,
   getCharacterPerformanceSteps,

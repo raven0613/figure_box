@@ -1,5 +1,5 @@
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
-import type { CharacterEventDefinition } from './definitions';
+import type { CharacterEventDefinition } from '../../constants/charactarEventsDefinitions';
 
 const DEFAULT_ACCEPTANCE_MIN_MOOD_VALUE = 30;
 const DEFAULT_ACCEPTANCE_FALLBACK_CHANCE = 0.3;

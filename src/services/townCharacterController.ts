@@ -1,57 +1,40 @@
-import { createActor, type ActorRefFrom, type SnapshotFrom } from 'xstate';
+import { createActor } from 'xstate';
 import { CHARACTER_SEEDS, Expression, type Position } from '~/constants/character';
-import { DESTINATION_MAP } from '~/constants/townMap';
-import {
-  characterMachine,
-  getCharacterStateSummary,
-} from '~/stateMachines/gameFlow/children/character';
-import {
-  CHARACTER_EVENT_DEFINITIONS_BY_ID,
-  type CharacterEventActivity,
-  type CharacterEventDefinition,
-} from '~/services/characterEvents/definitions';
-import {
-  CharacterPerformanceRunner,
-  type CharacterPerformanceBubble,
-  type CharacterPerformanceSelection,
-} from '~/services/characterEvents/characterPerformanceRunner';
-import { shouldAcceptInteraction } from '~/services/characterEvents/interactionAcceptance';
-import { canStartInteractionWithTarget } from '~/services/characterEvents/interactionCooldowns';
+import { characterMachine } from '~/stateMachines/gameFlow/children/character';
+import { CharacterPerformanceRunner } from '~/services/characterEvents/characterPerformanceRunner';
 import {
   createJoinableActivityManager,
   type JoinableActivity,
   type JoinableActivityManager,
 } from '~/services/characterEvents/joinableActivities';
-import {
-  type CharacterPerformancePhase,
-  type CharacterPerformanceTarget,
-} from '~/services/characterEvents/performances';
 import { EventType, type CharacterEvent } from '~/stateMachines/gameFlow/events';
 import {
   createRelationshipStore,
-  recordPassByPair,
   type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
+import { TownActivityCoordinator } from '~/services/townActivityCoordinator';
+import { TownInteractionProposalHandler } from '~/services/townInteractionProposalHandler';
+import { TownMovementCoordinator } from '~/services/townMovementCoordinator';
+import { TownRelationshipTicker } from '~/services/townRelationshipTicker';
+import type {
+  CharacterActor,
+  CharacterSeed,
+  CharacterSnapshot,
+} from '~/services/townCharacterTypes';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import type { GridCoordinate } from '~/widgets/townMapGrid';
 
-type CharacterActor = ActorRefFrom<typeof characterMachine>;
-type CharacterSeed = typeof CHARACTER_SEEDS[number];
 type Subscription = {
   unsubscribe: () => void;
 };
-type InteractionAcceptanceDecision =
-  | { accepted: true }
-  | { accepted: false; reason: 'busy' | 'mood' };
 
-export type CharacterSnapshot = SnapshotFrom<typeof characterMachine>;
+export type { CharacterSnapshot } from '~/services/townCharacterTypes';
 
 const INITIAL_DECISION_STAGGER_MIN_MS = 500;
 const INITIAL_DECISION_STAGGER_MAX_MS = 4500;
 const DECISION_INTERVAL_MIN_MS = 2500;
 const DECISION_INTERVAL_MAX_MS = 5500;
-const CHAT_INTERACTION_DURATION_MS = 20000;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
@@ -64,13 +47,12 @@ export class TownCharacterController {
   private readonly widget: FabricTownMapWidget;
   private readonly characterActors = new Map<string, CharacterActor>();
   private readonly characterSubscriptions = new Map<string, Subscription>();
-  private readonly walkingCharacterIds = new Set<string>();
-  private readonly processedInteractionProposalIds = new Set<string>();
-  private readonly chatEndTimers = new Map<string, number>();
-  private readonly playStartTimers = new Map<string, number>();
-  private readonly playEndTimers = new Map<string, number>();
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly activityManager: JoinableActivityManager;
+  private readonly activityCoordinator: TownActivityCoordinator;
+  private readonly interactionProposalHandler: TownInteractionProposalHandler;
+  private readonly movementCoordinator: TownMovementCoordinator;
+  private readonly relationshipTicker: TownRelationshipTicker;
   private readonly nextDecisionAtByCharacterId = new Map<string, number>();
   private relationshipStore = createRelationshipStore();
   private tickTimer: number | null = null;
@@ -90,6 +72,38 @@ export class TownCharacterController {
       },
       showMapActivity: (activity, durationMs) => {
         this.widget.showMapActivity(activity, durationMs);
+      },
+    });
+    this.movementCoordinator = new TownMovementCoordinator({
+      widget: this.widget,
+      getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+    });
+    this.relationshipTicker = new TownRelationshipTicker({
+      widget: this.widget,
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+    });
+    this.activityCoordinator = new TownActivityCoordinator({
+      activityManager: this.activityManager,
+      getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
+      getCharacterPosition: characterId => this.getCharacterPosition(characterId),
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+      showCharacterBubble: (characterId, text, durationMs) => {
+        this.widget.showCharacterBubble(characterId, text, durationMs);
+      },
+      notifyActivitiesChanged: () => this.notifyJoinableActivitiesChanged(),
+    });
+    this.interactionProposalHandler = new TownInteractionProposalHandler({
+      performanceRunner: this.performanceRunner,
+      activityManager: this.activityManager,
+      getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
+      getCharacterName: characterId => this.getCharacterName(characterId),
+      getCharacterPosition: characterId => this.getCharacterPosition(characterId),
+      isCharacterBodyFrozen: characterId => this.isCharacterBodyFrozen(characterId),
+      notifyActivitiesChanged: () => this.notifyJoinableActivitiesChanged(),
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+      showCharacterBubble: (characterId, text, durationMs) => {
+        this.widget.showCharacterBubble(characterId, text, durationMs);
       },
     });
     this.onCharacterSnapshot = options.onCharacterSnapshot;
@@ -164,17 +178,10 @@ export class TownCharacterController {
       this.tickTimer = null;
     }
 
-    this.walkingCharacterIds.forEach(id => this.widget.cancelWalk(id));
-    this.walkingCharacterIds.clear();
-    this.chatEndTimers.forEach(timerId => window.clearTimeout(timerId));
-    this.chatEndTimers.clear();
-    this.playStartTimers.forEach(timerId => window.clearTimeout(timerId));
-    this.playStartTimers.clear();
-    this.playEndTimers.forEach(timerId => window.clearTimeout(timerId));
-    this.playEndTimers.clear();
+    this.movementCoordinator.dispose();
+    this.interactionProposalHandler.dispose();
     this.performanceRunner.dispose();
     this.activityManager.clear();
-    this.processedInteractionProposalIds.clear();
     this.nextDecisionAtByCharacterId.clear();
 
     this.characterSubscriptions.forEach(subscription => {
@@ -205,14 +212,7 @@ export class TownCharacterController {
       ));
     }
 
-    this.widget.placeCharacter({
-      id: character.id,
-      x: previousContext?.position.x ?? character.position.x,
-      y: previousContext?.position.y ?? character.position.y,
-      color: character.color,
-      label: character.label,
-      expression: previousContext?.status.expression ?? Expression.Normal,
-    });
+    this.movementCoordinator.placeCharacter(character.id, character, previousContext);
 
     const actor = createActor(characterMachine, {
       input: {
@@ -228,70 +228,14 @@ export class TownCharacterController {
 
     const subscription = actor.subscribe(snapshot => {
       this.onCharacterSnapshot?.(character.id, snapshot);
-      this.syncCharacterWithWidget(character.id, snapshot);
-      this.handlePendingInteractionProposal(character.id, snapshot);
-      this.handlePendingActivityJoin(character.id, snapshot);
+      this.movementCoordinator.syncCharacterWithWidget(character.id, snapshot);
+      this.interactionProposalHandler.handlePendingInteractionProposal(character.id, snapshot);
+      this.activityCoordinator.handlePendingActivityJoin(character.id, snapshot);
     });
 
     actor.start();
     this.characterSubscriptions.set(character.id, subscription);
     return actor;
-  }
-
-  private syncCharacterWithWidget(characterId: string, snapshot: CharacterSnapshot): void {
-    this.widget.updateCharacterStatus(characterId, snapshot.context.currentMotivation);
-    this.widget.updateCharacterExpression(characterId, snapshot.context.status.expression);
-
-    const summary = getCharacterStateSummary(snapshot.value);
-    const target = snapshot.context.target;
-
-    if (summary.bodyMove !== 'walking' || !target) {
-      this.cancelWalkIfNeeded(characterId);
-      return;
-    }
-
-    if (this.walkingCharacterIds.has(characterId)) {
-      return;
-    }
-
-    const currentPosition = snapshot.context.position;
-    const path = this.widget.findPath(currentPosition, target, characterId);
-
-    if (!path) {
-      this.sendToCharacter(characterId, { type: EventType.MoveBlocked });
-      return;
-    }
-
-    if (path.length === 0) {
-      this.sendToCharacter(characterId, { type: EventType.Arrive, position: target });
-      return;
-    }
-
-    this.walkingCharacterIds.add(characterId);
-
-    this.widget.walkCharacterAlongPath(
-      characterId,
-      path,
-      arrivedPosition => {
-        this.walkingCharacterIds.delete(characterId);
-        const actor = this.characterActors.get(characterId);
-        const motivation = actor?.getSnapshot().context.currentMotivation ?? '';
-
-        this.sendToCharacter(characterId, { type: EventType.Arrive, position: arrivedPosition });
-
-        if (DESTINATION_MAP[motivation]) {
-          const dispersalTarget = this.findNearbyEmptyTile(arrivedPosition, characterId, 4);
-
-          if (dispersalTarget) {
-            this.sendToCharacter(characterId, { type: EventType.MoveTo, target: dispersalTarget });
-          }
-        }
-      },
-      blockedPosition => {
-        this.walkingCharacterIds.delete(characterId);
-        this.sendToCharacter(characterId, { type: EventType.MoveBlocked, position: blockedPosition });
-      },
-    );
   }
 
   private tick(): void {
@@ -309,15 +253,19 @@ export class TownCharacterController {
       this.sendToCharacter(character.id, {
         type: EventType.Tick,
         nearbyCharacterIds: this.getNearbyCharacterIds(character.id, 2),
-        nearbyJoinableActivities: this.getNearbyJoinableActivities(character.id, timestamp, 3),
+        nearbyJoinableActivities: this.activityCoordinator.getNearbyJoinableActivities(character.id, timestamp),
         timestamp,
         allowAutonomousDecision,
       });
     });
 
-    this.relationshipStore = this.triggerPassByRelationships(timestamp);
+    this.relationshipStore = this.relationshipTicker.triggerPassByRelationships(
+      this.characterActors,
+      this.relationshipStore,
+      timestamp,
+    );
     this.onRelationshipStoreChange?.(this.relationshipStore);
-    this.pruneEndedActivities(timestamp);
+    this.activityCoordinator.pruneEndedActivities(timestamp);
   }
 
   private canCharacterDecideNow(characterId: string, timestamp: number): boolean {
@@ -334,584 +282,12 @@ export class TownCharacterController {
     return true;
   }
 
-  private triggerPassByRelationships(timestamp: number): RelationshipStore {
-    let nextRelationshipStore = this.relationshipStore;
-    const processedPairs = new Set<string>();
-
-    this.characterActors.forEach((_actor, characterId) => {
-      const tile = this.widget.getCharacterTile(characterId);
-
-      if (!tile) {
-        return;
-      }
-
-      const nearbyIds = this.widget.getOccupiedNeighborIds(tile.x, tile.y, 2, characterId);
-
-      nearbyIds.forEach(targetCharId => {
-        const pairKey = characterId < targetCharId
-          ? `${characterId}::${targetCharId}`
-          : `${targetCharId}::${characterId}`;
-
-        if (processedPairs.has(pairKey)) {
-          return;
-        }
-
-        processedPairs.add(pairKey);
-
-        this.sendToCharacter(characterId, { type: EventType.PassBy, targetCharId, timestamp });
-        this.sendToCharacter(targetCharId, { type: EventType.PassBy, targetCharId: characterId, timestamp });
-
-        nextRelationshipStore = recordPassByPair(
-          nextRelationshipStore,
-          characterId,
-          targetCharId,
-          timestamp,
-        );
-      });
-    });
-
-    return nextRelationshipStore;
-  }
-
-  private handlePendingInteractionProposal(characterId: string, snapshot: CharacterSnapshot): void {
-    const proposal = snapshot.context.pendingInteractionProposal;
-
-    if (!proposal || this.processedInteractionProposalIds.has(proposal.id)) {
-      return;
-    }
-
-    this.processedInteractionProposalIds.add(proposal.id);
-
-    if (proposal.type !== 'chat') {
-      if (proposal.type === 'play') {
-        this.handlePlayProposal(characterId, snapshot);
-      }
-      return;
-    }
-
-    const initiatorName = snapshot.context.name;
-    const targetName = this.getCharacterName(proposal.targetCharId);
-    const proposalBubble = this.getInteractionBubble(
-      snapshot,
-      'proposal',
-      'initiator',
-      '{initiator}：要不要聊一下？',
-      3200,
-      initiatorName,
-      targetName,
-    );
-
-    const acceptanceDecision = this.evaluateChatProposal(proposal.targetCharId, characterId, proposal.sourceEventId);
-
-    if (acceptanceDecision.accepted) {
-      this.sendToCharacter(characterId, {
-        type: EventType.ChatProposalAccepted,
-        targetCharId: proposal.targetCharId,
-        proposalId: proposal.id,
-        sourceEventId: proposal.sourceEventId,
-      });
-      this.sendToCharacter(proposal.targetCharId, {
-        type: EventType.AcceptChatProposal,
-        fromCharacterId: characterId,
-        proposalId: proposal.id,
-        sourceEventId: proposal.sourceEventId,
-      });
-      this.playNonBubblePerformanceSteps(snapshot, 'proposal', characterId, proposal.targetCharId);
-      this.playNonBubblePerformanceSteps(snapshot, 'accepted', characterId, proposal.targetCharId);
-      const acceptedBubble = this.getInteractionBubble(
-        snapshot,
-        'accepted',
-        'target',
-        '{target}：好啊。',
-        3200,
-        initiatorName,
-        targetName,
-      );
-      this.widget.showCharacterBubble(characterId, proposalBubble.text, proposalBubble.durationMs);
-      this.widget.showCharacterBubble(proposal.targetCharId, acceptedBubble.text, acceptedBubble.durationMs);
-      this.scheduleChatEnd(proposal.id, characterId, proposal.targetCharId);
-      return;
-    }
-
-    const rejectedAt = Date.now();
-    this.sendToCharacter(characterId, {
-      type: EventType.ChatProposalRejected,
-      targetCharId: proposal.targetCharId,
-      proposalId: proposal.id,
-      timestamp: rejectedAt,
-    });
-    this.sendToCharacter(proposal.targetCharId, {
-      type: EventType.RecordInteractionCooldown,
-      interactionType: 'chat',
-      partnerCharId: characterId,
-      proposalId: proposal.id,
-      role: 'target',
-      sourceEventId: proposal.sourceEventId,
-      timestamp: rejectedAt,
-    });
-    const rejectedPhase = getRejectedPerformancePhase(acceptanceDecision.reason);
-    this.playNonBubblePerformanceSteps(snapshot, 'proposal', characterId, proposal.targetCharId);
-    this.playNonBubblePerformanceSteps(snapshot, rejectedPhase, characterId, proposal.targetCharId);
-    const rejectedBubble = this.getInteractionBubble(
-      snapshot,
-      rejectedPhase,
-      'target',
-      acceptanceDecision.reason === 'busy'
-        ? '{target}：抱歉，現在有事。'
-        : '{target}：現在有點不想聊。',
-      3200,
-      initiatorName,
-      targetName,
-    );
-    this.widget.showCharacterBubble(characterId, proposalBubble.text, proposalBubble.durationMs);
-    this.widget.showCharacterBubble(proposal.targetCharId, rejectedBubble.text, rejectedBubble.durationMs);
-  }
-
-  private handlePendingActivityJoin(characterId: string, snapshot: CharacterSnapshot): void {
-    const activityJoin = snapshot.context.pendingActivityJoin;
-
-    if (!activityJoin) {
-      return;
-    }
-
-    const timestamp = Date.now();
-    const activity = this.activityManager.getActivity(activityJoin.activityId);
-
-    if (!activity || activity.endsAt <= timestamp || !this.canCharacterJoinActivity(characterId, activity)) {
-      this.sendToCharacter(characterId, {
-        type: EventType.JoinActivityRejected,
-        activityId: activityJoin.activityId,
-      });
-      return;
-    }
-
-    const joinedActivity = this.activityManager.joinActivity(activityJoin.activityId, characterId, timestamp);
-
-    if (!joinedActivity) {
-      this.sendToCharacter(characterId, {
-        type: EventType.JoinActivityRejected,
-        activityId: activityJoin.activityId,
-      });
-      return;
-    }
-
-    this.sendToCharacter(characterId, {
-      type: EventType.JoinActivityAccepted,
-      activityId: joinedActivity.id,
-      sourceEventId: activityJoin.sourceEventId,
-    });
-    this.widget.showCharacterBubble(characterId, '我也要一起玩！', 2200);
-    this.notifyJoinableActivitiesChanged();
-  }
-
-  private handlePlayProposal(characterId: string, snapshot: CharacterSnapshot): void {
-    const proposal = snapshot.context.pendingInteractionProposal;
-
-    if (!proposal || proposal.type !== 'play') {
-      return;
-    }
-
-    const initiatorName = snapshot.context.name;
-    const targetName = this.getCharacterName(proposal.targetCharId);
-    const proposalBubble = this.getInteractionBubble(
-      snapshot,
-      'proposal',
-      'initiator',
-      '{initiator}：一起玩嗎？',
-      2600,
-      initiatorName,
-      targetName,
-    );
-
-    const acceptanceDecision = this.evaluatePlayProposal(proposal.targetCharId, characterId, proposal.sourceEventId);
-
-    if (acceptanceDecision.accepted) {
-      this.sendToCharacter(characterId, {
-        type: EventType.PlayProposalAccepted,
-        targetCharId: proposal.targetCharId,
-        proposalId: proposal.id,
-        sourceEventId: proposal.sourceEventId,
-      });
-      this.sendToCharacter(proposal.targetCharId, {
-        type: EventType.AcceptPlayProposal,
-        fromCharacterId: characterId,
-        proposalId: proposal.id,
-        sourceEventId: proposal.sourceEventId,
-      });
-      this.playNonBubblePerformanceSteps(snapshot, 'proposal', characterId, proposal.targetCharId);
-      this.playNonBubblePerformanceSteps(snapshot, 'accepted', characterId, proposal.targetCharId);
-      const acceptedBubble = this.getInteractionBubble(
-        snapshot,
-        'accepted',
-        'target',
-        '{target}：好，一起玩！',
-        2600,
-        initiatorName,
-        targetName,
-      );
-      this.widget.showCharacterBubble(characterId, proposalBubble.text, proposalBubble.durationMs);
-      this.widget.showCharacterBubble(proposal.targetCharId, acceptedBubble.text, acceptedBubble.durationMs);
-      this.schedulePlayTogether(proposal.id, characterId, proposal.targetCharId);
-      return;
-    }
-
-    const rejectedAt = Date.now();
-    this.sendToCharacter(characterId, {
-      type: EventType.PlayProposalRejected,
-      targetCharId: proposal.targetCharId,
-      proposalId: proposal.id,
-      timestamp: rejectedAt,
-    });
-    this.sendToCharacter(proposal.targetCharId, {
-      type: EventType.RecordInteractionCooldown,
-      interactionType: 'play',
-      partnerCharId: characterId,
-      proposalId: proposal.id,
-      role: 'target',
-      sourceEventId: proposal.sourceEventId,
-      timestamp: rejectedAt,
-    });
-    const rejectedPhase = getRejectedPerformancePhase(acceptanceDecision.reason);
-    this.playNonBubblePerformanceSteps(snapshot, 'proposal', characterId, proposal.targetCharId);
-    this.playNonBubblePerformanceSteps(snapshot, rejectedPhase, characterId, proposal.targetCharId);
-    const rejectedBubble = this.getInteractionBubble(
-      snapshot,
-      rejectedPhase,
-      'target',
-      acceptanceDecision.reason === 'busy'
-        ? '{target}：抱歉，現在有事。'
-        : '{target}：我現在不想玩。',
-      2600,
-      initiatorName,
-      targetName,
-    );
-    this.widget.showCharacterBubble(characterId, proposalBubble.text, proposalBubble.durationMs);
-    this.widget.showCharacterBubble(proposal.targetCharId, rejectedBubble.text, rejectedBubble.durationMs);
-  }
-
-  private getInteractionPresentation(snapshot: CharacterSnapshot) {
-    const definitionId = snapshot.context.lastEventDecision?.selectedCandidateId;
-
-    if (!definitionId) {
-      return undefined;
-    }
-
-    return CHARACTER_EVENT_DEFINITIONS_BY_ID[definitionId]?.interactionPresentation;
-  }
-
-  private getInteractionBubble(
-    snapshot: CharacterSnapshot,
-    phase: CharacterPerformancePhase,
-    target: CharacterPerformanceTarget,
-    fallbackTemplate: string,
-    fallbackDurationMs: number,
-    initiatorName: string,
-    targetName: string,
-  ): CharacterPerformanceBubble {
-    return this.performanceRunner.getInteractionBubble({
-      selection: this.getPerformanceSelection(snapshot),
-      phase,
-      target,
-      fallbackTemplate,
-      fallbackDurationMs,
-      initiatorName,
-      targetName,
-      legacyPresentation: this.getInteractionPresentation(snapshot),
-    });
-  }
-
-  private getPerformanceSelection(snapshot: CharacterSnapshot): CharacterPerformanceSelection {
-    return {
-      definitionId: snapshot.context.lastEventDecision?.selectedCandidateId,
-      variantId: snapshot.context.lastEventDecision?.selectedPresentationVariantId,
-    };
-  }
-
-  private getSelectedActivityDefinition(snapshot: CharacterSnapshot): CharacterEventActivity | undefined {
-    const definitionId = snapshot.context.lastEventDecision?.selectedCandidateId;
-    const variantId = snapshot.context.lastEventDecision?.selectedPresentationVariantId;
-
-    if (!definitionId || !variantId) {
-      return undefined;
-    }
-
-    return CHARACTER_EVENT_DEFINITIONS_BY_ID[definitionId]?.presentationVariants
-      ?.find(variant => variant.id === variantId)
-      ?.activity;
-  }
-
-  private playNonBubblePerformanceSteps(
-    snapshot: CharacterSnapshot,
-    phase: CharacterPerformancePhase,
-    initiatorId: string,
-    targetId: string,
-  ): void {
-    this.performanceRunner.playNonBubblePerformanceSteps(
-      this.getPerformanceSelection(snapshot),
-      phase,
-      initiatorId,
-      targetId,
-    );
-  }
-
   private getCharacterName(characterId: string): string {
-    return this.characterActors.get(characterId)?.getSnapshot().context.name ?? characterId;
+    return this.getCharacterSnapshot(characterId)?.context.name ?? characterId;
   }
 
-  private evaluateChatProposal(
-    targetCharId: string,
-    initiatorId: string,
-    sourceEventId: string,
-  ): InteractionAcceptanceDecision {
-    const actor = this.characterActors.get(targetCharId);
-
-    if (actor?.getSnapshot().status !== 'active') {
-      return { accepted: false, reason: 'busy' };
-    }
-
-    const context = actor.getSnapshot().context;
-
-    if (
-      context.target ||
-      context.pendingInteractionProposal ||
-      context.currentInteraction ||
-      context.currentMotivation !== 'idle' ||
-      this.isCharacterBodyFrozen(targetCharId)
-    ) {
-      return { accepted: false, reason: 'busy' };
-    }
-
-    const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[sourceEventId];
-
-    if (!definition || !this.canTargetStartInteraction(context, initiatorId, definition)) {
-      return { accepted: false, reason: 'busy' };
-    }
-
-    return shouldAcceptInteraction(context, definition)
-      ? { accepted: true }
-      : { accepted: false, reason: 'mood' };
-  }
-
-  private evaluatePlayProposal(
-    targetCharId: string,
-    initiatorId: string,
-    sourceEventId: string,
-  ): InteractionAcceptanceDecision {
-    const actor = this.characterActors.get(targetCharId);
-
-    if (actor?.getSnapshot().status !== 'active') {
-      return { accepted: false, reason: 'busy' };
-    }
-
-    const context = actor.getSnapshot().context;
-
-    if (
-      context.target ||
-      context.pendingInteractionProposal ||
-      context.currentInteraction ||
-      context.currentMotivation !== 'idle' ||
-      this.isCharacterBodyFrozen(targetCharId)
-    ) {
-      return { accepted: false, reason: 'busy' };
-    }
-
-    const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[sourceEventId];
-
-    if (!definition || !this.canTargetStartInteraction(context, initiatorId, definition)) {
-      return { accepted: false, reason: 'busy' };
-    }
-
-    return shouldAcceptInteraction(context, definition)
-      ? { accepted: true }
-      : { accepted: false, reason: 'mood' };
-  }
-
-  private canTargetStartInteraction(
-    context: CharacterSnapshot['context'],
-    initiatorId: string,
-    definition: CharacterEventDefinition,
-  ): boolean {
-    return canStartInteractionWithTarget(context, definition, initiatorId, Date.now());
-  }
-
-  private createJoinableActivityForInteraction(
-    proposalId: string,
-    snapshot: CharacterSnapshot,
-    initiatorId: string,
-    targetId: string,
-  ): string | null {
-    const sourceEventId = snapshot.context.lastEventDecision?.selectedCandidateId;
-    const activity = this.getSelectedActivityDefinition(snapshot);
-
-    if (!sourceEventId || !activity?.joinable) {
-      return null;
-    }
-
-    const activityId = `interaction.${proposalId}`;
-
-    this.activityManager.createActivity({
-      id: activityId,
-      sourceEventId,
-      activity,
-      hostCharacterIds: [initiatorId],
-      participantIds: [initiatorId, targetId],
-      timestamp: Date.now(),
-      phase: 'forming',
-      location: this.getCharacterPosition(initiatorId) ?? snapshot.context.position,
-    });
-    this.notifyJoinableActivitiesChanged();
-
-    return activityId;
-  }
-
-  private scheduleChatEnd(proposalId: string, initiatorId: string, targetId: string): void {
-    const initiatorSnapshot = this.characterActors.get(initiatorId)?.getSnapshot();
-    const initiatorName = this.getCharacterName(initiatorId);
-    const targetName = this.getCharacterName(targetId);
-    const activeBubble = initiatorSnapshot
-      ? this.getInteractionBubble(
-        initiatorSnapshot,
-        'active',
-        'both',
-        '正在聊天',
-        CHAT_INTERACTION_DURATION_MS,
-        initiatorName,
-        targetName,
-      )
-      : { text: '正在聊天', delayMs: 1200, durationMs: CHAT_INTERACTION_DURATION_MS };
-
-    const startTimerId = window.setTimeout(() => {
-      this.chatEndTimers.delete(`${proposalId}.active`);
-
-      if (initiatorSnapshot) {
-        this.playNonBubblePerformanceSteps(initiatorSnapshot, 'active', initiatorId, targetId);
-      }
-      this.widget.showCharacterBubble(initiatorId, activeBubble.text, activeBubble.durationMs);
-      this.widget.showCharacterBubble(targetId, activeBubble.text, activeBubble.durationMs);
-    }, activeBubble.delayMs ?? 1200);
-
-    this.chatEndTimers.set(`${proposalId}.active`, startTimerId);
-
-    const timerId = window.setTimeout(() => {
-      const initiatorSnapshot = this.characterActors.get(initiatorId)?.getSnapshot();
-      const initiatorName = this.getCharacterName(initiatorId);
-      const targetName = this.getCharacterName(targetId);
-      const endBubble = initiatorSnapshot
-        ? this.getInteractionBubble(
-          initiatorSnapshot,
-          'end',
-          'both',
-          '聊完了。',
-          1800,
-          initiatorName,
-          targetName,
-        )
-        : null;
-
-      if (endBubble && initiatorSnapshot) {
-        this.playNonBubblePerformanceSteps(initiatorSnapshot, 'end', initiatorId, targetId);
-        this.widget.showCharacterBubble(initiatorId, endBubble.text, endBubble.durationMs);
-        this.widget.showCharacterBubble(targetId, endBubble.text, endBubble.durationMs);
-      }
-
-      const activeTimerId = this.chatEndTimers.get(`${proposalId}.active`);
-
-      if (activeTimerId) {
-        window.clearTimeout(activeTimerId);
-        this.chatEndTimers.delete(`${proposalId}.active`);
-      }
-
-      this.chatEndTimers.delete(proposalId);
-      const timestamp = Date.now();
-      this.sendToCharacter(initiatorId, { type: EventType.EndChatInteraction, proposalId, timestamp });
-      this.sendToCharacter(targetId, { type: EventType.EndChatInteraction, proposalId, timestamp });
-    }, CHAT_INTERACTION_DURATION_MS);
-
-    this.chatEndTimers.set(proposalId, timerId);
-  }
-
-  private schedulePlayTogether(proposalId: string, initiatorId: string, targetId: string): void {
-    const initiatorSnapshot = this.characterActors.get(initiatorId)?.getSnapshot();
-    const initiatorName = this.getCharacterName(initiatorId);
-    const targetName = this.getCharacterName(targetId);
-    const activityId = initiatorSnapshot
-      ? this.createJoinableActivityForInteraction(proposalId, initiatorSnapshot, initiatorId, targetId)
-      : null;
-    const playDurationMs = initiatorSnapshot
-      ? this.getSelectedActivityDefinition(initiatorSnapshot)?.durationMs ?? 20000
-      : 20000;
-    const activeBubble = initiatorSnapshot
-      ? this.getInteractionBubble(
-        initiatorSnapshot,
-        'active',
-        'both',
-        '正在一起玩',
-        5000,
-        initiatorName,
-        targetName,
-      )
-      : { text: '正在一起玩', delayMs: 1200, durationMs: 5000 };
-
-    const startTimerId = window.setTimeout(() => {
-      this.playStartTimers.delete(proposalId);
-      if (initiatorSnapshot) {
-        if (activityId) {
-          this.activityManager.updateActivityPhase(
-            activityId,
-            'active',
-            this.getCharacterPosition(initiatorId) ?? initiatorSnapshot.context.position,
-          );
-          this.notifyJoinableActivitiesChanged();
-        }
-        this.playNonBubblePerformanceSteps(initiatorSnapshot, 'active', initiatorId, targetId);
-      }
-      this.widget.showCharacterBubble(initiatorId, activeBubble.text, activeBubble.durationMs);
-      this.widget.showCharacterBubble(targetId, activeBubble.text, activeBubble.durationMs);
-    }, activeBubble.delayMs ?? 1200);
-
-    this.playStartTimers.set(proposalId, startTimerId);
-
-    const timerId = window.setTimeout(() => {
-      const endSnapshot = this.characterActors.get(initiatorId)?.getSnapshot();
-      const endBubble = endSnapshot
-        ? this.getInteractionBubble(
-          endSnapshot,
-          'end',
-          'both',
-          '一起玩完了。',
-          1800,
-          initiatorName,
-          targetName,
-        )
-        : null;
-
-      if (endBubble && endSnapshot) {
-        this.playNonBubblePerformanceSteps(endSnapshot, 'end', initiatorId, targetId);
-        this.widget.showCharacterBubble(initiatorId, endBubble.text, endBubble.durationMs);
-        this.widget.showCharacterBubble(targetId, endBubble.text, endBubble.durationMs);
-      }
-
-      if (activityId) {
-        const endedActivity = this.activityManager.endActivity(activityId);
-        endedActivity?.participantIds
-          .filter(participantId => participantId !== initiatorId && participantId !== targetId)
-          .forEach(participantId => {
-            this.sendToCharacter(participantId, {
-              type: EventType.EndJoinedActivity,
-              activityId,
-              timestamp: Date.now(),
-            });
-          });
-        this.notifyJoinableActivitiesChanged();
-      }
-
-      this.playEndTimers.delete(proposalId);
-      const timestamp = Date.now();
-      this.sendToCharacter(initiatorId, { type: EventType.EndPlayInteraction, proposalId, timestamp });
-      this.sendToCharacter(targetId, { type: EventType.EndPlayInteraction, proposalId, timestamp });
-    }, playDurationMs);
-
-    this.playEndTimers.set(proposalId, timerId);
+  private getCharacterSnapshot(characterId: string): CharacterSnapshot | null {
+    return this.characterActors.get(characterId)?.getSnapshot() ?? null;
   }
 
   private getNearbyCharacterIds(characterId: string, range: number): string[] {
@@ -924,23 +300,6 @@ export class TownCharacterController {
     return this.widget.getOccupiedNeighborIds(tile.x, tile.y, range, characterId);
   }
 
-  private getNearbyJoinableActivities(
-    characterId: string,
-    timestamp: number,
-  ): readonly JoinableActivity[] {
-    const position = this.getCharacterPosition(characterId);
-
-    if (!position) {
-      return [];
-    }
-
-    return this.activityManager.findNearbyActivities({
-      position,
-      timestamp,
-      phases: ['forming', 'active'],
-    }).filter(activity => this.canCharacterJoinActivity(characterId, activity));
-  }
-
   private getCharacterPosition(characterId: string): Position | null {
     const tile = this.widget.getCharacterTile(characterId);
 
@@ -951,43 +310,8 @@ export class TownCharacterController {
     return { x: tile.x, y: tile.y };
   }
 
-  private pruneEndedActivities(timestamp: number): void {
-    const endedActivities = this.activityManager.pruneEndedActivities(timestamp);
-
-    if (endedActivities.length > 0) {
-      endedActivities.forEach(activity => {
-        activity.participantIds.forEach(participantId => {
-          this.sendToCharacter(participantId, {
-            type: EventType.EndJoinedActivity,
-            activityId: activity.id,
-            timestamp,
-          });
-        });
-      });
-      this.notifyJoinableActivitiesChanged();
-    }
-  }
-
   private notifyJoinableActivitiesChanged(): void {
     this.onJoinableActivitiesChange?.(this.activityManager.getActivities());
-  }
-
-  private canCharacterJoinActivity(characterId: string, activity: JoinableActivity): boolean {
-    if (activity.participantIds.includes(characterId)) {
-      return false;
-    }
-
-    const context = this.characterActors.get(characterId)?.getSnapshot().context;
-
-    if (!context) {
-      return false;
-    }
-
-    if (activity.joinRequirements.type === 'none') {
-      return true;
-    }
-
-    return context.ownItems.some(item => item.id === activity.joinRequirements.itemId);
   }
 
   private sendToCharacter(characterId: string, event: CharacterEvent): boolean {
@@ -1012,34 +336,8 @@ export class TownCharacterController {
     return locks.bodyAction.length > 0 || locks.bodyMove.length > 0;
   }
 
-  private cancelWalkIfNeeded(characterId: string): void {
-    if (!this.walkingCharacterIds.has(characterId)) {
-      return;
-    }
-
-    this.widget.cancelWalk(characterId);
-    this.walkingCharacterIds.delete(characterId);
-  }
-
-  private findNearbyEmptyTile(position: Position, occupantId: string, range: number): GridCoordinate | null {
-    const neighbors = this.widget.getNeighbors(position.x, position.y, range);
-    const candidates = neighbors.filter(tile =>
-      tile.cell.walkable && (!tile.cell.occupantId || tile.cell.occupantId === occupantId)
-    );
-
-    if (candidates.length === 0) {
-      return null;
-    }
-
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-    return { x: chosen.x, y: chosen.y };
-  }
 }
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
-}
-
-function getRejectedPerformancePhase(reason: 'busy' | 'mood'): CharacterPerformancePhase {
-  return reason === 'busy' ? 'rejectedBusy' : 'rejectedMood';
 }

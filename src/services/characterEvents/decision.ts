@@ -7,7 +7,7 @@ import type {
   CharacterEventDecisionInput,
   CharacterEventDecisionResult,
 } from './types';
-import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from './definitions';
+import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '../../constants/charactarEventsDefinitions';
 import { createCharacterEventRuleContext } from './rules';
 import { selectCharacterEventPresentationVariant } from './variants';
 

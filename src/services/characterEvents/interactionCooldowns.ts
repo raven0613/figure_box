@@ -3,7 +3,7 @@ import type {
   CharacterInteraction,
   CharacterInteractionCooldowns,
 } from '~/stateMachines/gameFlow/context';
-import { CHARACTER_EVENT_DEFINITIONS_BY_ID, type CharacterEventDefinition } from './definitions';
+import { CHARACTER_EVENT_DEFINITIONS_BY_ID, type CharacterEventDefinition } from '../../constants/charactarEventsDefinitions';
 
 const DEFAULT_COOLDOWN_CATEGORY = 'interaction';
 

@@ -3,7 +3,7 @@ import type {
   CharacterEventActivity,
   CharacterEventActivityType,
   CharacterEventJoinRequirement,
-} from './definitions';
+} from '../../constants/charactarEventsDefinitions';
 
 export type JoinableActivityPhase = 'forming' | 'traveling' | 'active';
 

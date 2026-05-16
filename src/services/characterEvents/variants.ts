@@ -1,4 +1,4 @@
-import type { CharacterEventPresentationVariant } from './definitions';
+import type { CharacterEventPresentationVariant } from '../../constants/charactarEventsDefinitions';
 import {
   applyCharacterEventWeightModifiers,
   matchesCharacterEventClauses,
