@@ -18,6 +18,7 @@ export interface JoinableActivity {
   phase: JoinableActivityPhase;
   startedAt: number;
   endsAt: number;
+  activeStartedAt?: number;
   location?: Position;
 }
 
@@ -43,6 +44,7 @@ export interface FindNearbyJoinableActivitiesInput {
 }
 
 const DETECT_RANGE = 10;
+const TRAVELING_ACTIVITY_TIMEOUT_MS = 60000;
 
 export interface JoinableActivityManager {
   getStore: () => JoinableActivityStore;
@@ -50,6 +52,8 @@ export interface JoinableActivityManager {
   getActivities: (timestamp?: number) => readonly JoinableActivity[];
   createActivity: (input: CreateJoinableActivityInput) => JoinableActivity;
   joinActivity: (activityId: string, characterId: string, timestamp: number) => JoinableActivity | null;
+  leaveActivity: (activityId: string, characterId: string) => JoinableActivity | null;
+  refreshActivityDuration: (activityId: string, timestamp: number) => JoinableActivity | null;
   updateActivityPhase: (
     activityId: string,
     phase: JoinableActivityPhase,
@@ -62,6 +66,9 @@ export interface JoinableActivityManager {
 }
 
 export function createJoinableActivity(input: CreateJoinableActivityInput): JoinableActivity {
+  const phase = input.phase ?? 'active';
+  const initialDurationMs = getActivityDurationForPhase(input.activity, phase);
+
   return {
     id: input.id,
     activityKey: input.activity.key,
@@ -70,9 +77,10 @@ export function createJoinableActivity(input: CreateJoinableActivityInput): Join
     hostCharacterIds: [...input.hostCharacterIds],
     participantIds: [...input.participantIds],
     joinRequirements: input.activity.joinRequirements ?? { type: 'none' },
-    phase: input.phase ?? 'active',
+    phase,
     startedAt: input.timestamp,
-    endsAt: input.timestamp + input.activity.durationMs,
+    endsAt: input.timestamp + initialDurationMs,
+    activeStartedAt: phase === 'active' ? input.timestamp : undefined,
     location: input.location,
   };
 }
@@ -90,8 +98,8 @@ export function refreshJoinableActivityOnJoin(
   return {
     ...activityState,
     participantIds,
-    endsAt: activityDefinition.refreshDurationOnJoin
-      ? timestamp + activityDefinition.durationMs
+    endsAt: shouldRefreshActivityDurationOnJoin(activityState, activityDefinition)
+      ? timestamp + getActivityDurationForPhase(activityDefinition, activityState.phase)
       : activityState.endsAt,
   };
 }
@@ -133,6 +141,47 @@ export function createJoinableActivityManager(): JoinableActivityManager {
         characterId,
         timestamp,
       );
+
+      activitiesById.set(activityId, nextActivity);
+      return nextActivity;
+    },
+    leaveActivity: (activityId, characterId) => {
+      const activity = activitiesById.get(activityId);
+
+      if (!activity || !activity.participantIds.includes(characterId)) {
+        return activity ?? null;
+      }
+
+      const participantIds = activity.participantIds.filter(participantId => participantId !== characterId);
+
+      if (participantIds.length === 0) {
+        activitiesById.delete(activityId);
+        activityDefinitionsById.delete(activityId);
+        return null;
+      }
+
+      const nextActivity = {
+        ...activity,
+        hostCharacterIds: activity.hostCharacterIds.filter(hostId => hostId !== characterId),
+        participantIds,
+      };
+
+      activitiesById.set(activityId, nextActivity);
+      return nextActivity;
+    },
+    refreshActivityDuration: (activityId, timestamp) => {
+      const activity = activitiesById.get(activityId);
+      const activityDefinition = activityDefinitionsById.get(activityId);
+
+      if (!activity || !activityDefinition) {
+        return null;
+      }
+
+      const nextActivity = {
+        ...activity,
+        activeStartedAt: timestamp,
+        endsAt: timestamp + activityDefinition.durationMs,
+      };
 
       activitiesById.set(activityId, nextActivity);
       return nextActivity;
@@ -185,6 +234,24 @@ export function createJoinableActivityManager(): JoinableActivityManager {
       activityDefinitionsById.clear();
     },
   };
+}
+
+function getActivityDurationForPhase(
+  activity: CharacterEventActivity,
+  phase: JoinableActivityPhase,
+): number {
+  if (phase === 'traveling') {
+    return Math.max(activity.joinWindowMs ?? 0, TRAVELING_ACTIVITY_TIMEOUT_MS);
+  }
+
+  return activity.durationMs;
+}
+
+function shouldRefreshActivityDurationOnJoin(
+  activity: JoinableActivity,
+  activityDefinition: CharacterEventActivity,
+): boolean {
+  return activity.phase === 'active' && activityDefinition.refreshDurationOnJoin === true;
 }
 
 function isWithinRange(

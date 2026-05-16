@@ -91,7 +91,8 @@ export class CharacterPerformanceRunner {
 
   playActivityPerformanceSteps(input: CharacterActivityPerformanceInput): void {
     const performanceId = this.getSelectedPerformanceId(input.selection);
-    const steps = getCharacterPerformanceSteps(performanceId, input.phase);
+    const steps = getCharacterPerformanceSteps(performanceId, input.phase)
+      .filter(step => matchesParticipantCount(step, input.participantIds.length));
 
     steps.forEach(step => {
       this.scheduleActivityPerformanceStep(step, input);
@@ -319,6 +320,24 @@ function resolveActivityPerformanceTargetIds(
   return nonHostParticipantIds.length > 0
     ? nonHostParticipantIds
     : participantIds.slice(1);
+}
+
+function matchesParticipantCount(step: CharacterPerformanceStep, participantCount: number): boolean {
+  const condition = step.participantCount;
+
+  if (!condition) {
+    return true;
+  }
+
+  if (condition.min !== undefined && participantCount < condition.min) {
+    return false;
+  }
+
+  if (condition.max !== undefined && participantCount > condition.max) {
+    return false;
+  }
+
+  return true;
 }
 
 function getEmoteLabel(emoteId: string): string {

@@ -161,19 +161,57 @@
     ]
   },
   {
-    "id": "item.play.toyBall",
+    "id": "social.playAtLocation.active",
     "steps": [
       {
         "phase": "active",
         "type": "emote",
-        "target": "initiator",
+        "target": "both",
         "emoteId": "play",
         "durationMs": 900
       },
       {
         "phase": "active",
         "type": "mapEffect",
-        "target": "initiator",
+        "target": "both",
+        "effectId": "playAtLocation",
+        "label": "在這邊玩得很開心",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "正在玩",
+        "delayMs": 1200,
+        "durationMs": 20000
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "both",
+        "text": "玩完了。",
+        "durationMs": 1800
+      }
+    ]
+  },
+  {
+    "id": "item.play.toyBall",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "play",
+        "durationMs": 900
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "max": 1
+        },
         "effectId": "playToyBall",
         "label": "玩球中",
         "durationMs": 20000
@@ -181,8 +219,32 @@
       {
         "phase": "active",
         "type": "bubble",
-        "target": "initiator",
+        "target": "both",
+        "participantCount": {
+          "max": 1
+        },
         "text": "正在玩球",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "effectId": "playToyBall",
+        "label": "一起玩球中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "text": "正在一起玩球",
         "durationMs": 20000
       }
     ]
@@ -193,14 +255,17 @@
       {
         "phase": "active",
         "type": "emote",
-        "target": "initiator",
+        "target": "both",
         "emoteId": "play",
         "durationMs": 900
       },
       {
         "phase": "active",
         "type": "mapEffect",
-        "target": "initiator",
+        "target": "both",
+        "participantCount": {
+          "max": 1
+        },
         "effectId": "playCards",
         "label": "玩牌中",
         "durationMs": 20000
@@ -208,8 +273,32 @@
       {
         "phase": "active",
         "type": "bubble",
-        "target": "initiator",
+        "target": "both",
+        "participantCount": {
+          "max": 1
+        },
         "text": "正在玩牌",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "effectId": "playCards",
+        "label": "一起玩牌中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "text": "正在一起玩牌",
         "durationMs": 20000
       }
     ]

@@ -194,6 +194,52 @@
     ]
   },
   {
+    "id": "need.playAtLocation.group",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 5,
+    "maxWeight": 85,
+    "interruptPolicy": "soft",
+    "commitment": 16,
+    "conditions": [
+      {
+        "path": "input.nearbyCharacterCount",
+        "operator": ">",
+        "value": 0
+      }
+    ],
+    "presentationVariants": [
+      {
+        "id": "play_at_location.group.casual",
+        "baseWeight": 10,
+        "presentationTags": ["emote.play", "motion.walk"],
+        "performanceId": "social.playAtLocation.active",
+        "activity": {
+          "key": "play.location.group.casual",
+          "type": "playAtLocation",
+          "startPhase": "traveling",
+          "destination": "randomDestination.play",
+          "group": {
+            "inviteNearbyRange": 8,
+            "maxParticipants": 4
+          },
+          "joinable": true,
+          "durationMs": 20000,
+          "refreshDurationOnJoin": true,
+          "joinWindowMs": 20000,
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
+      }
+    ]
+  },
+  {
     "id": "environment.nearbyCharacter.chat",
     "bucketId": "environment",
     "motivation": "chat",

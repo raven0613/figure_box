@@ -83,6 +83,9 @@ export interface CharacterEventAcceptance {
 export interface CharacterEventActivity {
   key: string;
   type: CharacterEventActivityType;
+  startPhase?: CharacterEventActivityStartPhase;
+  destination?: CharacterEventActivityDestination;
+  group?: CharacterEventGroupActivity;
   joinable?: boolean;
   durationMs: number;
   refreshDurationOnJoin?: boolean;
@@ -91,6 +94,15 @@ export interface CharacterEventActivity {
 }
 
 export type CharacterEventActivityType = 'playWithItem' | 'playAtLocation';
+export type CharacterEventActivityStartPhase = 'active' | 'traveling';
+export type CharacterEventActivityDestination =
+  | 'randomDestination.play'
+  | Position;
+
+export interface CharacterEventGroupActivity {
+  inviteNearbyRange?: number;
+  maxParticipants?: number;
+}
 
 export type CharacterEventJoinRequirement =
   | { type: 'none' }

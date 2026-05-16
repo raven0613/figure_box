@@ -13,6 +13,18 @@ export function getRandomDestinationTarget(motivation: string): Position | null 
   return tiles[Math.floor(Math.random() * tiles.length)];
 }
 
+export function resolveActivityDestination(destination: 'randomDestination.play' | Position | undefined): Position | null {
+  if (!destination) {
+    return null;
+  }
+
+  if (destination === 'randomDestination.play') {
+    return getRandomDestinationTarget('play');
+  }
+
+  return destination;
+}
+
 export function getRandomMapTarget(position: Position): Position {
   const target = {
     x: Math.floor(Math.random() * TOWN_MAP_WIDTH),

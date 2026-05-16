@@ -28,6 +28,7 @@ export interface CharacterPerformanceBubbleStep {
   type: 'bubble';
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
   text: string;
   delayMs?: number;
   durationMs?: number;
@@ -37,6 +38,7 @@ export interface CharacterPerformanceExpressionStep {
   type: 'expression';
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
   expression: Expression;
   delayMs?: number;
   durationMs?: number;
@@ -46,6 +48,7 @@ export interface CharacterPerformanceEmoteStep {
   type: 'emote';
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
   emoteId: string;
   delayMs?: number;
   durationMs?: number;
@@ -55,6 +58,7 @@ export interface CharacterPerformanceMapEffectStep {
   type: 'mapEffect';
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
   effectId: string;
   label?: string;
   delayMs?: number;
@@ -65,9 +69,15 @@ export interface CharacterPerformanceMotionStep {
   type: 'motion';
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
   motionId: string;
   delayMs?: number;
   durationMs?: number;
+}
+
+export interface CharacterPerformanceParticipantCountCondition {
+  min?: number;
+  max?: number;
 }
 
 export const CHARACTER_PERFORMANCE_DEFINITIONS: readonly CharacterPerformanceDefinition[] =

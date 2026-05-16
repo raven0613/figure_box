@@ -91,6 +91,12 @@ export class TownCharacterController {
       performanceRunner: this.performanceRunner,
       getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
       getCharacterPosition: characterId => this.getCharacterPosition(characterId),
+      getNearbyCharacterIds: (characterId, range) => this.getNearbyCharacterIds(characterId, range),
+      getTravelTarget: (destination, characterId, index) => (
+        index === 0
+          ? destination
+          : this.movementCoordinator.findNearbyEmptyTile(destination, characterId, 2) ?? destination
+      ),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
@@ -237,6 +243,7 @@ export class TownCharacterController {
       this.interactionProposalHandler.handlePendingInteractionProposal(character.id, snapshot);
       this.activityCoordinator.handleCurrentActivity(character.id, snapshot);
       this.activityCoordinator.handlePendingActivityJoin(character.id, snapshot);
+      this.activityCoordinator.handleActivityTravelProgress(character.id, snapshot);
     });
 
     actor.start();

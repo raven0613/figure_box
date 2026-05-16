@@ -87,11 +87,12 @@ export class TownMovementCoordinator {
   private handleWalkArrived(characterId: string, arrivedPosition: Position): void {
     this.walkingCharacterIds.delete(characterId);
 
-    const motivation = this.getCharacterSnapshot(characterId)?.context.currentMotivation ?? '';
+    const context = this.getCharacterSnapshot(characterId)?.context;
+    const motivation = context?.currentMotivation ?? '';
 
     this.sendToCharacter(characterId, { type: EventType.Arrive, position: arrivedPosition });
 
-    if (!DESTINATION_MAP[motivation]) {
+    if (context?.currentActivity || !DESTINATION_MAP[motivation]) {
       return;
     }
 
@@ -116,7 +117,7 @@ export class TownMovementCoordinator {
     this.walkingCharacterIds.delete(characterId);
   }
 
-  private findNearbyEmptyTile(position: Position, occupantId: string, range: number): GridCoordinate | null {
+  findNearbyEmptyTile(position: Position, occupantId: string, range: number): GridCoordinate | null {
     const neighbors = this.widget.getNeighbors(position.x, position.y, range);
     const candidates = neighbors.filter(tile =>
       tile.cell.walkable && (!tile.cell.occupantId || tile.cell.occupantId === occupantId)
@@ -130,4 +131,3 @@ export class TownMovementCoordinator {
     return { x: chosen.x, y: chosen.y };
   }
 }
-

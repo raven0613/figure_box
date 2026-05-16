@@ -1,6 +1,7 @@
 import type {
   CharacterPerformanceBubbleStep,
   CharacterPerformanceDefinition,
+  CharacterPerformanceParticipantCountCondition,
   CharacterPerformancePhase,
   CharacterPerformanceStep,
   CharacterPerformanceTarget,
@@ -24,6 +25,7 @@ type CharacterPerformanceRecord = Record<string, unknown>;
 interface BasePerformanceStep {
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
   delayMs?: number;
   durationMs?: number;
 }
@@ -130,9 +132,38 @@ function readBasePerformanceStep(
   return {
     phase: readPerformancePhase(step, index),
     target: readPerformanceTarget(step, index),
+    participantCount: readOptionalParticipantCount(step, index),
     delayMs: readOptionalNonNegativeNumber(step, 'delayMs', index),
     durationMs: readOptionalNonNegativeNumber(step, 'durationMs', index),
   };
+}
+
+function readOptionalParticipantCount(
+  step: CharacterPerformanceRecord,
+  index: number,
+): CharacterPerformanceParticipantCountCondition | undefined {
+  const value = step.participantCount;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character performance definition at index ${index} has invalid participantCount.`);
+  }
+
+  const min = readOptionalNonNegativeNumber(value, 'min', index);
+  const max = readOptionalNonNegativeNumber(value, 'max', index);
+
+  if (min === undefined && max === undefined) {
+    throw new Error(`Character performance definition at index ${index} has empty participantCount.`);
+  }
+
+  if (min !== undefined && max !== undefined && min > max) {
+    throw new Error(`Character performance definition at index ${index} has invalid participantCount range.`);
+  }
+
+  return { min, max };
 }
 
 function readPerformancePhase(

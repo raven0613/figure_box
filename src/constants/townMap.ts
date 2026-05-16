@@ -97,6 +97,11 @@ export const DESTINATION_MAP: Record<string, readonly Destination[]> = {
     { name: '牛排館', serviceTiles: [{ x: 62, y: 13 }, { x: 63, y: 13 }, { x: 64, y: 13 }] },
     { name: '火鍋店', serviceTiles: [{ x: 3, y: 66 }, { x: 4, y: 66 }, { x: 5, y: 66 }] },
   ],
+  play: [
+    { name: '中央廣場', serviceTiles: [{ x: 43, y: 22 }, { x: 44, y: 22 }, { x: 45, y: 22 }] },
+    { name: '公園', serviceTiles: [{ x: 18, y: 8 }, { x: 19, y: 8 }, { x: 20, y: 8 }] },
+    { name: '露天桌', serviceTiles: [{ x: 5, y: 48 }, { x: 8, y: 48 }, { x: 7, y: 50 }] },
+  ],
 };
 
 export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [

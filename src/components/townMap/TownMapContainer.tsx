@@ -213,6 +213,14 @@ function ActivityDebugPanel({
             <strong>{formatActivityParticipantNames(activity, allSnapshots)}</strong>
           </div>
           <div className={styles.detailRow}>
+            <span>Arrived</span>
+            <strong>{formatActivityArrivalDebug(activity, allSnapshots)}</strong>
+          </div>
+          <div className={styles.detailRow}>
+            <span>Location</span>
+            <strong>{activity.location ? `${activity.location.x}, ${activity.location.y}` : '-'}</strong>
+          </div>
+          <div className={styles.detailRow}>
             <span>Ends in</span>
             <strong>{Math.max(0, Math.ceil((activity.endsAt - Date.now()) / 1000))}s</strong>
           </div>
@@ -229,6 +237,34 @@ function formatActivityParticipantNames(
   return activity.participantIds
     .map(characterId => allSnapshots[characterId]?.context.name ?? characterId)
     .join(', ');
+}
+
+function formatActivityArrivalDebug(
+  activity: JoinableActivity,
+  allSnapshots: Record<string, CharacterSnapshot>,
+): string {
+  if (!activity.location) {
+    return '-';
+  }
+
+  return activity.participantIds
+    .map(characterId => {
+      const snapshot = allSnapshots[characterId];
+      const name = snapshot?.context.name ?? characterId;
+
+      if (!snapshot) {
+        return `${name}: no snapshot`;
+      }
+
+      const position = snapshot.context.position;
+      const target = snapshot.context.target;
+      const isArrived = isNearPosition(position, activity.location, 2);
+      const status = isArrived ? 'arrived' : 'not yet';
+      const targetText = target ? ` -> ${target.x},${target.y}` : '';
+
+      return `${name}: ${status} (${position.x},${position.y}${targetText})`;
+    })
+    .join(' / ');
 }
 
 function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationshipStore }: {
@@ -442,4 +478,11 @@ function getInviteAvailabilityDebugText(
   }
 
   return { isAvailable: true, text: 'yes' };
+}
+
+function isNearPosition(position: { x: number; y: number }, target: { x: number; y: number }, range: number): boolean {
+  return Math.max(
+    Math.abs(position.x - target.x),
+    Math.abs(position.y - target.y),
+  ) <= range;
 }

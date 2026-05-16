@@ -159,7 +159,7 @@ export const characterMachine = createMachine(
                     '.mind.thinking',
                     '.communication.null',
                 ],
-                actions: 'acceptActivityJoin',
+                actions: ['setPlayMotivation', 'acceptActivityJoin'],
             },
             [EventType.JoinActivityRejected]: {
                 target: [
@@ -310,7 +310,7 @@ export const characterMachine = createMachine(
                     '.bodyAction.idle',
                     '.bodyMove.stand',
                 ],
-                actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget'],
+                actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget', 'clearActivity'],
             },
             [EventType.StartThinking]: {
                 guard: 'canReceiveLogicCommand',
@@ -754,6 +754,10 @@ export const characterMachine = createMachine(
                 ),
                 currentMotivation: () => 'idle',
             }),
+            clearActivity: assign({
+                pendingActivityJoin: () => null,
+                currentActivity: () => null,
+            }),
             clearInteraction: assign({
                 interactionCooldowns: ({ context, event }) => (
                     event.type === EventType.EndChatInteraction &&
@@ -855,6 +859,10 @@ export const characterMachine = createMachine(
             }),
             completeCurrentMotivation: assign({
                 status: ({ context }) => {
+                    if (context.currentActivity) {
+                        return context.status;
+                    }
+
                     if (context.currentMotivation === 'findFood') {
                         return {
                             ...context.status,
@@ -872,7 +880,7 @@ export const characterMachine = createMachine(
 
                     return context.status;
                 },
-                currentMotivation: () => 'idle',
+                currentMotivation: ({ context }) => (context.currentActivity ? context.currentMotivation : 'idle'),
             }),
             syncPositionOnBlock: assign({
                 position: ({ context, event }) => (
