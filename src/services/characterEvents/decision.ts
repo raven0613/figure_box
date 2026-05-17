@@ -10,6 +10,9 @@ import type {
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '../../constants/charactarEventsDefinitions';
 import { createCharacterEventRuleContext } from './rules';
 import { selectCharacterEventPresentationVariant } from './variants';
+import { WeightedDecisionSelector } from '../decisionSelector';
+
+const weightedDecisionSelector = new WeightedDecisionSelector();
 
 export function decideCharacterEvent(
   context: CharacterContext,
@@ -17,9 +20,8 @@ export function decideCharacterEvent(
 ): CharacterEventDecisionResult {
   const utilityScores = calculateCharacterUtilityScores(context);
   const candidates = collectCharacterEventCandidates(context, utilityScores, input);
-  const selectedCandidate = sampleWeighted(
-    candidates,
-    candidate => candidate.weight,
+  const selectedCandidate = weightedDecisionSelector.select(
+    candidates.map(candidate => ({ item: candidate, weight: candidate.weight })),
     input.random ?? Math.random,
   );
   const selectedPresentationVariant = selectedCandidate
@@ -57,30 +59,6 @@ function selectPresentationVariant(
     createCharacterEventRuleContext(context, utilityScores, input),
     input.random ?? Math.random,
   );
-}
-
-function sampleWeighted<T>(
-  candidates: T[],
-  getWeight: (candidate: T) => number,
-  random: () => number,
-): T | null {
-  const totalWeight = candidates.reduce((sum, candidate) => sum + getWeight(candidate), 0);
-
-  if (totalWeight <= 0) {
-    return null;
-  }
-
-  let cursor = random() * totalWeight;
-
-  for (const candidate of candidates) {
-    cursor -= getWeight(candidate);
-
-    if (cursor <= 0) {
-      return candidate;
-    }
-  }
-
-  return candidates.at(-1) ?? null;
 }
 
 function getCandidateBucketIds(candidates: CharacterEventCandidate[]): CharacterEventBucketId[] {

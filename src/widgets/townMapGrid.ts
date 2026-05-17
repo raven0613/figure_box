@@ -50,6 +50,15 @@ export class TownMapGrid {
     return this.mapObjects.filter(object => this.isObjectOccupyingTile(object, x, y));
   }
 
+  getMapObjectsInRadius(x: number, y: number, radius: number): TownMapObjectData[] {
+    const normalizedRadius = Math.max(0, Math.floor(radius));
+
+    return this.mapObjects.filter(object => (
+      object.interactable &&
+      this.getObjectDistance(object, x, y) <= normalizedRadius
+    ));
+  }
+
   getOccupantTile(occupantId: string): GridCoordinate | null {
     const index = this.occupantToTile.get(occupantId);
 
@@ -86,6 +95,16 @@ export class TownMapGrid {
     }
 
     return result;
+  }
+
+  getDistanceToOccupant(x: number, y: number, occupantId: string): number | null {
+    const tile = this.getOccupantTile(occupantId);
+
+    if (!tile) {
+      return null;
+    }
+
+    return getChebyshevDistance({ x, y }, tile);
   }
 
   getNeighbors(x: number, y: number, radius: number): TownMapTile[] {
@@ -264,6 +283,17 @@ export class TownMapGrid {
 
     return path;
   }
+
+  private getObjectDistance(object: TownMapObjectData, x: number, y: number): number {
+    const minX = object.x;
+    const maxX = object.x + object.width - 1;
+    const minY = object.y;
+    const maxY = object.y + object.length - 1;
+    const nearestX = clamp(x, minX, maxX);
+    const nearestY = clamp(y, minY, maxY);
+
+    return getChebyshevDistance({ x, y }, { x: nearestX, y: nearestY });
+  }
   // 尋路：可以走斜的
   private getNeighborCoords(x: number, y: number): GridCoordinate[] {
     const cardinals: GridCoordinate[] = [
@@ -406,4 +436,12 @@ export class TownMapGrid {
   private isInside(x: number, y: number): boolean {
     return x >= 0 && x < this.width && y >= 0 && y < this.height;
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getChebyshevDistance(from: GridCoordinate, to: GridCoordinate): number {
+  return Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y));
 }

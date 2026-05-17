@@ -157,6 +157,14 @@ export class FabricTownMapWidget {
     return this.grid.getMapObjectsAt(x, y);
   }
 
+  getMapObjectsInRadius(x: number, y: number, radius: number): TownMapObjectData[] {
+    return this.grid.getMapObjectsInRadius(x, y, radius);
+  }
+
+  getDistanceToCharacter(x: number, y: number, characterId: string): number | null {
+    return this.grid.getDistanceToOccupant(x, y, characterId);
+  }
+
   placeCharacter(character: TownMapCharacter): boolean {
     const placed = this.grid.placeOccupant(character);
 
@@ -254,6 +262,10 @@ export class FabricTownMapWidget {
 
   cancelWalk(characterId: string): void {
     this.walkAnimator.cancelWalk(characterId);
+  }
+
+  pauseWalk(characterId: string, durationMs: number): boolean {
+    return this.walkAnimator.pauseWalk(characterId, durationMs);
   }
 
   getCell(x: number, y: number): TownMapCellData | null {

@@ -12,11 +12,19 @@ import {
   createRelationshipStore,
   getFeelingForIntimacy,
   normalizeRelationshipPair,
+  updateMutualRelationshipStatus,
   type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
 import { TownActivityCoordinator } from '~/services/townActivityCoordinator';
 import { TownMovementCoordinator } from '~/services/townMovementCoordinator';
 import { TownRelationshipTicker } from '~/services/townRelationshipTicker';
+import {
+  GOD_DROP_SCAN_RADIUS,
+  GodDropOpportunityService,
+  type GodDropOpportunity,
+  type GodDropOpportunityCandidate,
+} from '~/services/godDropOpportunityService';
+import { RelationshipMomentOverlayCoordinator } from '~/services/relationshipMomentOverlayCoordinator';
 import type {
   CharacterActor,
   CharacterSeed,
@@ -37,12 +45,16 @@ const INITIAL_DECISION_STAGGER_MIN_MS = 500;
 const INITIAL_DECISION_STAGGER_MAX_MS = 4500;
 const DECISION_INTERVAL_MIN_MS = 2500;
 const DECISION_INTERVAL_MAX_MS = 5500;
+const RELATIONSHIP_MOMENT_DURATION_MS = 3000;
+const RELATIONSHIP_MOMENT_DECISION_GRACE_MS = 1800;
+const GOD_DROP_DECISION_GRACE_MS = 2600;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
   onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
   onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
+  onGodDropOpportunityChange?: (opportunity: GodDropOpportunity | null) => void;
 }
 
 export class TownCharacterController {
@@ -54,12 +66,18 @@ export class TownCharacterController {
   private readonly activityCoordinator: TownActivityCoordinator;
   private readonly movementCoordinator: TownMovementCoordinator;
   private readonly relationshipTicker: TownRelationshipTicker;
+  private readonly relationshipMomentOverlayCoordinator: RelationshipMomentOverlayCoordinator;
+  private readonly godDropOpportunityService = new GodDropOpportunityService();
   private readonly nextDecisionAtByCharacterId = new Map<string, number>();
   private relationshipStore = createRelationshipStore();
   private tickTimer: number | null = null;
+  private godDropAutoTimer: number | null = null;
+  private godDropExpireTimer: number | null = null;
+  private currentGodDropOpportunity: GodDropOpportunity | null = null;
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
   private readonly onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
+  private readonly onGodDropOpportunityChange?: (opportunity: GodDropOpportunity | null) => void;
 
   constructor(options: TownCharacterControllerOptions) {
     this.widget = options.widget;
@@ -90,6 +108,29 @@ export class TownCharacterController {
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
     });
+    this.relationshipMomentOverlayCoordinator = new RelationshipMomentOverlayCoordinator({
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+      pauseCharacterWalk: (characterId, durationMs) => {
+        this.movementCoordinator.pauseCharacterWalk(characterId, durationMs);
+      },
+      showCharacterBubble: (characterId, text, durationMs) => {
+        this.widget.showCharacterBubble(characterId, text, durationMs);
+      },
+      showMapActivity: (activity, durationMs) => {
+        this.widget.showMapActivity(activity, durationMs);
+      },
+      pauseActivity: (activityId, timestamp) => {
+        this.activityManager.pauseActivity(activityId, timestamp);
+        this.notifyJoinableActivitiesChanged();
+      },
+      resumeActivity: (activityId, timestamp) => {
+        this.activityManager.resumeActivity(activityId, timestamp);
+        this.notifyJoinableActivitiesChanged();
+      },
+      onOverlayFinished: participantIds => {
+        this.deferCharactersDecision(participantIds, RELATIONSHIP_MOMENT_DECISION_GRACE_MS);
+      },
+    });
     this.relationshipTicker = new TownRelationshipTicker({
       widget: this.widget,
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
@@ -114,6 +155,7 @@ export class TownCharacterController {
     this.onCharacterSnapshot = options.onCharacterSnapshot;
     this.onRelationshipStoreChange = options.onRelationshipStoreChange;
     this.onJoinableActivitiesChange = options.onJoinableActivitiesChange;
+    this.onGodDropOpportunityChange = options.onGodDropOpportunityChange;
   }
 
   start(): void {
@@ -166,10 +208,24 @@ export class TownCharacterController {
 
     if (tile && this.widget.moveCharacter(characterId, tile)) {
       this.sendToCharacter(characterId, { type: EventType.Drop, position: tile });
+      this.deferCharacterDecision(characterId, GOD_DROP_DECISION_GRACE_MS);
+      this.openGodDropOpportunity(characterId, tile);
       return;
     }
 
     this.sendToCharacter(characterId, { type: EventType.Drop });
+    this.clearGodDropOpportunity();
+  }
+
+  chooseGodDropCandidate(candidateId: string): void {
+    const opportunity = this.currentGodDropOpportunity;
+    const candidate = opportunity?.candidates.find(item => item.id === candidateId);
+
+    if (!opportunity || !candidate) {
+      return;
+    }
+
+    this.executeGodDropCandidate(opportunity, candidate, 'player');
   }
 
   setCharacterExpression(characterId: string, expression: Expression): void {
@@ -186,6 +242,7 @@ export class TownCharacterController {
     }
 
     this.movementCoordinator.dispose();
+    this.relationshipMomentOverlayCoordinator.dispose();
     this.performanceRunner.dispose();
     this.activityManager.clear();
     this.nextDecisionAtByCharacterId.clear();
@@ -202,7 +259,215 @@ export class TownCharacterController {
 
     this.relationshipStore = createRelationshipStore();
     this.onRelationshipStoreChange?.(this.relationshipStore);
+    this.clearGodDropOpportunity();
     this.notifyJoinableActivitiesChanged();
+  }
+
+  private openGodDropOpportunity(characterId: string, droppedAt: GridCoordinate): void {
+    const timestamp = Date.now();
+    const nearbyCharacterIds = this.widget.getOccupiedNeighborIds(
+      droppedAt.x,
+      droppedAt.y,
+      GOD_DROP_SCAN_RADIUS,
+      characterId,
+    );
+    const opportunity = this.godDropOpportunityService.createOpportunity({
+      actorId: characterId,
+      droppedAt,
+      timestamp,
+      nearbyCharacterIds,
+      nearbyObjects: this.widget.getMapObjectsInRadius(droppedAt.x, droppedAt.y, GOD_DROP_SCAN_RADIUS),
+      nearbyActivities: this.activityManager.findNearbyActivities({
+        position: droppedAt,
+        timestamp,
+        phases: ['forming', 'traveling', 'active'],
+      }),
+      isCharacterUnavailable: targetCharacterId => (
+        this.relationshipMomentOverlayCoordinator.isCharacterInOverlay(targetCharacterId)
+      ),
+      getCharacterName: targetCharacterId => this.getCharacterName(targetCharacterId),
+      getCharacterDistance: targetCharacterId => this.widget.getDistanceToCharacter(
+        droppedAt.x,
+        droppedAt.y,
+        targetCharacterId,
+      ),
+      getRelationshipStatus: targetCharacterId => this.getMutualRelationshipStatus(characterId, targetCharacterId),
+    });
+
+    this.clearGodDropOpportunity();
+
+    if (!opportunity) {
+      return;
+    }
+
+    this.currentGodDropOpportunity = opportunity;
+    this.onGodDropOpportunityChange?.(opportunity);
+    this.widget.showCharacterBubble(characterId, this.getOpportunityBubbleText(opportunity), 1400);
+    this.godDropAutoTimer = window.setTimeout(() => {
+      this.autoChooseGodDropCandidate(opportunity.id);
+    }, Math.max(0, opportunity.autoDecisionAt - timestamp));
+    this.godDropExpireTimer = window.setTimeout(() => {
+      if (this.currentGodDropOpportunity?.id === opportunity.id) {
+        this.clearGodDropOpportunity();
+      }
+    }, Math.max(0, opportunity.expiresAt - timestamp));
+  }
+
+  private autoChooseGodDropCandidate(opportunityId: string): void {
+    const opportunity = this.currentGodDropOpportunity;
+
+    if (!opportunity || opportunity.id !== opportunityId) {
+      return;
+    }
+
+    const candidate = this.godDropOpportunityService.selectCandidate(opportunity);
+
+    if (!candidate) {
+      this.clearGodDropOpportunity();
+      return;
+    }
+
+    this.executeGodDropCandidate(opportunity, candidate, 'auto');
+  }
+
+  private executeGodDropCandidate(
+    opportunity: GodDropOpportunity,
+    candidate: GodDropOpportunityCandidate,
+    source: 'auto' | 'player',
+  ): void {
+    this.clearGodDropOpportunity();
+
+    if (candidate.kind === 'object') {
+      this.widget.showCharacterBubble(
+        opportunity.actorId,
+        source === 'player' ? `我去看看${candidate.label.replace('看看', '')}` : candidate.label,
+        2200,
+      );
+      this.widget.showCharacterEmote(opportunity.actorId, '!', 900);
+      return;
+    }
+
+    if (candidate.branch === 'activityFocused' && candidate.activityId) {
+      if (this.activityCoordinator.joinActivityByGodDrop(opportunity.actorId, candidate.activityId)) {
+        this.widget.showCharacterBubble(opportunity.actorId, candidate.label, 1800);
+      }
+      return;
+    }
+
+    if (candidate.branch === 'relationshipFocused' && candidate.participantId) {
+      this.playRelationshipMomentByGodDrop(opportunity.actorId, candidate.participantId, candidate.label);
+    }
+  }
+
+  private playRelationshipMomentByGodDrop(
+    actorId: string,
+    targetCharacterId: string,
+    label: string,
+  ): void {
+    if (
+      this.relationshipMomentOverlayCoordinator.isCharacterInOverlay(actorId) ||
+      this.relationshipMomentOverlayCoordinator.isCharacterInOverlay(targetCharacterId)
+    ) {
+      return;
+    }
+
+    const timestamp = Date.now();
+    const targetActivity = this.getActivityByParticipant(targetCharacterId);
+    const observerIds = targetActivity?.participantIds
+      .filter(participantId => participantId !== targetCharacterId)
+      ?? [];
+    const relationshipStatus = this.getMutualRelationshipStatus(actorId, targetCharacterId);
+
+    const overlay = this.relationshipMomentOverlayCoordinator.start({
+      actorId,
+      targetCharacterId,
+      label,
+      targetBubbleText: this.getRelationshipMomentTargetBubble(relationshipStatus),
+      observerIds,
+      sourceActivityId: targetActivity?.id,
+      timestamp,
+      durationMs: RELATIONSHIP_MOMENT_DURATION_MS,
+    });
+
+    if (!overlay) {
+      return;
+    }
+
+    this.deferCharactersDecision(
+      [actorId, targetCharacterId],
+      RELATIONSHIP_MOMENT_DURATION_MS + RELATIONSHIP_MOMENT_DECISION_GRACE_MS,
+    );
+    this.sendToCharacter(actorId, { type: EventType.PassBy, targetCharId: targetCharacterId, timestamp });
+    this.sendToCharacter(targetCharacterId, { type: EventType.PassBy, targetCharId: actorId, timestamp });
+
+    if (relationshipStatus === SocialStatus.Stranger) {
+      this.relationshipStore = updateMutualRelationshipStatus(
+        this.relationshipStore,
+        actorId,
+        targetCharacterId,
+        SocialStatus.Acquaintance,
+        timestamp,
+      );
+      this.onRelationshipStoreChange?.(this.relationshipStore);
+    }
+  }
+
+  private deferCharactersDecision(characterIds: readonly string[], durationMs: number): void {
+    const nextDecisionAt = Date.now() + durationMs;
+
+    characterIds.forEach(characterId => {
+      this.nextDecisionAtByCharacterId.set(characterId, nextDecisionAt);
+    });
+  }
+
+  private deferCharacterDecision(characterId: string, durationMs: number): void {
+    this.nextDecisionAtByCharacterId.set(characterId, Date.now() + durationMs);
+  }
+
+  private getActivityByParticipant(characterId: string): JoinableActivity | null {
+    return this.activityManager.getActivities()
+      .find(activity => activity.participantIds.includes(characterId)) ?? null;
+  }
+
+  private getRelationshipMomentTargetBubble(status: SocialStatus): string {
+    if (status === SocialStatus.Stranger) {
+      return '你好？';
+    }
+
+    if (status === SocialStatus.Lovers || status === SocialStatus.Married) {
+      return '嗯，我在聽。';
+    }
+
+    return '怎麼了？';
+  }
+
+  private clearGodDropOpportunity(): void {
+    if (this.godDropAutoTimer !== null) {
+      window.clearTimeout(this.godDropAutoTimer);
+      this.godDropAutoTimer = null;
+    }
+
+    if (this.godDropExpireTimer !== null) {
+      window.clearTimeout(this.godDropExpireTimer);
+      this.godDropExpireTimer = null;
+    }
+
+    if (!this.currentGodDropOpportunity) {
+      return;
+    }
+
+    this.currentGodDropOpportunity = null;
+    this.onGodDropOpportunityChange?.(null);
+  }
+
+  private getOpportunityBubbleText(opportunity: GodDropOpportunity): string {
+    const topCandidate = opportunity.candidates[0];
+
+    if (!topCandidate) {
+      return '看看附近...';
+    }
+
+    return `${topCandidate.label}？`;
   }
 
   private spawnCharacterActor(character: CharacterSeed, previousActor?: CharacterActor): CharacterActor {

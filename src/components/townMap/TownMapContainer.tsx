@@ -11,6 +11,7 @@ import {
   TownCharacterController,
   type CharacterSnapshot,
 } from '~/services/townCharacterController';
+import type { GodDropOpportunity } from '~/services/godDropOpportunityService';
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDefinitions';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
@@ -43,6 +44,7 @@ export function TownMapContainer({
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(CHARACTER_SEEDS[0].id);
   const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
   const [joinableActivities, setJoinableActivities] = useState<readonly JoinableActivity[]>([]);
+  const [godDropOpportunity, setGodDropOpportunity] = useState<GodDropOpportunity | null>(null);
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -76,6 +78,7 @@ export function TownMapContainer({
       },
       onRelationshipStoreChange: setRelationshipStore,
       onJoinableActivitiesChange: setJoinableActivities,
+      onGodDropOpportunityChange: setGodDropOpportunity,
     });
 
     characterControllerRef.current = characterController;
@@ -86,6 +89,7 @@ export function TownMapContainer({
       characterControllerRef.current = null;
       setCharacterSnapshots({});
       setJoinableActivities([]);
+      setGodDropOpportunity(null);
       setSelectedMapObjects([]);
       void widget.destroy();
       canvasHost.replaceChildren();
@@ -168,6 +172,12 @@ export function TownMapContainer({
           </div>
 
           <ActivityDebugPanel activities={joinableActivities} allSnapshots={characterSnapshots} />
+          <GodDropOpportunityPanel
+            opportunity={godDropOpportunity}
+            onSelectCandidate={candidateId => {
+              characterControllerRef.current?.chooseGodDropCandidate(candidateId);
+            }}
+          />
         </div>
 
         {characterSnapshots[selectedCharacterId] ? (
@@ -180,6 +190,43 @@ export function TownMapContainer({
         ) : null}
       </aside>
     </section>
+  );
+}
+
+function GodDropOpportunityPanel({
+  opportunity,
+  onSelectCandidate,
+}: {
+  opportunity: GodDropOpportunity | null;
+  onSelectCandidate: (candidateId: string) => void;
+}) {
+  if (!opportunity) {
+    return null;
+  }
+
+  const visibleCandidates = opportunity.candidates.slice(0, 5);
+
+  return (
+    <div className={styles.godDropPanel}>
+      <div className={styles.panelTitle}>God Drop</div>
+      <div className={styles.detailRow}>
+        <span>Auto</span>
+        <strong>{Math.max(0, Math.ceil((opportunity.autoDecisionAt - Date.now()) / 1000))}s</strong>
+      </div>
+      <div className={styles.godDropActions}>
+        {visibleCandidates.map(candidate => (
+          <button
+            className={styles.godDropButton}
+            key={candidate.id}
+            type="button"
+            onClick={() => onSelectCandidate(candidate.id)}
+          >
+            <span>{candidate.label}</span>
+            <strong>{Math.round(candidate.score)}</strong>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -222,12 +269,20 @@ function ActivityDebugPanel({
           </div>
           <div className={styles.detailRow}>
             <span>Ends in</span>
-            <strong>{Math.max(0, Math.ceil((activity.endsAt - Date.now()) / 1000))}s</strong>
+            <strong>{formatActivityRemainingTime(activity)}</strong>
           </div>
         </div>
       ))}
     </div>
   );
+}
+
+function formatActivityRemainingTime(activity: JoinableActivity): string {
+  if (activity.pausedAt !== undefined) {
+    return `${Math.max(0, Math.ceil((activity.remainingMs ?? 0) / 1000))}s paused`;
+  }
+
+  return `${Math.max(0, Math.ceil((activity.endsAt - Date.now()) / 1000))}s`;
 }
 
 function formatActivityParticipantNames(

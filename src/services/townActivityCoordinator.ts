@@ -84,13 +84,6 @@ export class TownActivityCoordinator {
     const participantIds = this.getInitialParticipantIds(characterId, activityDefinition);
 
     if (participantIds.length < 2 && activityDefinition.invite) {
-      this.playRejectedBusyInvite(
-        characterId,
-        currentActivity.activityId,
-        currentActivity.sourceEventId,
-        activityDefinition,
-        timestamp,
-      );
       this.sendToCharacter(characterId, {
         type: EventType.EndJoinedActivity,
         activityId: currentActivity.activityId,
@@ -346,6 +339,20 @@ export class TownActivityCoordinator {
     }
   }
 
+  joinActivityByGodDrop(characterId: string, activityId: string): boolean {
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (!activity || !this.canCharacterJoinActivity(characterId, activity)) {
+      return false;
+    }
+
+    return this.sendToCharacter(characterId, {
+      type: EventType.JoinActivity,
+      activityId: activity.id,
+      sourceEventId: activity.sourceEventId,
+    });
+  }
+
   private rejectActivityJoin(characterId: string, activityId: string): void {
     this.sendToCharacter(characterId, {
       type: EventType.JoinActivityRejected,
@@ -375,20 +382,6 @@ export class TownActivityCoordinator {
       .slice(0, Math.max(0, maxParticipants - 1));
 
     return [hostCharacterId, ...invitedParticipantIds];
-  }
-
-  private getRejectedBusyInviteeId(
-    hostCharacterId: string,
-    activityDefinition: CharacterEventActivity,
-  ): string | null {
-    if (!activityDefinition.invite) {
-      return null;
-    }
-
-    const inviteRange = activityDefinition.invite.range ?? 2;
-
-    return this.getNearbyCharacterIds(hostCharacterId, inviteRange)
-      .find(characterId => !this.canInviteCharacterToActivity(characterId, activityDefinition)) ?? null;
   }
 
   private canInviteCharacterToActivity(
@@ -511,73 +504,22 @@ export class TownActivityCoordinator {
       return false;
     }
 
-    const minMoodValue = definition.acceptance?.minMoodValue;
+    const acceptance = definition.acceptance;
 
-    if (minMoodValue !== undefined && context.status.moodValue < minMoodValue) {
-      return false;
+    if (!acceptance) {
+      return true;
     }
 
-    const allowedMoods = definition.acceptance?.allowedMoods;
+    const meetsMinMood = acceptance.minMoodValue === undefined ||
+      context.status.moodValue >= acceptance.minMoodValue;
+    const meetsAllowedMood = !acceptance.allowedMoods?.length ||
+      acceptance.allowedMoods.includes(context.status.mood);
 
-    if (allowedMoods?.length && !allowedMoods.includes(context.status.mood)) {
-      return false;
+    if (meetsMinMood && meetsAllowedMood) {
+      return true;
     }
 
-    const fallbackChance = definition.acceptance?.fallbackChance ?? 1;
-
-    return Math.random() <= fallbackChance;
-  }
-
-  private playRejectedBusyInvite(
-    hostCharacterId: string,
-    activityId: string,
-    sourceEventId: string,
-    activityDefinition: CharacterEventActivity,
-    timestamp: number,
-  ): void {
-    const rejectedInviteeId = this.getRejectedBusyInviteeId(hostCharacterId, activityDefinition);
-
-    if (!rejectedInviteeId) {
-      return;
-    }
-
-    const activity = this.activityManager.createActivity({
-      id: activityId,
-      sourceEventId,
-      activity: activityDefinition,
-      hostCharacterIds: [hostCharacterId],
-      participantIds: [hostCharacterId, rejectedInviteeId],
-      timestamp,
-      phase: 'inviting',
-      location: this.getCharacterPosition(hostCharacterId) ?? undefined,
-    });
-
-    this.performanceRunner.playActivityPerformanceSteps({
-      selection: this.getActivityPerformanceSelection(activity),
-      phase: 'proposal',
-      activityId: activity.id,
-      participantIds: activity.participantIds,
-      hostCharacterIds: activity.hostCharacterIds,
-    });
-    const durationMs = this.performanceRunner.playActivityPerformanceSteps({
-      selection: this.getActivityPerformanceSelection(activity),
-      phase: 'rejectedBusy',
-      activityId: activity.id,
-      participantIds: activity.participantIds,
-      hostCharacterIds: activity.hostCharacterIds,
-    });
-    this.recordInviteCooldowns(activity, hostCharacterId, [rejectedInviteeId]);
-
-    window.setTimeout(() => {
-      const endedActivity = this.activityManager.endActivity(activity.id);
-
-      if (endedActivity) {
-        this.clearActivityVisuals(endedActivity);
-      }
-
-      this.notifyActivitiesChanged();
-    }, durationMs || DEFAULT_ACTIVITY_RESPONSE_DELAY_MS);
-    this.notifyActivitiesChanged();
+    return Math.random() <= (acceptance.fallbackChance ?? 0);
   }
 
   private recordInviteCooldowns(

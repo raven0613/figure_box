@@ -29,7 +29,10 @@ import {
     SATURATION_GAIN_AFTER_EATING,
     SATURATION_LOSS_PER_TICK,
 } from '~/services/characterEvents/utility';
-import { getRandomMapTarget } from '~/services/characterEvents/targets';
+import {
+    getRandomDestinationTarget,
+    getRandomMapTarget,
+} from '~/services/characterEvents/targets';
 import {
     createEmptyActivityCooldowns,
     recordActivityCooldowns,
@@ -87,7 +90,7 @@ export const characterMachine = createMachine(
         on: {
             [EventType.Tick]: {
                 guard: 'canReceiveLogicCommand',
-                actions: ['tickStatus', 'updateUtilityScores', 'decideAndRaiseEvent'],
+                actions: ['tickStatus', 'clearIdleTarget', 'updateUtilityScores', 'decideAndRaiseEvent'],
             },
             [EventType.PassBy]: {
                 guard: 'canReceiveLogicCommand',
@@ -121,7 +124,7 @@ export const characterMachine = createMachine(
                     '.mind.thinking',
                     '.communication.null',
                 ],
-                actions: ['setPlayMotivation', 'chooseRandomTarget'],
+                actions: ['setPlayMotivation', 'choosePlayTarget'],
             },
             [EventType.StartActivity]: {
                 guard: 'shouldStartActivity',
@@ -159,7 +162,7 @@ export const characterMachine = createMachine(
                     '.mind.null',
                     '.communication.null',
                 ],
-                actions: ['rejectActivityJoin', 'setIdleMotivation'],
+                actions: ['rejectActivityJoin', 'setIdleMotivation', 'clearTarget'],
             },
             [EventType.EndJoinedActivity]: {
                 guard: 'shouldEndJoinedActivity',
@@ -169,7 +172,7 @@ export const characterMachine = createMachine(
                     '.mind.null',
                     '.communication.null',
                 ],
-                actions: 'completeJoinedActivity',
+                actions: ['completeJoinedActivity', 'clearTarget'],
             },
             [EventType.RecordActivityCooldown]: {
                 actions: 'recordActivityCooldown',
@@ -427,6 +430,11 @@ export const characterMachine = createMachine(
             chooseRandomTarget: assign({
                 target: ({ context }) => getRandomMapTarget(context.position),
             }),
+            choosePlayTarget: assign({
+                target: ({ context }) => (
+                    getRandomDestinationTarget('play') ?? getRandomMapTarget(context.position)
+                ),
+            }),
             startOwnActivity: assign({
                 currentActivity: ({ event }) => (
                     event.type === EventType.StartActivity
@@ -525,6 +533,15 @@ export const characterMachine = createMachine(
             }),
             clearTarget: assign({
                 target: () => null,
+            }),
+            clearIdleTarget: assign({
+                target: ({ context }) => (
+                    context.currentMotivation === 'idle' &&
+                        context.currentActivity === null &&
+                        context.pendingActivityJoin === null
+                        ? null
+                        : context.target
+                ),
             }),
             setManualTarget: assign({
                 target: ({ event }) => ((event.type === EventType.MoveTo || event.type === EventType.GoEat) ? event.target : null),

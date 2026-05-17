@@ -13,6 +13,7 @@ interface WalkState {
   characterId: string;
   onArrive: (position: GridCoordinate) => void;
   onBlocked: (position: GridCoordinate) => void;
+  pausedUntil: number | null;
 }
 
 interface TownMapWalkAnimatorOptions {
@@ -89,6 +90,19 @@ export class TownMapWalkAnimator {
     this.stopAnimationLoopIfIdle();
   }
 
+  pauseWalk(characterId: string, durationMs: number): boolean {
+    const walker = this.walkers.get(characterId);
+
+    if (!walker) {
+      return false;
+    }
+
+    const now = performance.now();
+    walker.pausedUntil = Math.max(walker.pausedUntil ?? now, now + durationMs);
+    this.startAnimationLoop();
+    return true;
+  }
+
   advanceWalkers(timestamp: number): void {
     const completedWalkers: { id: string; walker: WalkState }[] = [];
 
@@ -130,10 +144,20 @@ export class TownMapWalkAnimator {
       characterId,
       onArrive,
       onBlocked,
+      pausedUntil: null,
     };
   }
 
   private advanceWalker(walker: WalkState, timestamp: number): 'continue' | 'done' {
+    if (walker.pausedUntil !== null) {
+      if (timestamp < walker.pausedUntil) {
+        walker.lastTimestamp = timestamp;
+        return 'continue';
+      }
+
+      walker.pausedUntil = null;
+    }
+
     if (walker.lastTimestamp === null) {
       walker.lastTimestamp = timestamp;
     }
@@ -203,4 +227,3 @@ function getInterpolatedPosition(walker: WalkState): GridCoordinate {
     y: from.y + (to.y - from.y) * progress,
   };
 }
-

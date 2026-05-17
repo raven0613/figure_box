@@ -31,13 +31,18 @@
 .info {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-height: 0;
   max-height: 100%;
 }
 
 .panel {
   display: flex;
   gap: 10px;
+  overflow: hidden;
   min-height: 220px;
+  height: min(700px, calc(100vh - 32px));
   max-height: 700px;
   width: fit-content;
   padding: 14px;
@@ -90,8 +95,9 @@
   gap: 6px;
   padding-top: 8px;
   border-top: 1px solid rgba(28, 31, 35, 0.12);
+  min-height: 0;
   overflow-y: auto;
-  flex: 1;
+  flex: 1 1 0;
 }
 
 .characterButton {
@@ -121,6 +127,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
   padding-top: 8px;
   border-top: 1px solid rgba(28, 31, 35, 0.12);
 }
@@ -129,8 +137,43 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
   padding-top: 8px;
   border-top: 1px solid rgba(28, 31, 35, 0.12);
+  flex: 1 1 0;
+}
+
+.godDropPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(28, 31, 35, 0.12);
+}
+
+.godDropActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.godDropButton {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid rgba(59, 119, 110, 0.32);
+  border-radius: 6px;
+  background: #edf7f2;
+  color: #24313a;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.godDropButton strong {
+  color: #2d665e;
 }
 
 .activityRow {

@@ -30,6 +30,18 @@ export class TownMovementCoordinator {
     this.walkingCharacterIds.clear();
   }
 
+  pauseCharacterWalk(characterId: string, durationMs: number): void {
+    if (!this.walkingCharacterIds.has(characterId)) {
+      return;
+    }
+
+    const paused = this.widget.pauseWalk(characterId, durationMs);
+
+    if (!paused) {
+      this.walkingCharacterIds.delete(characterId);
+    }
+  }
+
   placeCharacter(characterId: string, character: {
     position: Position;
     color: string;

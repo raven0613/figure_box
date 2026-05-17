@@ -20,6 +20,8 @@ export interface JoinableActivity {
   endsAt: number;
   activeStartedAt?: number;
   location?: Position;
+  pausedAt?: number;
+  remainingMs?: number;
 }
 
 export interface JoinableActivityStore {
@@ -59,6 +61,8 @@ export interface JoinableActivityManager {
     phase: JoinableActivityPhase,
     location?: Position,
   ) => JoinableActivity | null;
+  pauseActivity: (activityId: string, timestamp: number) => JoinableActivity | null;
+  resumeActivity: (activityId: string, timestamp: number) => JoinableActivity | null;
   findNearbyActivities: (input: FindNearbyJoinableActivitiesInput) => readonly JoinableActivity[];
   endActivity: (activityId: string) => JoinableActivity | null;
   pruneEndedActivities: (timestamp: number) => readonly JoinableActivity[];
@@ -110,7 +114,7 @@ export function createJoinableActivityManager(): JoinableActivityManager {
 
   function getActivities(timestamp?: number): readonly JoinableActivity[] {
     return Array.from(activitiesById.values())
-      .filter(activity => timestamp === undefined || activity.endsAt > timestamp);
+      .filter(activity => timestamp === undefined || isActivityActiveAt(activity, timestamp));
   }
 
   return {
@@ -131,7 +135,7 @@ export function createJoinableActivityManager(): JoinableActivityManager {
       const activity = activitiesById.get(activityId);
       const activityDefinition = activityDefinitionsById.get(activityId);
 
-      if (!activity || !activityDefinition || activity.endsAt <= timestamp) {
+      if (!activity || !activityDefinition || !isActivityActiveAt(activity, timestamp)) {
         return null;
       }
 
@@ -202,7 +206,42 @@ export function createJoinableActivityManager(): JoinableActivityManager {
       activitiesById.set(activityId, nextActivity);
       return nextActivity;
     },
+    pauseActivity: (activityId, timestamp) => {
+      const activity = activitiesById.get(activityId);
+
+      if (!activity || activity.pausedAt !== undefined || activity.endsAt <= timestamp) {
+        return activity ?? null;
+      }
+
+      const nextActivity = {
+        ...activity,
+        pausedAt: timestamp,
+        remainingMs: Math.max(0, activity.endsAt - timestamp),
+      };
+
+      activitiesById.set(activityId, nextActivity);
+      return nextActivity;
+    },
+    resumeActivity: (activityId, timestamp) => {
+      const activity = activitiesById.get(activityId);
+
+      if (!activity || activity.pausedAt === undefined) {
+        return activity ?? null;
+      }
+
+      const remainingMs = activity.remainingMs ?? Math.max(0, activity.endsAt - activity.pausedAt);
+      const nextActivity = {
+        ...activity,
+        endsAt: timestamp + remainingMs,
+        pausedAt: undefined,
+        remainingMs: undefined,
+      };
+
+      activitiesById.set(activityId, nextActivity);
+      return nextActivity;
+    },
     findNearbyActivities: input => getActivities(input.timestamp).filter(activity => (
+      activity.pausedAt === undefined &&
       activity.location !== undefined &&
       isWithinRange(activity.location, input.position, DETECT_RANGE) &&
       (input.phases === undefined || input.phases.includes(activity.phase))
@@ -220,7 +259,7 @@ export function createJoinableActivityManager(): JoinableActivityManager {
     },
     pruneEndedActivities: timestamp => {
       const endedActivities = Array.from(activitiesById.values())
-        .filter(activity => activity.endsAt <= timestamp);
+        .filter(activity => activity.pausedAt === undefined && activity.endsAt <= timestamp);
 
       endedActivities.forEach(activity => {
         activitiesById.delete(activity.id);
@@ -234,6 +273,10 @@ export function createJoinableActivityManager(): JoinableActivityManager {
       activityDefinitionsById.clear();
     },
   };
+}
+
+function isActivityActiveAt(activity: JoinableActivity, timestamp: number): boolean {
+  return activity.pausedAt !== undefined || activity.endsAt > timestamp;
 }
 
 function getActivityDurationForPhase(
