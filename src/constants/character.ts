@@ -147,6 +147,47 @@ export enum Mood {
     Afraid = "afraid",
 }
 
+export interface MoodValueThreshold {
+    minMoodValue: number;
+    mood: Mood;
+}
+
+export const MOOD_VALUE_THRESHOLDS: readonly MoodValueThreshold[] = [
+    { minMoodValue: 0, mood: Mood.Heartbroken },
+    { minMoodValue: 10, mood: Mood.Afraid },
+    { minMoodValue: 20, mood: Mood.Angry },
+    { minMoodValue: 30, mood: Mood.Upset },
+    { minMoodValue: 40, mood: Mood.Sad },
+    { minMoodValue: 50, mood: Mood.Nervous },
+    { minMoodValue: 60, mood: Mood.Peaceful },
+    { minMoodValue: 70, mood: Mood.Relaxed },
+    { minMoodValue: 80, mood: Mood.Happy },
+    { minMoodValue: 95, mood: Mood.Ecstatic },
+];
+
+export function getMoodForMoodValue(moodValue: number): Mood {
+    const clampedMoodValue = clampMoodValue(moodValue);
+
+    for (let index = MOOD_VALUE_THRESHOLDS.length - 1; index >= 0; index -= 1) {
+        const threshold = MOOD_VALUE_THRESHOLDS[index];
+
+        if (clampedMoodValue >= threshold.minMoodValue) {
+            return threshold.mood;
+        }
+    }
+
+    return Mood.Peaceful;
+}
+
+export function getMoodMinValue(mood: Mood): number {
+    return MOOD_VALUE_THRESHOLDS.find(threshold => threshold.mood === mood)
+        ?.minMoodValue ?? 0;
+}
+
+export function clampMoodValue(moodValue: number): number {
+    return Math.max(0, Math.min(100, moodValue));
+}
+
 // 擁有同樣或類似物品可以互動
 // 範例：如果不喜歡對方，可能觸發雖然人很差，但品味倒不錯
 // 雙方互相喜歡，觸發定情信物

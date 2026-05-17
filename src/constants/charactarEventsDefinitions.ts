@@ -2,7 +2,7 @@ import type {
   CharacterEventBucketId,
   UtilityDrivenMotivation,
 } from '~/stateMachines/gameFlow/context';
-import type { Feeling, Position } from '~/constants/character';
+import type { Feeling, Mood, Position } from '~/constants/character';
 import rawCharacterEventDefinitions from '~/constants/events/characterEvents.json';
 import { loadCharacterEventDefinitions } from '../utils/jsonParser/definitionSchema';
 import type {
@@ -79,6 +79,7 @@ export interface CharacterEventInteractionPresentation {
 
 export interface CharacterEventAcceptance {
   minMoodValue?: number;
+  allowedMoods?: readonly Mood[];
   fallbackChance?: number;
 }
 
@@ -121,7 +122,9 @@ export type CharacterEventJoinRequirement =
 // 活動造成的效果
 export interface CharacterEventActivityEffects {
   relationshipIntimacyDelta?: number;
-  relationshipIntimacyDecreaseToFeelingMin?: Feeling;
+  relationshipFeelingTarget?: Feeling;
+  moodValueDelta?: number;
+  moodStageTarget?: Mood;
 }
 
 export interface CharacterEventCooldowns {

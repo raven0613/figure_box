@@ -1,5 +1,10 @@
 import { assign, createMachine, enqueueActions, StateValue } from 'xstate';
-import { Expression, Mood } from '~/constants/character';
+import {
+    clampMoodValue,
+    Expression,
+    getMoodForMoodValue,
+    getMoodMinValue,
+} from '~/constants/character';
 import {
     CharacterBodyActionState,
     CharacterBodyMoveState,
@@ -55,7 +60,7 @@ export const characterMachine = createMachine(
             name: input.name,
             ownItems: [...(input.ownItems ?? [])],
             status: {
-                mood: Mood.Happy,
+                mood: getMoodForMoodValue(65),
                 expression: Expression.Normal,
                 saturation: input.saturation ?? 70,
                 moodValue: 65,
@@ -356,12 +361,14 @@ export const characterMachine = createMachine(
                 },
             }),
             tickStatus: assign({
-                status: ({ context }) => ({
-                    ...context.status,
-                    saturation: Math.max(0, context.status.saturation - SATURATION_LOSS_PER_TICK),
-                    moodValue: Math.max(0, context.status.moodValue - 1),
-                    playNeed: Math.min(100, context.status.playNeed + PLAY_NEED_GAIN_PER_TICK),
-                }),
+                status: ({ context }) => updateCharacterMoodValue(
+                    {
+                        ...context.status,
+                        saturation: Math.max(0, context.status.saturation - SATURATION_LOSS_PER_TICK),
+                        playNeed: Math.min(100, context.status.playNeed + PLAY_NEED_GAIN_PER_TICK),
+                    },
+                    context.status.moodValue - 1,
+                ),
             }),
             updateUtilityScores: assign({
                 utilityScores: ({ context }) => calculateCharacterUtilityScores(context),
@@ -471,7 +478,7 @@ export const characterMachine = createMachine(
                 status: ({ context, event }) => (
                     event.type === EventType.EndJoinedActivity &&
                         context.currentActivity?.activityId === event.activityId
-                        ? getCompletedActivityStatus(context)
+                        ? getCompletedActivityStatus(context, event.activityEffects)
                         : context.status
                 ),
                 pendingActivityJoin: ({ context, event }) => (
@@ -545,11 +552,13 @@ export const characterMachine = createMachine(
                     }
 
                     if (context.currentMotivation === 'play') {
-                        return {
-                            ...context.status,
-                            moodValue: Math.min(100, context.status.moodValue + 18),
-                            playNeed: Math.max(0, context.status.playNeed - PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY),
-                        };
+                        return updateCharacterMoodValue(
+                            {
+                                ...context.status,
+                                playNeed: Math.max(0, context.status.playNeed - PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY),
+                            },
+                            context.status.moodValue + 18,
+                        );
                     }
 
                     return context.status;
@@ -607,26 +616,59 @@ function isLocked(context: CharacterContext, part: keyof CharacterContext['locks
     return context.locks[part].length > 0;
 }
 
-function getCompletedActivityStatus(context: CharacterContext): CharacterContext['status'] {
+function getCompletedActivityStatus(
+    context: CharacterContext,
+    activityEffects: CharacterEventActivity['effects'],
+): CharacterContext['status'] {
     const sourceEventId = context.currentActivity?.sourceEventId;
     const motivation = sourceEventId
         ? CHARACTER_EVENT_DEFINITIONS_BY_ID[sourceEventId]?.motivation
         : undefined;
 
     if (motivation === 'play') {
-        return {
-            ...context.status,
-            moodValue: Math.min(100, context.status.moodValue + 10),
-            playNeed: Math.max(
-                0,
-                context.status.playNeed - PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
-            ),
-        };
+        return applyCompletedActivityMoodEffects(
+            {
+                ...context.status,
+                playNeed: Math.max(
+                    0,
+                    context.status.playNeed - PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
+                ),
+            },
+            context.status.moodValue + 10,
+            activityEffects,
+        );
     }
 
+    return applyCompletedActivityMoodEffects(
+        context.status,
+        context.status.moodValue + 6,
+        activityEffects,
+    );
+}
+
+function applyCompletedActivityMoodEffects(
+    status: CharacterContext['status'],
+    baseMoodValue: number,
+    activityEffects: CharacterEventActivity['effects'],
+): CharacterContext['status'] {
+    const deltaMoodValue = baseMoodValue + (activityEffects?.moodValueDelta ?? 0);
+    const moodValue = activityEffects?.moodStageTarget
+        ? getMoodMinValue(activityEffects.moodStageTarget)
+        : deltaMoodValue;
+
+    return updateCharacterMoodValue(status, moodValue);
+}
+
+function updateCharacterMoodValue(
+    status: CharacterContext['status'],
+    moodValue: number,
+): CharacterContext['status'] {
+    const clampedMoodValue = clampMoodValue(moodValue);
+
     return {
-        ...context.status,
-        moodValue: Math.min(100, context.status.moodValue + 6),
+        ...status,
+        moodValue: clampedMoodValue,
+        mood: getMoodForMoodValue(clampedMoodValue),
     };
 }
 
@@ -649,7 +691,7 @@ function applyCompletedActivityRelationshipEffects(
                     timestamp,
                 );
 
-                if (!activityEffects?.relationshipIntimacyDecreaseToFeelingMin) {
+                if (!activityEffects?.relationshipFeelingTarget) {
                     return changedRelationships;
                 }
 
@@ -657,7 +699,7 @@ function applyCompletedActivityRelationshipEffects(
                     changedRelationships,
                     characterId,
                     participantId,
-                    activityEffects.relationshipIntimacyDecreaseToFeelingMin,
+                    activityEffects.relationshipFeelingTarget,
                     timestamp,
                 );
             },

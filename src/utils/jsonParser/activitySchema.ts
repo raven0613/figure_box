@@ -1,5 +1,5 @@
 import type { CharacterEventActivity } from '../../constants/charactarEventsDefinitions';
-import { Feeling } from '../../constants/character';
+import { Feeling, Mood } from '../../constants/character';
 import {
   includesString,
   isRecord,
@@ -15,6 +15,7 @@ const VALID_ACTIVITY_TYPES = ['chat', 'playWithItem', 'playAtLocation'] as const
 const VALID_ACTIVITY_START_PHASES = ['inviting', 'active', 'traveling'] as const;
 const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
 const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
+const VALID_MOODS = Object.values(Mood) as Mood[];
 
 // activity / joinRequirements parser
 export function readOptionalActivity(
@@ -63,11 +64,9 @@ function readOptionalActivityEffects(
 
   return {
     relationshipIntimacyDelta: readOptionalNumber(value, 'relationshipIntimacyDelta', index),
-    relationshipIntimacyDecreaseToFeelingMin: readOptionalFeeling(
-      value,
-      'relationshipIntimacyDecreaseToFeelingMin',
-      index,
-    ),
+    relationshipFeelingTarget: readOptionalFeeling(value, 'relationshipFeelingTarget', index),
+    moodValueDelta: readOptionalNumber(value, 'moodValueDelta', index),
+    moodStageTarget: readOptionalMood(value, 'moodStageTarget', index),
   };
 }
 
@@ -83,6 +82,24 @@ function readOptionalFeeling(
   }
 
   if (typeof value !== 'string' || !includesString(VALID_FEELINGS, value)) {
+    throw new Error(`Character event definition at index ${index} has invalid ${key}.`);
+  }
+
+  return value;
+}
+
+function readOptionalMood(
+  definition: CharacterEventDefinitionRecord,
+  key: string,
+  index: number,
+): Mood | undefined {
+  const value = definition[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string' || !includesString(VALID_MOODS, value)) {
     throw new Error(`Character event definition at index ${index} has invalid ${key}.`);
   }
 

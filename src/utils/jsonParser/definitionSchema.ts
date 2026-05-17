@@ -5,6 +5,7 @@ import type {
   CharacterEventInterruptPolicy,
   CharacterEventInteractionPresentation,
 } from '../../constants/charactarEventsDefinitions';
+import { Mood } from '../../constants/character';
 import { readCharacterEventAction } from './actionSchema';
 import {
   readOptionalRuleClauses,
@@ -33,6 +34,7 @@ import {
 } from './schemaReaders';
 
 const VALID_INTERRUPT_POLICIES = ['none', 'soft', 'always', 'critical'] as const;
+const VALID_MOODS = Object.values(Mood) as Mood[];
 
 // 把 characterEvents.json 轉成強型別 CharacterEventDefinition[] 的 parser + validator
 export function loadCharacterEventDefinitions(rawDefinitions: unknown): CharacterEventDefinition[] {
@@ -137,8 +139,30 @@ function readOptionalAcceptance(
 
   return {
     minMoodValue: readOptionalNonNegativeNumber(value, 'minMoodValue', index),
+    allowedMoods: readOptionalMoodList(value, 'allowedMoods', index),
     fallbackChance: readOptionalProbability(value, 'fallbackChance', index),
   };
+}
+
+function readOptionalMoodList(
+  definition: CharacterEventDefinitionRecord,
+  key: string,
+  index: number,
+): Mood[] | undefined {
+  const value = definition[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (
+    !Array.isArray(value) ||
+    !value.every(item => typeof item === 'string' && includesString(VALID_MOODS, item))
+  ) {
+    throw new Error(`Character event definition at index ${index} has invalid ${key}.`);
+  }
+
+  return value;
 }
 
 function readOptionalCooldowns(

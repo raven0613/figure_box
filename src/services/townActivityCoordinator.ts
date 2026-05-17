@@ -517,6 +517,12 @@ export class TownActivityCoordinator {
       return false;
     }
 
+    const allowedMoods = definition.acceptance?.allowedMoods;
+
+    if (allowedMoods?.length && !allowedMoods.includes(context.status.mood)) {
+      return false;
+    }
+
     const fallbackChance = definition.acceptance?.fallbackChance ?? 1;
 
     return Math.random() <= fallbackChance;

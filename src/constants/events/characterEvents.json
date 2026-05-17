@@ -278,6 +278,7 @@
     ],
     "acceptance": {
       "minMoodValue": 10,
+      "allowedMoods": ["nervous", "peaceful", "relaxed", "happy", "ecstatic"],
       "fallbackChance": 0.82
     },
     "cooldowns": {
@@ -351,6 +352,7 @@
     ],
     "acceptance": {
       "minMoodValue": 14,
+      "allowedMoods": ["peaceful", "relaxed", "happy", "ecstatic"],
       "fallbackChance": 0.75
     },
     "cooldowns": {
