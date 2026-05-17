@@ -160,6 +160,9 @@
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
+          "effects": {
+            "relationshipIntimacyDelta": 1
+          },
           "joinRequirements": {
             "type": "hasItem",
             "itemId": "toy-ball"
@@ -185,6 +188,9 @@
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
+          "effects": {
+            "relationshipIntimacyDelta": 1
+          },
           "joinRequirements": {
             "type": "hasItem",
             "itemId": "cards"
@@ -232,6 +238,9 @@
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
+          "effects": {
+            "relationshipIntimacyDelta": 1
+          },
           "joinRequirements": {
             "type": "none"
           }
@@ -301,6 +310,9 @@
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 8000,
+          "effects": {
+            "relationshipIntimacyDelta": 1
+          },
           "joinRequirements": {
             "type": "none"
           }
@@ -371,6 +383,9 @@
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
+          "effects": {
+            "relationshipIntimacyDelta": 1
+          },
           "joinRequirements": {
             "type": "none"
           }

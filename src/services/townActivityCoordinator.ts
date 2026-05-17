@@ -2,6 +2,7 @@ import type { Position } from '~/constants/character';
 import {
   CHARACTER_EVENT_DEFINITIONS_BY_ID,
   type CharacterEventActivity,
+  type CharacterEventActivityEffects,
 } from '~/constants/charactarEventsDefinitions';
 import { resolveActivityDestination } from '~/services/characterEvents/targets';
 import { EventType } from '~/stateMachines/gameFlow/events';
@@ -685,6 +686,7 @@ export class TownActivityCoordinator {
       hostCharacterIds: activity.hostCharacterIds,
     });
     const cleanupDelayMs = durationMs || DEFAULT_ACTIVITY_END_DURATION_MS;
+    const activityEffects = this.getActivityEffects(activity);
 
     window.setTimeout(() => {
       this.clearActivityVisuals(activity);
@@ -692,6 +694,8 @@ export class TownActivityCoordinator {
         this.sendToCharacter(participantId, {
           type: EventType.EndJoinedActivity,
           activityId: activity.id,
+          participantIds: activity.participantIds,
+          activityEffects,
           timestamp,
         });
       });
@@ -749,6 +753,13 @@ export class TownActivityCoordinator {
         ?.find(variant => variant.activity?.key === activity.activityKey)
         ?.id,
     };
+  }
+
+  private getActivityEffects(activity: JoinableActivity): CharacterEventActivityEffects | undefined {
+    return CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId]?.presentationVariants
+      ?.find(variant => variant.activity?.key === activity.activityKey)
+      ?.activity
+      ?.effects;
   }
 
   private getJoinBubbleText(activity: JoinableActivity): string {

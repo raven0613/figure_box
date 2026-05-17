@@ -1,4 +1,6 @@
 import { Expression, Position } from "~/constants/character";
+import type { CharacterEventActivityEffects } from "~/constants/charactarEventsDefinitions";
+import type { CharacterEventNearbyRelationship } from "~/services/characterEvents/types";
 import type { JoinableActivity } from "~/services/characterEvents/joinableActivities";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
 
@@ -20,6 +22,7 @@ export type CharacterEvent =
   | {
     type: EventType.Tick;
     nearbyCharacterIds?: string[];
+    nearbyRelationships?: readonly CharacterEventNearbyRelationship[];
     nearbyJoinableActivities?: readonly JoinableActivity[];
     globalEventTags?: string[];
     timestamp?: number;
@@ -33,7 +36,13 @@ export type CharacterEvent =
   | { type: EventType.JoinActivity; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivityAccepted; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivityRejected; activityId: string }
-  | { type: EventType.EndJoinedActivity; activityId: string; timestamp?: number }
+  | {
+    type: EventType.EndJoinedActivity;
+    activityId: string;
+    participantIds?: readonly string[];
+    activityEffects?: CharacterEventActivityEffects;
+    timestamp?: number;
+  }
   | {
     type: EventType.RecordActivityCooldown;
     partnerCharIds: string[];

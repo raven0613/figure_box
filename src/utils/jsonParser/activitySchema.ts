@@ -1,9 +1,11 @@
 import type { CharacterEventActivity } from '../../constants/charactarEventsDefinitions';
+import { Feeling } from '../../constants/character';
 import {
   includesString,
   isRecord,
   readOptionalBoolean,
   readOptionalNonNegativeNumber,
+  readOptionalNumber,
   readRequiredNonNegativeNumber,
   readRequiredString,
   type CharacterEventDefinitionRecord,
@@ -12,6 +14,7 @@ import {
 const VALID_ACTIVITY_TYPES = ['chat', 'playWithItem', 'playAtLocation'] as const;
 const VALID_ACTIVITY_START_PHASES = ['inviting', 'active', 'traveling'] as const;
 const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
+const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
 
 // activity / joinRequirements parser
 export function readOptionalActivity(
@@ -40,7 +43,50 @@ export function readOptionalActivity(
     refreshDurationOnJoin: readOptionalBoolean(value, 'refreshDurationOnJoin', index),
     joinWindowMs: readOptionalNonNegativeNumber(value, 'joinWindowMs', index),
     joinRequirements: readOptionalJoinRequirement(value, index),
+    effects: readOptionalActivityEffects(value, index),
   };
+}
+
+function readOptionalActivityEffects(
+  activity: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['effects'] {
+  const value = activity.effects;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.effects.`);
+  }
+
+  return {
+    relationshipIntimacyDelta: readOptionalNumber(value, 'relationshipIntimacyDelta', index),
+    relationshipIntimacyDecreaseToFeelingMin: readOptionalFeeling(
+      value,
+      'relationshipIntimacyDecreaseToFeelingMin',
+      index,
+    ),
+  };
+}
+
+function readOptionalFeeling(
+  definition: CharacterEventDefinitionRecord,
+  key: string,
+  index: number,
+): Feeling | undefined {
+  const value = definition[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string' || !includesString(VALID_FEELINGS, value)) {
+    throw new Error(`Character event definition at index ${index} has invalid ${key}.`);
+  }
+
+  return value;
 }
 
 function readOptionalInvite(

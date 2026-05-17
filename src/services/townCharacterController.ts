@@ -1,5 +1,5 @@
 import { createActor } from 'xstate';
-import { CHARACTER_SEEDS, Expression, type Position } from '~/constants/character';
+import { CHARACTER_SEEDS, Expression, SocialStatus, type Position } from '~/constants/character';
 import { characterMachine } from '~/stateMachines/gameFlow/children/character';
 import { CharacterPerformanceRunner } from '~/services/characterEvents/characterPerformanceRunner';
 import {
@@ -10,6 +10,8 @@ import {
 import { EventType, type CharacterEvent } from '~/stateMachines/gameFlow/events';
 import {
   createRelationshipStore,
+  getFeelingForIntimacy,
+  normalizeRelationshipPair,
   type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
 import { TownActivityCoordinator } from '~/services/townActivityCoordinator';
@@ -20,6 +22,7 @@ import type {
   CharacterSeed,
   CharacterSnapshot,
 } from '~/services/townCharacterTypes';
+import type { CharacterEventNearbyRelationship } from '~/services/characterEvents/types';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import type { GridCoordinate } from '~/widgets/townMapGrid';
@@ -254,10 +257,12 @@ export class TownCharacterController {
       }
 
       const allowAutonomousDecision = this.canCharacterDecideNow(character.id, timestamp);
+      const nearbyCharacterIds = this.getNearbyCharacterIds(character.id, 2);
 
       this.sendToCharacter(character.id, {
         type: EventType.Tick,
-        nearbyCharacterIds: this.getNearbyCharacterIds(character.id, 2),
+        nearbyCharacterIds,
+        nearbyRelationships: this.getNearbyRelationshipSnapshots(character.id, nearbyCharacterIds),
         nearbyJoinableActivities: this.activityCoordinator.getNearbyJoinableActivities(character.id, timestamp),
         timestamp,
         allowAutonomousDecision,
@@ -317,6 +322,37 @@ export class TownCharacterController {
 
   private notifyJoinableActivitiesChanged(): void {
     this.onJoinableActivitiesChange?.(this.activityManager.getActivities());
+  }
+
+  private getNearbyRelationshipSnapshots(
+    characterId: string,
+    nearbyCharacterIds: readonly string[],
+  ): CharacterEventNearbyRelationship[] {
+    const relationships = this.getCharacterSnapshot(characterId)?.context.relationships ?? [];
+
+    return nearbyCharacterIds.map(targetCharacterId => {
+      const relationship = relationships.find(entry => entry.targetCharId === targetCharacterId);
+      const intimacy = relationship?.intimacy ?? 0;
+
+      return {
+        characterId: targetCharacterId,
+        intimacy,
+        feeling: relationship?.feeling ?? getFeelingForIntimacy(intimacy),
+        socialStatus: this.getMutualRelationshipStatus(characterId, targetCharacterId),
+      };
+    });
+  }
+
+  private getMutualRelationshipStatus(characterId: string, targetCharacterId: string): SocialStatus {
+    const pair = normalizeRelationshipPair(characterId, targetCharacterId);
+
+    if (!pair) {
+      return SocialStatus.Stranger;
+    }
+
+    return this.relationshipStore.mutualRelationships.find(relationship => (
+      relationship.charIds[0] === pair[0] && relationship.charIds[1] === pair[1]
+    ))?.status ?? SocialStatus.Stranger;
   }
 
   private sendToCharacter(characterId: string, event: CharacterEvent): boolean {

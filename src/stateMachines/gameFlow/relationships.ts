@@ -15,6 +15,26 @@ export interface RelationshipStore {
 
 const EMPTY_STARTED_BY_ID = '';
 const IMPRESSION_COOLDOWN_MS = 60 * 1000;
+const MIN_INTIMACY = -100;
+const MAX_INTIMACY = 100;
+
+export interface RelationshipStageThreshold<TStage extends string> {
+  minIntimacy: number;
+  stage: TStage;
+}
+
+export const FEELING_INTIMACY_THRESHOLDS: readonly RelationshipStageThreshold<Feeling>[] = [
+  { minIntimacy: -100, stage: Feeling.Hate },
+  { minIntimacy: -70, stage: Feeling.Dislike },
+  { minIntimacy: -40, stage: Feeling.Wary },
+  { minIntimacy: -10, stage: Feeling.Neutral },
+  { minIntimacy: 10, stage: Feeling.Warm },
+  { minIntimacy: 25, stage: Feeling.Like },
+  { minIntimacy: 45, stage: Feeling.Fond },
+  { minIntimacy: 65, stage: Feeling.SecretCrush },
+  { minIntimacy: 80, stage: Feeling.OpenCrush },
+  { minIntimacy: 95, stage: Feeling.Love },
+];
 
 export function createRelationshipStore(): RelationshipStore {
   return {
@@ -34,6 +54,55 @@ export function rememberPassBy(
     charId,
     targetCharId,
     relationship => rememberImpression(relationship, timestamp),
+    timestamp,
+  );
+}
+
+export function changeRelationshipIntimacy(
+  relationships: DirectedRelationship[],
+  charId: string,
+  targetCharId: string,
+  delta: number,
+  timestamp: number = Date.now(),
+): DirectedRelationship[] {
+  if (delta === 0) {
+    return relationships;
+  }
+
+  return upsertDirectedRelationship(
+    relationships,
+    charId,
+    targetCharId,
+    relationship => updateDirectedRelationshipIntimacy(relationship, delta),
+    timestamp,
+  );
+}
+
+export function getFeelingForIntimacy(intimacy: number): Feeling {
+  return getRelationshipStageForIntimacy(
+    FEELING_INTIMACY_THRESHOLDS,
+    intimacy,
+    Feeling.Neutral,
+  );
+}
+
+export function getFeelingMinIntimacy(feeling: Feeling): number {
+  return FEELING_INTIMACY_THRESHOLDS.find(threshold => threshold.stage === feeling)
+    ?.minIntimacy ?? 0;
+}
+
+export function decreaseRelationshipIntimacyToFeelingMin(
+  relationships: DirectedRelationship[],
+  charId: string,
+  targetCharId: string,
+  feeling: Feeling,
+  timestamp: number = Date.now(),
+): DirectedRelationship[] {
+  return upsertDirectedRelationship(
+    relationships,
+    charId,
+    targetCharId,
+    relationship => decreaseDirectedRelationshipIntimacyToFeelingMin(relationship, feeling),
     timestamp,
   );
 }
@@ -185,8 +254,8 @@ export function createDirectedRelationship(
   return {
     charId,
     targetCharId,
-    feeling: Feeling.Neutral,
     intimacy: 0,
+    feeling: getFeelingForIntimacy(0),
     memories: createMemoryValueMap(timestamp),
   };
 }
@@ -274,4 +343,52 @@ function isSameRelationshipPair(
   right: [string, string],
 ): boolean {
   return left[0] === right[0] && left[1] === right[1];
+}
+
+function updateDirectedRelationshipIntimacy(
+  relationship: DirectedRelationship,
+  delta: number,
+): DirectedRelationship {
+  const intimacy = clampIntimacy(relationship.intimacy + delta);
+
+  return {
+    ...relationship,
+    intimacy,
+    feeling: getFeelingForIntimacy(intimacy),
+  };
+}
+
+function decreaseDirectedRelationshipIntimacyToFeelingMin(
+  relationship: DirectedRelationship,
+  feeling: Feeling,
+): DirectedRelationship {
+  const intimacy = Math.min(relationship.intimacy, getFeelingMinIntimacy(feeling));
+
+  return {
+    ...relationship,
+    intimacy,
+    feeling: getFeelingForIntimacy(intimacy),
+  };
+}
+
+function clampIntimacy(intimacy: number): number {
+  return Math.max(MIN_INTIMACY, Math.min(MAX_INTIMACY, intimacy));
+}
+
+function getRelationshipStageForIntimacy<TStage extends string>(
+  thresholds: readonly RelationshipStageThreshold<TStage>[],
+  intimacy: number,
+  fallbackStage: TStage,
+): TStage {
+  const clampedIntimacy = clampIntimacy(intimacy);
+
+  for (let index = thresholds.length - 1; index >= 0; index -= 1) {
+    const threshold = thresholds[index];
+
+    if (clampedIntimacy >= threshold.minIntimacy) {
+      return threshold.stage;
+    }
+  }
+
+  return fallbackStage;
 }

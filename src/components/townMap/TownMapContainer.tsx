@@ -404,6 +404,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationship
               <strong>{relationship.feeling}</strong>
             </div>
             <div className={styles.detailRow}>
+              <span>Intimacy</span>
+              <strong>{relationship.intimacy}</strong>
+            </div>
+            <div className={styles.detailRow}>
               <span>Relationship</span>
               <strong>{mutualStatus}</strong>
             </div>

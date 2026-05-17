@@ -33,6 +33,9 @@ export interface CharacterEventRuleContext {
 interface CharacterEventRuleInputSnapshot {
   nearbyCharacterIds: string[];
   nearbyCharacterCount: number;
+  nearbyRelationshipFeelings: string[];
+  nearbyRelationshipIntimacies: number[];
+  nearbySocialStatuses: string[];
   nearbyJoinableActivityCount: number;
   ownItemIds: string[];
   ownItemCount: number;
@@ -45,6 +48,7 @@ export function createCharacterEventRuleContext(
   input: CharacterEventDecisionInput,
 ): CharacterEventRuleContext {
   const nearbyCharacterIds = input.nearbyCharacterIds ?? [];
+  const nearbyRelationships = input.nearbyRelationships ?? [];
   const nearbyJoinableActivities = input.nearbyJoinableActivities ?? [];
   const globalEventTags = input.globalEventTags ?? [];
   const ownItemIds = character.ownItems.map(item => item.id);
@@ -55,6 +59,9 @@ export function createCharacterEventRuleContext(
     input: {
       nearbyCharacterIds,
       nearbyCharacterCount: nearbyCharacterIds.length,
+      nearbyRelationshipFeelings: nearbyRelationships.map(relationship => relationship.feeling),
+      nearbyRelationshipIntimacies: nearbyRelationships.map(relationship => relationship.intimacy),
+      nearbySocialStatuses: nearbyRelationships.map(relationship => relationship.socialStatus),
       nearbyJoinableActivityCount: nearbyJoinableActivities.length,
       ownItemIds,
       ownItemCount: ownItemIds.length,

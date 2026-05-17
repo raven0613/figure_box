@@ -9,7 +9,11 @@ import {
 } from '../states';
 import { CharacterEvent, EventType } from '../events';
 import { CharacterContext, CharacterMachineInput, CharacterUtilityScores } from '../context';
-import { rememberPassBy } from '../relationships';
+import {
+    changeRelationshipIntimacy,
+    decreaseRelationshipIntimacyToFeelingMin,
+    rememberPassBy,
+} from '../relationships';
 import { decideCharacterEvent } from '~/services/characterEvents/decision';
 import {
     calculateCharacterUtilityScores,
@@ -25,7 +29,10 @@ import {
     createEmptyActivityCooldowns,
     recordActivityCooldowns,
 } from '~/services/characterEvents/activityCooldowns';
-import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDefinitions';
+import {
+    CHARACTER_EVENT_DEFINITIONS_BY_ID,
+    type CharacterEventActivity,
+} from '~/constants/charactarEventsDefinitions';
 
 const INITIAL_UTILITY_SCORES: CharacterUtilityScores = {
     idle: 10,
@@ -374,6 +381,7 @@ export const characterMachine = createMachine(
 
                 const decision = decideCharacterEvent(context, {
                     nearbyCharacterIds: event.nearbyCharacterIds,
+                    nearbyRelationships: event.nearbyRelationships,
                     nearbyJoinableActivities: event.nearbyJoinableActivities,
                     globalEventTags: event.globalEventTags,
                     timestamp: event.timestamp,
@@ -477,6 +485,18 @@ export const characterMachine = createMachine(
                         context.currentActivity?.activityId === event.activityId
                         ? null
                         : context.currentActivity
+                ),
+                relationships: ({ context, event }) => (
+                    event.type === EventType.EndJoinedActivity &&
+                        context.currentActivity?.activityId === event.activityId
+                        ? applyCompletedActivityRelationshipEffects(
+                            context.relationships,
+                            context.id,
+                            event.participantIds ?? [],
+                            event.activityEffects,
+                            event.timestamp ?? Date.now(),
+                        )
+                        : context.relationships
                 ),
                 currentMotivation: () => 'idle',
             }),
@@ -608,6 +628,41 @@ function getCompletedActivityStatus(context: CharacterContext): CharacterContext
         ...context.status,
         moodValue: Math.min(100, context.status.moodValue + 6),
     };
+}
+
+function applyCompletedActivityRelationshipEffects(
+    relationships: CharacterContext['relationships'],
+    characterId: string,
+    participantIds: readonly string[],
+    activityEffects: CharacterEventActivity['effects'],
+    timestamp: number,
+): CharacterContext['relationships'] {
+    return participantIds
+        .filter(participantId => participantId !== characterId)
+        .reduce(
+            (nextRelationships, participantId) => {
+                const changedRelationships = changeRelationshipIntimacy(
+                    nextRelationships,
+                    characterId,
+                    participantId,
+                    activityEffects?.relationshipIntimacyDelta ?? 0,
+                    timestamp,
+                );
+
+                if (!activityEffects?.relationshipIntimacyDecreaseToFeelingMin) {
+                    return changedRelationships;
+                }
+
+                return decreaseRelationshipIntimacyToFeelingMin(
+                    changedRelationships,
+                    characterId,
+                    participantId,
+                    activityEffects.relationshipIntimacyDecreaseToFeelingMin,
+                    timestamp,
+                );
+            },
+            relationships,
+        );
 }
 
 function canMakeAutonomousDecision(context: CharacterContext): boolean {

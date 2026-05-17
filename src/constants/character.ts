@@ -156,17 +156,27 @@ export enum Mood {
 // 1. 單向的個人情感 (主觀的心情)
 export enum Feeling {
     Hate = "hate",
+    Dislike = "dislike",
+    Wary = "wary", // 提防的
     Neutral = "neutral", // 無感
+    Warm = "warm",
     Like = "like",
+    Fond = "fond", // 溺愛
     SecretCrush = "secret_crush", // 暗戀
     OpenCrush = "open_crush",     // 明戀
+    Love = "love",
 }
 
 // 2. 雙向的社會關係 (客觀的事實)
 export enum SocialStatus {
+    Hostile = "hostile",
+    Distant = "distant",
     Stranger = "stranger",
     Acquaintance = "acquaintance",
+    Friendly = "friendly",
     Friend = "friend",
+    CloseFriend = "close_friend",
+    BestFriend = "best_friend",
     Lovers = "lovers",
     Married = "married"
 }
@@ -176,7 +186,6 @@ export interface DirectedRelationship {
     charId: string; // owner
     targetCharId: string; // 對方
     feeling: Feeling;
-    // 可以再擴充：例如隱藏的數值化好感度，用來決定什麼時候升級 Feeling
     intimacy: number; // 親密度 (-100 到 100，預設0),
     memories: MemoryValueMap;
 }

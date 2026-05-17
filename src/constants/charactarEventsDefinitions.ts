@@ -2,7 +2,7 @@ import type {
   CharacterEventBucketId,
   UtilityDrivenMotivation,
 } from '~/stateMachines/gameFlow/context';
-import type { Position } from '~/constants/character';
+import type { Feeling, Position } from '~/constants/character';
 import rawCharacterEventDefinitions from '~/constants/events/characterEvents.json';
 import { loadCharacterEventDefinitions } from '../utils/jsonParser/definitionSchema';
 import type {
@@ -94,6 +94,7 @@ export interface CharacterEventActivity {
   refreshDurationOnJoin?: boolean;
   joinWindowMs?: number;
   joinRequirements?: CharacterEventJoinRequirement;
+  effects?: CharacterEventActivityEffects;
 }
 
 export type CharacterEventActivityType = 'chat' | 'playWithItem' | 'playAtLocation';
@@ -116,6 +117,12 @@ export interface CharacterEventGroupActivity {
 export type CharacterEventJoinRequirement =
   | { type: 'none' }
   | { type: 'hasItem'; itemId: string };
+
+// 活動造成的效果
+export interface CharacterEventActivityEffects {
+  relationshipIntimacyDelta?: number;
+  relationshipIntimacyDecreaseToFeelingMin?: Feeling;
+}
 
 export interface CharacterEventCooldowns {
   selfMs?: number;
