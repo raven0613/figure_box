@@ -13,7 +13,8 @@ export type TownMapObjectType =
   | 'bookcase'
   | 'statue'
   | 'noticeBoard'
-  | 'gate';
+  | 'gate'
+  | 'apartment';
 
 export type TownMapObjectLayer = 'floorObject' | 'wallObject' | 'decoration';
 
@@ -24,6 +25,7 @@ export interface TownMapObjectData {
   x: number;
   y: number;
   width: number;
+  length: number;
   height: number;
   layer: TownMapObjectLayer;
   blocksMovement: boolean;
@@ -87,6 +89,28 @@ export interface Destination {
   readonly serviceTiles: readonly { readonly x: number; readonly y: number }[];
 }
 
+export interface TownMapFloorDecorationData {
+  id: string;
+  type: 'tilePattern';
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  length: number;
+}
+
+export const TOWN_MAP_FLOOR_DECORATIONS: readonly TownMapFloorDecorationData[] = [
+  {
+    id: 'central-plaza-tile-pattern',
+    type: 'tilePattern',
+    label: '中央廣場地磚',
+    x: 37,
+    y: 18,
+    width: 16,
+    length: 12,
+  },
+];
+
 export const DESTINATION_MAP: Record<string, readonly Destination[]> = {
   findFood: [
     { name: '披薩店', serviceTiles: [{ x: 39, y: 4 }, { x: 40, y: 4 }, { x: 41, y: 4 }] },
@@ -106,12 +130,26 @@ export const DESTINATION_MAP: Record<string, readonly Destination[]> = {
 
 export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
   {
+    id: 'town-residence-apartment',
+    type: 'apartment',
+    label: '大家的公寓',
+    x: 58,
+    y: 0,
+    width: 12,
+    length: 12,
+    height: 12,
+    layer: 'wallObject',
+    blocksMovement: true,
+    interactable: true,
+  },
+  {
     id: 'test-tall-bookcase',
     type: 'bookcase',
     label: '高書櫃',
     x: 21,
     y: 20,
     width: 2,
+    length: 4,
     height: 4,
     layer: 'wallObject',
     blocksMovement: true,
@@ -124,6 +162,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     x: 43,
     y: 21,
     width: 2,
+    length: 3,
     height: 3,
     layer: 'decoration',
     blocksMovement: true,
@@ -136,6 +175,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     x: 43,
     y: 5,
     width: 5,
+    length: 3,
     height: 3,
     layer: 'decoration',
     blocksMovement: false,
@@ -148,6 +188,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     x: 6,
     y: 48,
     width: 2,
+    length: 2,
     height: 2,
     layer: 'floorObject',
     blocksMovement: true,
@@ -160,6 +201,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     x: 5,
     y: 49,
     width: 1,
+    length: 2,
     height: 2,
     layer: 'floorObject',
     blocksMovement: true,
@@ -172,6 +214,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     x: 8,
     y: 49,
     width: 1,
+    length: 2,
     height: 2,
     layer: 'floorObject',
     blocksMovement: true,
@@ -184,6 +227,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     x: 63,
     y: 40,
     width: 2,
+    length: 3,
     height: 3,
     layer: 'wallObject',
     blocksMovement: true,
@@ -196,6 +240,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     x: 0,
     y: 0,
     width: 3,
+    length: 3,
     height: 3,
     layer: 'decoration',
     blocksMovement: true,
@@ -208,6 +253,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     x: 0,
     y: 0,
     width: 1,
+    length: 1,
     height: 3,
     layer: 'decoration',
     blocksMovement: true,

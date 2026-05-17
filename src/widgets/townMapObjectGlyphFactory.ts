@@ -201,6 +201,7 @@ export class MapObjectGlyphFactory {
       statue: 'St',
       noticeBoard: 'N',
       gate: 'Ga',
+      apartment: 'Apt',
     };
 
     return glyphs[type];
@@ -221,6 +222,7 @@ export class MapObjectGlyphFactory {
       statue: '#7c8792',
       noticeBoard: '#8a633f',
       gate: '#4f6c78',
+      apartment: '#635247',
     };
 
     return fills[type];
@@ -236,4 +238,3 @@ export class MapObjectGlyphFactory {
     return ranks[layer];
   }
 }
-

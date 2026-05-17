@@ -15,7 +15,12 @@ import { DEFAULT_CELL_SIZE } from '../constants/townMapWidgetConstants';
 import type { Expression } from '~/constants/character';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
-import type { TownMapCellData, TownMapObjectData } from '~/constants/townMap';
+import {
+  TOWN_MAP_FLOOR_DECORATIONS,
+  type TownMapCellData,
+  type TownMapFloorDecorationData,
+  type TownMapObjectData,
+} from '~/constants/townMap';
 import type {
   FabricTownMapOptions,
   TownMapCharacter,
@@ -325,6 +330,43 @@ export class FabricTownMapWidget {
       this.baseContext.lineWidth = 1;
       this.baseContext.strokeRect(x + 0.5, y + 0.5, this.cellSize, this.cellSize);
     });
+
+    TOWN_MAP_FLOOR_DECORATIONS.forEach(decoration => {
+      this.drawFloorDecoration(decoration);
+    });
+  }
+
+  private drawFloorDecoration(decoration: TownMapFloorDecorationData): void {
+    const left = decoration.x * this.cellSize;
+    const top = decoration.y * this.cellSize;
+    const width = decoration.width * this.cellSize;
+    const height = decoration.length * this.cellSize;
+    const tileSize = this.cellSize;
+
+    this.baseContext.save();
+    this.baseContext.fillStyle = 'rgba(229, 214, 181, 0.82)';
+    this.baseContext.fillRect(left, top, width, height);
+    this.baseContext.strokeStyle = 'rgba(124, 101, 72, 0.5)';
+    this.baseContext.lineWidth = 1;
+
+    for (let x = left; x <= left + width; x += tileSize) {
+      this.baseContext.beginPath();
+      this.baseContext.moveTo(x + 0.5, top);
+      this.baseContext.lineTo(x + 0.5, top + height);
+      this.baseContext.stroke();
+    }
+
+    for (let y = top; y <= top + height; y += tileSize) {
+      this.baseContext.beginPath();
+      this.baseContext.moveTo(left, y + 0.5);
+      this.baseContext.lineTo(left + width, y + 0.5);
+      this.baseContext.stroke();
+    }
+
+    this.baseContext.strokeStyle = 'rgba(91, 72, 52, 0.75)';
+    this.baseContext.lineWidth = 2;
+    this.baseContext.strokeRect(left + 1, top + 1, width - 2, height - 2);
+    this.baseContext.restore();
   }
 
   private drawMapObjects(): void {

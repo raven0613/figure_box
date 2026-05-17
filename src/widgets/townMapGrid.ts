@@ -330,10 +330,17 @@ export class TownMapGrid {
     const treeTemplate = mapObjects.find(object => object.id === 'test-tree');
     const lampTemplate = mapObjects.find(object => object.id === 'test-streetlight');
     const templateIds = new Set(['test-tree', 'test-streetlight']);
+    const explicitMapObjects = mapObjects
+      .filter(object => !templateIds.has(object.id))
+      .map(object => ({ ...object }));
 
     return [
       ...rows.flatMap((row, y) => row.flatMap((cell, x) => {
         if (!cell.interactableObject) {
+          return [];
+        }
+
+        if (explicitMapObjects.some(object => object.blocksMovement && this.isObjectOccupyingTile(object, x, y))) {
           return [];
         }
 
@@ -364,15 +371,14 @@ export class TownMapGrid {
           x,
           y,
           width: 1,
+          length: 1,
           height: 1,
           layer: 'decoration' as const,
           blocksMovement: !cell.walkable,
           interactable: true,
         }];
       })),
-      ...mapObjects
-        .filter(object => !templateIds.has(object.id))
-        .map(object => ({ ...object })),
+      ...explicitMapObjects,
     ];
   }
 
@@ -390,7 +396,7 @@ export class TownMapGrid {
     return x >= object.x
       && x < object.x + object.width
       && y >= object.y
-      && y < object.y + object.height;
+      && y < object.y + object.length;
   }
 
   private toIndex(x: number, y: number): number {
