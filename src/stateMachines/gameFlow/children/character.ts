@@ -9,6 +9,7 @@ import {
     CharacterBodyActionState,
     CharacterBodyMoveState,
     CharacterCommunicationState,
+    CharacterControlState,
     CharacterMindState,
     CharacterStateSummary,
 } from '../states';
@@ -74,6 +75,7 @@ export const characterMachine = createMachine(
             utilityScores: INITIAL_UTILITY_SCORES,
             lastEventDecision: null,
             currentMotivation: 'idle',
+            controlState: CharacterControlState.Normal,
             pendingActivityJoin: null,
             currentActivity: null,
             activityCooldowns: createEmptyActivityCooldowns(),
@@ -148,6 +150,7 @@ export const characterMachine = createMachine(
                 actions: ['setActivityMotivation', 'setPendingActivityJoin'],
             },
             [EventType.JoinActivityAccepted]: {
+                guard: 'shouldAcceptActivityJoin',
                 target: [
                     '.bodyAction.socializing',
                     '.bodyMove.stand',
@@ -157,6 +160,7 @@ export const characterMachine = createMachine(
                 actions: ['setActivityMotivation', 'acceptActivityJoin'],
             },
             [EventType.JoinActivityRejected]: {
+                guard: 'shouldRejectActivityJoin',
                 target: [
                     '.bodyAction.idle',
                     '.bodyMove.stand',
@@ -181,6 +185,28 @@ export const characterMachine = createMachine(
             [EventType.ApplyRequestEffects]: {
                 actions: 'applyRequestEffects',
             },
+            [EventType.SetControlState]: [
+                {
+                    guard: 'shouldSetRequestFulfillmentControl',
+                    target: '.control.requestFulfillment',
+                    actions: 'setControlState',
+                },
+                {
+                    guard: 'shouldSetDialogueControl',
+                    target: '.control.dialogue',
+                    actions: 'setControlState',
+                },
+                {
+                    guard: 'shouldSetRelationshipMomentControl',
+                    target: '.control.relationshipMoment',
+                    actions: 'setControlState',
+                },
+                {
+                    guard: 'shouldSetNormalControl',
+                    target: '.control.normal',
+                    actions: 'setControlState',
+                },
+            ],
             [EventType.GoIdle]: {
                 guard: 'shouldChangeToIdle',
                 target: [
@@ -290,38 +316,57 @@ export const characterMachine = createMachine(
                     [CharacterCommunicationState.Requesting]: {},
                 },
             },
+            control: {
+                initial: CharacterControlState.Normal,
+                states: {
+                    [CharacterControlState.Normal]: {},
+                    [CharacterControlState.RequestFulfillment]: {},
+                    [CharacterControlState.RelationshipMoment]: {},
+                    [CharacterControlState.Dialogue]: {},
+                },
+            },
         },
     },
     {
         guards: {
-            canReceiveLogicCommand: ({ context }) => !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove'),
+            canReceiveLogicCommand: ({ context }) => canReceiveNormalLogicCommand(context),
             shouldChangeToFindFood: ({ context }) => (
-                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                canReceiveNormalLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
                 (context.currentMotivation !== 'findFood' || context.target === null)
             ),
             shouldChangeToRest: ({ context }) => (
-                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                canReceiveNormalLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'rest'
             ),
             shouldChangeToPlay: ({ context }) => (
-                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                canReceiveNormalLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
                 (context.currentMotivation !== 'play' || context.target === null)
             ),
             shouldStartActivity: ({ context }) => (
-                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                canReceiveNormalLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
                 context.target === null &&
                 context.currentActivity === null &&
                 context.pendingActivityJoin === null
             ),
             shouldJoinActivity: ({ context }) => (
-                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                canReceiveNormalLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
                 context.target === null &&
                 context.currentActivity === null &&
                 context.pendingActivityJoin === null
+            ),
+            shouldAcceptActivityJoin: ({ context, event }) => (
+                canReceiveNormalLogicCommand(context) &&
+                event.type === EventType.JoinActivityAccepted &&
+                context.pendingActivityJoin?.activityId === event.activityId
+            ),
+            shouldRejectActivityJoin: ({ context, event }) => (
+                canReceiveNormalLogicCommand(context) &&
+                event.type === EventType.JoinActivityRejected &&
+                context.pendingActivityJoin?.activityId === event.activityId
             ),
             shouldEndJoinedActivity: ({ context, event }) => (
                 event.type === EventType.EndJoinedActivity &&
@@ -331,11 +376,32 @@ export const characterMachine = createMachine(
                 )
             ),
             shouldChangeToIdle: ({ context }) => (
-                !isLocked(context, 'bodyAction') && !isLocked(context, 'bodyMove') &&
+                canReceiveNormalLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'idle'
+            ),
+            shouldSetRequestFulfillmentControl: ({ event }) => (
+                event.type === EventType.SetControlState &&
+                event.controlState === CharacterControlState.RequestFulfillment
+            ),
+            shouldSetDialogueControl: ({ event }) => (
+                event.type === EventType.SetControlState &&
+                event.controlState === CharacterControlState.Dialogue
+            ),
+            shouldSetRelationshipMomentControl: ({ event }) => (
+                event.type === EventType.SetControlState &&
+                event.controlState === CharacterControlState.RelationshipMoment
+            ),
+            shouldSetNormalControl: ({ event }) => (
+                event.type === EventType.SetControlState &&
+                event.controlState === CharacterControlState.Normal
             ),
         },
         actions: {
+            setControlState: assign({
+                controlState: ({ context, event }) => (
+                    event.type === EventType.SetControlState ? event.controlState : context.controlState
+                ),
+            }),
             setExpression: assign({
                 status: ({ context, event }) => {
                     if (event.type !== EventType.SetExpression) return context.status;
@@ -626,6 +692,9 @@ export function getCharacterStateSummary(value: StateValue): CharacterStateSumma
         communication: (
             parallelValue.communication ?? CharacterCommunicationState.Null
         ) as CharacterCommunicationState,
+        control: (
+            parallelValue.control ?? CharacterControlState.Normal
+        ) as CharacterControlState,
     };
 }
 
@@ -642,6 +711,10 @@ export function formatCharacterStateValue(value: StateValue): string {
 
 function isLocked(context: CharacterContext, part: keyof CharacterContext['locks']) {
     return context.locks[part].length > 0;
+}
+
+function canReceiveNormalLogicCommand(context: CharacterContext): boolean {
+    return context.controlState === CharacterControlState.Normal;
 }
 
 function getCompletedActivityStatus(

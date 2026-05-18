@@ -6,6 +6,7 @@ import {
 } from '~/constants/charactarEventsDefinitions';
 import { resolveActivityDestination } from '~/services/characterEvents/targets';
 import { EventType } from '~/stateMachines/gameFlow/events';
+import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
 import type { CharacterPerformanceRunner } from '~/services/characterEvents/characterPerformanceRunner';
 import type {
@@ -124,6 +125,10 @@ export class TownActivityCoordinator {
     const activityJoin = snapshot.context.pendingActivityJoin;
 
     if (!activityJoin) {
+      return;
+    }
+
+    if (snapshot.context.controlState !== CharacterControlState.Normal) {
       return;
     }
 
@@ -329,6 +334,10 @@ export class TownActivityCoordinator {
       return false;
     }
 
+    if (context.controlState !== CharacterControlState.Normal) {
+      return false;
+    }
+
     const joinRequirements = activity.joinRequirements;
 
     switch (joinRequirements.type) {
@@ -405,6 +414,7 @@ export class TownActivityCoordinator {
     }
 
     if (
+      context.controlState !== CharacterControlState.Normal ||
       context.currentMotivation !== 'idle' ||
       context.target ||
       context.currentActivity ||

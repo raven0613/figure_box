@@ -23,6 +23,10 @@ export class TerrainStyleCatalog {
 
 export class MapObjectGlyphFactory {
   create(object: TownMapObjectData, cellSize: number): Group {
+    if (object.type === 'apartment') {
+      return this.createApartment(object, cellSize);
+    }
+
     if (object.type === 'tree') {
       return this.createTree(object, cellSize);
     }
@@ -74,6 +78,172 @@ export class MapObjectGlyphFactory {
 
     this.applyObjectMetadata(group, object, top + height);
     return group;
+  }
+
+  private createApartment(object: TownMapObjectData, cellSize: number): Group {
+    const left = object.x * cellSize;
+    const top = object.y * cellSize;
+    const width = object.width * cellSize;
+    const height = object.height * cellSize;
+    const cornerRadius = Math.min(4, cellSize * 0.25);
+    const doorWidth = Math.max(cellSize * 2.2, width * 0.24);
+    const doorHeight = Math.max(cellSize * 1.7, height * 0.18);
+    const doorLeft = (width - doorWidth) / 2;
+    const doorTop = height - doorHeight;
+    const canopyWidth = doorWidth + cellSize * 1.2;
+    const canopyHeight = Math.max(cellSize * 1.1, height * 0.12);
+    const canopyLeft = (width - canopyWidth) / 2;
+    const canopyTop = height - canopyHeight * 1.35;
+
+    const body = new Rect({
+      left: 0,
+      top: 0,
+      width,
+      height,
+      originX: 'left',
+      originY: 'top',
+      fill: '#635247',
+      stroke: '#263238',
+      strokeWidth: 1,
+      rx: cornerRadius,
+      ry: cornerRadius,
+      selectable: false,
+      evented: false,
+    });
+    const roofLine = new Rect({
+      left: 0,
+      top: 0,
+      width,
+      height: Math.max(3, cellSize * 0.18),
+      originX: 'left',
+      originY: 'top',
+      fill: '#3f332d',
+      selectable: false,
+      evented: false,
+    });
+    const windows = this.createApartmentWindows(width, height, cellSize);
+    const door = new Rect({
+      left: doorLeft,
+      top: doorTop,
+      width: doorWidth,
+      height: doorHeight,
+      originX: 'left',
+      originY: 'top',
+      fill: '#3b2b24',
+      stroke: '#251c18',
+      strokeWidth: 1,
+      rx: Math.min(3, cornerRadius),
+      ry: Math.min(3, cornerRadius),
+      selectable: false,
+      evented: false,
+    });
+    const canopyShadow = new Rect({
+      left: canopyLeft + cellSize * 0.12,
+      top: canopyTop + canopyHeight * 0.24,
+      width: canopyWidth,
+      height: canopyHeight,
+      originX: 'left',
+      originY: 'top',
+      fill: '#2a211d',
+      opacity: 0.38,
+      rx: cornerRadius,
+      ry: cornerRadius,
+      selectable: false,
+      evented: false,
+    });
+    const canopy = new Rect({
+      left: canopyLeft,
+      top: canopyTop,
+      width: canopyWidth,
+      height: canopyHeight,
+      originX: 'left',
+      originY: 'top',
+      fill: '#4a3a33',
+      stroke: '#241c18',
+      strokeWidth: 1,
+      rx: cornerRadius,
+      ry: cornerRadius,
+      selectable: false,
+      evented: false,
+    });
+    const canopyTrim = new Rect({
+      left: canopyLeft,
+      top: canopyTop + canopyHeight - Math.max(2, cellSize * 0.12),
+      width: canopyWidth,
+      height: Math.max(2, cellSize * 0.12),
+      originX: 'left',
+      originY: 'top',
+      fill: '#d2b48c',
+      selectable: false,
+      evented: false,
+    });
+    const label = new Text(this.getGlyph(object.type), {
+      left: width / 2,
+      top: height * 0.18,
+      originX: 'center',
+      originY: 'center',
+      fontSize: Math.max(8, Math.min(width, height) * 0.18),
+      fontFamily: 'Arial, sans-serif',
+      fontWeight: '700',
+      fill: '#f7fbff',
+      selectable: false,
+      evented: false,
+    });
+    const group = new Group([
+      body,
+      roofLine,
+      ...windows,
+      door,
+      canopyShadow,
+      canopy,
+      canopyTrim,
+      label,
+    ], {
+      left,
+      top,
+      originX: 'left',
+      originY: 'top',
+      selectable: false,
+      evented: false,
+      objectCaching: true,
+    });
+
+    group.set('apartmentDoorCanopyBounds', {
+      x: object.x + canopyLeft / cellSize,
+      y: object.y + canopyTop / cellSize,
+      width: canopyWidth / cellSize,
+      height: canopyHeight / cellSize,
+    });
+    this.applyObjectMetadata(group, object, top + height);
+    return group;
+  }
+
+  private createApartmentWindows(width: number, height: number, cellSize: number): Rect[] {
+    const windowSize = Math.max(cellSize * 0.8, Math.min(width, height) * 0.11);
+    const windowTopRows = [height * 0.34, height * 0.55];
+    const windowLeftColumns = [width * 0.23, width * 0.77];
+
+    return windowTopRows.flatMap(windowTop => windowLeftColumns.map(windowLeft => (
+      this.createApartmentWindow(windowLeft, windowTop, windowSize)
+    )));
+  }
+
+  private createApartmentWindow(centerX: number, centerY: number, size: number): Rect {
+    return new Rect({
+      left: centerX - size / 2,
+      top: centerY - size / 2,
+      width: size,
+      height: size,
+      originX: 'left',
+      originY: 'top',
+      fill: '#f4d58d',
+      stroke: '#2f2a27',
+      strokeWidth: 1,
+      rx: 2,
+      ry: 2,
+      selectable: false,
+      evented: false,
+    });
   }
 
   private createTree(object: TownMapObjectData, cellSize: number): Group {

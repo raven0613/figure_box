@@ -41,12 +41,19 @@ export enum CharacterCommunicationState {
   Null = "null", // 閒置
   Requesting = "requesting", // 主動向 user 發出信號（代表可以一邊做事一邊提需求）
 }
+export enum CharacterControlState {
+  Normal = "normal",
+  RequestFulfillment = "requestFulfillment",
+  RelationshipMoment = "relationshipMoment",
+  Dialogue = "dialogue",
+}
 
 export interface CharacterStateSummary {
   bodyAction: CharacterBodyActionState;
   bodyMove: CharacterBodyMoveState;
   mind: CharacterMindState;
   communication: CharacterCommunicationState;
+  control: CharacterControlState;
 }
 
 

@@ -1,6 +1,8 @@
 import { Expression, Position } from "~/constants/character";
 import type { CharacterEventActivityEffects } from "~/constants/charactarEventsDefinitions";
 import type { CharacterRequestSatisfiedEffect } from "~/services/characterRequests/types";
+import type { CharacterControlReason } from "./controlReasons";
+import type { CharacterControlState } from "./states";
 import type { CharacterEventNearbyRelationship } from "~/services/characterEvents/types";
 import type { JoinableActivity } from "~/services/characterEvents/joinableActivities";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
@@ -55,6 +57,7 @@ export type CharacterEvent =
     type: EventType.ApplyRequestEffects;
     requestEffects: readonly CharacterRequestSatisfiedEffect[];
   }
+  | { type: EventType.SetControlState; controlState: CharacterControlState; reason: CharacterControlReason }
   | { type: EventType.GoIdle }
   | { type: EventType.PickUp }
   | { type: EventType.Drop; position?: Position }
@@ -64,8 +67,8 @@ export type CharacterEvent =
   | { type: EventType.StartThinking }
   | { type: EventType.StopThinking }
   | { type: EventType.SetExpression; expression: Expression }
-  | { type: EventType.AddLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: string }
-  | { type: EventType.RemoveLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: string };
+  | { type: EventType.AddLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: CharacterControlReason }
+  | { type: EventType.RemoveLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: CharacterControlReason };
 
 export type CharacterEventOld =
   | { type: EventType.Tick } // 自動：時間流逝
@@ -92,6 +95,7 @@ export enum EventType {
   EndJoinedActivity = "endJoinedActivity",
   RecordActivityCooldown = "recordActivityCooldown",
   ApplyRequestEffects = "applyRequestEffects",
+  SetControlState = "setControlState",
   GoIdle = "goIdle",
   PickUp = "pickUp",
   Drop = "drop",

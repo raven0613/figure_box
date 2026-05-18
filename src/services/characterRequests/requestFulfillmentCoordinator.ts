@@ -2,6 +2,8 @@ import type {
   ActivityInterruptionMoment,
   ActivityInterruptionMomentCoordinator,
 } from '~/services/activityInterruptionMomentCoordinator';
+import { CharacterControlReason } from '~/stateMachines/gameFlow/controlReasons';
+import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { CharacterRequest } from './types';
 
 interface CharacterRequestFulfillmentCoordinatorOptions {
@@ -15,12 +17,12 @@ interface StartCharacterRequestFulfillmentInput {
   participantIds?: readonly string[];
   observerIds?: readonly string[];
   sourceActivityId?: string;
+  sourceActivityIds?: readonly string[];
   timestamp: number;
   durationMs?: number;
   rewardText?: string;
 }
 
-const REQUEST_FULFILLMENT_LOCK_REASON = 'characterRequestFulfillment';
 const DEFAULT_FULFILLMENT_DURATION_MS = 4000;
 
 export class CharacterRequestFulfillmentCoordinator {
@@ -42,10 +44,12 @@ export class CharacterRequestFulfillmentCoordinator {
       participantIds,
       observerIds: input.observerIds,
       sourceActivityId: input.sourceActivityId,
+      sourceActivityIds: input.sourceActivityIds,
       timestamp: input.timestamp,
       durationMs,
-      lockReason: REQUEST_FULFILLMENT_LOCK_REASON,
+      lockReason: CharacterControlReason.RequestFulfillment,
       lockParts: ['bodyAction', 'bodyMove', 'mind', 'communication'],
+      controlState: CharacterControlState.RequestFulfillment,
       pauseParticipantWalks: true,
       curiosityLabel: '好奇',
       onFinished: () => {

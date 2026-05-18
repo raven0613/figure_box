@@ -1,5 +1,7 @@
 import { assign, createMachine, emit, enqueueActions } from 'xstate';
 import { DialogueManagerEmittedEvent, DialogueManagerEvent, EventType } from '../events';
+import { CharacterControlReason } from '../controlReasons';
+import { CharacterControlState } from '../states';
 import type {
   DialogueCharacterInstruction,
   DialogueChoiceInstruction,
@@ -154,7 +156,11 @@ export const dialogueManagerMachine = createMachine(
           enqueue.emit({
             type: 'DIALOGUE_CHARACTER_EVENT',
             characterId,
-            event: { type: EventType.RemoveLock, parts: ['bodyAction', 'bodyMove', 'communication'], reason: 'dialogue' },
+            event: {
+              type: EventType.SetControlState,
+              controlState: CharacterControlState.Normal,
+              reason: CharacterControlReason.Dialogue,
+            },
           });
         });
 
@@ -202,7 +208,11 @@ export const dialogueManagerMachine = createMachine(
           enqueue.emit({
             type: 'DIALOGUE_CHARACTER_EVENT',
             characterId,
-            event: { type: EventType.AddLock, parts: ['bodyAction', 'bodyMove', 'communication'], reason: 'dialogue' },
+            event: {
+              type: EventType.SetControlState,
+              controlState: CharacterControlState.Dialogue,
+              reason: CharacterControlReason.Dialogue,
+            },
           });
         });
 
@@ -229,7 +239,11 @@ export const dialogueManagerMachine = createMachine(
           enqueue.emit({
             type: 'DIALOGUE_CHARACTER_EVENT',
             characterId,
-            event: { type: EventType.RemoveLock, parts: ['bodyAction', 'bodyMove', 'communication'], reason: 'dialogue' },
+            event: {
+              type: EventType.SetControlState,
+              controlState: CharacterControlState.Normal,
+              reason: CharacterControlReason.Dialogue,
+            },
           });
         });
       }),

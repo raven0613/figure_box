@@ -1,4 +1,5 @@
 import type { CharacterEventRuleClause } from '~/services/characterEvents/rules';
+import type { SocialStatus } from '~/constants/character';
 
 export type CharacterRequestLevel = 'critical' | 'social' | 'minor';
 export type CharacterRequestKind =
@@ -13,10 +14,19 @@ export type CharacterRequestStatus = 'active' | 'resolving';
 
 export interface CharacterRequestTarget {
   targetCharacterId?: string;
+  targetCharacterName?: string;
   acceptedItemIds?: readonly string[];
   acceptedItemTypes?: readonly string[];
   acceptedItemTags?: readonly string[];
 }
+
+export type CharacterRequestTargetSelector =
+  | {
+    type: 'characterByRelationship';
+    scope: 'allCharacters';
+    statuses: readonly SocialStatus[];
+    statusWeight?: Partial<Record<SocialStatus, number>>;
+  };
 
 export type CharacterRequestSatisfiedEffect =
   | { type: 'characterMoodValueDelta'; value: number }
@@ -32,7 +42,14 @@ export interface CharacterRequestDefinition {
   conditions?: readonly CharacterEventRuleClause[];
   conditionMode?: 'all' | 'some';
   target?: CharacterRequestTarget;
+  targetSelector?: CharacterRequestTargetSelector;
   satisfiedEffects?: readonly CharacterRequestSatisfiedEffect[];
+}
+
+export interface CharacterRequestCharacterTarget {
+  characterId: string;
+  characterName: string;
+  socialStatus: SocialStatus;
 }
 
 export interface CharacterRequest {
@@ -52,6 +69,13 @@ export interface CharacterRequest {
 export interface CharacterRequestGenerationResult {
   request: CharacterRequest | null;
   didChange: boolean;
+}
+
+export interface CharacterRequestCandidate {
+  definition: CharacterRequestDefinition;
+  target?: CharacterRequestTarget;
+  label: string;
+  weight: number;
 }
 
 export interface CharacterRequestItemMatchInput {

@@ -1,4 +1,6 @@
 import { EventType } from '~/stateMachines/gameFlow/events';
+import type { CharacterControlReason } from '~/stateMachines/gameFlow/controlReasons';
+import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { SendCharacterEvent } from '~/services/townCharacterTypes';
 import type { MapActivityView } from '~/typing/eventDialoguePresentation';
 
@@ -9,6 +11,7 @@ export interface ActivityInterruptionMoment {
   participantIds: readonly string[];
   observerIds: readonly string[];
   sourceActivityId?: string;
+  sourceActivityIds: readonly string[];
   startedAt: number;
   endsAt: number;
 }
@@ -18,10 +21,12 @@ export interface StartActivityInterruptionMomentInput {
   participantIds: readonly string[];
   observerIds?: readonly string[];
   sourceActivityId?: string;
+  sourceActivityIds?: readonly string[];
   timestamp: number;
   durationMs: number;
-  lockReason: string;
+  lockReason: CharacterControlReason;
   lockParts?: readonly CharacterLockPart[];
+  controlState?: CharacterControlState;
   pauseParticipantWalks?: boolean;
   curiosityLabel?: string;
   onFinished?: (moment: ActivityInterruptionMoment) => void;
@@ -36,8 +41,9 @@ interface ActivityInterruptionMomentCoordinatorOptions {
 }
 
 interface ActiveActivityInterruptionMoment extends ActivityInterruptionMoment {
-  lockReason: string;
+  lockReason: CharacterControlReason;
   lockParts: readonly CharacterLockPart[];
+  controlState?: CharacterControlState;
   onFinished?: (moment: ActivityInterruptionMoment) => void;
 }
 
@@ -60,25 +66,33 @@ export class ActivityInterruptionMomentCoordinator {
   }
 
   start(input: StartActivityInterruptionMomentInput): ActivityInterruptionMoment | null {
-    if (input.participantIds.some(characterId => this.isCharacterInMoment(characterId))) {
+    const affectedCharacterIds = getAffectedCharacterIds(input.participantIds, input.observerIds ?? []);
+
+    if (affectedCharacterIds.some(characterId => this.isCharacterInMoment(characterId))) {
       return null;
     }
 
     const moment = this.createMoment(input);
+    const momentCharacterIds = this.getAffectedCharacterIds(moment);
 
     this.activeMomentsById.set(moment.id, moment);
-    moment.participantIds.forEach(characterId => {
+    momentCharacterIds.forEach(characterId => {
       this.momentIdsByCharacterId.set(characterId, moment.id);
     });
-    this.lockParticipants(moment.participantIds, input.lockReason, moment.lockParts);
+
+    if (moment.controlState) {
+      this.setControlState(momentCharacterIds, moment.controlState, input.lockReason);
+    }
+
+    this.lockCharacters(momentCharacterIds, input.lockReason, moment.lockParts);
 
     if (input.pauseParticipantWalks) {
-      this.pauseParticipantWalks(moment.participantIds, input.durationMs);
+      this.pauseCharacterWalks(momentCharacterIds, input.durationMs);
     }
 
-    if (moment.sourceActivityId) {
-      this.pauseActivity(moment.sourceActivityId, input.timestamp);
-    }
+    moment.sourceActivityIds.forEach(activityId => {
+      this.pauseActivity(activityId, input.timestamp);
+    });
 
     this.showObserverCuriosity(moment, input.durationMs, input.curiosityLabel ?? '好奇');
 
@@ -101,6 +115,7 @@ export class ActivityInterruptionMomentCoordinator {
       return;
     }
 
+    const momentCharacterIds = this.getAffectedCharacterIds(moment);
     const timerId = this.timerIdsByMomentId.get(momentId);
 
     if (timerId !== undefined) {
@@ -108,12 +123,16 @@ export class ActivityInterruptionMomentCoordinator {
       this.timerIdsByMomentId.delete(momentId);
     }
 
-    if (moment.sourceActivityId) {
-      this.resumeActivity(moment.sourceActivityId, Date.now());
+    this.unlockCharacters(momentCharacterIds, moment.lockReason, moment.lockParts);
+    if (moment.controlState) {
+      this.setControlState(momentCharacterIds, CharacterControlState.Normal, moment.lockReason);
     }
 
-    this.unlockParticipants(moment.participantIds, moment.lockReason, moment.lockParts);
-    moment.participantIds.forEach(characterId => {
+    moment.sourceActivityIds.forEach(activityId => {
+      this.resumeActivity(activityId, Date.now());
+    });
+
+    momentCharacterIds.forEach(characterId => {
       this.momentIdsByCharacterId.delete(characterId);
     });
     this.activeMomentsById.delete(momentId);
@@ -127,25 +146,46 @@ export class ActivityInterruptionMomentCoordinator {
   }
 
   private createMoment(input: StartActivityInterruptionMomentInput): ActiveActivityInterruptionMoment {
+    const sourceActivityIds = uniqueStrings([
+      ...(input.sourceActivityId ? [input.sourceActivityId] : []),
+      ...(input.sourceActivityIds ?? []),
+    ]);
+
     return {
       id: input.id,
       participantIds: [...input.participantIds],
       observerIds: [...(input.observerIds ?? [])],
-      sourceActivityId: input.sourceActivityId,
+      sourceActivityId: input.sourceActivityId ?? sourceActivityIds[0],
+      sourceActivityIds,
       startedAt: input.timestamp,
       endsAt: input.timestamp + input.durationMs,
       lockReason: input.lockReason,
       lockParts: input.lockParts ?? ['mind'],
+      controlState: input.controlState,
       onFinished: input.onFinished,
     };
   }
 
-  private lockParticipants(
-    participantIds: readonly string[],
-    reason: string,
+  private setControlState(
+    characterIds: readonly string[],
+    controlState: CharacterControlState,
+    reason: CharacterControlReason,
+  ): void {
+    characterIds.forEach(characterId => {
+      this.sendToCharacter(characterId, {
+        type: EventType.SetControlState,
+        controlState,
+        reason,
+      });
+    });
+  }
+
+  private lockCharacters(
+    characterIds: readonly string[],
+    reason: CharacterControlReason,
     parts: readonly CharacterLockPart[],
   ): void {
-    participantIds.forEach(characterId => {
+    characterIds.forEach(characterId => {
       this.sendToCharacter(characterId, {
         type: EventType.AddLock,
         parts: [...parts],
@@ -154,12 +194,12 @@ export class ActivityInterruptionMomentCoordinator {
     });
   }
 
-  private unlockParticipants(
-    participantIds: readonly string[],
-    reason: string,
+  private unlockCharacters(
+    characterIds: readonly string[],
+    reason: CharacterControlReason,
     parts: readonly CharacterLockPart[],
   ): void {
-    participantIds.forEach(characterId => {
+    characterIds.forEach(characterId => {
       this.sendToCharacter(characterId, {
         type: EventType.RemoveLock,
         parts: [...parts],
@@ -168,14 +208,18 @@ export class ActivityInterruptionMomentCoordinator {
     });
   }
 
-  private pauseParticipantWalks(participantIds: readonly string[], durationMs: number): void {
+  private pauseCharacterWalks(characterIds: readonly string[], durationMs: number): void {
     if (!this.pauseCharacterWalk) {
       return;
     }
 
-    participantIds.forEach(characterId => {
+    characterIds.forEach(characterId => {
       this.pauseCharacterWalk?.(characterId, durationMs);
     });
+  }
+
+  private getAffectedCharacterIds(moment: ActivityInterruptionMoment): string[] {
+    return getAffectedCharacterIds(moment.participantIds, moment.observerIds);
   }
 
   private showObserverCuriosity(
@@ -199,7 +243,19 @@ function toPublicMoment(moment: ActiveActivityInterruptionMoment): ActivityInter
     participantIds: moment.participantIds,
     observerIds: moment.observerIds,
     sourceActivityId: moment.sourceActivityId,
+    sourceActivityIds: moment.sourceActivityIds,
     startedAt: moment.startedAt,
     endsAt: moment.endsAt,
   };
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function getAffectedCharacterIds(
+  participantIds: readonly string[],
+  observerIds: readonly string[],
+): string[] {
+  return uniqueStrings([...participantIds, ...observerIds]);
 }

@@ -1,5 +1,6 @@
 import { DirectedRelationship, Expression, Mood, Position } from "~/constants/character";
 import { Item } from "~/constants/data";
+import type { CharacterControlState } from "./states";
 import type { RelationshipStore } from "./relationships";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
 
@@ -26,6 +27,7 @@ export interface CharacterContext {
   target: Position | null;
   position: Position;
   currentMotivation: CharacterMotivation;
+  controlState: CharacterControlState;
   pendingActivityJoin: CharacterActivityJoinRequest | null;
   currentActivity: CharacterActivityParticipation | null;
   activityCooldowns: CharacterActivityCooldowns;

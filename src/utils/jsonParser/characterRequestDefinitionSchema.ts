@@ -4,7 +4,9 @@ import type {
   CharacterRequestLevel,
   CharacterRequestSatisfiedEffect,
   CharacterRequestTarget,
+  CharacterRequestTargetSelector,
 } from '~/services/characterRequests/types';
+import { SocialStatus } from '~/constants/character';
 import { readOptionalRuleClauses } from './ruleSchema';
 import {
   includesString,
@@ -59,6 +61,7 @@ function parseCharacterRequestDefinition(rawDefinition: unknown, index: number):
     conditions: readOptionalRuleClauses(rawDefinition, 'conditions', index),
     conditionMode: readOptionalClauseMode(rawDefinition, 'conditionMode', index),
     target: readOptionalRequestTarget(rawDefinition, index),
+    targetSelector: readOptionalTargetSelector(rawDefinition, index),
     satisfiedEffects: readOptionalSatisfiedEffects(rawDefinition, index),
   };
 }
@@ -139,6 +142,84 @@ function readOptionalRequestTarget(
     acceptedItemTypes: readOptionalStringList(value, 'acceptedItemTypes', index),
     acceptedItemTags: readOptionalStringList(value, 'acceptedItemTags', index),
   };
+}
+
+function readOptionalTargetSelector(
+  definition: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterRequestTargetSelector | undefined {
+  const value = definition.targetSelector;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character request definition at index ${index} has invalid targetSelector.`);
+  }
+
+  const type = readRequiredString(value, 'type', index);
+
+  if (type !== 'characterByRelationship') {
+    throw new Error(`Character request definition at index ${index} has invalid targetSelector.type "${type}".`);
+  }
+
+  const scope = readRequiredString(value, 'scope', index);
+
+  if (scope !== 'allCharacters') {
+    throw new Error(`Character request definition at index ${index} has invalid targetSelector.scope "${scope}".`);
+  }
+
+  return {
+    type,
+    scope,
+    statuses: readSocialStatusList(value, 'statuses', index),
+    statusWeight: readOptionalStatusWeight(value, index),
+  };
+}
+
+function readSocialStatusList(
+  selector: CharacterEventDefinitionRecord,
+  key: string,
+  index: number,
+): SocialStatus[] {
+  const value = selector[key];
+
+  if (!Array.isArray(value) || !value.every(item => typeof item === 'string' && isSocialStatus(item))) {
+    throw new Error(`Character request definition at index ${index} has invalid targetSelector.${key}.`);
+  }
+
+  return value;
+}
+
+function readOptionalStatusWeight(
+  selector: CharacterEventDefinitionRecord,
+  index: number,
+): Partial<Record<SocialStatus, number>> | undefined {
+  const value = selector.statusWeight;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character request definition at index ${index} has invalid targetSelector.statusWeight.`);
+  }
+
+  return Object.entries(value).reduce<Partial<Record<SocialStatus, number>>>((weights, [status, weight]) => {
+    if (!isSocialStatus(status) || typeof weight !== 'number' || !Number.isFinite(weight) || weight < 0) {
+      throw new Error(`Character request definition at index ${index} has invalid targetSelector.statusWeight.`);
+    }
+
+    return {
+      ...weights,
+      [status]: weight,
+    };
+  }, {});
+}
+
+function isSocialStatus(value: string): value is SocialStatus {
+  return Object.values(SocialStatus).some(status => status === value);
 }
 
 function readOptionalTargetCharacterId(

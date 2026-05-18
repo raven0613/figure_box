@@ -9,6 +9,8 @@ import {
 import { CharacterRequestStore } from './requestStore';
 import type {
   CharacterRequest,
+  CharacterRequestCandidate,
+  CharacterRequestCharacterTarget,
   CharacterRequestDefinition,
   CharacterRequestGenerationResult,
   CharacterRequestItemMatchInput,
@@ -24,6 +26,7 @@ interface CharacterRequestServiceOptions {
 export interface CharacterRequestTickInput extends CharacterEventDecisionInput {
   context: CharacterContext;
   timestamp: number;
+  relationshipTargets?: readonly CharacterRequestCharacterTarget[];
 }
 
 export class CharacterRequestService {
@@ -47,16 +50,16 @@ export class CharacterRequestService {
       };
     }
 
-    const definition = this.generator.selectDefinition(input, this.random);
+    const candidate = this.generator.selectCandidate(input, this.random);
 
-    if (!definition) {
+    if (!candidate) {
       return {
         request: null,
         didChange: expiredRequests.length > 0,
       };
     }
 
-    const request = this.createRequest(input.context.id, definition, input.timestamp);
+    const request = this.createRequest(input.context.id, candidate, input.timestamp);
     const didAddRequest = this.store.addRequest(request);
 
     return {
@@ -97,9 +100,11 @@ export class CharacterRequestService {
 
   private createRequest(
     characterId: string,
-    definition: CharacterRequestDefinition,
+    candidate: CharacterRequestCandidate,
     timestamp: number,
   ): CharacterRequest {
+    const { definition } = candidate;
+
     return {
       id: `request-${characterId}-${definition.id}-${timestamp}`,
       definitionId: definition.id,
@@ -107,8 +112,8 @@ export class CharacterRequestService {
       level: definition.level,
       kind: definition.kind,
       status: 'active',
-      label: definition.label,
-      target: definition.target,
+      label: candidate.label,
+      target: candidate.target,
       satisfiedEffects: definition.satisfiedEffects,
       createdAt: timestamp,
       expiresAt: this.expirationPolicy.getExpiresAt(definition.level, timestamp),

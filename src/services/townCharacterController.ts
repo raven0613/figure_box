@@ -29,6 +29,7 @@ import { CHARACTER_REQUEST_DEFINITIONS } from '~/constants/characterRequestDefin
 import { CharacterRequestService } from '~/services/characterRequests/characterRequestService';
 import type {
   CharacterRequest,
+  CharacterRequestCharacterTarget,
   CharacterRequestItemMatchInput,
 } from '~/services/characterRequests/types';
 import { CharacterRequestFulfillmentCoordinator } from '~/services/characterRequests/requestFulfillmentCoordinator';
@@ -500,15 +501,7 @@ export class TownCharacterController {
       RELATIONSHIP_MOMENT_DECISION_GRACE_MS,
     );
 
-    const requestId = this.requestIdsByRelationshipOverlayId.get(overlay.id);
-
-    if (!requestId) {
-      return;
-    }
-
-    this.requestIdsByRelationshipOverlayId.delete(overlay.id);
-    const request = this.characterRequestService.getRequests()
-      .find(candidate => candidate.id === requestId);
+    const request = this.getRequestResolvedByRelationshipMoment(overlay);
 
     if (!request) {
       return;
@@ -518,21 +511,27 @@ export class TownCharacterController {
   }
 
   private startCharacterRequestFulfillment(request: CharacterRequest, rewardText?: string): void {
-    const sourceActivity = this.getActivityByParticipant(request.characterId);
-    const observerIds = sourceActivity?.participantIds
-      .filter(participantId => participantId !== request.characterId)
-      ?? [];
+    const participantIds = this.getRequestFulfillmentParticipantIds(request);
+    const sourceActivityIds = this.getActivityIdsByParticipants(participantIds);
+    const observerIds = this.getObserverIdsForActivities(sourceActivityIds, participantIds);
     const timestamp = Date.now();
+
+    this.clearPendingActivityJoins(participantIds, timestamp);
+
     const fulfillment = this.requestFulfillmentCoordinator.start({
       request,
-      participantIds: [request.characterId],
+      participantIds,
       observerIds,
-      sourceActivityId: sourceActivity?.id,
+      sourceActivityIds,
       timestamp,
       rewardText,
     });
 
     if (fulfillment) {
+      this.deferCharactersDecision(
+        participantIds,
+        Math.max(0, fulfillment.endsAt - Date.now()) + RELATIONSHIP_MOMENT_DECISION_GRACE_MS,
+      );
       return;
     }
 
@@ -556,6 +555,28 @@ export class TownCharacterController {
     this.notifyCharacterRequestsChanged();
   }
 
+  private getRequestResolvedByRelationshipMoment(overlay: RelationshipMomentOverlay): CharacterRequest | null {
+    const requestId = this.requestIdsByRelationshipOverlayId.get(overlay.id);
+
+    if (requestId) {
+      this.requestIdsByRelationshipOverlayId.delete(overlay.id);
+      return this.characterRequestService.getRequests()
+        .find(candidate => candidate.id === requestId) ?? null;
+    }
+
+    const result = this.characterRequestService.markMatchingSocialRequestResolving({
+      actorId: overlay.actorId,
+      targetCharacterId: overlay.targetCharacterId,
+    });
+
+    if (!result.request) {
+      return null;
+    }
+
+    this.notifyCharacterRequestsChanged();
+    return result.request;
+  }
+
   private deferCharactersDecision(characterIds: readonly string[], durationMs: number): void {
     const nextDecisionAt = Date.now() + durationMs;
 
@@ -571,6 +592,58 @@ export class TownCharacterController {
   private getActivityByParticipant(characterId: string): JoinableActivity | null {
     return this.activityManager.getActivities()
       .find(activity => activity.participantIds.includes(characterId)) ?? null;
+  }
+
+  private getRequestFulfillmentParticipantIds(request: CharacterRequest): string[] {
+    return uniqueStrings([
+      request.characterId,
+      ...(request.target?.targetCharacterId ? [request.target.targetCharacterId] : []),
+    ]);
+  }
+
+  private getActivityIdsByParticipants(participantIds: readonly string[]): string[] {
+    return uniqueStrings(
+      participantIds
+        .map(participantId => this.getActivityByParticipant(participantId)?.id)
+        .filter((activityId): activityId is string => activityId !== undefined),
+    );
+  }
+
+  private getObserverIdsForActivities(
+    activityIds: readonly string[],
+    participantIds: readonly string[],
+  ): string[] {
+    const participantIdSet = new Set(participantIds);
+
+    return uniqueStrings(
+      activityIds.flatMap(activityId => (
+        this.activityManager.getActivity(activityId)?.participantIds ?? []
+      )).filter(participantId => !participantIdSet.has(participantId)),
+    );
+  }
+
+  private clearPendingActivityJoins(participantIds: readonly string[], timestamp: number): void {
+    let didChangeActivity = false;
+
+    participantIds.forEach(participantId => {
+      const pendingActivityJoin = this.getCharacterSnapshot(participantId)?.context.pendingActivityJoin;
+
+      if (!pendingActivityJoin) {
+        return;
+      }
+
+      this.activityManager.leaveActivity(pendingActivityJoin.activityId, participantId);
+      didChangeActivity = true;
+      this.sendToCharacter(participantId, {
+        type: EventType.EndJoinedActivity,
+        activityId: pendingActivityJoin.activityId,
+        timestamp,
+      });
+    });
+
+    if (didChangeActivity) {
+      this.notifyJoinableActivitiesChanged();
+    }
   }
 
   private getRelationshipMomentTargetBubble(status: SocialStatus): string {
@@ -703,6 +776,7 @@ export class TownCharacterController {
       context: snapshot.context,
       nearbyCharacterIds: [...nearbyCharacterIds],
       nearbyRelationships: this.getNearbyRelationshipSnapshots(characterId, nearbyCharacterIds),
+      relationshipTargets: this.getCharacterRequestRelationshipTargets(characterId),
       nearbyJoinableActivities: this.activityCoordinator.getNearbyJoinableActivities(characterId, timestamp),
       timestamp,
     });
@@ -781,6 +855,16 @@ export class TownCharacterController {
     });
   }
 
+  private getCharacterRequestRelationshipTargets(characterId: string): CharacterRequestCharacterTarget[] {
+    return CHARACTER_SEEDS
+      .filter(character => character.id !== characterId)
+      .map(character => ({
+        characterId: character.id,
+        characterName: character.name,
+        socialStatus: this.getMutualRelationshipStatus(characterId, character.id),
+      }));
+  }
+
   private getMutualRelationshipStatus(characterId: string, targetCharacterId: string): SocialStatus {
     const pair = normalizeRelationshipPair(characterId, targetCharacterId);
 
@@ -819,4 +903,8 @@ export class TownCharacterController {
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return Array.from(new Set(values));
 }

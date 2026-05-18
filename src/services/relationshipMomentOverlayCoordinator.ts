@@ -2,6 +2,8 @@ import {
   ActivityInterruptionMomentCoordinator,
   type ActivityInterruptionMoment,
 } from '~/services/activityInterruptionMomentCoordinator';
+import { CharacterControlReason } from '~/stateMachines/gameFlow/controlReasons';
+import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 
 export interface RelationshipMomentOverlay {
   id: string;
@@ -30,8 +32,6 @@ interface RelationshipMomentOverlayCoordinatorOptions {
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   onOverlayFinished: (overlay: RelationshipMomentOverlay) => void;
 }
-
-const RELATIONSHIP_MOMENT_LOCK_REASON = 'godDropRelationshipMoment';
 
 export class RelationshipMomentOverlayCoordinator {
   private readonly activeOverlaysById = new Map<string, RelationshipMomentOverlay>();
@@ -62,7 +62,9 @@ export class RelationshipMomentOverlayCoordinator {
       sourceActivityId: overlay.sourceActivityId,
       timestamp: input.timestamp,
       durationMs: input.durationMs,
-      lockReason: RELATIONSHIP_MOMENT_LOCK_REASON,
+      lockReason: CharacterControlReason.GodDropRelationshipMoment,
+      controlState: CharacterControlState.RelationshipMoment,
+      pauseParticipantWalks: true,
       curiosityLabel: '好奇',
       onFinished: momentOverlay => {
         this.finish(momentOverlay);

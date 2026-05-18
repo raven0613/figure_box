@@ -231,6 +231,12 @@ function CharacterRequestDebugPanel({
             <span>{request.label}</span>
             <strong>{request.level} / {formatRequestRemainingTime(request)}</strong>
           </div>
+          {request.target?.targetCharacterName ? (
+            <div className={styles.detailRow}>
+              <span>Target</span>
+              <strong>{request.target.targetCharacterName}</strong>
+            </div>
+          ) : null}
           <button
             className={styles.requestButton}
             type="button"
@@ -426,6 +432,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationship
       <div className={styles.detailRow}>
         <span>Comm</span>
         <strong>{summary.communication}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Control</span>
+        <strong>{summary.control}</strong>
       </div>
       <div className={styles.detailRow}>
         <span>Motivation</span>
