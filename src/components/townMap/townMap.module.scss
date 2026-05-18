@@ -152,6 +152,33 @@
   border-top: 1px solid rgba(28, 31, 35, 0.12);
 }
 
+.requestPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(28, 31, 35, 0.12);
+}
+
+.requestRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(28, 31, 35, 0.1);
+}
+
+.requestButton {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid rgba(81, 126, 74, 0.34);
+  border-radius: 6px;
+  background: #edf7e8;
+  color: #24313a;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .godDropActions {
   display: flex;
   flex-direction: column;

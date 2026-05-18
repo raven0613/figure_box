@@ -41,6 +41,7 @@ import {
     CHARACTER_EVENT_DEFINITIONS_BY_ID,
     type CharacterEventActivity,
 } from '~/constants/charactarEventsDefinitions';
+import type { CharacterRequestSatisfiedEffect } from '~/services/characterRequests/types';
 
 const INITIAL_UTILITY_SCORES: CharacterUtilityScores = {
     idle: 10,
@@ -176,6 +177,9 @@ export const characterMachine = createMachine(
             },
             [EventType.RecordActivityCooldown]: {
                 actions: 'recordActivityCooldown',
+            },
+            [EventType.ApplyRequestEffects]: {
+                actions: 'applyRequestEffects',
             },
             [EventType.GoIdle]: {
                 guard: 'shouldChangeToIdle',
@@ -531,6 +535,13 @@ export const characterMachine = createMachine(
                         : context.activityCooldowns
                 ),
             }),
+            applyRequestEffects: assign({
+                status: ({ context, event }) => (
+                    event.type === EventType.ApplyRequestEffects
+                        ? applyRequestEffectsToStatus(context.status, event.requestEffects)
+                        : context.status
+                ),
+            }),
             clearTarget: assign({
                 target: () => null,
             }),
@@ -722,6 +733,28 @@ function applyCompletedActivityRelationshipEffects(
             },
             relationships,
         );
+}
+
+function applyRequestEffectsToStatus(
+    status: CharacterContext['status'],
+    requestEffects: readonly CharacterRequestSatisfiedEffect[],
+): CharacterContext['status'] {
+    const nextStatus = requestEffects.reduce((currentStatus, effect) => {
+        if (effect.type === 'characterSaturationDelta') {
+            return {
+                ...currentStatus,
+                saturation: Math.max(0, Math.min(100, currentStatus.saturation + effect.value)),
+            };
+        }
+
+        if (effect.type === 'characterMoodValueDelta') {
+            return updateCharacterMoodValue(currentStatus, currentStatus.moodValue + effect.value);
+        }
+
+        return currentStatus;
+    }, status);
+
+    return updateCharacterMoodValue(nextStatus, nextStatus.moodValue);
 }
 
 function canMakeAutonomousDecision(context: CharacterContext): boolean {

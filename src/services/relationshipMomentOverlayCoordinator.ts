@@ -1,6 +1,7 @@
-import { EventType } from '~/stateMachines/gameFlow/events';
-import type { SendCharacterEvent } from '~/services/townCharacterTypes';
-import type { MapActivityView } from '~/typing/eventDialoguePresentation';
+import {
+  ActivityInterruptionMomentCoordinator,
+  type ActivityInterruptionMoment,
+} from '~/services/activityInterruptionMomentCoordinator';
 
 export interface RelationshipMomentOverlay {
   id: string;
@@ -24,13 +25,10 @@ interface StartRelationshipMomentOverlayInput {
 }
 
 interface RelationshipMomentOverlayCoordinatorOptions {
-  sendToCharacter: SendCharacterEvent;
+  momentCoordinator: ActivityInterruptionMomentCoordinator;
   pauseCharacterWalk: (characterId: string, durationMs: number) => void;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
-  showMapActivity: (activity: MapActivityView, durationMs?: number) => void;
-  pauseActivity: (activityId: string, timestamp: number) => void;
-  resumeActivity: (activityId: string, timestamp: number) => void;
-  onOverlayFinished: (participantIds: readonly string[]) => void;
+  onOverlayFinished: (overlay: RelationshipMomentOverlay) => void;
 }
 
 const RELATIONSHIP_MOMENT_LOCK_REASON = 'godDropRelationshipMoment';
@@ -38,22 +36,15 @@ const RELATIONSHIP_MOMENT_LOCK_REASON = 'godDropRelationshipMoment';
 export class RelationshipMomentOverlayCoordinator {
   private readonly activeOverlaysById = new Map<string, RelationshipMomentOverlay>();
   private readonly overlayIdsByCharacterId = new Map<string, string>();
-  private readonly timerIdsByOverlayId = new Map<string, number>();
-  private readonly sendToCharacter: SendCharacterEvent;
+  private readonly momentCoordinator: ActivityInterruptionMomentCoordinator;
   private readonly pauseCharacterWalk: (characterId: string, durationMs: number) => void;
   private readonly showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
-  private readonly showMapActivity: (activity: MapActivityView, durationMs?: number) => void;
-  private readonly pauseActivity: (activityId: string, timestamp: number) => void;
-  private readonly resumeActivity: (activityId: string, timestamp: number) => void;
-  private readonly onOverlayFinished: (participantIds: readonly string[]) => void;
+  private readonly onOverlayFinished: (overlay: RelationshipMomentOverlay) => void;
 
   constructor(options: RelationshipMomentOverlayCoordinatorOptions) {
-    this.sendToCharacter = options.sendToCharacter;
+    this.momentCoordinator = options.momentCoordinator;
     this.pauseCharacterWalk = options.pauseCharacterWalk;
     this.showCharacterBubble = options.showCharacterBubble;
-    this.showMapActivity = options.showMapActivity;
-    this.pauseActivity = options.pauseActivity;
-    this.resumeActivity = options.resumeActivity;
     this.onOverlayFinished = options.onOverlayFinished;
   }
 
@@ -64,25 +55,32 @@ export class RelationshipMomentOverlayCoordinator {
 
     const overlay = this.createOverlay(input);
     const participantIds = this.getParticipantIds(overlay);
+    const moment = this.momentCoordinator.start({
+      id: overlay.id,
+      participantIds,
+      observerIds: overlay.observerIds,
+      sourceActivityId: overlay.sourceActivityId,
+      timestamp: input.timestamp,
+      durationMs: input.durationMs,
+      lockReason: RELATIONSHIP_MOMENT_LOCK_REASON,
+      curiosityLabel: '好奇',
+      onFinished: momentOverlay => {
+        this.finish(momentOverlay);
+      },
+    });
+
+    if (!moment) {
+      return null;
+    }
 
     this.activeOverlaysById.set(overlay.id, overlay);
     participantIds.forEach(characterId => {
       this.overlayIdsByCharacterId.set(characterId, overlay.id);
     });
 
-    this.lockParticipants(participantIds);
-    if (overlay.sourceActivityId) {
-      this.pauseActivity(overlay.sourceActivityId, input.timestamp);
-    }
     this.pauseCharacterWalk(input.targetCharacterId, input.durationMs);
     this.showCharacterBubble(input.actorId, input.label, input.durationMs);
     this.showCharacterBubble(input.targetCharacterId, input.targetBubbleText, input.durationMs);
-    this.showObserverCuriosity(overlay, input.durationMs);
-
-    const timerId = window.setTimeout(() => {
-      this.finish(overlay.id);
-    }, input.durationMs);
-    this.timerIdsByOverlayId.set(overlay.id, timerId);
     return overlay;
   }
 
@@ -92,7 +90,7 @@ export class RelationshipMomentOverlayCoordinator {
 
   dispose(): void {
     Array.from(this.activeOverlaysById.keys()).forEach(overlayId => {
-      this.finish(overlayId);
+      this.momentCoordinator.finish(overlayId);
     });
   }
 
@@ -108,61 +106,20 @@ export class RelationshipMomentOverlayCoordinator {
     };
   }
 
-  private finish(overlayId: string): void {
-    const overlay = this.activeOverlaysById.get(overlayId);
+  private finish(moment: ActivityInterruptionMoment): void {
+    const overlay = this.activeOverlaysById.get(moment.id);
 
     if (!overlay) {
       return;
     }
 
-    const timerId = this.timerIdsByOverlayId.get(overlayId);
-
-    if (timerId !== undefined) {
-      window.clearTimeout(timerId);
-      this.timerIdsByOverlayId.delete(overlayId);
-    }
-
     const participantIds = this.getParticipantIds(overlay);
 
-    if (overlay.sourceActivityId) {
-      this.resumeActivity(overlay.sourceActivityId, Date.now());
-    }
-    this.unlockParticipants(participantIds);
     participantIds.forEach(characterId => {
       this.overlayIdsByCharacterId.delete(characterId);
     });
-    this.activeOverlaysById.delete(overlayId);
-    this.onOverlayFinished(participantIds);
-  }
-
-  private lockParticipants(participantIds: readonly string[]): void {
-    participantIds.forEach(characterId => {
-      this.sendToCharacter(characterId, {
-        type: EventType.AddLock,
-        parts: ['mind'],
-        reason: RELATIONSHIP_MOMENT_LOCK_REASON,
-      });
-    });
-  }
-
-  private unlockParticipants(participantIds: readonly string[]): void {
-    participantIds.forEach(characterId => {
-      this.sendToCharacter(characterId, {
-        type: EventType.RemoveLock,
-        parts: ['mind'],
-        reason: RELATIONSHIP_MOMENT_LOCK_REASON,
-      });
-    });
-  }
-
-  private showObserverCuriosity(overlay: RelationshipMomentOverlay, durationMs: number): void {
-    overlay.observerIds.forEach(observerId => {
-      this.showMapActivity({
-        id: `${overlay.id}-curious-${observerId}`,
-        label: '好奇',
-        participantIds: [observerId],
-      }, durationMs);
-    });
+    this.activeOverlaysById.delete(moment.id);
+    this.onOverlayFinished(overlay);
   }
 
   private getParticipantIds(overlay: RelationshipMomentOverlay): readonly string[] {

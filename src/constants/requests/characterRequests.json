@@ -1,0 +1,30 @@
+[
+  {
+    "id": "minor.food.hungry",
+    "level": "minor",
+    "kind": "food",
+    "label": "想吃點東西",
+    "baseChance": 0.65,
+    "conditions": [
+      {
+        "path": "character.status.saturation",
+        "operator": "<=",
+        "value": 35
+      }
+    ],
+    "target": {
+      "acceptedItemTypes": ["food"],
+      "acceptedItemTags": ["food"]
+    },
+    "satisfiedEffects": [
+      {
+        "type": "characterMoodValueDelta",
+        "value": 6
+      },
+      {
+        "type": "characterSaturationDelta",
+        "value": 35
+      }
+    ]
+  }
+]

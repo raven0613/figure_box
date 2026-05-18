@@ -339,6 +339,16 @@ export class TownActivityCoordinator {
     }
   }
 
+  replayActivityActiveVisuals(activityId: string): void {
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (!activity || activity.pausedAt !== undefined) {
+      return;
+    }
+
+    this.playActivityPerformance(activity);
+  }
+
   joinActivityByGodDrop(characterId: string, activityId: string): boolean {
     const activity = this.activityManager.getActivity(activityId);
 

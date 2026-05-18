@@ -18,13 +18,22 @@ import {
 import { TownActivityCoordinator } from '~/services/townActivityCoordinator';
 import { TownMovementCoordinator } from '~/services/townMovementCoordinator';
 import { TownRelationshipTicker } from '~/services/townRelationshipTicker';
+import { ActivityInterruptionMomentCoordinator } from '~/services/activityInterruptionMomentCoordinator';
 import {
   GOD_DROP_SCAN_RADIUS,
   GodDropOpportunityService,
   type GodDropOpportunity,
   type GodDropOpportunityCandidate,
 } from '~/services/godDropOpportunityService';
+import { CHARACTER_REQUEST_DEFINITIONS } from '~/constants/characterRequestDefinitions';
+import { CharacterRequestService } from '~/services/characterRequests/characterRequestService';
+import type {
+  CharacterRequest,
+  CharacterRequestItemMatchInput,
+} from '~/services/characterRequests/types';
+import { CharacterRequestFulfillmentCoordinator } from '~/services/characterRequests/requestFulfillmentCoordinator';
 import { RelationshipMomentOverlayCoordinator } from '~/services/relationshipMomentOverlayCoordinator';
+import type { RelationshipMomentOverlay } from '~/services/relationshipMomentOverlayCoordinator';
 import type {
   CharacterActor,
   CharacterSeed,
@@ -55,6 +64,7 @@ interface TownCharacterControllerOptions {
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
   onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
   onGodDropOpportunityChange?: (opportunity: GodDropOpportunity | null) => void;
+  onCharacterRequestsChange?: (requests: readonly CharacterRequest[]) => void;
 }
 
 export class TownCharacterController {
@@ -66,18 +76,25 @@ export class TownCharacterController {
   private readonly activityCoordinator: TownActivityCoordinator;
   private readonly movementCoordinator: TownMovementCoordinator;
   private readonly relationshipTicker: TownRelationshipTicker;
+  private readonly activityInterruptionMomentCoordinator: ActivityInterruptionMomentCoordinator;
   private readonly relationshipMomentOverlayCoordinator: RelationshipMomentOverlayCoordinator;
+  private readonly requestFulfillmentCoordinator: CharacterRequestFulfillmentCoordinator;
   private readonly godDropOpportunityService = new GodDropOpportunityService();
+  private readonly characterRequestService = new CharacterRequestService({
+    definitions: CHARACTER_REQUEST_DEFINITIONS,
+  });
   private readonly nextDecisionAtByCharacterId = new Map<string, number>();
   private relationshipStore = createRelationshipStore();
   private tickTimer: number | null = null;
   private godDropAutoTimer: number | null = null;
   private godDropExpireTimer: number | null = null;
   private currentGodDropOpportunity: GodDropOpportunity | null = null;
+  private readonly requestIdsByRelationshipOverlayId = new Map<string, string>();
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
   private readonly onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
   private readonly onGodDropOpportunityChange?: (opportunity: GodDropOpportunity | null) => void;
+  private readonly onCharacterRequestsChange?: (requests: readonly CharacterRequest[]) => void;
 
   constructor(options: TownCharacterControllerOptions) {
     this.widget = options.widget;
@@ -108,14 +125,8 @@ export class TownCharacterController {
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
     });
-    this.relationshipMomentOverlayCoordinator = new RelationshipMomentOverlayCoordinator({
+    this.activityInterruptionMomentCoordinator = new ActivityInterruptionMomentCoordinator({
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
-      pauseCharacterWalk: (characterId, durationMs) => {
-        this.movementCoordinator.pauseCharacterWalk(characterId, durationMs);
-      },
-      showCharacterBubble: (characterId, text, durationMs) => {
-        this.widget.showCharacterBubble(characterId, text, durationMs);
-      },
       showMapActivity: (activity, durationMs) => {
         this.widget.showMapActivity(activity, durationMs);
       },
@@ -126,9 +137,31 @@ export class TownCharacterController {
       resumeActivity: (activityId, timestamp) => {
         this.activityManager.resumeActivity(activityId, timestamp);
         this.notifyJoinableActivitiesChanged();
+        this.activityCoordinator.replayActivityActiveVisuals(activityId);
       },
-      onOverlayFinished: participantIds => {
-        this.deferCharactersDecision(participantIds, RELATIONSHIP_MOMENT_DECISION_GRACE_MS);
+      pauseCharacterWalk: (characterId, durationMs) => {
+        this.movementCoordinator.pauseCharacterWalk(characterId, durationMs);
+      },
+    });
+    this.relationshipMomentOverlayCoordinator = new RelationshipMomentOverlayCoordinator({
+      momentCoordinator: this.activityInterruptionMomentCoordinator,
+      pauseCharacterWalk: (characterId, durationMs) => {
+        this.movementCoordinator.pauseCharacterWalk(characterId, durationMs);
+      },
+      showCharacterBubble: (characterId, text, durationMs) => {
+        this.widget.showCharacterBubble(characterId, text, durationMs);
+      },
+      onOverlayFinished: overlay => {
+        this.handleRelationshipMomentFinished(overlay);
+      },
+    });
+    this.requestFulfillmentCoordinator = new CharacterRequestFulfillmentCoordinator({
+      momentCoordinator: this.activityInterruptionMomentCoordinator,
+      showCharacterBubble: (characterId, text, durationMs) => {
+        this.widget.showCharacterBubble(characterId, text, durationMs);
+      },
+      onFulfillmentFinished: request => {
+        this.finishCharacterRequestFulfillment(request);
       },
     });
     this.relationshipTicker = new TownRelationshipTicker({
@@ -156,6 +189,7 @@ export class TownCharacterController {
     this.onRelationshipStoreChange = options.onRelationshipStoreChange;
     this.onJoinableActivitiesChange = options.onJoinableActivitiesChange;
     this.onGodDropOpportunityChange = options.onGodDropOpportunityChange;
+    this.onCharacterRequestsChange = options.onCharacterRequestsChange;
   }
 
   start(): void {
@@ -228,6 +262,29 @@ export class TownCharacterController {
     this.executeGodDropCandidate(opportunity, candidate, 'player');
   }
 
+  completeCharacterRequest(requestId: string): void {
+    const request = this.characterRequestService.markRequestResolving(requestId);
+
+    if (!request) {
+      return;
+    }
+
+    this.startCharacterRequestFulfillment(request);
+    this.notifyCharacterRequestsChanged();
+  }
+
+  markCharacterRequestItemReceived(input: CharacterRequestItemMatchInput): CharacterRequest | null {
+    const result = this.characterRequestService.markMatchingItemRequestResolving(input);
+
+    if (!result.request) {
+      return null;
+    }
+
+    this.startCharacterRequestFulfillment(result.request, '收到了，謝謝你');
+    this.notifyCharacterRequestsChanged();
+    return result.request;
+  }
+
   setCharacterExpression(characterId: string, expression: Expression): void {
     this.sendToCharacter(characterId, {
       type: EventType.SetExpression,
@@ -243,9 +300,11 @@ export class TownCharacterController {
 
     this.movementCoordinator.dispose();
     this.relationshipMomentOverlayCoordinator.dispose();
+    this.activityInterruptionMomentCoordinator.dispose();
     this.performanceRunner.dispose();
     this.activityManager.clear();
     this.nextDecisionAtByCharacterId.clear();
+    this.requestIdsByRelationshipOverlayId.clear();
 
     this.characterSubscriptions.forEach(subscription => {
       subscription.unsubscribe();
@@ -260,6 +319,8 @@ export class TownCharacterController {
     this.relationshipStore = createRelationshipStore();
     this.onRelationshipStoreChange?.(this.relationshipStore);
     this.clearGodDropOpportunity();
+    this.characterRequestService.clear();
+    this.notifyCharacterRequestsChanged();
     this.notifyJoinableActivitiesChanged();
   }
 
@@ -283,7 +344,7 @@ export class TownCharacterController {
         phases: ['forming', 'traveling', 'active'],
       }),
       isCharacterUnavailable: targetCharacterId => (
-        this.relationshipMomentOverlayCoordinator.isCharacterInOverlay(targetCharacterId)
+        this.isCharacterInBlockingMoment(targetCharacterId)
       ),
       getCharacterName: targetCharacterId => this.getCharacterName(targetCharacterId),
       getCharacterDistance: targetCharacterId => this.widget.getDistanceToCharacter(
@@ -393,6 +454,7 @@ export class TownCharacterController {
       return;
     }
 
+    this.markSocialRequestResolving(overlay.id, actorId, targetCharacterId);
     this.deferCharactersDecision(
       [actorId, targetCharacterId],
       RELATIONSHIP_MOMENT_DURATION_MS + RELATIONSHIP_MOMENT_DECISION_GRACE_MS,
@@ -410,6 +472,88 @@ export class TownCharacterController {
       );
       this.onRelationshipStoreChange?.(this.relationshipStore);
     }
+  }
+
+  private markSocialRequestResolving(overlayId: string, actorId: string, targetCharacterId: string): void {
+    const result = this.characterRequestService.markMatchingSocialRequestResolving({
+      actorId,
+      targetCharacterId,
+    });
+
+    if (!result.request) {
+      return;
+    }
+
+    this.widget.showCharacterBubble(result.request.characterId, '就是這個！', 1200);
+    this.requestIdsByRelationshipOverlayId.set(overlayId, result.request.id);
+    this.notifyCharacterRequestsChanged();
+  }
+
+  private isCharacterInBlockingMoment(characterId: string): boolean {
+    return this.relationshipMomentOverlayCoordinator.isCharacterInOverlay(characterId) ||
+      this.activityInterruptionMomentCoordinator.isCharacterInMoment(characterId);
+  }
+
+  private handleRelationshipMomentFinished(overlay: RelationshipMomentOverlay): void {
+    this.deferCharactersDecision(
+      [overlay.actorId, overlay.targetCharacterId],
+      RELATIONSHIP_MOMENT_DECISION_GRACE_MS,
+    );
+
+    const requestId = this.requestIdsByRelationshipOverlayId.get(overlay.id);
+
+    if (!requestId) {
+      return;
+    }
+
+    this.requestIdsByRelationshipOverlayId.delete(overlay.id);
+    const request = this.characterRequestService.getRequests()
+      .find(candidate => candidate.id === requestId);
+
+    if (!request) {
+      return;
+    }
+
+    this.startCharacterRequestFulfillment(request, '謝謝你幫我完成心願');
+  }
+
+  private startCharacterRequestFulfillment(request: CharacterRequest, rewardText?: string): void {
+    const sourceActivity = this.getActivityByParticipant(request.characterId);
+    const observerIds = sourceActivity?.participantIds
+      .filter(participantId => participantId !== request.characterId)
+      ?? [];
+    const timestamp = Date.now();
+    const fulfillment = this.requestFulfillmentCoordinator.start({
+      request,
+      participantIds: [request.characterId],
+      observerIds,
+      sourceActivityId: sourceActivity?.id,
+      timestamp,
+      rewardText,
+    });
+
+    if (fulfillment) {
+      return;
+    }
+
+    this.finishCharacterRequestFulfillment(request);
+  }
+
+  private finishCharacterRequestFulfillment(request: CharacterRequest): void {
+    const completedRequest = this.characterRequestService.completeRequest(request.id);
+
+    if (!completedRequest) {
+      return;
+    }
+
+    if (completedRequest.satisfiedEffects?.length) {
+      this.sendToCharacter(completedRequest.characterId, {
+        type: EventType.ApplyRequestEffects,
+        requestEffects: completedRequest.satisfiedEffects,
+      });
+    }
+
+    this.notifyCharacterRequestsChanged();
   }
 
   private deferCharactersDecision(characterIds: readonly string[], durationMs: number): void {
@@ -532,6 +676,7 @@ export class TownCharacterController {
         timestamp,
         allowAutonomousDecision,
       });
+      this.tickCharacterRequest(character.id, nearbyCharacterIds, timestamp);
     });
 
     this.relationshipStore = this.relationshipTicker.triggerPassByRelationships(
@@ -541,6 +686,30 @@ export class TownCharacterController {
     );
     this.onRelationshipStoreChange?.(this.relationshipStore);
     this.activityCoordinator.pruneEndedActivities(timestamp);
+  }
+
+  private tickCharacterRequest(
+    characterId: string,
+    nearbyCharacterIds: readonly string[],
+    timestamp: number,
+  ): void {
+    const snapshot = this.getCharacterSnapshot(characterId);
+
+    if (!snapshot) {
+      return;
+    }
+
+    const result = this.characterRequestService.tickCharacter({
+      context: snapshot.context,
+      nearbyCharacterIds: [...nearbyCharacterIds],
+      nearbyRelationships: this.getNearbyRelationshipSnapshots(characterId, nearbyCharacterIds),
+      nearbyJoinableActivities: this.activityCoordinator.getNearbyJoinableActivities(characterId, timestamp),
+      timestamp,
+    });
+
+    if (result.didChange) {
+      this.notifyCharacterRequestsChanged();
+    }
   }
 
   private canCharacterDecideNow(characterId: string, timestamp: number): boolean {
@@ -587,6 +756,10 @@ export class TownCharacterController {
 
   private notifyJoinableActivitiesChanged(): void {
     this.onJoinableActivitiesChange?.(this.activityManager.getActivities());
+  }
+
+  private notifyCharacterRequestsChanged(): void {
+    this.onCharacterRequestsChange?.(this.characterRequestService.getRequests());
   }
 
   private getNearbyRelationshipSnapshots(

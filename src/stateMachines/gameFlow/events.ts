@@ -1,5 +1,6 @@
 import { Expression, Position } from "~/constants/character";
 import type { CharacterEventActivityEffects } from "~/constants/charactarEventsDefinitions";
+import type { CharacterRequestSatisfiedEffect } from "~/services/characterRequests/types";
 import type { CharacterEventNearbyRelationship } from "~/services/characterEvents/types";
 import type { JoinableActivity } from "~/services/characterEvents/joinableActivities";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
@@ -50,6 +51,10 @@ export type CharacterEvent =
     sourceEventId: string;
     timestamp?: number;
   }
+  | {
+    type: EventType.ApplyRequestEffects;
+    requestEffects: readonly CharacterRequestSatisfiedEffect[];
+  }
   | { type: EventType.GoIdle }
   | { type: EventType.PickUp }
   | { type: EventType.Drop; position?: Position }
@@ -86,6 +91,7 @@ export enum EventType {
   JoinActivityRejected = "joinActivityRejected",
   EndJoinedActivity = "endJoinedActivity",
   RecordActivityCooldown = "recordActivityCooldown",
+  ApplyRequestEffects = "applyRequestEffects",
   GoIdle = "goIdle",
   PickUp = "pickUp",
   Drop = "drop",

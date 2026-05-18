@@ -12,6 +12,7 @@ import {
   type CharacterSnapshot,
 } from '~/services/townCharacterController';
 import type { GodDropOpportunity } from '~/services/godDropOpportunityService';
+import type { CharacterRequest } from '~/services/characterRequests/types';
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDefinitions';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
@@ -45,6 +46,7 @@ export function TownMapContainer({
   const [characterSnapshots, setCharacterSnapshots] = useState<Record<string, CharacterSnapshot>>({});
   const [joinableActivities, setJoinableActivities] = useState<readonly JoinableActivity[]>([]);
   const [godDropOpportunity, setGodDropOpportunity] = useState<GodDropOpportunity | null>(null);
+  const [characterRequests, setCharacterRequests] = useState<readonly CharacterRequest[]>([]);
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -79,6 +81,7 @@ export function TownMapContainer({
       onRelationshipStoreChange: setRelationshipStore,
       onJoinableActivitiesChange: setJoinableActivities,
       onGodDropOpportunityChange: setGodDropOpportunity,
+      onCharacterRequestsChange: setCharacterRequests,
     });
 
     characterControllerRef.current = characterController;
@@ -90,6 +93,7 @@ export function TownMapContainer({
       setCharacterSnapshots({});
       setJoinableActivities([]);
       setGodDropOpportunity(null);
+      setCharacterRequests([]);
       setSelectedMapObjects([]);
       void widget.destroy();
       canvasHost.replaceChildren();
@@ -172,6 +176,13 @@ export function TownMapContainer({
           </div>
 
           <ActivityDebugPanel activities={joinableActivities} allSnapshots={characterSnapshots} />
+          <CharacterRequestDebugPanel
+            requests={characterRequests}
+            allSnapshots={characterSnapshots}
+            onCompleteRequest={requestId => {
+              characterControllerRef.current?.completeCharacterRequest(requestId);
+            }}
+          />
           <GodDropOpportunityPanel
             opportunity={godDropOpportunity}
             onSelectCandidate={candidateId => {
@@ -190,6 +201,46 @@ export function TownMapContainer({
         ) : null}
       </aside>
     </section>
+  );
+}
+
+function CharacterRequestDebugPanel({
+  requests,
+  allSnapshots,
+  onCompleteRequest,
+}: {
+  requests: readonly CharacterRequest[];
+  allSnapshots: Record<string, CharacterSnapshot>;
+  onCompleteRequest: (requestId: string) => void;
+}) {
+  return (
+    <div className={styles.requestPanel}>
+      <div className={styles.panelTitle}>Requests</div>
+      {requests.length === 0 ? (
+        <div className={styles.detailRow}>
+          <span>Active</span>
+          <strong>-</strong>
+        </div>
+      ) : requests.map(request => (
+        <div className={styles.requestRow} key={request.id}>
+          <div className={styles.detailRow}>
+            <span>{allSnapshots[request.characterId]?.context.name ?? request.characterId}</span>
+            <strong>{request.status}</strong>
+          </div>
+          <div className={styles.detailRow}>
+            <span>{request.label}</span>
+            <strong>{request.level} / {formatRequestRemainingTime(request)}</strong>
+          </div>
+          <button
+            className={styles.requestButton}
+            type="button"
+            onClick={() => onCompleteRequest(request.id)}
+          >
+            Complete
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -228,6 +279,22 @@ function GodDropOpportunityPanel({
       </div>
     </div>
   );
+}
+
+function formatRequestRemainingTime(request: CharacterRequest): string {
+  if (request.expiresAt === null) {
+    return 'never';
+  }
+
+  const remainingMs = Math.max(0, request.expiresAt - Date.now());
+  const remainingHours = Math.floor(remainingMs / (60 * 60 * 1000));
+  const remainingMinutes = Math.ceil((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+
+  if (remainingHours <= 0) {
+    return `${remainingMinutes}m`;
+  }
+
+  return `${remainingHours}h ${remainingMinutes}m`;
 }
 
 function ActivityDebugPanel({
