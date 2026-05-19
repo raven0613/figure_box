@@ -40,6 +40,7 @@ export type CharacterEventAction =
   | { type: 'goIdle' }
   | { type: 'goRest' }
   | { type: 'goPlay' }
+  | { type: 'goHome' }
   | { type: 'goEat'; target: CharacterEventTarget }
   | { type: 'startActivity' }
   | {

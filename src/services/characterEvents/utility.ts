@@ -24,5 +24,6 @@ export function calculateCharacterUtilityScores(context: CharacterContext): Char
     rest: Math.round(restScore),
     play: Math.round(playScore),
     chat: Math.round(chatScore),
+    goHome: 0,
   };
 }

@@ -35,6 +35,9 @@ export type CharacterEvent =
   | { type: EventType.GoEat; target: Position }
   | { type: EventType.GoRest }
   | { type: EventType.GoPlay }
+  | { type: EventType.GoHome }
+  | { type: EventType.EnterApartment; apartmentSpaceId: string }
+  | { type: EventType.LeaveApartment; worldSpaceId: string; position: Position }
   | { type: EventType.StartActivity; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivity; activityId: string; sourceEventId: string }
   | { type: EventType.JoinActivityAccepted; activityId: string; sourceEventId: string }
@@ -88,6 +91,9 @@ export enum EventType {
   GoEat = "goEat",
   GoRest = "goRest",
   GoPlay = "goPlay",
+  GoHome = "goHome",
+  EnterApartment = "enterApartment",
+  LeaveApartment = "leaveApartment",
   StartActivity = "startActivity",
   JoinActivity = "joinActivity",
   JoinActivityAccepted = "joinActivityAccepted",

@@ -15,6 +15,7 @@ const VALID_CHARACTER_EVENT_TYPES = [
   'goIdle',
   'goRest',
   'goPlay',
+  'goHome',
   'goEat',
   'startActivity',
   'joinActivity',

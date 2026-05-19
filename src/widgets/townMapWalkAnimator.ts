@@ -27,6 +27,8 @@ interface TownMapWalkAnimatorOptions {
   stopAnimationLoopIfIdle: () => void;
 }
 
+const MAX_WALK_FRAME_DELTA_MS = 50;
+
 // 走路狀態與步進動畫
 export class TownMapWalkAnimator {
   private readonly grid: TownMapGrid;
@@ -162,7 +164,7 @@ export class TownMapWalkAnimator {
       walker.lastTimestamp = timestamp;
     }
 
-    const delta = timestamp - walker.lastTimestamp;
+    const delta = Math.min(Math.max(0, timestamp - walker.lastTimestamp), MAX_WALK_FRAME_DELTA_MS);
     walker.lastTimestamp = timestamp;
     walker.segmentProgress += walker.speed * delta;
 

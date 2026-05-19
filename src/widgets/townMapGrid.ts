@@ -189,9 +189,11 @@ export class TownMapGrid {
     const visited = new Set<number>([startKey]);
     const cameFrom = new Map<number, number>();
     const queue: number[] = [startKey];
+    let queueCursor = 0;
 
-    while (queue.length > 0) {
-      const currentIndex = queue.shift()!;
+    while (queueCursor < queue.length) {
+      const currentIndex = queue[queueCursor];
+      queueCursor += 1;
 
       if (currentIndex === endKey) {
         return this.reconstructPath(cameFrom, endKey);
@@ -241,9 +243,11 @@ export class TownMapGrid {
     const visited = new Set<number>([startKey]);
     const cameFrom = new Map<number, number>();
     const queue: number[] = [startKey];
+    let queueCursor = 0;
 
-    while (queue.length > 0) {
-      const currentIndex = queue.shift()!;
+    while (queueCursor < queue.length) {
+      const currentIndex = queue[queueCursor];
+      queueCursor += 1;
 
       if (currentIndex === endKey) {
         const idealPath = this.reconstructPath(cameFrom, endKey);

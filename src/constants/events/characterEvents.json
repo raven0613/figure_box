@@ -55,6 +55,33 @@
     ]
   },
   {
+    "id": "need.findFoodAtApartment",
+    "bucketId": "need",
+    "motivation": "findFood",
+    "characterEvent": {
+      "type": "goHome"
+    },
+    "baseWeight": 0,
+    "weightSource": "findFood",
+    "maxWeight": 28,
+    "interruptPolicy": "soft",
+    "commitment": 30,
+    "conditions": [
+      {
+        "path": "character.presence.kind",
+        "operator": "==",
+        "value": "positioned"
+      }
+    ],
+    "presentationVariants": [
+      {
+        "id": "food_at_apartment.casual",
+        "baseWeight": 10,
+        "presentationTags": ["emote.hungry", "motion.walk"]
+      }
+    ]
+  },
+  {
     "id": "need.rest",
     "bucketId": "need",
     "motivation": "rest",
@@ -196,6 +223,33 @@
             "itemId": "cards"
           }
         }
+      }
+    ]
+  },
+  {
+    "id": "need.playAtApartment",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "goHome"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "maxWeight": 28,
+    "interruptPolicy": "soft",
+    "commitment": 18,
+    "conditions": [
+      {
+        "path": "character.presence.kind",
+        "operator": "==",
+        "value": "positioned"
+      }
+    ],
+    "presentationVariants": [
+      {
+        "id": "play_at_apartment.casual",
+        "baseWeight": 10,
+        "presentationTags": ["emote.play", "motion.walk"]
       }
     ]
   },

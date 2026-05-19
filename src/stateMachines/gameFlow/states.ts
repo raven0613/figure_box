@@ -46,6 +46,7 @@ export enum CharacterControlState {
   RequestFulfillment = "requestFulfillment",
   RelationshipMoment = "relationshipMoment",
   Dialogue = "dialogue",
+  SpaceTransition = "spaceTransition",
 }
 
 export interface CharacterStateSummary {

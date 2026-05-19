@@ -1,0 +1,140 @@
+.panel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  max-height: 320px;
+  overflow: hidden;
+  border: 1px solid rgba(28, 31, 35, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #24313a;
+  box-shadow: 0 16px 38px rgba(20, 23, 28, 0.22);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid rgba(28, 31, 35, 0.12);
+  background: #f7f3ea;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.header:active {
+  cursor: grabbing;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(28, 31, 35, 0.16);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #24313a;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 10px;
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5c6972;
+}
+
+.empty {
+  padding: 10px;
+  border: 1px dashed rgba(28, 31, 35, 0.18);
+  border-radius: 6px;
+  color: #6f7b83;
+  font-size: 13px;
+  text-align: center;
+}
+
+.residentList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.residentRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(28, 31, 35, 0.12);
+  border-radius: 6px;
+  background: #fbfaf6;
+  font-size: 13px;
+}
+
+.residentRow strong {
+  color: #3b776e;
+  font-size: 12px;
+  text-align: right;
+}
+
+.residentText {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.residentText span,
+.residentText strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.residentText strong {
+  text-align: left;
+}
+
+.leaveButton {
+  flex: 0 0 auto;
+  min-width: 48px;
+  height: 28px;
+  border: 1px solid rgba(59, 119, 110, 0.28);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #2f665e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.leaveButton:hover {
+  background: #edf7f4;
+}

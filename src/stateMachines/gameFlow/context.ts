@@ -26,6 +26,7 @@ export interface CharacterContext {
   lastEventDecision: CharacterEventDecision | null;
   target: Position | null;
   position: Position;
+  presence: CharacterPresence;
   currentMotivation: CharacterMotivation;
   controlState: CharacterControlState;
   pendingActivityJoin: CharacterActivityJoinRequest | null;
@@ -40,6 +41,17 @@ export interface CharacterContext {
   };
 }
 
+export type CharacterPresence =
+  | {
+    kind: 'positioned';
+    spaceId: string;
+    position: Position;
+  }
+  | {
+    kind: 'contained';
+    spaceId: string;
+  };
+
 // 創建角色時必須輸入的 initial data
 export interface CharacterMachineInput {
   id: string;
@@ -50,7 +62,7 @@ export interface CharacterMachineInput {
   relationships?: DirectedRelationship[];
 }
 
-export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'chat' | 'controllingByGod';
+export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'chat' | 'goHome' | 'controllingByGod';
 export type UtilityDrivenMotivation = Exclude<CharacterMotivation, 'controllingByGod'>;
 export type CharacterUtilityScores = Record<UtilityDrivenMotivation, number>;
 

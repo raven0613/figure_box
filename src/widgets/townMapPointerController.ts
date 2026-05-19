@@ -10,9 +10,11 @@ interface TownMapPointerControllerOptions {
   grid: TownMapGrid;
   cellSize: number;
   getCharacterIdFromTarget: (target: unknown) => string | null;
+  getMapObjectIdFromTarget: (target: unknown) => string | null;
   getCharacterTile: (characterId: string) => GridCoordinate | null;
   snapCharacterToGrid: (characterId: string, tile: GridCoordinate | null) => void;
   onTileClick?: (tile: TownMapTile) => void;
+  onMapObjectClick?: (objectId: string) => void;
   onCharacterPickUp?: (characterId: string) => void;
   onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
 }
@@ -30,9 +32,11 @@ export class TownMapPointerController {
   private readonly grid: TownMapGrid;
   private readonly cellSize: number;
   private readonly getCharacterIdFromTarget: (target: unknown) => string | null;
+  private readonly getMapObjectIdFromTarget: (target: unknown) => string | null;
   private readonly getCharacterTile: (characterId: string) => GridCoordinate | null;
   private readonly snapCharacterToGrid: (characterId: string, tile: GridCoordinate | null) => void;
   private readonly onTileClick?: (tile: TownMapTile) => void;
+  private readonly onMapObjectClick?: (objectId: string) => void;
   private readonly onCharacterPickUp?: (characterId: string) => void;
   private readonly onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
   private pendingTileClick: TownMapTile | null = null;
@@ -44,9 +48,11 @@ export class TownMapPointerController {
     this.grid = options.grid;
     this.cellSize = options.cellSize;
     this.getCharacterIdFromTarget = options.getCharacterIdFromTarget;
+    this.getMapObjectIdFromTarget = options.getMapObjectIdFromTarget;
     this.getCharacterTile = options.getCharacterTile;
     this.snapCharacterToGrid = options.snapCharacterToGrid;
     this.onTileClick = options.onTileClick;
+    this.onMapObjectClick = options.onMapObjectClick;
     this.onCharacterPickUp = options.onCharacterPickUp;
     this.onCharacterDrop = options.onCharacterDrop;
   }
@@ -102,8 +108,11 @@ export class TownMapPointerController {
 
     const didPan = this.camera.endPan();
     const characterId = this.getCharacterIdFromTarget(event.target ?? this.canvas.getActiveObject());
+    const mapObjectId = this.getMapObjectIdFromTarget(event.target);
 
-    if (!characterId && this.pendingTileClick && !didPan) {
+    if (!characterId && mapObjectId && !didPan) {
+      this.onMapObjectClick?.(mapObjectId);
+    } else if (!characterId && this.pendingTileClick && !didPan) {
       this.onTileClick?.(this.pendingTileClick);
     }
 

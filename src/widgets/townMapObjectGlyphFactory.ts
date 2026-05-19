@@ -8,12 +8,12 @@ interface TerrainStyle {
 // 地形樣式、地圖物件 glyph
 export class TerrainStyleCatalog {
   private readonly styles: Record<TerrainType, TerrainStyle> = {
-    grass: { fill: '#7fb069', stroke: '#6d985b' },
-    road: { fill: '#c8a46a', stroke: '#a98552' },
+    grass: { fill: '#c8d9c0', stroke: '#b1c9a7' },
+    road: { fill: '#e3d2b6', stroke: '#d1bda0' },
     plaza: { fill: '#d7c3a2', stroke: '#b9a27d' },
-    water: { fill: '#4b9bc7', stroke: '#377fa6' },
-    building: { fill: '#8a6b55', stroke: '#6c5141' },
-    garden: { fill: '#5fae7a', stroke: '#4a8f64' },
+    water: { fill: '#a4bdcb', stroke: '#8ba5b3' },
+    building: { fill: '#ab9280', stroke: '#9e806f' },
+    garden: { fill: '#a2cab0', stroke: '#88b89b' },
   };
 
   get(terrain: TerrainType): TerrainStyle {
@@ -204,16 +204,10 @@ export class MapObjectGlyphFactory {
       originX: 'left',
       originY: 'top',
       selectable: false,
-      evented: false,
+      evented: true,
       objectCaching: true,
     });
 
-    group.set('apartmentDoorCanopyBounds', {
-      x: object.x + canopyLeft / cellSize,
-      y: object.y + canopyTop / cellSize,
-      width: canopyWidth / cellSize,
-      height: canopyHeight / cellSize,
-    });
     this.applyObjectMetadata(group, object, top + height);
     return group;
   }
@@ -352,6 +346,7 @@ export class MapObjectGlyphFactory {
 
   private applyObjectMetadata(group: Group, object: TownMapObjectData, sortBottomY: number): void {
     group.set('mapObjectId', object.id);
+    group.set('mapObjectType', object.type);
     group.set('sortBottomY', sortBottomY);
     group.set('entityLayerRank', this.getLayerRank(object.layer));
   }

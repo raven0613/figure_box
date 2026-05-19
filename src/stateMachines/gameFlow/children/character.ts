@@ -34,6 +34,7 @@ import {
     getRandomDestinationTarget,
     getRandomMapTarget,
 } from '~/services/characterEvents/targets';
+import { TOWN_APARTMENT_ENTRANCE_TILES, TOWN_WORLD_SPACE_ID } from '~/constants/townMap';
 import {
     createEmptyActivityCooldowns,
     recordActivityCooldowns,
@@ -50,6 +51,7 @@ const INITIAL_UTILITY_SCORES: CharacterUtilityScores = {
     rest: 20,
     play: 35,
     chat: 15,
+    goHome: 0,
 };
 
 export const characterMachine = createMachine(
@@ -80,6 +82,11 @@ export const characterMachine = createMachine(
             currentActivity: null,
             activityCooldowns: createEmptyActivityCooldowns(),
             position: input.position,
+            presence: {
+                kind: 'positioned',
+                spaceId: TOWN_WORLD_SPACE_ID,
+                position: input.position,
+            },
             target: null,
             relationships: input.relationships ?? [],
             locks: {
@@ -128,6 +135,39 @@ export const characterMachine = createMachine(
                     '.communication.null',
                 ],
                 actions: ['setPlayMotivation', 'choosePlayTarget'],
+            },
+            [EventType.GoHome]: {
+                guard: 'shouldGoHome',
+                target: [
+                    '.bodyAction.observing',
+                    '.bodyMove.walking',
+                    '.mind.thinking',
+                    '.communication.null',
+                    '.control.spaceTransition',
+                ],
+                actions: ['setGoHomeMotivation', 'chooseApartmentEntranceTarget', 'setSpaceTransitionControl'],
+            },
+            [EventType.EnterApartment]: {
+                guard: 'shouldEnterApartment',
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                    '.control.normal',
+                ],
+                actions: ['enterApartment', 'setIdleMotivation', 'clearTarget', 'setNormalControl'],
+            },
+            [EventType.LeaveApartment]: {
+                guard: 'shouldLeaveApartment',
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                    '.control.normal',
+                ],
+                actions: ['leaveApartment', 'setIdleMotivation', 'clearTarget', 'setNormalControl'],
             },
             [EventType.StartActivity]: {
                 guard: 'shouldStartActivity',
@@ -202,6 +242,11 @@ export const characterMachine = createMachine(
                     actions: 'setControlState',
                 },
                 {
+                    guard: 'shouldSetSpaceTransitionControl',
+                    target: '.control.spaceTransition',
+                    actions: 'setControlState',
+                },
+                {
                     guard: 'shouldSetNormalControl',
                     target: '.control.normal',
                     actions: 'setControlState',
@@ -255,13 +300,28 @@ export const characterMachine = createMachine(
                 ],
                 actions: ['arriveAtTarget', 'completeCurrentMotivation'],
             },
-            [EventType.MoveBlocked]: {
-                target: [
-                    '.bodyAction.idle',
-                    '.bodyMove.stand',
-                ],
-                actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget', 'clearActivity'],
-            },
+            [EventType.MoveBlocked]: [
+                {
+                    guard: 'isSpaceTransitionControl',
+                    target: [
+                        '.bodyAction.idle',
+                        '.bodyMove.stand',
+                        '.mind.null',
+                        '.communication.null',
+                        '.control.normal',
+                    ],
+                    actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget', 'clearActivity', 'setNormalControl'],
+                },
+                {
+                    target: [
+                        '.bodyAction.idle',
+                        '.bodyMove.stand',
+                        '.mind.null',
+                        '.communication.null',
+                    ],
+                    actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget', 'clearActivity'],
+                },
+            ],
             [EventType.StartThinking]: {
                 guard: 'canReceiveLogicCommand',
                 target: '.mind.thinking',
@@ -323,6 +383,7 @@ export const characterMachine = createMachine(
                     [CharacterControlState.RequestFulfillment]: {},
                     [CharacterControlState.RelationshipMoment]: {},
                     [CharacterControlState.Dialogue]: {},
+                    [CharacterControlState.SpaceTransition]: {},
                 },
             },
         },
@@ -343,6 +404,23 @@ export const characterMachine = createMachine(
                 canReceiveNormalLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
                 (context.currentMotivation !== 'play' || context.target === null)
+            ),
+            shouldGoHome: ({ context }) => (
+                canReceiveNormalLogicCommand(context) &&
+                context.currentMotivation !== 'controllingByGod' &&
+                context.presence.kind === 'positioned'
+            ),
+            shouldEnterApartment: ({ context, event }) => (
+                event.type === EventType.EnterApartment &&
+                context.controlState === CharacterControlState.SpaceTransition &&
+                context.currentMotivation === 'goHome'
+            ),
+            shouldLeaveApartment: ({ context, event }) => (
+                event.type === EventType.LeaveApartment &&
+                context.presence.kind === 'contained'
+            ),
+            isSpaceTransitionControl: ({ context }) => (
+                context.controlState === CharacterControlState.SpaceTransition
             ),
             shouldStartActivity: ({ context }) => (
                 canReceiveNormalLogicCommand(context) &&
@@ -390,6 +468,10 @@ export const characterMachine = createMachine(
             shouldSetRelationshipMomentControl: ({ event }) => (
                 event.type === EventType.SetControlState &&
                 event.controlState === CharacterControlState.RelationshipMoment
+            ),
+            shouldSetSpaceTransitionControl: ({ event }) => (
+                event.type === EventType.SetControlState &&
+                event.controlState === CharacterControlState.SpaceTransition
             ),
             shouldSetNormalControl: ({ event }) => (
                 event.type === EventType.SetControlState &&
@@ -482,6 +564,9 @@ export const characterMachine = createMachine(
             setPlayMotivation: assign({
                 currentMotivation: () => 'play',
             }),
+            setGoHomeMotivation: assign({
+                currentMotivation: () => 'goHome',
+            }),
             setActivityMotivation: assign({
                 currentMotivation: ({ event }) => (
                     event.type === EventType.StartActivity ||
@@ -494,6 +579,12 @@ export const characterMachine = createMachine(
             setIdleMotivation: assign({
                 currentMotivation: () => 'idle',
             }),
+            setSpaceTransitionControl: assign({
+                controlState: () => CharacterControlState.SpaceTransition,
+            }),
+            setNormalControl: assign({
+                controlState: () => CharacterControlState.Normal,
+            }),
             setPickedUpMotivation: assign({
                 currentMotivation: () => 'controllingByGod',
             }),
@@ -504,6 +595,9 @@ export const characterMachine = createMachine(
                 target: ({ context }) => (
                     getRandomDestinationTarget('play') ?? getRandomMapTarget(context.position)
                 ),
+            }),
+            chooseApartmentEntranceTarget: assign({
+                target: () => chooseRandomApartmentEntranceTile(),
             }),
             startOwnActivity: assign({
                 currentActivity: ({ event }) => (
@@ -627,10 +721,54 @@ export const characterMachine = createMachine(
                 position: ({ context, event }) => (
                     event.type === EventType.Drop && event.position ? event.position : context.position
                 ),
+                presence: ({ context, event }) => (
+                    event.type === EventType.Drop && event.position
+                        ? {
+                            kind: 'positioned',
+                            spaceId: TOWN_WORLD_SPACE_ID,
+                            position: event.position,
+                        }
+                        : context.presence
+                ),
             }),
             arriveAtTarget: assign({
                 position: ({ event }) => (event.type === EventType.Arrive ? event.position : { x: 0, y: 0 }),
+                presence: ({ context, event }) => (
+                    event.type === EventType.Arrive
+                        ? {
+                            kind: 'positioned',
+                            spaceId: context.presence.kind === 'positioned'
+                                ? context.presence.spaceId
+                                : TOWN_WORLD_SPACE_ID,
+                            position: event.position,
+                        }
+                        : context.presence
+                ),
                 target: () => null,
+            }),
+            enterApartment: assign({
+                presence: ({ context, event }) => (
+                    event.type === EventType.EnterApartment
+                        ? {
+                            kind: 'contained',
+                            spaceId: event.apartmentSpaceId,
+                        }
+                        : context.presence
+                ),
+            }),
+            leaveApartment: assign({
+                position: ({ context, event }) => (
+                    event.type === EventType.LeaveApartment ? event.position : context.position
+                ),
+                presence: ({ context, event }) => (
+                    event.type === EventType.LeaveApartment
+                        ? {
+                            kind: 'positioned',
+                            spaceId: event.worldSpaceId,
+                            position: event.position,
+                        }
+                        : context.presence
+                ),
             }),
             completeCurrentMotivation: assign({
                 status: ({ context }) => {
@@ -657,7 +795,13 @@ export const characterMachine = createMachine(
 
                     return context.status;
                 },
-                currentMotivation: ({ context }) => (context.currentActivity ? context.currentMotivation : 'idle'),
+                currentMotivation: ({ context }) => {
+                    if (context.currentActivity || context.currentMotivation === 'goHome') {
+                        return context.currentMotivation;
+                    }
+
+                    return 'idle';
+                },
             }),
             syncPositionOnBlock: assign({
                 position: ({ context, event }) => (
@@ -715,6 +859,14 @@ function isLocked(context: CharacterContext, part: keyof CharacterContext['locks
 
 function canReceiveNormalLogicCommand(context: CharacterContext): boolean {
     return context.controlState === CharacterControlState.Normal;
+}
+
+function chooseRandomApartmentEntranceTile(): CharacterContext['position'] {
+    const entranceTile = TOWN_APARTMENT_ENTRANCE_TILES[
+        Math.floor(Math.random() * TOWN_APARTMENT_ENTRANCE_TILES.length)
+    ];
+
+    return { x: entranceTile.x, y: entranceTile.y };
 }
 
 function getCompletedActivityStatus(
@@ -833,6 +985,7 @@ function applyRequestEffectsToStatus(
 function canMakeAutonomousDecision(context: CharacterContext): boolean {
     return (
         context.target === null &&
+        context.presence.kind === 'positioned' &&
         context.pendingActivityJoin === null &&
         context.currentActivity === null &&
         context.currentMotivation !== 'controllingByGod' &&

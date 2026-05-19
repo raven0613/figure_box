@@ -12,7 +12,7 @@ export interface FabricTownMapOptions {
   baseCanvasElement?: HTMLCanvasElement;
   cellSize?: number;
   onTileClick?: (tile: TownMapTile) => void;
+  onMapObjectClick?: (objectId: string) => void;
   onCharacterPickUp?: (characterId: string) => void;
   onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
 }
-

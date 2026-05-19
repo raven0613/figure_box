@@ -2,6 +2,8 @@ import { createActor } from 'xstate';
 import { CHARACTER_SEEDS, Expression, SocialStatus, type Position } from '~/constants/character';
 import { characterMachine } from '~/stateMachines/gameFlow/children/character';
 import { CharacterPerformanceRunner } from '~/services/characterEvents/characterPerformanceRunner';
+import { getRandomDestinationTarget } from '~/services/characterEvents/targets';
+import { calculateCharacterUtilityScores } from '~/services/characterEvents/utility';
 import {
   createJoinableActivityManager,
   type JoinableActivity,
@@ -44,6 +46,10 @@ import type { CharacterEventNearbyRelationship } from '~/services/characterEvent
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import type { GridCoordinate } from '~/widgets/townMapGrid';
+import {
+  TOWN_APARTMENT_ENTRANCE_TILES,
+  TOWN_WORLD_SPACE_ID,
+} from '~/constants/townMap';
 
 type Subscription = {
   unsubscribe: () => void;
@@ -58,6 +64,8 @@ const DECISION_INTERVAL_MAX_MS = 5500;
 const RELATIONSHIP_MOMENT_DURATION_MS = 3000;
 const RELATIONSHIP_MOMENT_DECISION_GRACE_MS = 1800;
 const GOD_DROP_DECISION_GRACE_MS = 2600;
+const APARTMENT_EXIT_FOOD_SCORE_THRESHOLD = 65;
+const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
@@ -250,6 +258,10 @@ export class TownCharacterController {
 
     this.sendToCharacter(characterId, { type: EventType.Drop });
     this.clearGodDropOpportunity();
+  }
+
+  leaveApartment(characterId: string): void {
+    this.leaveApartmentWithFollowUp(characterId);
   }
 
   chooseGodDropCandidate(candidateId: string): void {
@@ -739,6 +751,7 @@ export class TownCharacterController {
       }
 
       const allowAutonomousDecision = this.canCharacterDecideNow(character.id, timestamp);
+      const didLeaveApartment = allowAutonomousDecision && this.maybeLeaveApartmentForOutsideNeed(character.id);
       const nearbyCharacterIds = this.getNearbyCharacterIds(character.id, 2);
 
       this.sendToCharacter(character.id, {
@@ -747,7 +760,7 @@ export class TownCharacterController {
         nearbyRelationships: this.getNearbyRelationshipSnapshots(character.id, nearbyCharacterIds),
         nearbyJoinableActivities: this.activityCoordinator.getNearbyJoinableActivities(character.id, timestamp),
         timestamp,
-        allowAutonomousDecision,
+        allowAutonomousDecision: allowAutonomousDecision && !didLeaveApartment,
       });
       this.tickCharacterRequest(character.id, nearbyCharacterIds, timestamp);
     });
@@ -806,6 +819,75 @@ export class TownCharacterController {
 
   private getCharacterSnapshot(characterId: string): CharacterSnapshot | null {
     return this.characterActors.get(characterId)?.getSnapshot() ?? null;
+  }
+
+  private maybeLeaveApartmentForOutsideNeed(characterId: string): boolean {
+    const snapshot = this.getCharacterSnapshot(characterId);
+
+    if (!snapshot || snapshot.context.presence.kind !== 'contained') {
+      return false;
+    }
+
+    const utilityScores = calculateCharacterUtilityScores(snapshot.context);
+    const isHungry = (
+      snapshot.context.status.saturation <= snapshot.context.status.hungerThreshold ||
+      utilityScores.findFood >= APARTMENT_EXIT_FOOD_SCORE_THRESHOLD
+    );
+
+    if (!isHungry) {
+      return utilityScores.play >= APARTMENT_EXIT_PLAY_SCORE_THRESHOLD
+        ? this.leaveApartmentWithFollowUp(characterId, { type: EventType.GoPlay })
+        : false;
+    }
+
+    return this.leaveApartmentWithFollowUp(characterId, {
+      type: EventType.GoEat,
+      target: getRandomDestinationTarget('findFood') ?? { x: 1, y: 20 },
+    });
+  }
+
+  private leaveApartmentWithFollowUp(characterId: string, followUpEvent?: CharacterEvent): boolean {
+    const snapshot = this.getCharacterSnapshot(characterId);
+
+    if (!snapshot || snapshot.context.presence.kind !== 'contained') {
+      return false;
+    }
+
+    const entrancePosition = this.getAvailableApartmentEntrancePosition();
+
+    if (!entrancePosition) {
+      return false;
+    }
+
+    const didLeave = this.sendToCharacter(characterId, {
+      type: EventType.LeaveApartment,
+      worldSpaceId: TOWN_WORLD_SPACE_ID,
+      position: entrancePosition,
+    });
+
+    if (!didLeave) {
+      return false;
+    }
+
+    if (followUpEvent) {
+      this.sendToCharacter(characterId, followUpEvent);
+    }
+
+    return true;
+  }
+
+  private getAvailableApartmentEntrancePosition(): Position | null {
+    const candidates = TOWN_APARTMENT_ENTRANCE_TILES.filter(tile => {
+      const cell = this.widget.getCell(tile.x, tile.y);
+      return cell?.walkable && !cell.occupantId;
+    });
+
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+    return { x: chosen.x, y: chosen.y };
   }
 
   private getNearbyCharacterIds(characterId: string, range: number): string[] {

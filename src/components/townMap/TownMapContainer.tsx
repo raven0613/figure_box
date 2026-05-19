@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getCharacterStateSummary,
 } from '~/stateMachines/gameFlow/children/character';
@@ -17,6 +17,7 @@ import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDe
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
+import { TOWN_APARTMENT_OBJECT_ID, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import {
   CharacterBodyActionState,
   CharacterBodyMoveState,
@@ -24,6 +25,7 @@ import {
 } from '~/stateMachines/gameFlow/states';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { TownMapTile } from '~/widgets/townMapGrid';
+import { ApartmentPanel, type ApartmentResident } from './ApartmentPanel';
 
 import styles from './townMap.module.scss';
 
@@ -47,6 +49,11 @@ export function TownMapContainer({
   const [joinableActivities, setJoinableActivities] = useState<readonly JoinableActivity[]>([]);
   const [godDropOpportunity, setGodDropOpportunity] = useState<GodDropOpportunity | null>(null);
   const [characterRequests, setCharacterRequests] = useState<readonly CharacterRequest[]>([]);
+  const [isApartmentPanelOpen, setIsApartmentPanelOpen] = useState(false);
+  const apartmentResidents = useMemo(
+    () => getApartmentResidents(characterSnapshots, TOWN_APARTMENT_SPACE_ID),
+    [characterSnapshots],
+  );
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -60,6 +67,11 @@ export function TownMapContainer({
         setSelectedTile(tile);
         setSelectedMapObjects(widget.getMapObjectsAt(tile.x, tile.y).map(object => object.label));
         // setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
+      },
+      onMapObjectClick: objectId => {
+        if (objectId === TOWN_APARTMENT_OBJECT_ID) {
+          setIsApartmentPanelOpen(true);
+        }
       },
       onCharacterPickUp: characterId => {
         setSelectedCharacterId(characterId);
@@ -95,6 +107,7 @@ export function TownMapContainer({
       setGodDropOpportunity(null);
       setCharacterRequests([]);
       setSelectedMapObjects([]);
+      setIsApartmentPanelOpen(false);
       void widget.destroy();
       canvasHost.replaceChildren();
     };
@@ -123,6 +136,18 @@ export function TownMapContainer({
       <div className={styles.mapShell}>
         <div className={styles.canvasHost} ref={canvasHostRef} />
       </div>
+
+      {isApartmentPanelOpen ? (
+        <ApartmentPanel
+          title="大家的公寓"
+          residents={apartmentResidents}
+          initialPosition={{ left: 716, top: 18 }}
+          onClose={() => setIsApartmentPanelOpen(false)}
+          onLeaveApartment={characterId => {
+            characterControllerRef.current?.leaveApartment(characterId);
+          }}
+        />
+      ) : null}
 
       <aside className={styles.panel}>
         <div className={styles.info}>
@@ -202,6 +227,22 @@ export function TownMapContainer({
       </aside>
     </section>
   );
+}
+
+function getApartmentResidents(
+  snapshots: Record<string, CharacterSnapshot>,
+  apartmentSpaceId: string,
+): ApartmentResident[] {
+  return Object.values(snapshots)
+    .filter(snapshot => (
+      snapshot.context.presence.kind === 'contained' &&
+      snapshot.context.presence.spaceId === apartmentSpaceId
+    ))
+    .map(snapshot => ({
+      id: snapshot.context.id,
+      name: snapshot.context.name,
+      statusText: snapshot.context.currentMotivation,
+    }));
 }
 
 function CharacterRequestDebugPanel({

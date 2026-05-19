@@ -1,5 +1,5 @@
 import { Expression, type Position } from '~/constants/character';
-import { DESTINATION_MAP } from '~/constants/townMap';
+import { DESTINATION_MAP, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
@@ -18,6 +18,11 @@ export class TownMovementCoordinator {
   private readonly getCharacterSnapshot: (characterId: string) => CharacterSnapshot | null;
   private readonly sendToCharacter: SendCharacterEvent;
   private readonly walkingCharacterIds = new Set<string>();
+  private readonly visibleCharacterIds = new Set<string>();
+  private readonly characterRenderDataById = new Map<string, {
+    color: string;
+    label: string;
+  }>();
 
   constructor(options: TownMovementCoordinatorOptions) {
     this.widget = options.widget;
@@ -28,6 +33,8 @@ export class TownMovementCoordinator {
   dispose(): void {
     this.walkingCharacterIds.forEach(id => this.widget.cancelWalk(id));
     this.walkingCharacterIds.clear();
+    this.visibleCharacterIds.clear();
+    this.characterRenderDataById.clear();
   }
 
   pauseCharacterWalk(characterId: string, durationMs: number): void {
@@ -47,7 +54,12 @@ export class TownMovementCoordinator {
     color: string;
     label: string;
   }, previousContext?: CharacterSnapshot['context']): void {
-    this.widget.placeCharacter({
+    this.characterRenderDataById.set(characterId, {
+      color: character.color,
+      label: character.label,
+    });
+
+    const placed = this.widget.placeCharacter({
       id: characterId,
       x: previousContext?.position.x ?? character.position.x,
       y: previousContext?.position.y ?? character.position.y,
@@ -55,9 +67,22 @@ export class TownMovementCoordinator {
       label: character.label,
       expression: previousContext?.status.expression ?? Expression.Normal,
     });
+
+    if (placed) {
+      this.visibleCharacterIds.add(characterId);
+    }
   }
 
   syncCharacterWithWidget(characterId: string, snapshot: CharacterSnapshot): void {
+    if (snapshot.context.presence.kind === 'contained') {
+      this.cancelWalkIfNeeded(characterId);
+      this.widget.removeCharacter(characterId);
+      this.visibleCharacterIds.delete(characterId);
+      return;
+    }
+
+    this.ensurePositionedCharacterVisible(characterId, snapshot);
+
     this.widget.updateCharacterStatus(characterId, snapshot.context.currentMotivation);
     this.widget.updateCharacterExpression(characterId, snapshot.context.status.expression);
 
@@ -83,6 +108,7 @@ export class TownMovementCoordinator {
 
     if (path.length === 0) {
       this.sendToCharacter(characterId, { type: EventType.Arrive, position: target });
+      this.enterApartmentIfGoingHome(characterId, snapshot.context.currentMotivation);
       return;
     }
 
@@ -104,6 +130,10 @@ export class TownMovementCoordinator {
 
     this.sendToCharacter(characterId, { type: EventType.Arrive, position: arrivedPosition });
 
+    if (this.enterApartmentIfGoingHome(characterId, motivation)) {
+      return;
+    }
+
     if (context?.currentActivity || !DESTINATION_MAP[motivation]) {
       return;
     }
@@ -118,6 +148,38 @@ export class TownMovementCoordinator {
   private handleWalkBlocked(characterId: string, blockedPosition: Position): void {
     this.walkingCharacterIds.delete(characterId);
     this.sendToCharacter(characterId, { type: EventType.MoveBlocked, position: blockedPosition });
+  }
+
+  private ensurePositionedCharacterVisible(characterId: string, snapshot: CharacterSnapshot): void {
+    if (this.visibleCharacterIds.has(characterId)) {
+      return;
+    }
+
+    const renderData = this.characterRenderDataById.get(characterId);
+    const placed = this.widget.placeCharacter({
+      id: characterId,
+      x: snapshot.context.position.x,
+      y: snapshot.context.position.y,
+      color: renderData?.color ?? '#f0cc5f',
+      label: renderData?.label ?? snapshot.context.name,
+      expression: snapshot.context.status.expression,
+    });
+
+    if (placed) {
+      this.visibleCharacterIds.add(characterId);
+    }
+  }
+
+  private enterApartmentIfGoingHome(characterId: string, motivation: string): boolean {
+    if (motivation !== 'goHome') {
+      return false;
+    }
+
+    this.sendToCharacter(characterId, {
+      type: EventType.EnterApartment,
+      apartmentSpaceId: TOWN_APARTMENT_SPACE_ID,
+    });
+    return true;
   }
 
   private cancelWalkIfNeeded(characterId: string): void {

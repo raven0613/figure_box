@@ -123,11 +123,13 @@ export class FabricTownMapWidget {
       grid: this.grid,
       cellSize: this.cellSize,
       getCharacterIdFromTarget: target => this.characterLayer.getCharacterIdFromTarget(target),
+      getMapObjectIdFromTarget: target => this.getMapObjectIdFromTarget(target),
       getCharacterTile: characterId => this.getCharacterTile(characterId),
       snapCharacterToGrid: (characterId, tile) => {
         this.characterLayer.snapCharacterToGrid(characterId, tile);
       },
       onTileClick: options.onTileClick,
+      onMapObjectClick: options.onMapObjectClick,
       onCharacterPickUp: options.onCharacterPickUp,
       onCharacterDrop: options.onCharacterDrop,
     });
@@ -451,5 +453,12 @@ export class FabricTownMapWidget {
 
   private getCharacterCenter(characterId: string): GridCoordinate | null {
     return this.characterLayer?.getCharacterCenter(characterId) ?? null;
+  }
+
+  private getMapObjectIdFromTarget(target: unknown): string | null {
+    const maybeMapObject = target as { get?: (key: string) => unknown } | undefined;
+    const mapObjectId = maybeMapObject?.get?.('mapObjectId');
+
+    return typeof mapObjectId === 'string' ? mapObjectId : null;
   }
 }

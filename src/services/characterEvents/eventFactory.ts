@@ -21,6 +21,8 @@ export function createCharacterEventFromAction(
       return { type: EventType.GoRest };
     case 'goPlay':
       return { type: EventType.GoPlay };
+    case 'goHome':
+      return { type: EventType.GoHome };
     case 'goEat':
       return {
         type: EventType.GoEat,
