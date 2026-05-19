@@ -159,14 +159,12 @@ export class TownMapFloatingTextLayer {
     };
   }
 
-  showMapActivity(activity: MapActivityView, durationMs = 4800): void {
+  showMapActivity(activity: MapActivityView, durationMs: number | null = 4800): void {
     if (activity.visibleAtZoom !== undefined && this.getZoom() < activity.visibleAtZoom) {
       return;
     }
 
-    const points = activity.participantIds
-      .map(characterId => this.getCharacterCenter(characterId))
-      .filter((point): point is GridCoordinate => point !== null);
+    const points = this.getMapActivityAnchorPoints(activity);
 
     if (points.length === 0) {
       return;
@@ -181,14 +179,17 @@ export class TownMapFloatingTextLayer {
       text: activity.label,
       left: center.x,
       top: center.y - this.cellSize * CHARACTER_SCALE * 1.1,
+      ...getMapActivityToneStyle(activity.tone),
     });
     this.canvas.bringObjectToFront(label);
     this.canvas.requestRenderAll();
 
-    this.mapActivityTimers.set(activity.id, window.setTimeout(() => {
-      this.removeMapActivity(activity.id);
-      this.mapActivityTimers.delete(activity.id);
-    }, durationMs));
+    if (durationMs !== null) {
+      this.mapActivityTimers.set(activity.id, window.setTimeout(() => {
+        this.removeMapActivity(activity.id);
+        this.mapActivityTimers.delete(activity.id);
+      }, durationMs));
+    }
   }
 
   removeMapActivity(activityId: string): void {
@@ -254,6 +255,25 @@ export class TownMapFloatingTextLayer {
       sequence.bubbleDurationMs,
       sequence.animation,
     );
+  }
+
+  private getMapActivityAnchorPoints(activity: MapActivityView): GridCoordinate[] {
+    const participantPoints = activity.participantIds
+      .map(characterId => this.getCharacterCenter(characterId))
+      .filter((point): point is GridCoordinate => point !== null);
+
+    if (participantPoints.length > 0) {
+      return participantPoints;
+    }
+
+    if (!activity.anchorTile) {
+      return [];
+    }
+
+    return [{
+      x: (activity.anchorTile.x + 0.5) * this.cellSize,
+      y: (activity.anchorTile.y + 0.5) * this.cellSize,
+    }];
   }
 
   private removeCharacterBubble(characterId: string): void {
@@ -385,6 +405,37 @@ function averagePoints(points: readonly GridCoordinate[]): GridCoordinate {
     }),
     { x: 0, y: 0 },
   );
+}
+
+function getMapActivityToneStyle(tone: MapActivityView['tone']): {
+  fill: string;
+  backgroundColor: string;
+} {
+  if (tone === 'critical') {
+    return {
+      fill: '#7c2626',
+      backgroundColor: 'rgba(255, 220, 220, 0.96)',
+    };
+  }
+
+  if (tone === 'social') {
+    return {
+      fill: '#1f5f9f',
+      backgroundColor: 'rgba(221, 237, 255, 0.96)',
+    };
+  }
+
+  if (tone === 'minor') {
+    return {
+      fill: '#256a43',
+      backgroundColor: 'rgba(222, 244, 229, 0.96)',
+    };
+  }
+
+  return {
+    fill: '#24313a',
+    backgroundColor: 'rgba(246, 232, 184, 0.94)',
+  };
 }
 
 function applyFadeBubbleAnimation(state: BubbleAnimationState, progress: number, cellSize: number): void {

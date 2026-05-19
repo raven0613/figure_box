@@ -1,6 +1,7 @@
 import { Canvas, Group, Text } from 'fabric';
 import { Expression } from '~/constants/character';
-import { CharacterTokenFactory } from './townMapCharacterTokenFactory';
+import type { CharacterRequestLevel } from '~/services/characterRequests/types';
+import { CharacterTokenFactory, getRequestMarkerStyle } from './townMapCharacterTokenFactory';
 import type { GridCoordinate } from './townMapGrid';
 import type { TownMapCharacter } from './townMapWidgetTypes';
 import { sortEntityLayer, updateEntitySortMetadata } from './townMapLayerSorter';
@@ -113,6 +114,37 @@ export class TownMapCharacterLayer {
     this.canvas.requestRenderAll();
   }
 
+  updateCharacterRequestMarker(
+    characterId: string,
+    marker: { label: string; level: CharacterRequestLevel } | null,
+  ): void {
+    const token = this.characterTokens.get(characterId);
+    const requestMarker = token?.get('requestMarkerObject') as Text | undefined;
+
+    if (!token || !requestMarker) {
+      return;
+    }
+
+    if (!marker) {
+      if (!requestMarker.visible) {
+        return;
+      }
+
+      requestMarker.set({ text: '', visible: false });
+      token.setCoords();
+      this.canvas.requestRenderAll();
+      return;
+    }
+
+    requestMarker.set({
+      text: marker.label,
+      visible: true,
+      ...getRequestMarkerStyle(marker.level),
+    });
+    token.setCoords();
+    this.canvas.requestRenderAll();
+  }
+
   removeCharacterToken(characterId: string): void {
     const token = this.characterTokens.get(characterId);
 
@@ -151,4 +183,3 @@ export class TownMapCharacterLayer {
     };
   }
 }
-

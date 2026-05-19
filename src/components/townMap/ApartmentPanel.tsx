@@ -5,6 +5,15 @@ export interface ApartmentResident {
   id: string;
   name: string;
   statusText: string;
+  requests: readonly ApartmentResidentRequest[];
+}
+
+export interface ApartmentResidentRequest {
+  id: string;
+  label: string;
+  level: 'critical' | 'social' | 'minor';
+  levelLabel: string;
+  status: string;
 }
 
 interface ApartmentPanelProps {
@@ -112,6 +121,19 @@ export function ApartmentPanel({
                   <span>{resident.name}</span>
                   <strong>{resident.statusText}</strong>
                 </div>
+                {resident.requests.length > 0 ? (
+                  <div className={styles.requestList}>
+                    {resident.requests.map(request => (
+                      <div className={styles.requestRow} key={request.id}>
+                        <span className={styles[getRequestLevelClassName(request.level)]}>
+                          {request.levelLabel}
+                        </span>
+                        <strong>{request.label}</strong>
+                        <em>{request.status}</em>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <button
                   className={styles.leaveButton}
                   type="button"
@@ -126,4 +148,16 @@ export function ApartmentPanel({
       </div>
     </aside>
   );
+}
+
+function getRequestLevelClassName(level: ApartmentResidentRequest['level']): string {
+  if (level === 'critical') {
+    return 'requestLevelCritical';
+  }
+
+  if (level === 'social') {
+    return 'requestLevelSocial';
+  }
+
+  return 'requestLevelMinor';
 }

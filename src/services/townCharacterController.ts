@@ -29,6 +29,7 @@ import {
 } from '~/services/godDropOpportunityService';
 import { CHARACTER_REQUEST_DEFINITIONS } from '~/constants/characterRequestDefinitions';
 import { CharacterRequestService } from '~/services/characterRequests/characterRequestService';
+import { getVisibleRequestIndicators } from '~/services/characterRequests/visibility';
 import type {
   CharacterRequest,
   CharacterRequestCharacterTarget,
@@ -48,6 +49,7 @@ import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import type { GridCoordinate } from '~/widgets/townMapGrid';
 import {
   TOWN_APARTMENT_ENTRANCE_TILES,
+  TOWN_APARTMENT_SPACE_ID,
   TOWN_WORLD_SPACE_ID,
 } from '~/constants/townMap';
 
@@ -98,6 +100,8 @@ export class TownCharacterController {
   private godDropAutoTimer: number | null = null;
   private godDropExpireTimer: number | null = null;
   private currentGodDropOpportunity: GodDropOpportunity | null = null;
+  private readonly activeRequestIndicatorCharacterIds = new Set<string>();
+  private readonly activeRequestMapMarkerIds = new Set<string>();
   private readonly requestIdsByRelationshipOverlayId = new Map<string, string>();
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
@@ -264,6 +268,58 @@ export class TownCharacterController {
     this.leaveApartmentWithFollowUp(characterId);
   }
 
+  syncRequestIndicators(zoom = this.widget.getZoom()): void {
+    const indicators = getVisibleRequestIndicators({
+      requests: this.characterRequestService.getRequests(),
+      snapshots: this.getCharacterSnapshotsById(),
+      zoom,
+    });
+    const nextCharacterIds = new Set(
+      indicators
+        .filter(indicator => indicator.anchor.type === 'character')
+        .map(indicator => indicator.anchor.characterId),
+    );
+    const nextSpaceMarkerIds = new Set(
+      indicators
+        .filter(indicator => indicator.anchor.type === 'space')
+        .map(indicator => indicator.id),
+    );
+
+    this.activeRequestIndicatorCharacterIds.forEach(characterId => {
+      if (!nextCharacterIds.has(characterId)) {
+        this.widget.updateCharacterRequestMarker(characterId, null);
+      }
+    });
+    this.activeRequestIndicatorCharacterIds.clear();
+
+    this.activeRequestMapMarkerIds.forEach(markerId => {
+      if (!nextSpaceMarkerIds.has(markerId)) {
+        this.widget.removeMapActivity(markerId);
+      }
+    });
+    this.activeRequestMapMarkerIds.clear();
+
+    indicators.forEach(indicator => {
+      if (indicator.anchor.type === 'character') {
+        this.widget.updateCharacterRequestMarker(indicator.anchor.characterId, {
+          label: indicator.label,
+          level: indicator.request.level,
+        });
+        this.activeRequestIndicatorCharacterIds.add(indicator.anchor.characterId);
+        return;
+      }
+
+      this.widget.showMapActivity({
+        id: indicator.id,
+        label: indicator.label,
+        tone: indicator.request.level,
+        participantIds: [],
+        anchorTile: this.getRequestSpaceMarkerTile(indicator.anchor.spaceId),
+      }, null);
+      this.activeRequestMapMarkerIds.add(indicator.id);
+    });
+  }
+
   chooseGodDropCandidate(candidateId: string): void {
     const opportunity = this.currentGodDropOpportunity;
     const candidate = opportunity?.candidates.find(item => item.id === candidateId);
@@ -318,6 +374,7 @@ export class TownCharacterController {
     this.activityManager.clear();
     this.nextDecisionAtByCharacterId.clear();
     this.requestIdsByRelationshipOverlayId.clear();
+    this.clearRequestIndicators();
 
     this.characterSubscriptions.forEach(subscription => {
       subscription.unsubscribe();
@@ -733,6 +790,7 @@ export class TownCharacterController {
       this.activityCoordinator.handleCurrentActivity(character.id, snapshot);
       this.activityCoordinator.handlePendingActivityJoin(character.id, snapshot);
       this.activityCoordinator.handleActivityTravelProgress(character.id, snapshot);
+      this.syncRequestIndicators();
     });
 
     actor.start();
@@ -819,6 +877,13 @@ export class TownCharacterController {
 
   private getCharacterSnapshot(characterId: string): CharacterSnapshot | null {
     return this.characterActors.get(characterId)?.getSnapshot() ?? null;
+  }
+
+  private getCharacterSnapshotsById(): Record<string, CharacterSnapshot> {
+    return Object.fromEntries(
+      Array.from(this.characterActors.entries())
+        .map(([characterId, actor]) => [characterId, actor.getSnapshot()]),
+    );
   }
 
   private maybeLeaveApartmentForOutsideNeed(characterId: string): boolean {
@@ -916,6 +981,7 @@ export class TownCharacterController {
 
   private notifyCharacterRequestsChanged(): void {
     this.onCharacterRequestsChange?.(this.characterRequestService.getRequests());
+    this.syncRequestIndicators();
   }
 
   private getNearbyRelationshipSnapshots(
@@ -979,6 +1045,28 @@ export class TownCharacterController {
 
     const locks = actor.getSnapshot().context.locks;
     return locks.bodyAction.length > 0 || locks.bodyMove.length > 0;
+  }
+
+  private clearRequestIndicators(): void {
+    this.activeRequestIndicatorCharacterIds.forEach(characterId => {
+      this.widget.updateCharacterRequestMarker(characterId, null);
+    });
+    this.activeRequestIndicatorCharacterIds.clear();
+
+    this.activeRequestMapMarkerIds.forEach(markerId => {
+      this.widget.removeMapActivity(markerId);
+    });
+    this.activeRequestMapMarkerIds.clear();
+  }
+
+  private getRequestSpaceMarkerTile(spaceId: string): GridCoordinate | undefined {
+    if (spaceId !== TOWN_APARTMENT_SPACE_ID) {
+      return undefined;
+    }
+
+    const entranceTile = TOWN_APARTMENT_ENTRANCE_TILES[1] ?? TOWN_APARTMENT_ENTRANCE_TILES[0];
+
+    return entranceTile ? { x: entranceTile.x, y: entranceTile.y } : undefined;
   }
 
 }

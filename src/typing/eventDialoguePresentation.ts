@@ -5,7 +5,12 @@ import type { DialogueViewScript } from '~/typing/dialogueView';
 export interface MapActivityView {
   id: string;
   participantIds: string[];
+  anchorTile?: {
+    x: number;
+    y: number;
+  };
   label: string;
+  tone?: 'critical' | 'social' | 'minor';
   visibleAtZoom?: number;
   previewLine?: MapBubbleSequenceLine;
 }

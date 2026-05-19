@@ -87,7 +87,7 @@
 
 .residentRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 8px;
@@ -120,6 +120,58 @@
 
 .residentText strong {
   text-align: left;
+}
+
+.requestList {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.requestRow {
+  display: grid;
+  grid-template-columns: minmax(48px, auto) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: rgba(247, 243, 234, 0.95);
+  font-size: 12px;
+}
+
+.requestRow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #24313a;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.requestRow em {
+  color: #6f7b83;
+  font-style: normal;
+}
+
+.requestLevelCritical,
+.requestLevelSocial,
+.requestLevelMinor {
+  font-weight: 700;
+}
+
+.requestLevelCritical {
+  color: #a84242;
+}
+
+.requestLevelSocial {
+  color: #2f6fb2;
+}
+
+.requestLevelMinor {
+  color: #3b776e;
 }
 
 .leaveButton {

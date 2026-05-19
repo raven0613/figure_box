@@ -12,6 +12,7 @@ interface TownMapCameraOptions {
   viewportHeight: number;
   minZoom?: number;
   maxZoom?: number;
+  onZoomChange?: (zoom: number) => void;
 }
 
 interface PointerPosition {
@@ -48,8 +49,10 @@ export class TownMapCamera {
   private readonly viewportHeight: number;
   private readonly minZoom: number;
   private readonly maxZoom: number;
+  private readonly onZoomChange?: (zoom: number) => void;
   private readonly zoomControls: Group[];
   private zoom = 1;
+  private notifiedZoom = 1;
   private panStart: PointerPosition | null = null;
   private viewportStart: ViewportTransform | null = null;
   private hasPannedSincePointerDown = false;
@@ -64,6 +67,7 @@ export class TownMapCamera {
     this.viewportHeight = options.viewportHeight;
     this.minZoom = options.minZoom ?? DEFAULT_MIN_ZOOM;
     this.maxZoom = options.maxZoom ?? DEFAULT_MAX_ZOOM;
+    this.onZoomChange = options.onZoomChange;
     this.zoomControls = this.createZoomControls();
 
     this.applyViewport([1, 0, 0, 1, 0, 0]);
@@ -271,6 +275,16 @@ export class TownMapCamera {
     this.baseCanvasElement.style.transform = `matrix(${viewport[0]}, ${viewport[1]}, ${viewport[2]}, ${viewport[3]}, ${viewport[4]}, ${viewport[5]})`;
     this.updateZoomControlPositions();
     this.canvas.requestRenderAll();
+    this.notifyZoomChange(viewport[0]);
+  }
+
+  private notifyZoomChange(zoom: number): void {
+    if (zoom === this.notifiedZoom) {
+      return;
+    }
+
+    this.notifiedZoom = zoom;
+    this.onZoomChange?.(zoom);
   }
 
   private clampViewport(viewport: ViewportTransform): ViewportTransform {

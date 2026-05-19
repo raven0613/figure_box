@@ -1,5 +1,6 @@
 import { Circle, Group, Text } from 'fabric';
 import { Expression } from '~/constants/character';
+import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import type { GridCoordinate } from './townMapGrid';
 import type { TownMapCharacter } from './townMapWidgetTypes';
 import {
@@ -53,7 +54,20 @@ export class CharacterTokenFactory {
       selectable: false,
       evented: false,
     });
-    const group = new Group([expression, status, token, label], {
+    const requestMarker = new Text('', {
+      top: -renderSize * 1.16,
+      fontSize: 11,
+      fontFamily: 'Arial, sans-serif',
+      fontWeight: '700',
+      fill: '#24313a',
+      backgroundColor: 'rgba(246, 232, 184, 0.94)',
+      originX: 'center',
+      originY: 'bottom',
+      selectable: false,
+      evented: false,
+      visible: false,
+    });
+    const group = new Group([requestMarker, expression, status, token, label], {
       left: center.x,
       top: center.y,
       originX: 'center',
@@ -72,7 +86,31 @@ export class CharacterTokenFactory {
     group.set('characterId', character.id);
     group.set('statusObject', status);
     group.set('expressionObject', expression);
+    group.set('requestMarkerObject', requestMarker);
     return group;
   }
 }
 
+export function getRequestMarkerStyle(level: CharacterRequestLevel): {
+  fill: string;
+  backgroundColor: string;
+} {
+  if (level === 'critical') {
+    return {
+      fill: '#7c2626',
+      backgroundColor: 'rgba(255, 220, 220, 0.96)',
+    };
+  }
+
+  if (level === 'social') {
+    return {
+      fill: '#1f5f9f',
+      backgroundColor: 'rgba(221, 237, 255, 0.96)',
+    };
+  }
+
+  return {
+    fill: '#256a43',
+    backgroundColor: 'rgba(222, 244, 229, 0.96)',
+  };
+}

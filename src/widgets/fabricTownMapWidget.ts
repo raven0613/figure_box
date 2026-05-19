@@ -21,6 +21,7 @@ import {
   type TownMapFloorDecorationData,
   type TownMapObjectData,
 } from '~/constants/townMap';
+import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import type {
   FabricTownMapOptions,
   TownMapCharacter,
@@ -83,6 +84,7 @@ export class FabricTownMapWidget {
       mapHeight: this.mapHeight,
       viewportWidth: this.mapWidth,
       viewportHeight: this.mapHeight,
+      onZoomChange: options.onZoomChange,
     });
     this.characterTracker = new TownMapCharacterTracker({
       canvas: this.canvas,
@@ -198,6 +200,13 @@ export class FabricTownMapWidget {
     this.characterLayer.updateCharacterExpression(characterId, expressionText);
   }
 
+  updateCharacterRequestMarker(
+    characterId: string,
+    marker: { label: string; level: CharacterRequestLevel } | null,
+  ): void {
+    this.characterLayer.updateCharacterRequestMarker(characterId, marker);
+  }
+
   showCharacterBubble(
     characterId: string,
     text: string,
@@ -222,7 +231,7 @@ export class FabricTownMapWidget {
     return this.floatingTextLayer.playMapBubbleSequence(sequence, onLine);
   }
 
-  showMapActivity(activity: MapActivityView, durationMs = 4800): void {
+  showMapActivity(activity: MapActivityView, durationMs: number | null = 4800): void {
     this.floatingTextLayer.showMapActivity(activity, durationMs);
   }
 

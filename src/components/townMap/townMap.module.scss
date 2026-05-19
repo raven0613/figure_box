@@ -190,6 +190,18 @@
   cursor: pointer;
 }
 
+.requestLevelCritical {
+  color: #a84242;
+}
+
+.requestLevelSocial {
+  color: #2f6fb2;
+}
+
+.requestLevelMinor {
+  color: #3b776e;
+}
+
 .godDropActions {
   display: flex;
   flex-direction: column;

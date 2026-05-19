@@ -13,6 +13,13 @@ import {
 } from '~/services/townCharacterController';
 import type { GodDropOpportunity } from '~/services/godDropOpportunityService';
 import type { CharacterRequest } from '~/services/characterRequests/types';
+import {
+  getApartmentRequestItems,
+  getRequestListItems,
+  MINOR_REQUEST_MAP_MIN_ZOOM,
+  type ApartmentRequestItem,
+  type RequestListItem,
+} from '~/services/characterRequests/visibility';
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDefinitions';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
@@ -50,9 +57,25 @@ export function TownMapContainer({
   const [godDropOpportunity, setGodDropOpportunity] = useState<GodDropOpportunity | null>(null);
   const [characterRequests, setCharacterRequests] = useState<readonly CharacterRequest[]>([]);
   const [isApartmentPanelOpen, setIsApartmentPanelOpen] = useState(false);
+  const [mapZoom, setMapZoom] = useState(1);
+  const requestListItems = useMemo(
+    () => getRequestListItems({
+      requests: characterRequests,
+      snapshots: characterSnapshots,
+    }),
+    [characterRequests, characterSnapshots],
+  );
+  const apartmentRequestItems = useMemo(
+    () => getApartmentRequestItems({
+      requests: characterRequests,
+      snapshots: characterSnapshots,
+      apartmentSpaceId: TOWN_APARTMENT_SPACE_ID,
+    }),
+    [characterRequests, characterSnapshots],
+  );
   const apartmentResidents = useMemo(
-    () => getApartmentResidents(characterSnapshots, TOWN_APARTMENT_SPACE_ID),
-    [characterSnapshots],
+    () => getApartmentResidents(characterSnapshots, TOWN_APARTMENT_SPACE_ID, apartmentRequestItems),
+    [apartmentRequestItems, characterSnapshots],
   );
 
   useEffect(() => {
@@ -72,6 +95,10 @@ export function TownMapContainer({
         if (objectId === TOWN_APARTMENT_OBJECT_ID) {
           setIsApartmentPanelOpen(true);
         }
+      },
+      onZoomChange: zoom => {
+        setMapZoom(zoom);
+        characterControllerRef.current?.syncRequestIndicators(zoom);
       },
       onCharacterPickUp: characterId => {
         setSelectedCharacterId(characterId);
@@ -202,8 +229,8 @@ export function TownMapContainer({
 
           <ActivityDebugPanel activities={joinableActivities} allSnapshots={characterSnapshots} />
           <CharacterRequestDebugPanel
-            requests={characterRequests}
-            allSnapshots={characterSnapshots}
+            items={requestListItems}
+            mapZoom={mapZoom}
             onCompleteRequest={requestId => {
               characterControllerRef.current?.completeCharacterRequest(requestId);
             }}
@@ -232,6 +259,7 @@ export function TownMapContainer({
 function getApartmentResidents(
   snapshots: Record<string, CharacterSnapshot>,
   apartmentSpaceId: string,
+  apartmentRequests: readonly ApartmentRequestItem[],
 ): ApartmentResident[] {
   return Object.values(snapshots)
     .filter(snapshot => (
@@ -242,46 +270,65 @@ function getApartmentResidents(
       id: snapshot.context.id,
       name: snapshot.context.name,
       statusText: snapshot.context.currentMotivation,
+      requests: apartmentRequests
+        .filter(item => item.characterId === snapshot.context.id)
+        .map(item => ({
+          id: item.request.id,
+          label: item.request.label,
+          level: item.request.level,
+          levelLabel: item.levelLabel,
+          status: item.request.status,
+        })),
     }));
 }
 
 function CharacterRequestDebugPanel({
-  requests,
-  allSnapshots,
+  items,
+  mapZoom,
   onCompleteRequest,
 }: {
-  requests: readonly CharacterRequest[];
-  allSnapshots: Record<string, CharacterSnapshot>;
+  items: readonly RequestListItem[];
+  mapZoom: number;
   onCompleteRequest: (requestId: string) => void;
 }) {
   return (
     <div className={styles.requestPanel}>
       <div className={styles.panelTitle}>Requests</div>
-      {requests.length === 0 ? (
+      <div className={styles.detailRow}>
+        <span>Minor map zoom</span>
+        <strong>{mapZoom >= MINOR_REQUEST_MAP_MIN_ZOOM ? 'visible' : `${mapZoom.toFixed(1)} / 3`}</strong>
+      </div>
+      {items.length === 0 ? (
         <div className={styles.detailRow}>
           <span>Active</span>
           <strong>-</strong>
         </div>
-      ) : requests.map(request => (
-        <div className={styles.requestRow} key={request.id}>
+      ) : items.map(item => (
+        <div className={styles.requestRow} key={item.request.id}>
           <div className={styles.detailRow}>
-            <span>{allSnapshots[request.characterId]?.context.name ?? request.characterId}</span>
-            <strong>{request.status}</strong>
+            <span>{item.characterName}</span>
+            <strong>{item.request.status}</strong>
           </div>
           <div className={styles.detailRow}>
-            <span>{request.label}</span>
-            <strong>{request.level} / {formatRequestRemainingTime(request)}</strong>
+            <span>{item.request.label}</span>
+            <strong className={styles[getRequestLevelClassName(item.request.level)]}>
+              {item.levelLabel} / {formatRequestRemainingTime(item.request)}
+            </strong>
           </div>
-          {request.target?.targetCharacterName ? (
+          <div className={styles.detailRow}>
+            <span>Location</span>
+            <strong>{item.locationLabel}</strong>
+          </div>
+          {item.request.target?.targetCharacterName ? (
             <div className={styles.detailRow}>
               <span>Target</span>
-              <strong>{request.target.targetCharacterName}</strong>
+              <strong>{item.request.target.targetCharacterName}</strong>
             </div>
           ) : null}
           <button
             className={styles.requestButton}
             type="button"
-            onClick={() => onCompleteRequest(request.id)}
+            onClick={() => onCompleteRequest(item.request.id)}
           >
             Complete
           </button>
@@ -342,6 +389,18 @@ function formatRequestRemainingTime(request: CharacterRequest): string {
   }
 
   return `${remainingHours}h ${remainingMinutes}m`;
+}
+
+function getRequestLevelClassName(level: CharacterRequest['level']): string {
+  if (level === 'critical') {
+    return 'requestLevelCritical';
+  }
+
+  if (level === 'social') {
+    return 'requestLevelSocial';
+  }
+
+  return 'requestLevelMinor';
 }
 
 function ActivityDebugPanel({

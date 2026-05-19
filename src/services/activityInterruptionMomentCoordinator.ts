@@ -34,7 +34,7 @@ export interface StartActivityInterruptionMomentInput {
 
 interface ActivityInterruptionMomentCoordinatorOptions {
   sendToCharacter: SendCharacterEvent;
-  showMapActivity: (activity: MapActivityView, durationMs?: number) => void;
+  showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   pauseActivity: (activityId: string, timestamp: number) => void;
   resumeActivity: (activityId: string, timestamp: number) => void;
   pauseCharacterWalk?: (characterId: string, durationMs: number) => void;
@@ -52,7 +52,7 @@ export class ActivityInterruptionMomentCoordinator {
   private readonly momentIdsByCharacterId = new Map<string, string>();
   private readonly timerIdsByMomentId = new Map<string, number>();
   private readonly sendToCharacter: SendCharacterEvent;
-  private readonly showMapActivity: (activity: MapActivityView, durationMs?: number) => void;
+  private readonly showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   private readonly pauseActivity: (activityId: string, timestamp: number) => void;
   private readonly resumeActivity: (activityId: string, timestamp: number) => void;
   private readonly pauseCharacterWalk?: (characterId: string, durationMs: number) => void;

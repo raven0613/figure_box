@@ -46,7 +46,7 @@ interface CharacterPerformanceRunnerPorts {
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   removeCharacterBubble: (characterId: string) => void;
   showCharacterEmote: (characterId: string, text: string, durationMs?: number) => void;
-  showMapActivity: (activity: MapActivityView, durationMs?: number) => void;
+  showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   removeMapActivity: (activityId: string) => void;
 }
 
