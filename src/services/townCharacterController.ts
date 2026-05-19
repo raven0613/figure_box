@@ -29,7 +29,7 @@ import {
 } from '~/services/godDropOpportunityService';
 import { CHARACTER_REQUEST_DEFINITIONS } from '~/constants/characterRequestDefinitions';
 import { CharacterRequestService } from '~/services/characterRequests/characterRequestService';
-import { getVisibleRequestIndicators } from '~/services/characterRequests/visibility';
+import { getVisibleRequestIndicators, type RequestVisibilityIndicator } from '~/services/characterRequests/visibility';
 import type {
   CharacterRequest,
   CharacterRequestCharacterTarget,
@@ -276,7 +276,7 @@ export class TownCharacterController {
     });
     const nextCharacterIds = new Set(
       indicators
-        .filter(indicator => indicator.anchor.type === 'character')
+        .filter((indicator): indicator is RequestVisibilityIndicator & { anchor: { type: 'character'; characterId: string } } => indicator.anchor.type === 'character')
         .map(indicator => indicator.anchor.characterId),
     );
     const nextSpaceMarkerIds = new Set(
