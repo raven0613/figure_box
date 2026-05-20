@@ -139,6 +139,7 @@ export interface ItemTransferHistoryEntry {
   toActorId?: ActorId;
   reason: ItemTransferReason;
   day: number;
+  quantity: number;
   timeOfDay?: string;
 }
 
@@ -171,8 +172,9 @@ export interface HeldItem {
 export interface ShopStockItem {
   id: string;
   shopId: ShopId;
-  itemInstanceId: ItemInstanceId;
+  definitionId: ItemDefinitionId;
   price?: number;
+  stock: number;
   generatedAtDay: number;
 }
 

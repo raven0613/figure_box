@@ -101,6 +101,13 @@
   flex: 1 1 0;
 }
 
+.characterRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 6px;
+  align-items: stretch;
+}
+
 .characterButton {
   display: flex;
   justify-content: space-between;
@@ -115,6 +122,14 @@
   cursor: pointer;
 }
 
+.characterButtonName {
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .characterButton strong {
   font-weight: 700;
 }
@@ -122,6 +137,22 @@
 .characterButtonActive {
   border-color: #3b776e;
   background: #dceee9;
+}
+
+.characterInventoryButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+  border: 1px solid rgba(59, 119, 110, 0.32);
+  border-radius: 6px;
+  background: #edf7f2;
+  color: #2d665e;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .characterPanel {
@@ -184,6 +215,11 @@
 .floatingHistoryPanel {
   width: 280px;
   max-height: 380px;
+}
+
+.floatingShopPanel {
+  width: 300px;
+  max-height: 430px;
 }
 
 .floatingPanelContent {

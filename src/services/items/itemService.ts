@@ -12,10 +12,13 @@ import type {
   ItemInstance,
   ItemInstanceId,
   ItemState,
+  ItemTransferHistoryEntry,
+  ItemTransferReason,
 } from '~/typing/item';
 import { EmptyItemSavePort, type ItemSavePort } from './itemSavePort';
 import { matchesItemDefinition } from './itemMatcher';
 import { ItemStore, type ItemStoreSnapshot } from './itemStore';
+import { appendItemTransferHistoryEntry } from './itemTransferHistory';
 
 interface ItemServiceOptions {
   definitions?: readonly ItemDefinition[];
@@ -26,10 +29,13 @@ interface ItemServiceOptions {
 
 export interface CreateItemInstanceInput {
   definitionId: ItemDefinitionId;
+  fromActorId?: ActorId;
   ownerActorId?: ActorId;
   quantity?: number;
   state?: ItemState;
+  reason?: ItemTransferReason;
   day?: number;
+  timeOfDay?: string;
 }
 
 export interface InventoryGroup {
@@ -107,6 +113,10 @@ export class ItemService {
     return this.store.updateItemInstance(itemInstance);
   }
 
+  removeItemInstance(itemInstanceId: ItemInstanceId): ItemInstance | null {
+    return this.store.removeItemInstance(itemInstanceId);
+  }
+
   getActorItems(actorId: ActorId): readonly ItemInstance[] {
     return this.store.getItemInstancesByOwner(actorId);
   }
@@ -149,8 +159,22 @@ export class ItemService {
   createItemInstance(input: CreateItemInstanceInput): ItemInstance {
     const definition = this.getDefinitionOrThrow(input.definitionId);
     const quantity = input.quantity ?? DEFAULT_ITEM_QUANTITY;
+    const transferHistoryEntry = this.createTransferHistoryEntry(input, quantity);
 
     this.assertValidQuantity(definition, quantity);
+
+    const stackableItemInstance = this.findStackableItemInstance(input.ownerActorId, definition.id, quantity);
+
+    if (stackableItemInstance) {
+      return this.store.updateItemInstance({
+        ...stackableItemInstance,
+        quantity: stackableItemInstance.quantity + quantity,
+        transferHistory: appendItemTransferHistoryEntry(
+          stackableItemInstance.transferHistory,
+          transferHistoryEntry,
+        ),
+      });
+    }
 
     return this.store.addItemInstance({
       id: this.createItemInstanceId(definition.id),
@@ -158,13 +182,7 @@ export class ItemService {
       ownerActorId: input.ownerActorId,
       state: input.state ?? 'stored',
       quantity,
-      transferHistory: input.ownerActorId
-        ? [{
-          toActorId: input.ownerActorId,
-          reason: 'system',
-          day: input.day ?? 0,
-        }]
-        : undefined,
+      transferHistory: input.ownerActorId ? [transferHistoryEntry] : undefined,
     });
   }
 
@@ -185,6 +203,42 @@ export class ItemService {
     if (definition.maxStack !== undefined && quantity > definition.maxStack) {
       throw new Error(`Item quantity for "${definition.id}" cannot exceed ${definition.maxStack}.`);
     }
+  }
+
+  private findStackableItemInstance(
+    ownerActorId: ActorId | undefined,
+    definitionId: ItemDefinitionId,
+    quantity: number,
+  ): ItemInstance | null {
+    const definition = this.getDefinitionOrThrow(definitionId);
+
+    if (!ownerActorId || !definition.stackable) {
+      return null;
+    }
+
+    return this.store.getItemInstancesByOwner(ownerActorId).find(itemInstance => (
+      itemInstance.definitionId === definitionId &&
+      itemInstance.state === 'stored' &&
+      this.canAddToStack(definition, itemInstance.quantity, quantity)
+    )) ?? null;
+  }
+
+  private canAddToStack(definition: ItemDefinition, currentQuantity: number, addedQuantity: number): boolean {
+    return definition.maxStack === undefined || currentQuantity + addedQuantity <= definition.maxStack;
+  }
+
+  private createTransferHistoryEntry(
+    input: CreateItemInstanceInput,
+    quantity: number,
+  ): ItemTransferHistoryEntry {
+    return {
+      ...(input.fromActorId ? { fromActorId: input.fromActorId } : {}),
+      ...(input.ownerActorId ? { toActorId: input.ownerActorId } : {}),
+      reason: input.reason ?? 'system',
+      day: input.day ?? 0,
+      quantity,
+      ...(input.timeOfDay ? { timeOfDay: input.timeOfDay } : {}),
+    };
   }
 
   private createItemInstanceId(definitionId: ItemDefinitionId): ItemInstanceId {

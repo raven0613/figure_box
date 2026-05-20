@@ -72,7 +72,7 @@ export class MapObjectGlyphFactory {
       originX: 'left',
       originY: 'top',
       selectable: false,
-      evented: false,
+      evented: object.interactable,
       objectCaching: true,
     });
 
@@ -276,7 +276,7 @@ export class MapObjectGlyphFactory {
       originX: 'left',
       originY: 'top',
       selectable: false,
-      evented: false,
+      evented: object.interactable,
       objectCaching: true,
     });
 
@@ -336,7 +336,7 @@ export class MapObjectGlyphFactory {
       originX: 'left',
       originY: 'top',
       selectable: false,
-      evented: false,
+      evented: object.interactable,
       objectCaching: true,
     });
 

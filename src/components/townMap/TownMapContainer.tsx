@@ -25,7 +25,7 @@ import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDe
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
-import { TOWN_APARTMENT_OBJECT_ID, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
+import { TOWN_APARTMENT_OBJECT_ID, TOWN_APARTMENT_SPACE_ID, TOWN_ITEM_SHOP_OBJECT_ID } from '~/constants/townMap';
 import {
   CharacterBodyActionState,
   CharacterBodyMoveState,
@@ -35,8 +35,10 @@ import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentati
 import type { TownMapTile } from '~/widgets/townMapGrid';
 import { itemService, type InventoryGroup } from '~/services/items/itemService';
 import { itemTransferService } from '~/services/items/itemTransferService';
-import type { ItemDefinitionId, ItemInstance } from '~/typing/item';
+import { DEFAULT_ITEM_SHOP_ID, shopService } from '~/services/items/shopService';
+import type { ItemDefinitionId, ItemInstance, ShopStockItem } from '~/typing/item';
 import { InventoryPanel } from '~/components/inventory/InventoryPanel';
+import { ShopPanel } from '~/components/shop/ShopPanel';
 import { DraggablePanel } from '~/components/common/DraggablePanel';
 import { ApartmentPanel, type ApartmentResident } from './ApartmentPanel';
 
@@ -74,6 +76,12 @@ interface GiftTargetPickerState {
   };
 }
 
+interface CharacterInventoryWindowState {
+  characterId: string;
+  characterName: string;
+  groups: readonly InventoryGroup[];
+}
+
 export function TownMapContainer({
   expressionByCharacterId = {},
   mapDialoguePresentation = null,
@@ -94,9 +102,12 @@ export function TownMapContainer({
   const [isApartmentPanelOpen, setIsApartmentPanelOpen] = useState(false);
   const [isInventoryPanelOpen, setIsInventoryPanelOpen] = useState(false);
   const [isRequestPanelOpen, setIsRequestPanelOpen] = useState(false);
+  const [isShopPanelOpen, setIsShopPanelOpen] = useState(false);
+  const [shopStockItems, setShopStockItems] = useState<readonly ShopStockItem[]>([]);
   const [transferHistoryItem, setTransferHistoryItem] = useState<ItemInstance | null>(null);
   const [giftDragState, setGiftDragState] = useState<GiftDragState | null>(null);
   const [giftTargetPicker, setGiftTargetPicker] = useState<GiftTargetPickerState | null>(null);
+  const [characterInventoryWindow, setCharacterInventoryWindow] = useState<CharacterInventoryWindowState | null>(null);
   const [mapZoom, setMapZoom] = useState(1);
   const requestListItems = useMemo(
     () => getRequestListItems({
@@ -124,21 +135,43 @@ export function TownMapContainer({
     setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID));
   }, []);
 
+  const refreshShopStock = useCallback(() => {
+    setShopStockItems(shopService.getStock(DEFAULT_ITEM_SHOP_ID));
+  }, []);
+
+  const refreshOpenCharacterInventory = useCallback((characterId: string) => {
+    setCharacterInventoryWindow(currentWindow => {
+      if (!currentWindow || currentWindow.characterId !== characterId) {
+        return currentWindow;
+      }
+
+      return {
+        ...currentWindow,
+        groups: itemService.getActorInventoryGroups(characterId),
+      };
+    });
+  }, []);
+
   const giftItemToCharacter = useCallback((itemInstance: ItemInstance, targetCharacterId: string) => {
     handleGiftItemToSelectedCharacter({
       itemInstance,
       selectedCharacterId: targetCharacterId,
       characterController: characterControllerRef.current,
       refreshPlayerInventory,
-      onItemTransferred: updatedItemInstance => {
-        setTransferHistoryItem(currentItemInstance => (
-          currentItemInstance?.id === updatedItemInstance.id
-            ? null
-            : currentItemInstance
-        ));
+      onItemTransferred: () => {
+        setTransferHistoryItem(currentItemInstance => {
+          if (!currentItemInstance) {
+            return null;
+          }
+
+          const latestItemInstance = itemService.getItemInstance(currentItemInstance.id);
+
+          return latestItemInstance ?? null;
+        });
+        refreshOpenCharacterInventory(targetCharacterId);
       },
     });
-  }, [refreshPlayerInventory]);
+  }, [refreshOpenCharacterInventory, refreshPlayerInventory]);
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -156,6 +189,11 @@ export function TownMapContainer({
       onMapObjectClick: objectId => {
         if (objectId === TOWN_APARTMENT_OBJECT_ID) {
           setIsApartmentPanelOpen(true);
+        }
+
+        if (objectId === TOWN_ITEM_SHOP_OBJECT_ID) {
+          setIsShopPanelOpen(true);
+          refreshShopStock();
         }
       },
       onZoomChange: zoom => {
@@ -199,6 +237,7 @@ export function TownMapContainer({
       setCharacterRequests([]);
       setSelectedMapObjects([]);
       setIsApartmentPanelOpen(false);
+      setIsShopPanelOpen(false);
       void widget.destroy();
       canvasHost.replaceChildren();
     };
@@ -207,7 +246,8 @@ export function TownMapContainer({
   useEffect(() => {
     seedDemoPlayerInventory();
     refreshPlayerInventory();
-  }, [refreshPlayerInventory]);
+    refreshShopStock();
+  }, [refreshPlayerInventory, refreshShopStock]);
 
   useEffect(() => {
     if (!giftDragState) {
@@ -360,6 +400,69 @@ export function TownMapContainer({
         </DraggablePanel>
       ) : null}
 
+      {characterInventoryWindow ? (
+        <DraggablePanel
+          title={`${characterInventoryWindow.characterName} 的物品`}
+          initialPosition={{ left: 426, top: 284 }}
+          closeAriaLabel="關閉角色物品欄"
+          className={styles.floatingInventoryPanel}
+          contentClassName={styles.floatingPanelContent}
+          onClose={() => setCharacterInventoryWindow(null)}
+        >
+          <InventoryPanel
+            groups={characterInventoryWindow.groups}
+            getDefinition={definitionId => itemService.getDefinition(definitionId)}
+            ownerLabel={characterInventoryWindow.characterName}
+            onOpenTransferHistory={itemInstance => {
+              setTransferHistoryItem(itemService.getItemInstance(itemInstance.id) ?? itemInstance);
+            }}
+          />
+        </DraggablePanel>
+      ) : null}
+
+      {isShopPanelOpen ? (
+        <DraggablePanel
+          title="綠地商店"
+          initialPosition={{ left: 426, top: 18 }}
+          closeAriaLabel="關閉綠地商店"
+          className={styles.floatingShopPanel}
+          contentClassName={styles.floatingPanelContent}
+          onClose={() => setIsShopPanelOpen(false)}
+        >
+          <ShopPanel
+            stockItems={shopStockItems}
+            getDefinition={definitionId => itemService.getDefinition(definitionId)}
+            onPurchase={stockItem => {
+              if (stockItem.stock <= 0) {
+                return;
+              }
+
+              try {
+                const purchaseResult = shopService.purchaseItem({
+                  shopId: DEFAULT_ITEM_SHOP_ID,
+                  stockItemId: stockItem.id,
+                  buyerActorId: PLAYER_ACTOR_ID,
+                  day: 1,
+                });
+                setTransferHistoryItem(currentItemInstance => {
+                  if (!currentItemInstance || currentItemInstance.id !== purchaseResult.itemInstanceId) {
+                    return currentItemInstance;
+                  }
+
+                  return itemService.getItemInstance(purchaseResult.itemInstanceId) ?? currentItemInstance;
+                });
+              } catch {
+                refreshShopStock();
+                return;
+              }
+
+              refreshShopStock();
+              refreshPlayerInventory();
+            }}
+          />
+        </DraggablePanel>
+      ) : null}
+
       {giftDragState ? (
         <GiftDragPreview
           itemInstance={giftDragState.itemInstance}
@@ -436,15 +539,30 @@ export function TownMapContainer({
               const isSelected = selectedCharacterId === character.id;
 
               return (
-                <button
-                  className={`${styles.characterButton} ${isSelected ? styles.characterButtonActive : ''}`}
-                  key={character.id}
-                  type="button"
-                  onClick={() => setSelectedCharacterId(character.id)}
-                >
-                  <span>{character.name}</span>
-                  <strong>{summary ? summary.bodyAction : '-'}</strong>
-                </button>
+                <div className={styles.characterRow} key={character.id}>
+                  <button
+                    className={`${styles.characterButton} ${isSelected ? styles.characterButtonActive : ''}`}
+                    type="button"
+                    onClick={() => setSelectedCharacterId(character.id)}
+                  >
+                    <span className={styles.characterButtonName}>{character.name}</span>
+                    <strong>{summary ? summary.bodyAction : '-'}</strong>
+                  </button>
+                  <button
+                    className={styles.characterInventoryButton}
+                    type="button"
+                    onClick={() => {
+                      setCharacterInventoryWindow({
+                        characterId: character.id,
+                        characterName: character.name,
+                        groups: itemService.getActorInventoryGroups(character.id),
+                      });
+                    }}
+                    aria-label={`打開${character.name}的物品欄`}
+                  >
+                    物
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -609,6 +727,7 @@ function handleGiftItemToSelectedCharacter({
     toActorId: selectedCharacterId,
     reason: 'gift',
     day: 1,
+    quantity: 1,
   });
 
   refreshPlayerInventory();
@@ -659,6 +778,10 @@ function TransferHistoryPanel({
               <div className={styles.detailRow}>
                 <span>To</span>
                 <strong>{entry.toActorId ?? '-'}</strong>
+              </div>
+              <div className={styles.detailRow}>
+                <span>Qty</span>
+                <strong>{entry.quantity}</strong>
               </div>
             </div>
           ))}

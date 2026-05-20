@@ -10,6 +10,7 @@ import styles from './inventoryPanel.module.scss';
 interface InventoryPanelProps {
   groups: readonly InventoryGroup[];
   getDefinition: (definitionId: string) => ItemDefinition | null;
+  ownerLabel?: string;
   giftTargetName?: string;
   onGiftItem?: (itemInstance: ItemInstance) => void;
   onOpenTransferHistory?: (itemInstance: ItemInstance) => void;
@@ -34,6 +35,7 @@ const RARITY_ORDER: Record<string, number> = {
 export function InventoryPanel({
   groups,
   getDefinition,
+  ownerLabel,
   giftTargetName,
   onGiftItem,
   onOpenTransferHistory,
@@ -56,7 +58,7 @@ export function InventoryPanel({
       <div className={styles.header}>
         <div>
           <div className={styles.title}>{t('inventory.title')}</div>
-          <div className={styles.subtitle}>{t('inventory.owner.player')}</div>
+          <div className={styles.subtitle}>{ownerLabel ?? t('inventory.owner.player')}</div>
         </div>
         <strong className={styles.count}>{itemCount}</strong>
       </div>

@@ -137,6 +137,7 @@ export const TOWN_APARTMENT_ENTRANCE_TILES: readonly { readonly x: number; reado
 export const TOWN_WORLD_SPACE_ID = 'world.main';
 export const TOWN_APARTMENT_SPACE_ID = 'apartment.201';
 export const TOWN_APARTMENT_OBJECT_ID = 'town-residence-apartment';
+export const TOWN_ITEM_SHOP_OBJECT_ID = 'south-green-item-shop';
 
 export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
   {
@@ -242,6 +243,19 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
     height: 3,
     layer: 'wallObject',
     blocksMovement: true,
+    interactable: true,
+  },
+  {
+    id: TOWN_ITEM_SHOP_OBJECT_ID,
+    type: 'marketStall',
+    label: '綠地商店',
+    x: 44,
+    y: 40,
+    width: 1,
+    length: 2,
+    height: 2,
+    layer: 'floorObject',
+    blocksMovement: false,
     interactable: true,
   },
   {
