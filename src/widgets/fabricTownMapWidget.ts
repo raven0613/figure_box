@@ -13,6 +13,7 @@ import {
 import { sortEntityLayer } from './townMapLayerSorter';
 import { DEFAULT_CELL_SIZE } from '../constants/townMapWidgetConstants';
 import type { Expression } from '~/constants/character';
+import type { ItemDefinition } from '~/typing/item';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
 import {
@@ -238,6 +239,14 @@ export class FabricTownMapWidget {
     marker: { label: string; level: CharacterRequestLevel } | null,
   ): void {
     this.characterLayer.updateCharacterRequestMarker(characterId, marker);
+  }
+
+  holdItem(characterId: string, itemDefinition: ItemDefinition): void {
+    this.characterLayer.holdItem(characterId, itemDefinition);
+  }
+
+  releaseHeldItem(characterId: string): void {
+    this.characterLayer.releaseHeldItem(characterId);
   }
 
   showCharacterBubble(

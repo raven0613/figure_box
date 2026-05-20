@@ -5,6 +5,7 @@ import type {
   ItemDefinition,
   ItemInstance,
 } from '~/typing/item';
+import { ItemIcon } from './ItemIcon';
 import styles from './inventoryPanel.module.scss';
 
 interface InventoryPanelProps {
@@ -85,7 +86,7 @@ export function InventoryPanel({
                 }}
               >
                 <div className={styles.itemIcon} aria-hidden="true">
-                  {getIconLabel(item.definition)}
+                  <ItemIcon definition={item.definition} />
                 </div>
                 <div className={styles.itemText}>
                   <div className={styles.itemName}>{item.name}</div>
@@ -158,8 +159,4 @@ function getSortedItemViews(
 
 function getRarityOrder(rarity: string): number {
   return RARITY_ORDER[rarity] ?? RARITY_ORDER.common;
-}
-
-function getIconLabel(definition: ItemDefinition): string {
-  return definition.category.slice(0, 2).toUpperCase();
 }

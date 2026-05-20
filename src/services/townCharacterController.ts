@@ -52,6 +52,7 @@ import {
   TOWN_APARTMENT_SPACE_ID,
   TOWN_WORLD_SPACE_ID,
 } from '~/constants/townMap';
+import type { ItemDefinition } from '~/typing/item';
 
 type Subscription = {
   unsubscribe: () => void;
@@ -172,6 +173,12 @@ export class TownCharacterController {
       momentCoordinator: this.activityInterruptionMomentCoordinator,
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
+      },
+      holdItem: (characterId, itemDefinition) => {
+        this.widget.holdItem(characterId, itemDefinition);
+      },
+      releaseHeldItem: characterId => {
+        this.widget.releaseHeldItem(characterId);
       },
       onFulfillmentFinished: request => {
         this.finishCharacterRequestFulfillment(request);
@@ -349,7 +356,7 @@ export class TownCharacterController {
       return null;
     }
 
-    this.startCharacterRequestFulfillment(result.request, '收到了，謝謝你');
+    this.startCharacterRequestFulfillment(result.request, '收到了，謝謝你', input.itemDefinition);
     this.notifyCharacterRequestsChanged();
     return result.request;
   }
@@ -579,7 +586,11 @@ export class TownCharacterController {
     this.startCharacterRequestFulfillment(request, '謝謝你幫我完成心願');
   }
 
-  private startCharacterRequestFulfillment(request: CharacterRequest, rewardText?: string): void {
+  private startCharacterRequestFulfillment(
+    request: CharacterRequest,
+    rewardText?: string,
+    fulfilledItemDefinition?: ItemDefinition,
+  ): void {
     const participantIds = this.getRequestFulfillmentParticipantIds(request);
     const sourceActivityIds = this.getActivityIdsByParticipants(participantIds);
     const observerIds = this.getObserverIdsForActivities(sourceActivityIds, participantIds);
@@ -594,6 +605,7 @@ export class TownCharacterController {
       sourceActivityIds,
       timestamp,
       rewardText,
+      fulfilledItemDefinition,
     });
 
     if (fulfillment) {

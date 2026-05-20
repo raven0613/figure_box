@@ -50,6 +50,10 @@ export const ITEM_DEFINITIONS: readonly ItemDefinition[] = [
         held: 0.4,
         placed: 0.65,
       },
+      heldOffset: {
+        x: -6,
+        y: 6,
+      },
     },
     placement: {
       surfaceTypes: ['tabletop', 'objectSurface'],

@@ -4,11 +4,14 @@ import type {
 } from '~/services/activityInterruptionMomentCoordinator';
 import { CharacterControlReason } from '~/stateMachines/gameFlow/controlReasons';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
+import type { ItemDefinition } from '~/typing/item';
 import type { CharacterRequest } from './types';
 
 interface CharacterRequestFulfillmentCoordinatorOptions {
   momentCoordinator: ActivityInterruptionMomentCoordinator;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
+  holdItem?: (characterId: string, itemDefinition: ItemDefinition) => void;
+  releaseHeldItem?: (characterId: string) => void;
   onFulfillmentFinished: (request: CharacterRequest) => void;
 }
 
@@ -21,6 +24,7 @@ interface StartCharacterRequestFulfillmentInput {
   timestamp: number;
   durationMs?: number;
   rewardText?: string;
+  fulfilledItemDefinition?: ItemDefinition;
 }
 
 const DEFAULT_FULFILLMENT_DURATION_MS = 4000;
@@ -28,11 +32,15 @@ const DEFAULT_FULFILLMENT_DURATION_MS = 4000;
 export class CharacterRequestFulfillmentCoordinator {
   private readonly momentCoordinator: ActivityInterruptionMomentCoordinator;
   private readonly showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
+  private readonly holdItem?: (characterId: string, itemDefinition: ItemDefinition) => void;
+  private readonly releaseHeldItem?: (characterId: string) => void;
   private readonly onFulfillmentFinished: (request: CharacterRequest) => void;
 
   constructor(options: CharacterRequestFulfillmentCoordinatorOptions) {
     this.momentCoordinator = options.momentCoordinator;
     this.showCharacterBubble = options.showCharacterBubble;
+    this.holdItem = options.holdItem;
+    this.releaseHeldItem = options.releaseHeldItem;
     this.onFulfillmentFinished = options.onFulfillmentFinished;
   }
 
@@ -53,6 +61,7 @@ export class CharacterRequestFulfillmentCoordinator {
       pauseParticipantWalks: true,
       curiosityLabel: '好奇',
       onFinished: () => {
+        this.releaseFulfilledItem(input);
         this.onFulfillmentFinished(input.request);
       },
     });
@@ -66,11 +75,28 @@ export class CharacterRequestFulfillmentCoordinator {
       input.rewardText ?? getDefaultRewardText(input.request),
       durationMs,
     );
+    this.holdFulfilledItem(input);
     return moment;
   }
 
   dispose(): void {
     this.momentCoordinator.dispose();
+  }
+
+  private holdFulfilledItem(input: StartCharacterRequestFulfillmentInput): void {
+    if (!input.fulfilledItemDefinition || !this.holdItem) {
+      return;
+    }
+
+    this.holdItem(input.request.characterId, input.fulfilledItemDefinition);
+  }
+
+  private releaseFulfilledItem(input: StartCharacterRequestFulfillmentInput): void {
+    if (!input.fulfilledItemDefinition || !this.releaseHeldItem) {
+      return;
+    }
+
+    this.releaseHeldItem(input.request.characterId);
   }
 }
 

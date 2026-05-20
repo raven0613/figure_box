@@ -1,4 +1,4 @@
-import { Circle, Group, Text } from 'fabric';
+import { Circle, Group, Rect, Text } from 'fabric';
 import { Expression } from '~/constants/character';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import type { GridCoordinate } from './townMapGrid';
@@ -10,7 +10,7 @@ import {
 
 // 角色 token 建立
 export class CharacterTokenFactory {
-  create(character: TownMapCharacter, center: GridCoordinate, cellSize: number): Group {
+  create(character: TownMapCharacter, center: GridCoordinate, cellSize: number, heldItem?: Group): Group {
     const renderSize = cellSize * CHARACTER_SCALE;
     const token = new Circle({
       radius: renderSize * CHARACTER_RADIUS_RATIO,
@@ -67,7 +67,54 @@ export class CharacterTokenFactory {
       evented: false,
       visible: false,
     });
-    const group = new Group([requestMarker, expression, status, token, label], {
+    const heldItemSlotBounds = new Rect({
+      left: 0,
+      top: 0,
+      width: 20,
+      height: 20,
+      fill: 'rgba(0,0,0,0)',
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const heldItemMountBounds = new Rect({
+      left: 0,
+      top: 0,
+      width: 20,
+      height: 20,
+      fill: 'rgba(0,0,0,0)',
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const heldItemMount = new Group([
+      heldItemMountBounds,
+      ...(heldItem ? [heldItem] : []),
+    ], {
+      left: 0,
+      top: 0,
+      width: 20,
+      height: 20,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+      objectCaching: false,
+    });
+    const heldItemSlot = new Group([heldItemSlotBounds, heldItemMount], {
+      left: 10,
+      top: -10,
+      width: 20,
+      height: 20,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+      objectCaching: false,
+    });
+    const group = new Group([requestMarker, expression, status, token, label, heldItemSlot], {
       left: center.x,
       top: center.y,
       originX: 'center',
@@ -87,6 +134,9 @@ export class CharacterTokenFactory {
     group.set('statusObject', status);
     group.set('expressionObject', expression);
     group.set('requestMarkerObject', requestMarker);
+    group.set('heldItemSlotObject', heldItemSlot);
+    group.set('heldItemMountObject', heldItemMount);
+    group.set('heldItemMountBoundsObject', heldItemMountBounds);
     return group;
   }
 }

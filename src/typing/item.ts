@@ -92,6 +92,7 @@ export interface ItemVisualDefinition {
   assetId: string;
   visibleOnCharacter?: boolean;
   scale?: ItemVisualScale;
+  heldOffset?: ItemPosition;
 }
 
 export interface ItemVisualScale {
