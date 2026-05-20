@@ -3,6 +3,7 @@ import type {
   CharacterRequestItemMatchInput,
   CharacterRequestSocialMatchInput,
 } from './types';
+import { matchesItemDefinition } from '~/services/items/itemMatcher';
 
 const ITEM_REQUEST_KINDS = ['food', 'item'] as const;
 const SOCIAL_REQUEST_KINDS = ['meetCharacter', 'talkToCharacter'] as const;
@@ -43,11 +44,25 @@ export function matchesItemRequest(
     return false;
   }
 
+  if (target.itemMatch && input.itemDefinition && matchesItemDefinition(input.itemDefinition, target.itemMatch)) {
+    return true;
+  }
+
   if (target.acceptedItemIds?.includes(input.itemId)) {
     return true;
   }
 
-  if (input.itemType && target.acceptedItemTypes?.includes(input.itemType)) {
+  if (
+    input.itemType &&
+    target.acceptedItemTypes?.includes(input.itemType)
+  ) {
+    return true;
+  }
+
+  if (
+    input.itemCategory &&
+    target.acceptedItemTypes?.includes(input.itemCategory)
+  ) {
     return true;
   }
 

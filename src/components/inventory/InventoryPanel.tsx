@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { InventoryGroup } from '~/services/items/itemService';
 import type {
@@ -10,6 +10,10 @@ import styles from './inventoryPanel.module.scss';
 interface InventoryPanelProps {
   groups: readonly InventoryGroup[];
   getDefinition: (definitionId: string) => ItemDefinition | null;
+  giftTargetName?: string;
+  onGiftItem?: (itemInstance: ItemInstance) => void;
+  onOpenTransferHistory?: (itemInstance: ItemInstance) => void;
+  onStartDragItem?: (itemInstance: ItemInstance, pointer: { x: number; y: number }) => void;
 }
 
 interface InventoryItemView {
@@ -30,6 +34,10 @@ const RARITY_ORDER: Record<string, number> = {
 export function InventoryPanel({
   groups,
   getDefinition,
+  giftTargetName,
+  onGiftItem,
+  onOpenTransferHistory,
+  onStartDragItem,
 }: InventoryPanelProps) {
   const { t } = useTranslation();
   const visibleGroups = useMemo(
@@ -60,7 +68,20 @@ export function InventoryPanel({
           <div className={styles.groupTitle}>{t(group.labelKey)}</div>
           <div className={styles.itemList}>
             {group.items.map(item => (
-              <div className={styles.itemRow} key={item.instance.id}>
+              <div
+                className={`${styles.itemRow} ${onStartDragItem ? styles.itemRowDraggable : ''}`}
+                key={item.instance.id}
+                onPointerDown={event => {
+                  if (!onStartDragItem || isInteractivePointerTarget(event)) {
+                    return;
+                  }
+
+                  onStartDragItem(item.instance, {
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                }}
+              >
                 <div className={styles.itemIcon} aria-hidden="true">
                   {getIconLabel(item.definition)}
                 </div>
@@ -73,6 +94,26 @@ export function InventoryPanel({
                 <strong className={styles.quantity}>
                   {item.instance.quantity > 1 ? `x${item.instance.quantity}` : ''}
                 </strong>
+                <div className={styles.itemActions}>
+                  {onGiftItem ? (
+                    <button
+                      className={styles.itemActionButton}
+                      type="button"
+                      onClick={() => onGiftItem(item.instance)}
+                    >
+                      {giftTargetName ? `送給${giftTargetName}` : '送出'}
+                    </button>
+                  ) : null}
+                  {onOpenTransferHistory ? (
+                    <button
+                      className={styles.itemActionButton}
+                      type="button"
+                      onClick={() => onOpenTransferHistory(item.instance)}
+                    >
+                      履歷
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
@@ -80,6 +121,10 @@ export function InventoryPanel({
       ))}
     </section>
   );
+}
+
+function isInteractivePointerTarget(event: PointerEvent<HTMLElement>): boolean {
+  return event.target instanceof HTMLElement && Boolean(event.target.closest('button'));
 }
 
 function getSortedItemViews(

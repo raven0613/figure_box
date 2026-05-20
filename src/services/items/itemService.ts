@@ -103,6 +103,10 @@ export class ItemService {
     return this.store.getItemInstance(itemInstanceId);
   }
 
+  updateItemInstance(itemInstance: ItemInstance): ItemInstance {
+    return this.store.updateItemInstance(itemInstance);
+  }
+
   getActorItems(actorId: ActorId): readonly ItemInstance[] {
     return this.store.getItemInstancesByOwner(actorId);
   }

@@ -169,6 +169,39 @@ export class FabricTownMapWidget {
     return this.grid.getDistanceToOccupant(x, y, characterId);
   }
 
+  getTileAtViewportPoint(x: number, y: number): GridCoordinate | null {
+    const viewport = this.canvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
+    const zoom = viewport[0] || 1;
+    const sceneX = (x - viewport[4]) / zoom;
+    const sceneY = (y - viewport[5]) / zoom;
+    const tileX = Math.floor(sceneX / this.cellSize);
+    const tileY = Math.floor(sceneY / this.cellSize);
+
+    if (!this.grid.getTile(tileX, tileY)) {
+      return null;
+    }
+
+    return {
+      x: tileX,
+      y: tileY,
+    };
+  }
+
+  getCharacterIdsNearViewportPoint(x: number, y: number, radius: number): string[] {
+    const tile = this.getTileAtViewportPoint(x, y);
+
+    if (!tile) {
+      return [];
+    }
+
+    const occupantId = this.getCell(tile.x, tile.y)?.occupantId;
+
+    return [
+      ...(occupantId ? [occupantId] : []),
+      ...this.getOccupiedNeighborIds(tile.x, tile.y, radius, occupantId ?? undefined),
+    ];
+  }
+
   placeCharacter(character: TownMapCharacter): boolean {
     const placed = this.grid.placeOccupant(character);
 

@@ -7,12 +7,15 @@ import type {
   CharacterRequestTargetSelector,
 } from '~/services/characterRequests/types';
 import { SocialStatus } from '~/constants/character';
+import type { ItemMatch } from '~/typing/item';
 import { readOptionalRuleClauses } from './ruleSchema';
 import {
   includesString,
   isRecord,
+  readOptionalBoolean,
   readOptionalClauseMode,
   readOptionalProbability,
+  readOptionalString,
   readOptionalStringList,
   readRequiredNonNegativeNumber,
   readRequiredNumber,
@@ -141,6 +144,34 @@ function readOptionalRequestTarget(
     acceptedItemIds: readOptionalStringList(value, 'acceptedItemIds', index),
     acceptedItemTypes: readOptionalStringList(value, 'acceptedItemTypes', index),
     acceptedItemTags: readOptionalStringList(value, 'acceptedItemTags', index),
+    itemMatch: readOptionalItemMatch(value, index),
+  };
+}
+
+function readOptionalItemMatch(
+  target: CharacterEventDefinitionRecord,
+  index: number,
+): ItemMatch | undefined {
+  const value = target.itemMatch;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character request definition at index ${index} has invalid target.itemMatch.`);
+  }
+
+  return {
+    itemIds: readOptionalStringList(value, 'itemIds', index),
+    types: readOptionalStringList(value, 'types', index),
+    categories: readOptionalStringList(value, 'categories', index),
+    tagsAnyOf: readOptionalStringList(value, 'tagsAnyOf', index),
+    tagsAllOf: readOptionalStringList(value, 'tagsAllOf', index),
+    tagsNoneOf: readOptionalStringList(value, 'tagsNoneOf', index),
+    rarities: readOptionalStringList(value, 'rarities', index),
+    minRarity: readOptionalString(value, 'minRarity', index),
+    actorPreference: readOptionalBoolean(value, 'actorPreference', index),
   };
 }
 

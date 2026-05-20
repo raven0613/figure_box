@@ -78,8 +78,9 @@
       }
     ],
     "target": {
-      "acceptedItemTypes": ["food"],
-      "acceptedItemTags": ["food"]
+      "itemMatch": {
+        "categories": ["food"]
+      }
     },
     "satisfiedEffects": [
       {
@@ -89,6 +90,25 @@
       {
         "type": "characterSaturationDelta",
         "value": 35
+      }
+    ]
+  },
+  {
+    "id": "minor.item.shiny",
+    "level": "minor",
+    "kind": "item",
+    "label": "想要有點稀有又閃亮的東西",
+    "baseChance": 0.8,
+    "target": {
+      "itemMatch": {
+        "tagsAnyOf": ["shiny"],
+        "minRarity": "uncommon"
+      }
+    },
+    "satisfiedEffects": [
+      {
+        "type": "characterMoodValueDelta",
+        "value": 8
       }
     ]
   }

@@ -1,5 +1,6 @@
 import type { CharacterEventRuleClause } from '~/services/characterEvents/rules';
 import type { SocialStatus } from '~/constants/character';
+import type { ItemDefinition, ItemMatch } from '~/typing/item';
 
 export type CharacterRequestLevel = 'critical' | 'social' | 'minor';
 export type CharacterRequestKind =
@@ -18,6 +19,7 @@ export interface CharacterRequestTarget {
   acceptedItemIds?: readonly string[];
   acceptedItemTypes?: readonly string[];
   acceptedItemTags?: readonly string[];
+  itemMatch?: ItemMatch;
 }
 
 export type CharacterRequestTargetSelector =
@@ -82,7 +84,9 @@ export interface CharacterRequestItemMatchInput {
   characterId: string;
   itemId: string;
   itemType?: string;
+  itemCategory?: string;
   itemTags?: readonly string[];
+  itemDefinition?: ItemDefinition;
 }
 
 export interface CharacterRequestSocialMatchInput {

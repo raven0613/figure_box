@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   getCharacterStateSummary,
 } from '~/stateMachines/gameFlow/children/character';
@@ -33,7 +34,8 @@ import {
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { TownMapTile } from '~/widgets/townMapGrid';
 import { itemService, type InventoryGroup } from '~/services/items/itemService';
-import type { ItemDefinitionId } from '~/typing/item';
+import { itemTransferService } from '~/services/items/itemTransferService';
+import type { ItemDefinitionId, ItemInstance } from '~/typing/item';
 import { InventoryPanel } from '~/components/inventory/InventoryPanel';
 import { DraggablePanel } from '~/components/common/DraggablePanel';
 import { ApartmentPanel, type ApartmentResident } from './ApartmentPanel';
@@ -47,10 +49,29 @@ const PLAYER_DEMO_ITEM_IDS: readonly ItemDefinitionId[] = [
   'silver_bracelet',
   'wooden_chair',
 ];
+const GIFT_DROP_CHARACTER_RADIUS = 1;
 
 interface TownMapContainerProps {
   expressionByCharacterId?: Partial<Record<string, Expression>>;
   mapDialoguePresentation?: EventDialoguePresentation | null;
+}
+
+interface GiftDragState {
+  itemInstance: ItemInstance;
+  pointer: {
+    x: number;
+    y: number;
+  };
+  candidateCharacterIds: readonly string[];
+}
+
+interface GiftTargetPickerState {
+  itemInstance: ItemInstance;
+  candidateCharacterIds: readonly string[];
+  pointer: {
+    x: number;
+    y: number;
+  };
 }
 
 export function TownMapContainer({
@@ -58,6 +79,7 @@ export function TownMapContainer({
   mapDialoguePresentation = null,
 }: TownMapContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
+  const widgetRef = useRef<FabricTownMapWidget | null>(null);
   const characterControllerRef = useRef<TownCharacterController | null>(null);
   const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(createRelationshipStore);
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
@@ -72,6 +94,9 @@ export function TownMapContainer({
   const [isApartmentPanelOpen, setIsApartmentPanelOpen] = useState(false);
   const [isInventoryPanelOpen, setIsInventoryPanelOpen] = useState(false);
   const [isRequestPanelOpen, setIsRequestPanelOpen] = useState(false);
+  const [transferHistoryItem, setTransferHistoryItem] = useState<ItemInstance | null>(null);
+  const [giftDragState, setGiftDragState] = useState<GiftDragState | null>(null);
+  const [giftTargetPicker, setGiftTargetPicker] = useState<GiftTargetPickerState | null>(null);
   const [mapZoom, setMapZoom] = useState(1);
   const requestListItems = useMemo(
     () => getRequestListItems({
@@ -92,6 +117,28 @@ export function TownMapContainer({
     () => getApartmentResidents(characterSnapshots, TOWN_APARTMENT_SPACE_ID, apartmentRequestItems),
     [apartmentRequestItems, characterSnapshots],
   );
+  const selectedCharacterName = CHARACTER_SEEDS.find(character => character.id === selectedCharacterId)?.name ?? selectedCharacterId;
+  const transferHistoryDefinition = transferHistoryItem ? itemService.getDefinition(transferHistoryItem.definitionId) : null;
+
+  const refreshPlayerInventory = useCallback(() => {
+    setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID));
+  }, []);
+
+  const giftItemToCharacter = useCallback((itemInstance: ItemInstance, targetCharacterId: string) => {
+    handleGiftItemToSelectedCharacter({
+      itemInstance,
+      selectedCharacterId: targetCharacterId,
+      characterController: characterControllerRef.current,
+      refreshPlayerInventory,
+      onItemTransferred: updatedItemInstance => {
+        setTransferHistoryItem(currentItemInstance => (
+          currentItemInstance?.id === updatedItemInstance.id
+            ? null
+            : currentItemInstance
+        ));
+      },
+    });
+  }, [refreshPlayerInventory]);
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -124,6 +171,7 @@ export function TownMapContainer({
       },
     });
 
+    widgetRef.current = widget;
     const characterController = new TownCharacterController({
       widget,
       onCharacterSnapshot: (characterId, snapshot) => {
@@ -144,6 +192,7 @@ export function TownMapContainer({
     return () => {
       characterController.dispose();
       characterControllerRef.current = null;
+      widgetRef.current = null;
       setCharacterSnapshots({});
       setJoinableActivities([]);
       setGodDropOpportunity(null);
@@ -157,8 +206,76 @@ export function TownMapContainer({
 
   useEffect(() => {
     seedDemoPlayerInventory();
-    setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID));
-  }, []);
+    refreshPlayerInventory();
+  }, [refreshPlayerInventory]);
+
+  useEffect(() => {
+    if (!giftDragState) {
+      return undefined;
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const candidateCharacterIds = getGiftCandidateCharacterIds(event, canvasHostRef.current, widgetRef.current);
+
+      setGiftDragState(currentState => {
+        if (!currentState) {
+          return null;
+        }
+
+        if (!areSameStringLists(currentState.candidateCharacterIds, candidateCharacterIds)) {
+          showGiftPreview(candidateCharacterIds, widgetRef.current);
+        }
+
+        return {
+          ...currentState,
+          pointer: {
+            x: event.clientX,
+            y: event.clientY,
+          },
+          candidateCharacterIds,
+        };
+      });
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const candidateCharacterIds = getGiftCandidateCharacterIds(event, canvasHostRef.current, widgetRef.current);
+
+      setGiftDragState(currentState => {
+        if (!currentState) {
+          return null;
+        }
+
+        if (candidateCharacterIds.length === 1) {
+          giftItemToCharacter(currentState.itemInstance, candidateCharacterIds[0]);
+          return null;
+        }
+
+        if (candidateCharacterIds.length > 1) {
+          showGiftPreview(candidateCharacterIds, widgetRef.current);
+          setGiftTargetPicker({
+            itemInstance: currentState.itemInstance,
+            candidateCharacterIds,
+            pointer: {
+              x: event.clientX,
+              y: event.clientY,
+            },
+          });
+        }
+
+        return null;
+      });
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+    window.addEventListener('pointercancel', handlePointerUp, { once: true });
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [giftDragState, giftItemToCharacter]);
 
   useEffect(() => {
     Object.entries(expressionByCharacterId).forEach(([characterId, expression]) => {
@@ -208,8 +325,58 @@ export function TownMapContainer({
           <InventoryPanel
             groups={playerInventoryGroups}
             getDefinition={definitionId => itemService.getDefinition(definitionId)}
+            giftTargetName={selectedCharacterName}
+            onGiftItem={itemInstance => {
+              giftItemToCharacter(itemInstance, selectedCharacterId);
+            }}
+            onOpenTransferHistory={itemInstance => {
+              setTransferHistoryItem(itemService.getItemInstance(itemInstance.id) ?? itemInstance);
+            }}
+            onStartDragItem={(itemInstance, pointer) => {
+              setGiftTargetPicker(null);
+              setGiftDragState({
+                itemInstance,
+                pointer,
+                candidateCharacterIds: [],
+              });
+            }}
           />
         </DraggablePanel>
+      ) : null}
+
+      {transferHistoryItem ? (
+        <DraggablePanel
+          title="物品轉移履歷"
+          initialPosition={{ left: 426, top: 18 }}
+          closeAriaLabel="關閉物品轉移履歷"
+          className={styles.floatingHistoryPanel}
+          contentClassName={styles.floatingPanelContent}
+          onClose={() => setTransferHistoryItem(null)}
+        >
+          <TransferHistoryPanel
+            itemInstance={transferHistoryItem}
+            itemName={transferHistoryDefinition?.nameKey ?? transferHistoryItem.definitionId}
+          />
+        </DraggablePanel>
+      ) : null}
+
+      {giftDragState ? (
+        <GiftDragPreview
+          itemInstance={giftDragState.itemInstance}
+          pointer={giftDragState.pointer}
+          candidateCount={giftDragState.candidateCharacterIds.length}
+        />
+      ) : null}
+
+      {giftTargetPicker ? (
+        <GiftTargetPicker
+          state={giftTargetPicker}
+          onSelectTarget={characterId => {
+            giftItemToCharacter(giftTargetPicker.itemInstance, characterId);
+            setGiftTargetPicker(null);
+          }}
+          onCancel={() => setGiftTargetPicker(null)}
+        />
       ) : null}
 
       {isRequestPanelOpen ? (
@@ -307,6 +474,197 @@ export function TownMapContainer({
         ) : null}
       </aside>
     </section>
+  );
+}
+
+function getGiftCandidateCharacterIds(
+  event: PointerEvent,
+  canvasHost: HTMLElement | null,
+  widget: FabricTownMapWidget | null,
+): readonly string[] {
+  if (!canvasHost || !widget) {
+    return [];
+  }
+
+  const rect = canvasHost.getBoundingClientRect();
+
+  if (
+    event.clientX < rect.left ||
+    event.clientX > rect.right ||
+    event.clientY < rect.top ||
+    event.clientY > rect.bottom
+  ) {
+    return [];
+  }
+
+  return widget.getCharacterIdsNearViewportPoint(
+    event.clientX - rect.left,
+    event.clientY - rect.top,
+    GIFT_DROP_CHARACTER_RADIUS,
+  );
+}
+
+function showGiftPreview(characterIds: readonly string[], widget: FabricTownMapWidget | null): void {
+  characterIds.forEach(characterId => {
+    widget?.showCharacterEmote(characterId, '?', 700);
+  });
+}
+
+function areSameStringLists(first: readonly string[], second: readonly string[]): boolean {
+  return first.length === second.length && first.every((value, index) => value === second[index]);
+}
+
+function GiftDragPreview({
+  itemInstance,
+  pointer,
+  candidateCount,
+}: {
+  itemInstance: ItemInstance;
+  pointer: { x: number; y: number };
+  candidateCount: number;
+}) {
+  const definition = itemService.getDefinition(itemInstance.definitionId);
+
+  return (
+    <div
+      className={styles.giftDragPreview}
+      style={{
+        transform: `translate(${pointer.x + 12}px, ${pointer.y + 12}px)`,
+      }}
+    >
+      <strong>{definition?.category.slice(0, 2).toUpperCase() ?? 'IT'}</strong>
+      <span>{candidateCount > 0 ? `${candidateCount} target` : 'drag to character'}</span>
+    </div>
+  );
+}
+
+function GiftTargetPicker({
+  state,
+  onSelectTarget,
+  onCancel,
+}: {
+  state: GiftTargetPickerState;
+  onSelectTarget: (characterId: string) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className={styles.giftTargetPicker}
+      style={{
+        left: state.pointer.x,
+        top: state.pointer.y,
+      }}
+    >
+      <div className={styles.giftTargetPickerTitle}>選擇要送給誰</div>
+      {state.candidateCharacterIds.map(characterId => (
+        <button
+          className={styles.giftTargetButton}
+          key={characterId}
+          type="button"
+          onClick={() => onSelectTarget(characterId)}
+        >
+          {CHARACTER_SEEDS.find(character => character.id === characterId)?.name ?? characterId}
+        </button>
+      ))}
+      <button
+        className={styles.giftTargetCancelButton}
+        type="button"
+        onClick={onCancel}
+      >
+        取消
+      </button>
+    </div>
+  );
+}
+
+function handleGiftItemToSelectedCharacter({
+  itemInstance,
+  selectedCharacterId,
+  characterController,
+  refreshPlayerInventory,
+  onItemTransferred,
+}: {
+  itemInstance: ItemInstance;
+  selectedCharacterId: string;
+  characterController: TownCharacterController | null;
+  refreshPlayerInventory: () => void;
+  onItemTransferred: (itemInstance: ItemInstance) => void;
+}): void {
+  const latestItemInstance = itemService.getItemInstance(itemInstance.id);
+
+  if (!latestItemInstance || latestItemInstance.ownerActorId !== PLAYER_ACTOR_ID) {
+    refreshPlayerInventory();
+    return;
+  }
+
+  const itemDefinition = itemService.getDefinition(latestItemInstance.definitionId);
+
+  if (!itemDefinition) {
+    return;
+  }
+
+  const result = itemTransferService.transferItem({
+    itemInstanceId: latestItemInstance.id,
+    fromActorId: PLAYER_ACTOR_ID,
+    toActorId: selectedCharacterId,
+    reason: 'gift',
+    day: 1,
+  });
+
+  refreshPlayerInventory();
+  onItemTransferred(result.itemInstance);
+  characterController?.markCharacterRequestItemReceived({
+    characterId: selectedCharacterId,
+    itemId: itemDefinition.id,
+    itemType: itemDefinition.type,
+    itemCategory: itemDefinition.category,
+    itemTags: itemDefinition.tags,
+    itemDefinition,
+  });
+}
+
+function TransferHistoryPanel({
+  itemInstance,
+  itemName,
+}: {
+  itemInstance: ItemInstance;
+  itemName: string;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className={styles.transferHistoryPanel}>
+      <div className={styles.detailRow}>
+        <span>Item</span>
+        <strong>{t(itemName)}</strong>
+      </div>
+      {(itemInstance.transferHistory?.length ?? 0) === 0 ? (
+        <div className={styles.emptyPanelText}>沒有轉移履歷</div>
+      ) : (
+        <div className={styles.transferHistoryList}>
+          {itemInstance.transferHistory?.map((entry, index) => (
+            <div className={styles.transferHistoryRow} key={`${entry.reason}-${entry.day}-${index}`}>
+              <div className={styles.detailRow}>
+                <span>Day</span>
+                <strong>{entry.timeOfDay ? `${entry.day} ${entry.timeOfDay}` : entry.day}</strong>
+              </div>
+              <div className={styles.detailRow}>
+                <span>Reason</span>
+                <strong>{entry.reason}</strong>
+              </div>
+              <div className={styles.detailRow}>
+                <span>From</span>
+                <strong>{entry.fromActorId ?? '-'}</strong>
+              </div>
+              <div className={styles.detailRow}>
+                <span>To</span>
+                <strong>{entry.toActorId ?? '-'}</strong>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
