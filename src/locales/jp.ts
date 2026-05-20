@@ -37,5 +37,45 @@ export default {
       wins: '승리!',
       payrate: '배당률',
     },
+    inventory: {
+      title: '아이템',
+      empty: '아직 아이템이 없습니다',
+      owner: {
+        player: '플레이어 소유',
+      },
+      group: {
+        food: '음식',
+        clothing: '의상',
+        furniture: '가구',
+        materials: '재료',
+        other: '기타',
+      },
+    },
+    item: {
+      rarity: {
+        common: '일반',
+        uncommon: '조금 희귀',
+        rare: '희귀',
+        epic: '매우 희귀',
+        legendary: '전설',
+        special: '특별',
+      },
+      apple: {
+        name: '사과',
+        description: '빨갛고 달콤한 과일입니다.',
+      },
+      clearGem: {
+        name: '투명 보석',
+        description: '장식하거나 제작에 쓸 수 있는 보석입니다.',
+      },
+      silverBracelet: {
+        name: '은색 팔찌',
+        description: '작고 반짝이는 장신구입니다.',
+      },
+      woodenChair: {
+        name: '나무 의자',
+        description: '방에 놓을 수 있는 평범한 나무 의자입니다.',
+      },
+    },
   },
 };

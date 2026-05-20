@@ -32,9 +32,21 @@ import {
 } from '~/stateMachines/gameFlow/states';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { TownMapTile } from '~/widgets/townMapGrid';
+import { itemService, type InventoryGroup } from '~/services/items/itemService';
+import type { ItemDefinitionId } from '~/typing/item';
+import { InventoryPanel } from '~/components/inventory/InventoryPanel';
+import { DraggablePanel } from '~/components/common/DraggablePanel';
 import { ApartmentPanel, type ApartmentResident } from './ApartmentPanel';
 
 import styles from './townMap.module.scss';
+
+const PLAYER_ACTOR_ID = 'player';
+const PLAYER_DEMO_ITEM_IDS: readonly ItemDefinitionId[] = [
+  'apple',
+  'clear_gem',
+  'silver_bracelet',
+  'wooden_chair',
+];
 
 interface TownMapContainerProps {
   expressionByCharacterId?: Partial<Record<string, Expression>>;
@@ -56,7 +68,10 @@ export function TownMapContainer({
   const [joinableActivities, setJoinableActivities] = useState<readonly JoinableActivity[]>([]);
   const [godDropOpportunity, setGodDropOpportunity] = useState<GodDropOpportunity | null>(null);
   const [characterRequests, setCharacterRequests] = useState<readonly CharacterRequest[]>([]);
+  const [playerInventoryGroups, setPlayerInventoryGroups] = useState<readonly InventoryGroup[]>([]);
   const [isApartmentPanelOpen, setIsApartmentPanelOpen] = useState(false);
+  const [isInventoryPanelOpen, setIsInventoryPanelOpen] = useState(false);
+  const [isRequestPanelOpen, setIsRequestPanelOpen] = useState(false);
   const [mapZoom, setMapZoom] = useState(1);
   const requestListItems = useMemo(
     () => getRequestListItems({
@@ -141,6 +156,11 @@ export function TownMapContainer({
   }, []);
 
   useEffect(() => {
+    seedDemoPlayerInventory();
+    setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID));
+  }, []);
+
+  useEffect(() => {
     Object.entries(expressionByCharacterId).forEach(([characterId, expression]) => {
       if (expression) {
         characterControllerRef.current?.setCharacterExpression(characterId, expression);
@@ -174,6 +194,41 @@ export function TownMapContainer({
             characterControllerRef.current?.leaveApartment(characterId);
           }}
         />
+      ) : null}
+
+      {isInventoryPanelOpen ? (
+        <DraggablePanel
+          title="物品欄"
+          initialPosition={{ left: 716, top: 18 }}
+          closeAriaLabel="關閉物品欄"
+          className={styles.floatingInventoryPanel}
+          contentClassName={styles.floatingPanelContent}
+          onClose={() => setIsInventoryPanelOpen(false)}
+        >
+          <InventoryPanel
+            groups={playerInventoryGroups}
+            getDefinition={definitionId => itemService.getDefinition(definitionId)}
+          />
+        </DraggablePanel>
+      ) : null}
+
+      {isRequestPanelOpen ? (
+        <DraggablePanel
+          title="Requests"
+          initialPosition={{ left: 716, top: 284 }}
+          closeAriaLabel="關閉 request 面板"
+          className={styles.floatingRequestPanel}
+          contentClassName={styles.floatingPanelContent}
+          onClose={() => setIsRequestPanelOpen(false)}
+        >
+          <CharacterRequestDebugPanel
+            items={requestListItems}
+            mapZoom={mapZoom}
+            onCompleteRequest={requestId => {
+              characterControllerRef.current?.completeCharacterRequest(requestId);
+            }}
+          />
+        </DraggablePanel>
       ) : null}
 
       <aside className={styles.panel}>
@@ -228,12 +283,11 @@ export function TownMapContainer({
           </div>
 
           <ActivityDebugPanel activities={joinableActivities} allSnapshots={characterSnapshots} />
-          <CharacterRequestDebugPanel
-            items={requestListItems}
-            mapZoom={mapZoom}
-            onCompleteRequest={requestId => {
-              characterControllerRef.current?.completeCharacterRequest(requestId);
-            }}
+          <DebugWindowActions
+            isInventoryPanelOpen={isInventoryPanelOpen}
+            isRequestPanelOpen={isRequestPanelOpen}
+            onOpenInventory={() => setIsInventoryPanelOpen(true)}
+            onOpenRequests={() => setIsRequestPanelOpen(true)}
           />
           <GodDropOpportunityPanel
             opportunity={godDropOpportunity}
@@ -254,6 +308,55 @@ export function TownMapContainer({
       </aside>
     </section>
   );
+}
+
+function DebugWindowActions({
+  isInventoryPanelOpen,
+  isRequestPanelOpen,
+  onOpenInventory,
+  onOpenRequests,
+}: {
+  isInventoryPanelOpen: boolean;
+  isRequestPanelOpen: boolean;
+  onOpenInventory: () => void;
+  onOpenRequests: () => void;
+}) {
+  return (
+    <div className={styles.debugWindowActions}>
+      <div className={styles.panelTitle}>Debug Windows</div>
+      <button
+        className={styles.debugWindowButton}
+        type="button"
+        onClick={onOpenInventory}
+        disabled={isInventoryPanelOpen}
+      >
+        打開物品欄
+      </button>
+      <button
+        className={styles.debugWindowButton}
+        type="button"
+        onClick={onOpenRequests}
+        disabled={isRequestPanelOpen}
+      >
+        打開 Requests
+      </button>
+    </div>
+  );
+}
+
+function seedDemoPlayerInventory(): void {
+  if (itemService.getActorItems(PLAYER_ACTOR_ID).length > 0) {
+    return;
+  }
+
+  PLAYER_DEMO_ITEM_IDS.forEach((definitionId, index) => {
+    itemService.createItemInstance({
+      definitionId,
+      ownerActorId: PLAYER_ACTOR_ID,
+      quantity: definitionId === 'apple' ? 3 : 1,
+      day: index + 1,
+    });
+  });
 }
 
 function getApartmentResidents(
@@ -293,7 +396,6 @@ function CharacterRequestDebugPanel({
 }) {
   return (
     <div className={styles.requestPanel}>
-      <div className={styles.panelTitle}>Requests</div>
       <div className={styles.detailRow}>
         <span>Minor map zoom</span>
         <strong>{mapZoom >= MINOR_REQUEST_MAP_MIN_ZOOM ? 'visible' : `${mapZoom.toFixed(1)} / 3`}</strong>

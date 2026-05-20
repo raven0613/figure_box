@@ -145,6 +145,46 @@
   flex: 1 1 0;
 }
 
+.debugWindowActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(28, 31, 35, 0.12);
+}
+
+.debugWindowButton {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 1px solid rgba(59, 119, 110, 0.32);
+  border-radius: 6px;
+  background: #edf7f2;
+  color: #24313a;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.debugWindowButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.floatingInventoryPanel {
+  width: 280px;
+  max-height: 420px;
+}
+
+.floatingRequestPanel {
+  width: 320px;
+  max-height: 460px;
+}
+
+.floatingPanelContent {
+  overflow-y: auto;
+}
+
 .godDropPanel {
   display: flex;
   flex-direction: column;

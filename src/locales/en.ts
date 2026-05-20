@@ -37,5 +37,45 @@ export default {
       wins: 'Wins!',
       payrate: 'payrate',
     },
+    inventory: {
+      title: 'Items',
+      empty: 'No items yet',
+      owner: {
+        player: 'Player owned',
+      },
+      group: {
+        food: 'Food',
+        clothing: 'Outfits',
+        furniture: 'Furniture',
+        materials: 'Materials',
+        other: 'Other',
+      },
+    },
+    item: {
+      rarity: {
+        common: 'Common',
+        uncommon: 'Uncommon',
+        rare: 'Rare',
+        epic: 'Epic',
+        legendary: 'Legendary',
+        special: 'Special',
+      },
+      apple: {
+        name: 'Apple',
+        description: 'A red, sweet fruit.',
+      },
+      clearGem: {
+        name: 'Clear Gem',
+        description: 'A gem for decoration or crafting.',
+      },
+      silverBracelet: {
+        name: 'Silver Bracelet',
+        description: 'A small shiny accessory.',
+      },
+      woodenChair: {
+        name: 'Wooden Chair',
+        description: 'A plain wooden chair for a room.',
+      },
+    },
   },
 };
