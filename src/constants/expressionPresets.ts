@@ -58,4 +58,18 @@ export const AVATAR_EXPRESSION_PRESETS: AvatarExpressionPresetCatalog = {
       scale: 0.82,
     },
   },
+  [Expression.Curious]: {
+    expression: Expression.Curious,
+    label: 'curious',
+    eyes: {
+      offsetY: -3,
+      rotate: -6,
+      scale: 1.02,
+    },
+    mouth: {
+      offsetY: 4,
+      rotate: -8,
+      scale: 0.9,
+    },
+  },
 };

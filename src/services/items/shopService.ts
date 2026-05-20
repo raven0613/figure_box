@@ -1,6 +1,5 @@
 import type {
   ActorId,
-  ItemDefinitionId,
   ItemInstanceId,
   ShopId,
   ShopStockItem,
