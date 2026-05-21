@@ -276,7 +276,7 @@ export interface RelationshipRecord {
 }
 
 export const CHARACTER_SEEDS = [
-    { id: 'friend-01', name: 'Tezuka', label: 'T', color: '#413636', position: { x: 18, y: 18 }, saturation: 58, ownItems: [{ definitionId: 'toy-ball', quantity: 1 }] },
+    { id: 'friend-01', name: 'Tezuka', label: 'T', color: '#413636', position: { x: 18, y: 18 }, saturation: 58, ownItems: [{ definitionId: 'toy-ball', quantity: 1, state: 'held' }] },
     { id: 'friend-02', name: 'Fuji', label: 'F', color: '#e57070', position: { x: 21, y: 18 }, saturation: 32, ownItems: [{ definitionId: 'toy-ball', quantity: 1 }] },
     { id: 'friend-03', name: 'Eiji', label: 'E', color: '#ff9900', position: { x: 24, y: 18 }, saturation: 80, ownItems: [{ definitionId: 'toy-ball', quantity: 1 }] },
     { id: 'friend-04', name: 'Ooishi', label: 'O', color: '#33cc33', position: { x: 27, y: 18 }, saturation: 60, ownItems: [{ definitionId: 'cards', quantity: 1 }] },

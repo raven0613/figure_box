@@ -25,6 +25,20 @@ export class ItemHoldingService {
   }
 
   holdItemForActor(input: HoldItemForActorInput): ItemInstance {
+    const currentHeldItem = this.items.getActorItems(input.actorId)
+      .find(itemInstance => (
+        itemInstance.definitionId === input.definitionId &&
+        itemInstance.state === 'held'
+      ));
+
+    if (currentHeldItem) {
+      this.heldItemsByActorId.set(input.actorId, {
+        actorId: input.actorId,
+        itemInstanceId: currentHeldItem.id,
+      });
+      return currentHeldItem;
+    }
+
     this.releaseHeldItemForActor(input.actorId);
 
     const itemInstance = this.getOrCreateActorItem(input);
@@ -64,6 +78,23 @@ export class ItemHoldingService {
 
   getHeldItem(actorId: ActorId): HeldItemRecord | null {
     return this.heldItemsByActorId.get(actorId) ?? null;
+  }
+
+  restoreHeldItemForActor(actorId: ActorId): ItemInstance | null {
+    const heldItemInstance = this.items.getActorItems(actorId)
+      .find(itemInstance => itemInstance.state === 'held');
+
+    if (!heldItemInstance) {
+      this.heldItemsByActorId.delete(actorId);
+      return null;
+    }
+
+    this.heldItemsByActorId.set(actorId, {
+      actorId,
+      itemInstanceId: heldItemInstance.id,
+    });
+
+    return heldItemInstance;
   }
 
   clear(): void {

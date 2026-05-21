@@ -80,6 +80,7 @@ export const characterMachine = createMachine(
             controlState: CharacterControlState.Normal,
             pendingActivityJoin: null,
             currentActivity: null,
+            heldItem: input.heldItem ?? null,
             activityCooldowns: createEmptyActivityCooldowns(),
             position: input.position,
             presence: {
@@ -369,6 +370,12 @@ export const characterMachine = createMachine(
             [EventType.SetExpression]: {
                 actions: 'setExpression',
             },
+            [EventType.HoldItem]: {
+                actions: 'setHeldItem',
+            },
+            [EventType.ReleaseHeldItem]: {
+                actions: 'clearHeldItem',
+            },
             [EventType.AddLock]: {
                 actions: 'addLock',
             },
@@ -532,6 +539,19 @@ export const characterMachine = createMachine(
                         expression: event.expression,
                     };
                 },
+            }),
+            setHeldItem: assign({
+                heldItem: ({ context, event }) => (
+                    event.type === EventType.HoldItem
+                        ? {
+                            itemInstanceId: event.itemInstanceId,
+                            definitionId: event.definitionId,
+                        }
+                        : context.heldItem
+                ),
+            }),
+            clearHeldItem: assign({
+                heldItem: () => null,
             }),
             addLock: assign({
                 locks: ({ context, event }) => {

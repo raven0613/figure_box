@@ -1,5 +1,5 @@
 import { DirectedRelationship, Expression, Mood, Position } from "~/constants/character";
-import type { CharacterSeedItem } from "~/typing/item";
+import type { ItemDefinitionId, ItemInstanceId, CharacterSeedItem } from "~/typing/item";
 import type { CharacterControlState } from "./states";
 import type { RelationshipStore } from "./relationships";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
@@ -31,6 +31,7 @@ export interface CharacterContext {
   controlState: CharacterControlState;
   pendingActivityJoin: CharacterActivityJoinRequest | null;
   currentActivity: CharacterActivityParticipation | null;
+  heldItem: CharacterHeldItem | null;
   activityCooldowns: CharacterActivityCooldowns;
   relationships: DirectedRelationship[];
   locks: {
@@ -60,6 +61,7 @@ export interface CharacterMachineInput {
   ownItems?: readonly CharacterSeedItem[];
   saturation?: number;
   relationships?: DirectedRelationship[];
+  heldItem?: CharacterHeldItem | null;
 }
 
 export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'chat' | 'goHome' | 'controllingByGod';
@@ -76,6 +78,11 @@ export interface CharacterActivityParticipation {
   id: string;
   activityId: string;
   sourceEventId: string;
+}
+
+export interface CharacterHeldItem {
+  itemInstanceId: ItemInstanceId;
+  definitionId: ItemDefinitionId;
 }
 
 export interface CharacterActivityCooldowns {

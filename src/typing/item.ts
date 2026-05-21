@@ -206,4 +206,5 @@ export interface InventoryGroupRule {
 export interface CharacterSeedItem {
   definitionId: ItemDefinitionId;
   quantity: number;
+  state?: Extract<ItemState, 'stored' | 'held'>;
 }

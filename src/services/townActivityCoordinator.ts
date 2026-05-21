@@ -24,8 +24,6 @@ interface TownActivityCoordinatorOptions {
   actorHasItem: (characterId: string, itemId: string) => boolean;
   sendToCharacter: SendCharacterEvent;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
-  holdItemForActor?: (characterId: string, itemId: string) => void;
-  releaseHeldItemForActor?: (characterId: string) => void;
   notifyActivitiesChanged: () => void;
 }
 
@@ -45,8 +43,6 @@ export class TownActivityCoordinator {
   private readonly actorHasItem: (characterId: string, itemId: string) => boolean;
   private readonly sendToCharacter: SendCharacterEvent;
   private readonly showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
-  private readonly holdItemForActor?: (characterId: string, itemId: string) => void;
-  private readonly releaseHeldItemForActor?: (characterId: string) => void;
   private readonly notifyActivitiesChanged: () => void;
 
   constructor(options: TownActivityCoordinatorOptions) {
@@ -59,8 +55,6 @@ export class TownActivityCoordinator {
     this.actorHasItem = options.actorHasItem;
     this.sendToCharacter = options.sendToCharacter;
     this.showCharacterBubble = options.showCharacterBubble;
-    this.holdItemForActor = options.holdItemForActor;
-    this.releaseHeldItemForActor = options.releaseHeldItemForActor;
     this.notifyActivitiesChanged = options.notifyActivitiesChanged;
   }
 
@@ -239,7 +233,6 @@ export class TownActivityCoordinator {
     const nextActivity = this.activityManager.leaveActivity(activity.id, characterId);
 
     this.arrivedCharacterIdsByActivityId.get(activity.id)?.delete(characterId);
-    this.releaseHeldItemForActor?.(characterId);
     this.performanceRunner.clearActivityActiveVisuals(
       this.getActivityPerformanceSelection(activity),
       activity.id,
@@ -298,7 +291,6 @@ export class TownActivityCoordinator {
     staleActivities.forEach(activity => {
       this.activityManager.leaveActivity(activity.id, characterId);
       this.arrivedCharacterIdsByActivityId.get(activity.id)?.delete(characterId);
-      this.releaseHeldItemForActor?.(characterId);
     });
     this.notifyActivitiesChanged();
   }
@@ -630,7 +622,6 @@ export class TownActivityCoordinator {
   }
 
   private playActivityPerformance(activity: JoinableActivity): void {
-    this.holdRequiredActivityItems(activity);
     this.performanceRunner.playActivityPerformanceSteps({
       selection: this.getActivityPerformanceSelection(activity),
       phase: 'active',
@@ -641,7 +632,6 @@ export class TownActivityCoordinator {
   }
 
   private clearActivityVisuals(activity: JoinableActivity): void {
-    this.releaseRequiredActivityItems(activity);
     this.performanceRunner.clearActivityVisuals(
       this.getActivityPerformanceSelection(activity),
       activity.id,
@@ -727,28 +717,6 @@ export class TownActivityCoordinator {
     }, 5000);
   }
 
-  private holdRequiredActivityItems(activity: JoinableActivity): void {
-    const activityItemId = getActivityItemId(activity);
-
-    if (!activityItemId || !this.holdItemForActor) {
-      return;
-    }
-
-    activity.participantIds.forEach(participantId => {
-      this.holdItemForActor?.(participantId, activityItemId);
-    });
-  }
-
-  private releaseRequiredActivityItems(activity: JoinableActivity): void {
-    if (!getActivityItemId(activity) || !this.releaseHeldItemForActor) {
-      return;
-    }
-
-    activity.participantIds.forEach(participantId => {
-      this.releaseHeldItemForActor?.(participantId);
-    });
-  }
-
   private getActivityPerformanceSelection(activity: JoinableActivity) {
     return {
       definitionId: activity.sourceEventId,
@@ -779,12 +747,4 @@ function isNearPosition(position: Position, target: Position, range: number): bo
     Math.abs(position.x - target.x),
     Math.abs(position.y - target.y),
   ) <= range;
-}
-
-function getActivityItemId(activity: JoinableActivity): string | null {
-  if (activity.type !== 'playWithItem' || activity.joinRequirements.type !== 'hasItem') {
-    return null;
-  }
-
-  return activity.joinRequirements.itemId;
 }

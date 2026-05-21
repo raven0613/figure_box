@@ -157,3 +157,24 @@ describe('character activity body action', () => {
         expect(getCharacterStateSummary(snapshot.value).bodyAction).toBe(CharacterBodyActionState.Socializing);
     });
 });
+
+describe('character held item context', () => {
+    test('records and clears the item currently held by the character', () => {
+        const actor = createTestCharacterActor();
+
+        actor.send({
+            type: EventType.HoldItem,
+            itemInstanceId: 'item-toy-ball-1',
+            definitionId: 'toy-ball',
+        });
+
+        expect(actor.getSnapshot().context.heldItem).toEqual({
+            itemInstanceId: 'item-toy-ball-1',
+            definitionId: 'toy-ball',
+        });
+
+        actor.send({ type: EventType.ReleaseHeldItem });
+
+        expect(actor.getSnapshot().context.heldItem).toBeNull();
+    });
+});

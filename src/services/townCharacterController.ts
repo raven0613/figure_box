@@ -10,6 +10,7 @@ import {
   type JoinableActivityManager,
 } from '~/services/characterEvents/joinableActivities';
 import { EventType, type CharacterEvent } from '~/stateMachines/gameFlow/events';
+import type { CharacterHeldItem } from '~/stateMachines/gameFlow/context';
 import {
   createRelationshipStore,
   getFeelingForIntimacy,
@@ -52,13 +53,17 @@ import {
   TOWN_APARTMENT_SPACE_ID,
   TOWN_WORLD_SPACE_ID,
 } from '~/constants/townMap';
-import type { ItemDefinition } from '~/typing/item';
+import type { ItemDefinition, ItemDefinitionId, ItemInstanceId } from '~/typing/item';
 import { itemHoldingService } from '~/services/items/itemHoldingService';
 import { itemService } from '~/services/items/itemService';
 
 type Subscription = {
   unsubscribe: () => void;
 };
+
+interface ActivityHeldItemRecord {
+  itemInstanceId: ItemInstanceId;
+}
 
 export type { CharacterSnapshot } from '~/services/townCharacterTypes';
 
@@ -106,6 +111,8 @@ export class TownCharacterController {
   private readonly activeRequestIndicatorCharacterIds = new Set<string>();
   private readonly activeRequestMapMarkerIds = new Set<string>();
   private readonly requestIdsByRelationshipOverlayId = new Map<string, string>();
+  private readonly renderedHeldItemInstanceIdByCharacterId = new Map<string, string>();
+  private readonly activityHeldItemsByCharacterId = new Map<string, ActivityHeldItemRecord>();
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
   private readonly onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
@@ -189,6 +196,11 @@ export class TownCharacterController {
       },
       releaseHeldItem: characterId => {
         this.widget.releaseHeldItem(characterId);
+        this.syncCharacterHeldItemWithWidget(
+          characterId,
+          this.getCharacterSnapshot(characterId)?.context.heldItem ?? null,
+          true,
+        );
       },
       playPresentation: (characterId, presentationId) => {
         this.widget.playPresentation(characterId, presentationId);
@@ -216,31 +228,12 @@ export class TownCharacterController {
         itemService.getActorItems(characterId)
           .some(itemInstance => (
             itemInstance.definitionId === itemId &&
-            itemInstance.state === 'stored'
+            (itemInstance.state === 'stored' || itemInstance.state === 'held')
           ))
       ),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
-      },
-      holdItemForActor: (characterId, itemId) => {
-        try {
-          const itemInstance = itemHoldingService.holdItemForActor({
-            actorId: characterId,
-            definitionId: itemId,
-          });
-          const itemDefinition = itemService.getDefinition(itemInstance.definitionId);
-
-          if (itemDefinition) {
-            this.widget.holdItem(characterId, itemDefinition);
-          }
-        } catch {
-          this.widget.releaseHeldItem(characterId);
-        }
-      },
-      releaseHeldItemForActor: characterId => {
-        itemHoldingService.releaseHeldItemForActor(characterId);
-        this.widget.releaseHeldItem(characterId);
       },
       notifyActivitiesChanged: () => this.notifyJoinableActivitiesChanged(),
     });
@@ -422,6 +415,8 @@ export class TownCharacterController {
     this.activityManager.clear();
     this.nextDecisionAtByCharacterId.clear();
     this.requestIdsByRelationshipOverlayId.clear();
+    this.renderedHeldItemInstanceIdByCharacterId.clear();
+    this.activityHeldItemsByCharacterId.clear();
     this.clearRequestIndicators();
 
     this.characterSubscriptions.forEach(subscription => {
@@ -830,14 +825,155 @@ export class TownCharacterController {
           quantity: 1,
           reason: 'system',
           day: 0,
+          state: 'stored',
         });
       });
     });
+
+    const heldSeedItem = character.ownItems.find(seedItem => (
+      'state' in seedItem && seedItem.state === 'held'
+    ));
+
+    if (heldSeedItem) {
+      itemHoldingService.holdItemForActor({
+        actorId: character.id,
+        definitionId: heldSeedItem.definitionId,
+      });
+    }
   }
 
-  private getStoredActorItemDefinitionIds(characterId: string): string[] {
+  private getHeldItemForCharacter(characterId: string): CharacterHeldItem | null {
+    const heldItemInstance = itemHoldingService.restoreHeldItemForActor(characterId);
+
+    if (!heldItemInstance) {
+      return null;
+    }
+
+    return {
+      itemInstanceId: heldItemInstance.id,
+      definitionId: heldItemInstance.definitionId,
+    };
+  }
+
+  private syncCharacterHeldItemWithWidget(
+    characterId: string,
+    heldItem: CharacterHeldItem | null,
+    force = false,
+  ): void {
+    const renderedHeldItemInstanceId = this.renderedHeldItemInstanceIdByCharacterId.get(characterId);
+
+    if (!heldItem) {
+      if (renderedHeldItemInstanceId || force) {
+        this.renderedHeldItemInstanceIdByCharacterId.delete(characterId);
+        this.widget.releaseHeldItem(characterId);
+      }
+      return;
+    }
+
+    if (!force && renderedHeldItemInstanceId === heldItem.itemInstanceId) {
+      return;
+    }
+
+    const itemDefinition = itemService.getDefinition(heldItem.definitionId);
+
+    if (!itemDefinition) {
+      return;
+    }
+
+    this.widget.holdItem(characterId, itemDefinition);
+    this.renderedHeldItemInstanceIdByCharacterId.set(characterId, heldItem.itemInstanceId);
+  }
+
+  private syncActivityHeldItem(characterId: string, snapshot: CharacterSnapshot): boolean {
+    const requiredItemId = this.getRequiredActivityItemId(snapshot);
+    const activityHeldItem = this.activityHeldItemsByCharacterId.get(characterId);
+
+    if (!requiredItemId) {
+      if (!activityHeldItem) {
+        return false;
+      }
+
+      this.activityHeldItemsByCharacterId.delete(characterId);
+
+      if (snapshot.context.heldItem?.itemInstanceId !== activityHeldItem.itemInstanceId) {
+        return false;
+      }
+
+      this.releaseHeldItemForCharacter(characterId);
+      return true;
+    }
+
+    if (snapshot.context.heldItem?.definitionId === requiredItemId) {
+      return false;
+    }
+
+    const heldItem = this.holdItemForCharacter(characterId, requiredItemId);
+
+    if (!heldItem) {
+      return false;
+    }
+
+    this.activityHeldItemsByCharacterId.set(characterId, {
+      itemInstanceId: heldItem.itemInstanceId,
+    });
+    return true;
+  }
+
+  private getRequiredActivityItemId(snapshot: CharacterSnapshot): ItemDefinitionId | null {
+    const activityId = snapshot.context.currentActivity?.activityId;
+
+    if (!activityId) {
+      return null;
+    }
+
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (
+      !activity ||
+      activity.type !== 'playWithItem' ||
+      activity.joinRequirements.type !== 'hasItem'
+    ) {
+      return null;
+    }
+
+    return activity.joinRequirements.itemId;
+  }
+
+  private holdItemForCharacter(
+    characterId: string,
+    definitionId: ItemDefinitionId,
+  ): CharacterHeldItem | null {
+    try {
+      const itemInstance = itemHoldingService.holdItemForActor({
+        actorId: characterId,
+        definitionId,
+      });
+      const heldItem = {
+        itemInstanceId: itemInstance.id,
+        definitionId: itemInstance.definitionId,
+      };
+
+      this.sendToCharacter(characterId, {
+        type: EventType.HoldItem,
+        itemInstanceId: heldItem.itemInstanceId,
+        definitionId: heldItem.definitionId,
+      });
+      this.syncCharacterHeldItemWithWidget(characterId, heldItem, true);
+      return heldItem;
+    } catch {
+      return null;
+    }
+  }
+
+  private releaseHeldItemForCharacter(characterId: string): void {
+    itemHoldingService.releaseHeldItemForActor(characterId);
+    this.sendToCharacter(characterId, { type: EventType.ReleaseHeldItem });
+    this.syncCharacterHeldItemWithWidget(characterId, null, true);
+  }
+
+  private getAvailableActorItemDefinitionIds(characterId: string): string[] {
     return itemService.getActorItems(characterId)
-      .filter(itemInstance => itemInstance.state === 'stored')
+      .filter(itemInstance => itemInstance.state === 'stored' || itemInstance.state === 'held')
       .map(itemInstance => itemInstance.definitionId);
   }
 
@@ -864,6 +1000,7 @@ export class TownCharacterController {
         ownItems: previousContext?.ownItems ?? ('ownItems' in character ? character.ownItems : undefined),
         saturation: previousContext?.status.saturation ?? character.saturation,
         relationships: previousContext?.relationships,
+        heldItem: previousContext?.heldItem ?? this.getHeldItemForCharacter(character.id),
       },
     });
 
@@ -875,6 +1012,10 @@ export class TownCharacterController {
       this.activityCoordinator.handleCurrentActivity(character.id, snapshot);
       this.activityCoordinator.handlePendingActivityJoin(character.id, snapshot);
       this.activityCoordinator.handleActivityTravelProgress(character.id, snapshot);
+      const didSyncActivityHeldItem = this.syncActivityHeldItem(character.id, snapshot);
+      if (!didSyncActivityHeldItem) {
+        this.syncCharacterHeldItemWithWidget(character.id, snapshot.context.heldItem);
+      }
       this.syncRequestIndicators();
     });
 
@@ -902,7 +1043,7 @@ export class TownCharacterController {
         nearbyCharacterIds,
         nearbyRelationships: this.getNearbyRelationshipSnapshots(character.id, nearbyCharacterIds),
         nearbyJoinableActivities: this.activityCoordinator.getNearbyJoinableActivities(character.id, timestamp),
-        ownItemIds: this.getStoredActorItemDefinitionIds(character.id),
+        ownItemIds: this.getAvailableActorItemDefinitionIds(character.id),
         timestamp,
         allowAutonomousDecision: allowAutonomousDecision && !didLeaveApartment,
       });

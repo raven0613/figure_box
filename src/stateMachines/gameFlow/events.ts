@@ -3,6 +3,7 @@ import type { CharacterEventActivityEffects } from "~/constants/charactarEventsD
 import type { CharacterRequestSatisfiedEffect } from "~/services/characterRequests/types";
 import type { CharacterControlReason } from "./controlReasons";
 import type { CharacterControlState } from "./states";
+import type { ItemDefinitionId, ItemInstanceId } from "~/typing/item";
 import type { CharacterEventNearbyRelationship } from "~/services/characterEvents/types";
 import type { JoinableActivity } from "~/services/characterEvents/joinableActivities";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
@@ -71,6 +72,8 @@ export type CharacterEvent =
   | { type: EventType.StartThinking }
   | { type: EventType.StopThinking }
   | { type: EventType.SetExpression; expression: Expression }
+  | { type: EventType.HoldItem; itemInstanceId: ItemInstanceId; definitionId: ItemDefinitionId }
+  | { type: EventType.ReleaseHeldItem }
   | { type: EventType.AddLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: CharacterControlReason }
   | { type: EventType.RemoveLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: CharacterControlReason };
 
@@ -112,6 +115,8 @@ export enum EventType {
   StartThinking = "startThinking",
   StopThinking = "stopThinking",
   SetExpression = "setExpression",
+  HoldItem = "holdItem",
+  ReleaseHeldItem = "releaseHeldItem",
   AddLock = "addLock",
   RemoveLock = "removeLock",
 }
