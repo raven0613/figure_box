@@ -64,6 +64,14 @@ export default {
         name: '蘋果',
         description: '紅色、甜甜的水果。',
       },
+      toyBall: {
+        name: '玩具球',
+        description: '適合一起玩的彈力球。',
+      },
+      cards: {
+        name: '卡片',
+        description: '可以拿來一起玩的卡片。',
+      },
       clearGem: {
         name: '透明寶石',
         description: '可以裝飾，也可以拿來製作。',

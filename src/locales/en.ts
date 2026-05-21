@@ -64,6 +64,14 @@ export default {
         name: 'Apple',
         description: 'A red, sweet fruit.',
       },
+      toyBall: {
+        name: 'Toy Ball',
+        description: 'A bouncy ball for playing together.',
+      },
+      cards: {
+        name: 'Cards',
+        description: 'A small deck for playing together.',
+      },
       clearGem: {
         name: 'Clear Gem',
         description: 'A gem for decoration or crafting.',

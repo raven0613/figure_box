@@ -1,11 +1,12 @@
 import type { Canvas, FabricObject } from 'fabric';
+import type { PresentationId } from '~/constants/presentationAnimations';
 
 export interface AnimationHandle {
   cancel: () => void;
   finished: Promise<void>;
 }
 
-export interface HeldItemCelebrationAnimationInput {
+export interface HeldItemCelebrationAnimInput {
   key: string;
   target: FabricObject;
   canvas: Canvas;
@@ -14,13 +15,24 @@ export interface HeldItemCelebrationAnimationInput {
   loopCount?: number;
 }
 
-export interface CharacterJumpAnimationInput {
+export interface CharacterJumpAnimInput {
   key: string;
   target: FabricObject;
   canvas: Canvas;
   jumpHeight: number;
   durationMs?: number;
   jumpCount?: number;
+}
+
+export interface PresentationAnimationInput {
+  presentationId: PresentationId;
+  heldItem: FabricObject;
+  character: FabricObject;
+  canvas: Canvas;
+  cellSize: number;
+  heldItemAnimationKey: string;
+  characterAnimationKey: string;
+  isHeldItemCurrent: () => boolean;
 }
 
 const DEFAULT_HELD_ITEM_CELEBRATION_DURATION_MS = 920;
@@ -35,8 +47,61 @@ interface ActiveAnimation {
 
 export class PresentationAnimationService {
   private readonly activeAnimationsByKey = new Map<string, ActiveAnimation>();
+  private readonly presentationPlayers: Record<PresentationId, (input: PresentationAnimationInput) => Promise<void>> = {
+    receive_gift_happy: input => this.playReceiveGiftHappyPresentation(input),
+  };
 
-  playHeldItemCelebration(input: HeldItemCelebrationAnimationInput): AnimationHandle {
+  play(input: PresentationAnimationInput): void {
+    const presentationPlayer = this.presentationPlayers[input.presentationId];
+
+    if (!presentationPlayer) {
+      return;
+    }
+
+    void presentationPlayer(input);
+  }
+
+  cancel(key: string): void {
+    const activeAnimation = this.activeAnimationsByKey.get(key);
+
+    if (!activeAnimation) {
+      return;
+    }
+
+    window.cancelAnimationFrame(activeAnimation.frameId);
+    this.activeAnimationsByKey.delete(key);
+    activeAnimation.finish();
+  }
+
+  cancelAll(): void {
+    Array.from(this.activeAnimationsByKey.keys()).forEach(key => {
+      this.cancel(key);
+    });
+  }
+
+  private async playReceiveGiftHappyPresentation(input: PresentationAnimationInput): Promise<void> {
+    const itemCelebration = this.heldItemCelebrationAnim({
+      key: input.heldItemAnimationKey,
+      target: input.heldItem,
+      canvas: input.canvas,
+      radius: input.cellSize * 0.38,
+    });
+
+    await itemCelebration.finished;
+
+    if (!input.isHeldItemCurrent()) {
+      return;
+    }
+
+    this.characterJumpAnim({
+      key: input.characterAnimationKey,
+      target: input.character,
+      canvas: input.canvas,
+      jumpHeight: input.cellSize * 0.64,
+    });
+  }
+
+  private heldItemCelebrationAnim(input: HeldItemCelebrationAnimInput): AnimationHandle {
     const durationMs = input.durationMs ?? DEFAULT_HELD_ITEM_CELEBRATION_DURATION_MS;
     const loopCount = input.loopCount ?? DEFAULT_HELD_ITEM_CELEBRATION_LOOP_COUNT;
     const origin = {
@@ -90,7 +155,7 @@ export class PresentationAnimationService {
     };
   }
 
-  playCharacterJump(input: CharacterJumpAnimationInput): AnimationHandle {
+  private characterJumpAnim(input: CharacterJumpAnimInput): AnimationHandle {
     const durationMs = input.durationMs ?? DEFAULT_CHARACTER_JUMP_DURATION_MS;
     const jumpCount = input.jumpCount ?? DEFAULT_CHARACTER_JUMP_COUNT;
     const origin = {
@@ -144,24 +209,6 @@ export class PresentationAnimationService {
       },
       finished,
     };
-  }
-
-  cancel(key: string): void {
-    const activeAnimation = this.activeAnimationsByKey.get(key);
-
-    if (!activeAnimation) {
-      return;
-    }
-
-    window.cancelAnimationFrame(activeAnimation.frameId);
-    this.activeAnimationsByKey.delete(key);
-    activeAnimation.finish();
-  }
-
-  cancelAll(): void {
-    Array.from(this.activeAnimationsByKey.keys()).forEach(key => {
-      this.cancel(key);
-    });
   }
 
   private resetCelebrationTarget(

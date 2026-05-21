@@ -27,6 +27,7 @@ export type CharacterEvent =
     nearbyCharacterIds?: string[];
     nearbyRelationships?: readonly CharacterEventNearbyRelationship[];
     nearbyJoinableActivities?: readonly JoinableActivity[];
+    ownItemIds?: readonly string[];
     globalEventTags?: string[];
     timestamp?: number;
     allowAutonomousDecision?: boolean;

@@ -64,6 +64,14 @@ export default {
         name: '사과',
         description: '빨갛고 달콤한 과일입니다.',
       },
+      toyBall: {
+        name: '장난감 공',
+        description: '함께 놀기 좋은 탄력 있는 공입니다.',
+      },
+      cards: {
+        name: '카드',
+        description: '함께 놀 수 있는 작은 카드 묶음입니다.',
+      },
       clearGem: {
         name: '투명 보석',
         description: '장식하거나 제작에 쓸 수 있는 보석입니다.',

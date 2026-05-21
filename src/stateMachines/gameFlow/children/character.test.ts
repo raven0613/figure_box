@@ -8,6 +8,7 @@ import {
 import { CharacterControlReason } from '../controlReasons';
 import { EventType } from '../events';
 import {
+    CharacterBodyActionState,
     CharacterBodyMoveState,
     CharacterControlState,
 } from '../states';
@@ -124,5 +125,35 @@ describe('character space transition control', () => {
         expect(snapshot.context.controlState).toBe(CharacterControlState.Normal);
         expect(snapshot.context.target).toEqual({ x: 8, y: 41 });
         expect(getCharacterStateSummary(snapshot.value).bodyMove).toBe(CharacterBodyMoveState.Walking);
+    });
+});
+
+describe('character activity body action', () => {
+    test('uses operating body action while joining a play-with-item activity', () => {
+        const actor = createTestCharacterActor();
+
+        actor.send({
+            type: EventType.JoinActivity,
+            activityId: 'activity-play-item',
+            sourceEventId: 'need.playWithItem',
+        });
+
+        const snapshot = actor.getSnapshot();
+
+        expect(getCharacterStateSummary(snapshot.value).bodyAction).toBe(CharacterBodyActionState.Operating);
+    });
+
+    test('keeps socializing body action while joining a chat activity', () => {
+        const actor = createTestCharacterActor();
+
+        actor.send({
+            type: EventType.JoinActivity,
+            activityId: 'activity-chat',
+            sourceEventId: 'environment.nearbyCharacter.chat',
+        });
+
+        const snapshot = actor.getSnapshot();
+
+        expect(getCharacterStateSummary(snapshot.value).bodyAction).toBe(CharacterBodyActionState.Socializing);
     });
 });

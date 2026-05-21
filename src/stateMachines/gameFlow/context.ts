@@ -1,5 +1,5 @@
 import { DirectedRelationship, Expression, Mood, Position } from "~/constants/character";
-import { Item } from "~/constants/data";
+import type { CharacterSeedItem } from "~/typing/item";
 import type { CharacterControlState } from "./states";
 import type { RelationshipStore } from "./relationships";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
@@ -13,7 +13,7 @@ export interface GameFlowContext {
 export interface CharacterContext {
   id: string;
   name: string;
-  ownItems: Item[],
+  ownItems: CharacterSeedItem[],
   status: {
     mood: Mood;
     expression: Expression;
@@ -57,7 +57,7 @@ export interface CharacterMachineInput {
   id: string;
   name: string;
   position: Position;
-  ownItems?: readonly Item[];
+  ownItems?: readonly CharacterSeedItem[];
   saturation?: number;
   relationships?: DirectedRelationship[];
 }

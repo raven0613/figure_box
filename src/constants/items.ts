@@ -5,6 +5,46 @@ import type {
 
 export const ITEM_DEFINITIONS: readonly ItemDefinition[] = [
   {
+    id: 'toy-ball',
+    nameKey: 'item.toyBall.name',
+    descriptionKey: 'item.toyBall.description',
+    type: 'tool',
+    category: 'toy',
+    tags: ['play', 'ball'],
+    rarity: 'common',
+    stackable: false,
+    basePrice: 40,
+    visual: {
+      assetId: 'item/toy_ball',
+      scale: {
+        icon: 1,
+        held: 0.46,
+      },
+    },
+  },
+  {
+    id: 'cards',
+    nameKey: 'item.cards.name',
+    descriptionKey: 'item.cards.description',
+    type: 'tool',
+    category: 'toy',
+    tags: ['play', 'cards'],
+    rarity: 'common',
+    stackable: false,
+    basePrice: 35,
+    visual: {
+      assetId: 'item/cards',
+      scale: {
+        icon: 1,
+        held: 0.5,
+      },
+      heldOffset: {
+        x: -1,
+        y: 1,
+      },
+    },
+  },
+  {
     id: 'apple',
     nameKey: 'item.apple.name',
     descriptionKey: 'item.apple.description',

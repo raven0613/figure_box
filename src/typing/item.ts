@@ -24,6 +24,7 @@ export type ItemCategory =
   | 'decoration'
   | 'tool'
   | 'material'
+  | 'toy'
   | 'gem'
   | 'collectible'
   | 'story'
@@ -200,4 +201,9 @@ export interface InventoryGroupRule {
   id: InventoryGroupId;
   labelKey: string;
   match: ItemMatch;
+}
+
+export interface CharacterSeedItem {
+  definitionId: ItemDefinitionId;
+  quantity: number;
 }

@@ -1,9 +1,7 @@
+import type { CharacterSeedItem } from '~/typing/item';
+
 // 綁 character
-export interface Item {
-    id: string;
-    amount: number;
-    isHanding: boolean;
-}
+export type Item = CharacterSeedItem;
 // item 基本資料
 export interface ItemInfo {
     id: string;

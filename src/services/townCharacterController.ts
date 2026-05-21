@@ -53,6 +53,8 @@ import {
   TOWN_WORLD_SPACE_ID,
 } from '~/constants/townMap';
 import type { ItemDefinition } from '~/typing/item';
+import { itemHoldingService } from '~/services/items/itemHoldingService';
+import { itemService } from '~/services/items/itemService';
 
 type Subscription = {
   unsubscribe: () => void;
@@ -149,9 +151,17 @@ export class TownCharacterController {
         this.notifyJoinableActivitiesChanged();
       },
       resumeActivity: (activityId, timestamp) => {
-        this.activityManager.resumeActivity(activityId, timestamp);
+        const resumedActivity = this.activityManager.resumeActivity(activityId, timestamp);
         this.notifyJoinableActivitiesChanged();
-        this.activityCoordinator.replayActivityActiveVisuals(activityId);
+
+        if (!resumedActivity) {
+          return;
+        }
+
+        // Let interruption cleanup release temporary presentation items before restoring activity visuals.
+        window.setTimeout(() => {
+          this.activityCoordinator.replayActivityActiveVisuals(activityId);
+        }, 0);
       },
       pauseCharacterWalk: (characterId, durationMs) => {
         this.movementCoordinator.pauseCharacterWalk(characterId, durationMs);
@@ -180,6 +190,9 @@ export class TownCharacterController {
       releaseHeldItem: characterId => {
         this.widget.releaseHeldItem(characterId);
       },
+      playPresentation: (characterId, presentationId) => {
+        this.widget.playPresentation(characterId, presentationId);
+      },
       onFulfillmentFinished: request => {
         this.finishCharacterRequestFulfillment(request);
       },
@@ -199,9 +212,35 @@ export class TownCharacterController {
           ? destination
           : this.movementCoordinator.findNearbyEmptyTile(destination, characterId, 2) ?? destination
       ),
+      actorHasItem: (characterId, itemId) => (
+        itemService.getActorItems(characterId)
+          .some(itemInstance => (
+            itemInstance.definitionId === itemId &&
+            itemInstance.state === 'stored'
+          ))
+      ),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
+      },
+      holdItemForActor: (characterId, itemId) => {
+        try {
+          const itemInstance = itemHoldingService.holdItemForActor({
+            actorId: characterId,
+            definitionId: itemId,
+          });
+          const itemDefinition = itemService.getDefinition(itemInstance.definitionId);
+
+          if (itemDefinition) {
+            this.widget.holdItem(characterId, itemDefinition);
+          }
+        } catch {
+          this.widget.releaseHeldItem(characterId);
+        }
+      },
+      releaseHeldItemForActor: characterId => {
+        itemHoldingService.releaseHeldItemForActor(characterId);
+        this.widget.releaseHeldItem(characterId);
       },
       notifyActivitiesChanged: () => this.notifyJoinableActivitiesChanged(),
     });
@@ -214,6 +253,7 @@ export class TownCharacterController {
 
   start(): void {
     CHARACTER_SEEDS.forEach(character => {
+      this.seedCharacterItems(character);
       this.spawnCharacterActor(character);
     });
     this.tickTimer = window.setInterval(() => {
@@ -378,6 +418,7 @@ export class TownCharacterController {
     this.relationshipMomentOverlayCoordinator.dispose();
     this.activityInterruptionMomentCoordinator.dispose();
     this.performanceRunner.dispose();
+    itemHoldingService.clear();
     this.activityManager.clear();
     this.nextDecisionAtByCharacterId.clear();
     this.requestIdsByRelationshipOverlayId.clear();
@@ -768,6 +809,38 @@ export class TownCharacterController {
     return `${topCandidate.label}？`;
   }
 
+  private seedCharacterItems(character: CharacterSeed): void {
+    if (!('ownItems' in character) || !character.ownItems?.length) {
+      return;
+    }
+
+    character.ownItems.forEach(seedItem => {
+      const existingQuantity = itemService.getActorItems(character.id)
+        .filter(itemInstance => itemInstance.definitionId === seedItem.definitionId)
+        .reduce((totalQuantity, itemInstance) => totalQuantity + itemInstance.quantity, 0);
+
+      if (existingQuantity >= seedItem.quantity) {
+        return;
+      }
+
+      Array.from({ length: seedItem.quantity - existingQuantity }).forEach(() => {
+        itemService.createItemInstance({
+          definitionId: seedItem.definitionId,
+          ownerActorId: character.id,
+          quantity: 1,
+          reason: 'system',
+          day: 0,
+        });
+      });
+    });
+  }
+
+  private getStoredActorItemDefinitionIds(characterId: string): string[] {
+    return itemService.getActorItems(characterId)
+      .filter(itemInstance => itemInstance.state === 'stored')
+      .map(itemInstance => itemInstance.definitionId);
+  }
+
   private spawnCharacterActor(character: CharacterSeed, previousActor?: CharacterActor): CharacterActor {
     this.characterSubscriptions.get(character.id)?.unsubscribe();
 
@@ -829,6 +902,7 @@ export class TownCharacterController {
         nearbyCharacterIds,
         nearbyRelationships: this.getNearbyRelationshipSnapshots(character.id, nearbyCharacterIds),
         nearbyJoinableActivities: this.activityCoordinator.getNearbyJoinableActivities(character.id, timestamp),
+        ownItemIds: this.getStoredActorItemDefinitionIds(character.id),
         timestamp,
         allowAutonomousDecision: allowAutonomousDecision && !didLeaveApartment,
       });

@@ -6,6 +6,26 @@ interface ItemIconProps {
 }
 
 export function ItemIcon({ definition }: ItemIconProps) {
+  if (definition.visual.assetId === 'item/toy_ball') {
+    return (
+      <svg className={styles.itemIconSvg} viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="10" fill="#f2d16b" stroke="#6d5a24" strokeWidth="1.6" />
+        <ellipse cx="16" cy="16" rx="3" ry="10" fill="#ef7b45" transform="rotate(28 16 16)" />
+        <circle cx="12" cy="12" r="2.1" fill="rgba(255,255,255,0.55)" />
+      </svg>
+    );
+  }
+
+  if (definition.visual.assetId === 'item/cards') {
+    return (
+      <svg className={styles.itemIconSvg} viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="14" y="7" width="11" height="17" rx="2" fill="#9cc7ef" stroke="#2f5f8a" strokeWidth="1.4" transform="rotate(10 19.5 15.5)" />
+        <rect x="7" y="8" width="11" height="17" rx="2" fill="#fffaf0" stroke="#7f5f3e" strokeWidth="1.4" transform="rotate(-9 12.5 16.5)" />
+        <text x="12" y="19" fill="#b64646" fontSize="8" fontWeight="700" textAnchor="middle">A</text>
+      </svg>
+    );
+  }
+
   if (definition.visual.assetId === 'item/apple') {
     return (
       <svg className={styles.itemIconSvg} viewBox="0 0 32 32" aria-hidden="true">

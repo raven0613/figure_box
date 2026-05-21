@@ -27,6 +27,14 @@ export class TownMapItemGlyphFactory {
       return this.createAppleGlyph(size);
     }
 
+    if (assetId === 'item/toy_ball') {
+      return this.createToyBallGlyph(size);
+    }
+
+    if (assetId === 'item/cards') {
+      return this.createCardsGlyph(size);
+    }
+
     if (assetId === 'item/clear_gem') {
       return this.createGemGlyph(size);
     }
@@ -77,6 +85,91 @@ export class TownMapItemGlyphFactory {
     });
 
     return this.createGlyphGroup([body, shine, leaf]);
+  }
+
+  private createToyBallGlyph(size: number): Group {
+    const ball = new Circle({
+      radius: size * 0.44,
+      fill: '#f2d16b',
+      stroke: '#6d5a24',
+      strokeWidth: 1.2,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const stripe = new Ellipse({
+      rx: size * 0.11,
+      ry: size * 0.42,
+      fill: '#ef7b45',
+      angle: 28,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const highlight = new Circle({
+      left: -size * 0.14,
+      top: -size * 0.15,
+      radius: size * 0.08,
+      fill: 'rgba(255,255,255,0.55)',
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+
+    return this.createGlyphGroup([ball, stripe, highlight]);
+  }
+
+  private createCardsGlyph(size: number): Group {
+    const backCard = new Rect({
+      left: size * 0.08,
+      top: -size * 0.04,
+      width: size * 0.5,
+      height: size * 0.68,
+      rx: 1.5,
+      ry: 1.5,
+      fill: '#9cc7ef',
+      stroke: '#2f5f8a',
+      strokeWidth: 1,
+      angle: 10,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const frontCard = new Rect({
+      left: -size * 0.08,
+      top: size * 0.04,
+      width: size * 0.5,
+      height: size * 0.68,
+      rx: 1.5,
+      ry: 1.5,
+      fill: '#fffaf0',
+      stroke: '#7f5f3e',
+      strokeWidth: 1,
+      angle: -9,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const mark = new Text('A', {
+      left: -size * 0.08,
+      top: size * 0.04,
+      fontSize: size * 0.26,
+      fontWeight: '700',
+      fontFamily: 'Arial, sans-serif',
+      fill: '#b64646',
+      angle: -9,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+
+    return this.createGlyphGroup([backCard, frontCard, mark]);
   }
 
   private createGemGlyph(size: number): Group {

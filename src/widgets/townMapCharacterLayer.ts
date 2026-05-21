@@ -1,5 +1,6 @@
 import { Canvas, Group, Text } from 'fabric';
 import { Expression } from '~/constants/character';
+import type { PresentationId } from '~/constants/presentationAnimations';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import { PresentationAnimationService } from '~/services/presentationAnimationService';
 import type { ItemDefinition } from '~/typing/item';
@@ -177,7 +178,6 @@ export class TownMapCharacterLayer {
 
     this.heldItems.set(characterId, heldItem);
     this.rebuildCharacterToken(characterId);
-    void this.playRewardHeldItemSequence(characterId, heldItem);
   }
 
   releaseHeldItem(characterId: string): void {
@@ -207,6 +207,26 @@ export class TownMapCharacterLayer {
     this.characterTokens.delete(characterId);
     this.characters.delete(characterId);
     this.canvas.requestRenderAll();
+  }
+
+  playPresentation(characterId: string, presentationId: PresentationId): void {
+    const heldItem = this.heldItems.get(characterId);
+    const token = this.characterTokens.get(characterId);
+
+    if (!heldItem || !token) {
+      return;
+    }
+
+    this.presentationAnimations.play({
+      presentationId,
+      heldItem,
+      character: token,
+      canvas: this.canvas,
+      cellSize: this.cellSize,
+      heldItemAnimationKey: this.getHeldItemAnimationKey(characterId),
+      characterAnimationKey: this.getCharacterJumpAnimationKey(characterId),
+      isHeldItemCurrent: () => this.heldItems.get(characterId) === heldItem,
+    });
   }
 
   snapCharacterToGrid(characterId: string, currentTile: GridCoordinate | null): void {
@@ -303,34 +323,6 @@ export class TownMapCharacterLayer {
     this.characters.set(characterId, {
       ...character,
       ...patch,
-    });
-  }
-
-  private async playRewardHeldItemSequence(characterId: string, heldItem: Group): Promise<void> {
-    const itemCelebration = this.presentationAnimations.playHeldItemCelebration({
-      key: this.getHeldItemAnimationKey(characterId),
-      target: heldItem,
-      canvas: this.canvas,
-      radius: this.cellSize * 0.38,
-    });
-
-    await itemCelebration.finished;
-
-    if (this.heldItems.get(characterId) !== heldItem) {
-      return;
-    }
-
-    const token = this.characterTokens.get(characterId);
-
-    if (!token) {
-      return;
-    }
-
-    this.presentationAnimations.playCharacterJump({
-      key: this.getCharacterJumpAnimationKey(characterId),
-      target: token,
-      canvas: this.canvas,
-      jumpHeight: this.cellSize * 0.64,
     });
   }
 

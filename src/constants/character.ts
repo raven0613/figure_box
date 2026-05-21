@@ -1,3 +1,5 @@
+import type { CharacterSeedItem } from '~/typing/item';
+
 // 想要有性格&容易遇到的事的權重，但這樣會不會變無聊？
 export interface CharacterBaseSetting {
     name: string;
@@ -118,6 +120,10 @@ export interface CharacterBaseSetting {
         ending: string; // 話語結尾，例如：喵
         selfReference: string; // 自稱，例如：我、在下
     }
+}
+
+export interface CharacterSeedOwnItems {
+    ownItems?: readonly CharacterSeedItem[];
 }
 export interface Position {
     x: number;
@@ -270,12 +276,12 @@ export interface RelationshipRecord {
 }
 
 export const CHARACTER_SEEDS = [
-    { id: 'friend-01', name: 'Tezuka', label: 'T', color: '#413636', position: { x: 18, y: 18 }, saturation: 58, ownItems: [{ id: 'toy-ball', amount: 1, isHanding: true }] },
-    { id: 'friend-02', name: 'Fuji', label: 'F', color: '#e57070', position: { x: 21, y: 18 }, saturation: 32, ownItems: [{ id: 'toy-ball', amount: 1, isHanding: true }] },
-    { id: 'friend-03', name: 'Eiji', label: 'E', color: '#ff9900', position: { x: 24, y: 18 }, saturation: 80, ownItems: [{ id: 'toy-ball', amount: 1, isHanding: true }] },
-    { id: 'friend-04', name: 'Ooishi', label: 'O', color: '#33cc33', position: { x: 27, y: 18 }, saturation: 60, ownItems: [{ id: 'cards', amount: 1, isHanding: true }] },
-    { id: 'friend-05', name: 'Kikumaru', label: 'K', color: '#ff3333', position: { x: 30, y: 18 }, saturation: 90, ownItems: [{ id: 'cards', amount: 1, isHanding: true }] },
-    { id: 'friend-06', name: 'Inui', label: 'I', color: '#333399', position: { x: 18, y: 23 }, saturation: 50, ownItems: [{ id: 'cards', amount: 1, isHanding: true }] },
+    { id: 'friend-01', name: 'Tezuka', label: 'T', color: '#413636', position: { x: 18, y: 18 }, saturation: 58, ownItems: [{ definitionId: 'toy-ball', quantity: 1 }] },
+    { id: 'friend-02', name: 'Fuji', label: 'F', color: '#e57070', position: { x: 21, y: 18 }, saturation: 32, ownItems: [{ definitionId: 'toy-ball', quantity: 1 }] },
+    { id: 'friend-03', name: 'Eiji', label: 'E', color: '#ff9900', position: { x: 24, y: 18 }, saturation: 80, ownItems: [{ definitionId: 'toy-ball', quantity: 1 }] },
+    { id: 'friend-04', name: 'Ooishi', label: 'O', color: '#33cc33', position: { x: 27, y: 18 }, saturation: 60, ownItems: [{ definitionId: 'cards', quantity: 1 }] },
+    { id: 'friend-05', name: 'Kikumaru', label: 'K', color: '#ff3333', position: { x: 30, y: 18 }, saturation: 90, ownItems: [{ definitionId: 'cards', quantity: 1 }] },
+    { id: 'friend-06', name: 'Inui', label: 'I', color: '#333399', position: { x: 18, y: 23 }, saturation: 50, ownItems: [{ definitionId: 'cards', quantity: 1 }] },
     { id: 'friend-07', name: 'Kawamura', label: 'Ka', color: '#996633', position: { x: 14, y: 16 }, saturation: 75 },
     { id: 'friend-08', name: 'Momoshiro', label: 'M', color: '#ff66cc', position: { x: 14, y: 18 }, saturation: 85 },
     { id: 'friend-09', name: 'Kaidoh', label: 'Kd', color: '#339933', position: { x: 27, y: 23 }, saturation: 65 },

@@ -7,6 +7,7 @@ import type {
   CharacterRequestTargetSelector,
 } from '~/services/characterRequests/types';
 import { SocialStatus } from '~/constants/character';
+import { PRESENTATION_IDS, type PresentationId } from '~/constants/presentationAnimations';
 import type { ItemMatch } from '~/typing/item';
 import { readOptionalRuleClauses } from './ruleSchema';
 import {
@@ -61,12 +62,33 @@ function parseCharacterRequestDefinition(rawDefinition: unknown, index: number):
     kind: readRequestKind(rawDefinition, index),
     label: readRequiredString(rawDefinition, 'label', index),
     baseChance: readRequestBaseChance(rawDefinition, index),
+    fulfillmentPresentationId: readOptionalPresentationId(rawDefinition, index),
     conditions: readOptionalRuleClauses(rawDefinition, 'conditions', index),
     conditionMode: readOptionalClauseMode(rawDefinition, 'conditionMode', index),
     target: readOptionalRequestTarget(rawDefinition, index),
     targetSelector: readOptionalTargetSelector(rawDefinition, index),
     satisfiedEffects: readOptionalSatisfiedEffects(rawDefinition, index),
   };
+}
+
+function readOptionalPresentationId(
+  definition: CharacterEventDefinitionRecord,
+  index: number,
+): PresentationId | undefined {
+  const value = readOptionalString(definition, 'fulfillmentPresentationId', index);
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!includesString(PRESENTATION_IDS, value)) {
+    throw new Error(
+      `Character request definition at index ${index} has invalid fulfillmentPresentationId "${value}". ` +
+      `Expected one of: ${PRESENTATION_IDS.join(', ')}.`,
+    );
+  }
+
+  return value;
 }
 
 function readRequestLevel(

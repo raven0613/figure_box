@@ -169,36 +169,72 @@ export const characterMachine = createMachine(
                 ],
                 actions: ['leaveApartment', 'setIdleMotivation', 'clearTarget', 'setNormalControl'],
             },
-            [EventType.StartActivity]: {
-                guard: 'shouldStartActivity',
-                target: [
-                    '.bodyAction.socializing',
-                    '.bodyMove.stand',
-                    '.mind.thinking',
-                    '.communication.null',
-                ],
-                actions: ['setActivityMotivation', 'startOwnActivity'],
-            },
-            [EventType.JoinActivity]: {
-                guard: 'shouldJoinActivity',
-                target: [
-                    '.bodyAction.socializing',
-                    '.bodyMove.stand',
-                    '.mind.thinking',
-                    '.communication.null',
-                ],
-                actions: ['setActivityMotivation', 'setPendingActivityJoin'],
-            },
-            [EventType.JoinActivityAccepted]: {
-                guard: 'shouldAcceptActivityJoin',
-                target: [
-                    '.bodyAction.socializing',
-                    '.bodyMove.stand',
-                    '.mind.thinking',
-                    '.communication.null',
-                ],
-                actions: ['setActivityMotivation', 'acceptActivityJoin'],
-            },
+            [EventType.StartActivity]: [
+                {
+                    guard: 'shouldStartPlayWithItemActivity',
+                    target: [
+                        '.bodyAction.operating',
+                        '.bodyMove.stand',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['setActivityMotivation', 'startOwnActivity'],
+                },
+                {
+                    guard: 'shouldStartActivity',
+                    target: [
+                        '.bodyAction.socializing',
+                        '.bodyMove.stand',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['setActivityMotivation', 'startOwnActivity'],
+                },
+            ],
+            [EventType.JoinActivity]: [
+                {
+                    guard: 'shouldJoinPlayWithItemActivity',
+                    target: [
+                        '.bodyAction.operating',
+                        '.bodyMove.stand',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['setActivityMotivation', 'setPendingActivityJoin'],
+                },
+                {
+                    guard: 'shouldJoinActivity',
+                    target: [
+                        '.bodyAction.socializing',
+                        '.bodyMove.stand',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['setActivityMotivation', 'setPendingActivityJoin'],
+                },
+            ],
+            [EventType.JoinActivityAccepted]: [
+                {
+                    guard: 'shouldAcceptPlayWithItemActivityJoin',
+                    target: [
+                        '.bodyAction.operating',
+                        '.bodyMove.stand',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['setActivityMotivation', 'acceptActivityJoin'],
+                },
+                {
+                    guard: 'shouldAcceptActivityJoin',
+                    target: [
+                        '.bodyAction.socializing',
+                        '.bodyMove.stand',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['setActivityMotivation', 'acceptActivityJoin'],
+                },
+            ],
             [EventType.JoinActivityRejected]: {
                 guard: 'shouldRejectActivityJoin',
                 target: [
@@ -422,24 +458,28 @@ export const characterMachine = createMachine(
             isSpaceTransitionControl: ({ context }) => (
                 context.controlState === CharacterControlState.SpaceTransition
             ),
-            shouldStartActivity: ({ context }) => (
-                canReceiveNormalLogicCommand(context) &&
-                context.currentMotivation !== 'controllingByGod' &&
-                context.target === null &&
-                context.currentActivity === null &&
-                context.pendingActivityJoin === null
+            shouldStartActivity: ({ context }) => canStartOrJoinActivity(context),
+            shouldStartPlayWithItemActivity: ({ context, event }) => (
+                event.type === EventType.StartActivity &&
+                canStartOrJoinActivity(context) &&
+                isPlayWithItemActivityEvent(context, event)
             ),
-            shouldJoinActivity: ({ context }) => (
-                canReceiveNormalLogicCommand(context) &&
-                context.currentMotivation !== 'controllingByGod' &&
-                context.target === null &&
-                context.currentActivity === null &&
-                context.pendingActivityJoin === null
+            shouldJoinActivity: ({ context }) => canStartOrJoinActivity(context),
+            shouldJoinPlayWithItemActivity: ({ context, event }) => (
+                event.type === EventType.JoinActivity &&
+                canStartOrJoinActivity(context) &&
+                isPlayWithItemActivityEvent(context, event)
             ),
             shouldAcceptActivityJoin: ({ context, event }) => (
                 canReceiveNormalLogicCommand(context) &&
                 event.type === EventType.JoinActivityAccepted &&
                 context.pendingActivityJoin?.activityId === event.activityId
+            ),
+            shouldAcceptPlayWithItemActivityJoin: ({ context, event }) => (
+                event.type === EventType.JoinActivityAccepted &&
+                canReceiveNormalLogicCommand(context) &&
+                context.pendingActivityJoin?.activityId === event.activityId &&
+                isPlayWithItemActivityEvent(context, event)
             ),
             shouldRejectActivityJoin: ({ context, event }) => (
                 canReceiveNormalLogicCommand(context) &&
@@ -545,6 +585,7 @@ export const characterMachine = createMachine(
                     nearbyCharacterIds: event.nearbyCharacterIds,
                     nearbyRelationships: event.nearbyRelationships,
                     nearbyJoinableActivities: event.nearbyJoinableActivities,
+                    ownItemIds: event.ownItemIds,
                     globalEventTags: event.globalEventTags,
                     timestamp: event.timestamp,
                 });
@@ -851,6 +892,43 @@ export function formatCharacterStateValue(value: StateValue): string {
         summary.mind,
         summary.communication,
     ].join(' | ');
+}
+
+function canStartOrJoinActivity(context: CharacterContext): boolean {
+    return (
+        canReceiveNormalLogicCommand(context) &&
+        context.currentMotivation !== 'controllingByGod' &&
+        context.target === null &&
+        context.currentActivity === null &&
+        context.pendingActivityJoin === null
+    );
+}
+
+function isPlayWithItemActivityEvent(context: CharacterContext, event: CharacterEvent): boolean {
+    if (
+        event.type !== EventType.StartActivity &&
+        event.type !== EventType.JoinActivity &&
+        event.type !== EventType.JoinActivityAccepted
+    ) {
+        return false;
+    }
+
+    const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[event.sourceEventId];
+
+    if (!definition) {
+        return false;
+    }
+
+    if (event.type === EventType.StartActivity) {
+        const selectedVariantId = context.lastEventDecision?.selectedPresentationVariantId;
+        const selectedVariant = definition.presentationVariants
+            ?.find(variant => variant.id === selectedVariantId);
+
+        return selectedVariant?.activity?.type === 'playWithItem';
+    }
+
+    return definition.presentationVariants
+        ?.some(variant => variant.activity?.type === 'playWithItem') === true;
 }
 
 function isLocked(context: CharacterContext, part: keyof CharacterContext['locks']) {

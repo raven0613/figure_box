@@ -1,5 +1,6 @@
 import type { CharacterEventRuleClause } from '~/services/characterEvents/rules';
 import type { SocialStatus } from '~/constants/character';
+import type { PresentationId } from '~/constants/presentationAnimations';
 import type { ItemDefinition, ItemMatch } from '~/typing/item';
 
 export type CharacterRequestLevel = 'critical' | 'social' | 'minor';
@@ -41,6 +42,7 @@ export interface CharacterRequestDefinition {
   kind: CharacterRequestKind;
   label: string;
   baseChance: number;
+  fulfillmentPresentationId?: PresentationId;
   conditions?: readonly CharacterEventRuleClause[];
   conditionMode?: 'all' | 'some';
   target?: CharacterRequestTarget;
@@ -62,6 +64,7 @@ export interface CharacterRequest {
   kind: CharacterRequestKind;
   status: CharacterRequestStatus;
   label: string;
+  fulfillmentPresentationId?: PresentationId;
   target?: CharacterRequestTarget;
   satisfiedEffects?: readonly CharacterRequestSatisfiedEffect[];
   createdAt: number;
