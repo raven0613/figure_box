@@ -6,6 +6,7 @@ import type {
   ItemTransferReason,
 } from '~/typing/item';
 import { itemService, type ItemService } from './itemService';
+import { ItemStackService } from './itemStackService';
 import { appendItemTransferHistoryEntry } from './itemTransferHistory';
 
 export interface TransferItemInput {
@@ -29,9 +30,11 @@ const DEFAULT_TRANSFER_QUANTITY = 1;
 
 export class ItemTransferService {
   private readonly items: ItemService;
+  private readonly stacks: ItemStackService;
 
   constructor(items: ItemService = itemService) {
     this.items = items;
+    this.stacks = new ItemStackService(items);
   }
 
   transferItem(input: TransferItemInput): TransferItemResult {
@@ -92,35 +95,25 @@ export class ItemTransferService {
       itemInstance.ownerActorId,
       transferQuantity,
     );
-    const remainingQuantity = itemInstance.quantity - transferQuantity;
-    const sourceItemInstance = remainingQuantity > 0
-      ? this.items.updateItemInstance({
-        ...itemInstance,
-        quantity: remainingQuantity,
-        transferHistory: appendItemTransferHistoryEntry(
-          itemInstance.transferHistory,
-          transferHistoryEntry,
-        ),
-      })
-      : undefined;
 
-    if (remainingQuantity === 0) {
-      this.items.removeItemInstance(itemInstance.id);
-    }
-    const targetItemInstance = this.items.createItemInstance({
-      definitionId: itemInstance.definitionId,
-      fromActorId: itemInstance.ownerActorId,
-      ownerActorId: input.toActorId,
+    const result = this.stacks.extractItemQuantity({
+      itemInstanceId: itemInstance.id,
       quantity: transferQuantity,
-      reason: input.reason,
-      day: input.day,
-      timeOfDay: input.timeOfDay,
+      sourceTransferHistoryEntry: transferHistoryEntry,
+      createExtractedItemInput: {
+        fromActorId: itemInstance.ownerActorId,
+        ownerActorId: input.toActorId,
+        state: 'stored',
+        reason: input.reason,
+        day: input.day,
+        timeOfDay: input.timeOfDay,
+      },
     });
 
     return {
-      itemInstance: targetItemInstance,
-      sourceItemInstance,
-      previousOwnerActorId: itemInstance.ownerActorId,
+      itemInstance: result.extractedItemInstance,
+      sourceItemInstance: result.sourceItemInstance,
+      previousOwnerActorId: result.previousOwnerActorId,
     };
   }
 

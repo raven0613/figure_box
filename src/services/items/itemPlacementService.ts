@@ -8,9 +8,11 @@ import type {
   PlacementSurfaceType,
 } from '~/typing/item';
 import { itemService, type ItemService } from './itemService';
+import { ItemStackService } from './itemStackService';
 
 interface ItemPlacementServiceOptions {
   items?: ItemService;
+  stacks?: ItemStackService;
 }
 
 export interface PlaceItemOnMapInput {
@@ -28,9 +30,11 @@ export interface PickupPlacedItemInput {
 
 export class ItemPlacementService {
   private readonly items: ItemService;
+  private readonly stacks: ItemStackService;
 
   constructor(options: ItemPlacementServiceOptions = {}) {
     this.items = options.items ?? itemService;
+    this.stacks = options.stacks ?? new ItemStackService(this.items);
   }
 
   placeItemOnMap(input: PlaceItemOnMapInput): PlacedObject {
@@ -48,10 +52,6 @@ export class ItemPlacementService {
       throw new Error(`Item instance "${input.itemInstanceId}" must be stored before placing.`);
     }
 
-    if (itemInstance.quantity !== 1) {
-      throw new Error('Only quantity 1 item stacks can be placed on the map for now.');
-    }
-
     const definition = this.items.getDefinitionOrThrow(itemInstance.definitionId);
 
     if (!definition.placement) {
@@ -60,17 +60,24 @@ export class ItemPlacementService {
 
     this.assertWorldPositionIsAvailable(input.mapId, input.worldPosition);
 
-    const placedObject = this.items.createPlacedObject({
+    const extractionResult = this.stacks.extractItemQuantity({
       itemInstanceId: itemInstance.id,
+      quantity: 1,
+      reuseSourceWhenExtractingAll: true,
+      createExtractedItemInput: {
+        ownerActorId: input.ownerActorId,
+        state: 'placed',
+        stacking: 'separate',
+        transferHistory: itemInstance.quantity > 1 ? itemInstance.transferHistory ?? [] : undefined,
+      },
+    });
+    const placedObject = this.items.createPlacedObject({
+      itemInstanceId: extractionResult.extractedItemInstance.id,
       mapId: input.mapId,
       surfaceType: input.surfaceType ?? 'floor',
       worldPosition: input.worldPosition,
     });
 
-    this.items.updateItemInstance({
-      ...itemInstance,
-      state: 'placed',
-    });
     return placedObject;
   }
 
@@ -95,10 +102,9 @@ export class ItemPlacementService {
       throw new Error(`Actor "${input.actorId}" cannot pick up item instance "${itemInstance.id}".`);
     }
 
-    this.items.updateItemInstance({
-      ...itemInstance,
+    this.stacks.mergeIntoStoredStack({
+      itemInstanceId: itemInstance.id,
       ownerActorId: input.actorId,
-      state: 'stored',
     });
     this.items.removePlacedObject(placedObject.id);
     return placedObject;
@@ -116,10 +122,10 @@ export class ItemPlacementService {
     this.items.getPlacedObjects().forEach(placedObject => {
       const itemInstance = this.items.getItemInstance(placedObject.itemInstanceId);
 
-      if (itemInstance?.state === 'placed') {
-        this.items.updateItemInstance({
-          ...itemInstance,
-          state: 'stored',
+      if (itemInstance?.state === 'placed' && itemInstance.ownerActorId) {
+        this.stacks.mergeIntoStoredStack({
+          itemInstanceId: itemInstance.id,
+          ownerActorId: itemInstance.ownerActorId,
         });
       }
 

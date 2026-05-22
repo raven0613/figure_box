@@ -100,6 +100,20 @@ interface PlacedItemView {
   definition: ItemDefinition;
 }
 
+interface PlacedItemMenuState {
+  placedObjectId: string;
+}
+
+interface PlacedItemMenuView {
+  placedObject: PlacedObject;
+  itemInstance: ItemInstance;
+  definition: ItemDefinition;
+}
+
+interface PickupChainState {
+  actorId: typeof PLAYER_ACTOR_ID;
+}
+
 export function TownMapContainer({
   expressionByCharacterId = {},
   mapDialoguePresentation = null,
@@ -127,9 +141,12 @@ export function TownMapContainer({
   const [giftDragState, setGiftDragState] = useState<GiftDragState | null>(null);
   const [giftTargetPicker, setGiftTargetPicker] = useState<GiftTargetPickerState | null>(null);
   const [placementDraft, setPlacementDraft] = useState<ItemInstance | null>(null);
+  const [placedItemMenu, setPlacedItemMenu] = useState<PlacedItemMenuState | null>(null);
+  const [pickupChain, setPickupChain] = useState<PickupChainState | null>(null);
   const [characterInventoryWindow, setCharacterInventoryWindow] = useState<CharacterInventoryWindowState | null>(null);
   const [mapZoom, setMapZoom] = useState(1);
   const placementDraftRef = useRef<ItemInstance | null>(null);
+  const pickupChainRef = useRef<PickupChainState | null>(null);
   const requestListItems = useMemo(
     () => getRequestListItems({
       requests: characterRequests,
@@ -155,6 +172,12 @@ export function TownMapContainer({
   const placementDraftName = placementDraftDefinition
     ? t(placementDraftDefinition.nameKey)
     : placementDraft?.definitionId ?? '';
+  const placedItemMenuView = placedItemMenu
+    ? getPlacedItemMenuView(placedItemMenu.placedObjectId)
+    : null;
+  const placedItemMenuName = placedItemMenuView
+    ? t(placedItemMenuView.definition.nameKey)
+    : '';
 
   const refreshPlayerInventory = useCallback(() => {
     setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID, { states: ['stored'] }));
@@ -204,6 +227,64 @@ export function TownMapContainer({
     widgetRef.current?.setCharacterDraggingEnabled(true);
   }, []);
 
+  const cancelPickupChain = useCallback(() => {
+    pickupChainRef.current = null;
+    setPickupChain(null);
+  }, []);
+
+  const pickupPlacedItem = useCallback((placedObjectId: string, options: { closePlacedItemMenu?: boolean } = {}) => {
+    const shouldClosePlacedItemMenu = options.closePlacedItemMenu ?? true;
+    const placedObject = itemPlacementService.getPlacedObject(placedObjectId);
+
+    if (!placedObject) {
+      if (shouldClosePlacedItemMenu) {
+        setPlacedItemMenu(null);
+      }
+
+      widgetRef.current?.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
+      return false;
+    }
+
+    try {
+      itemPlacementService.pickupPlacedItem({
+        placedObjectId: placedObject.id,
+        actorId: PLAYER_ACTOR_ID,
+      });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '撿起物品失敗。');
+      refreshPlayerInventory();
+      widgetRef.current?.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
+      return false;
+    }
+
+    if (shouldClosePlacedItemMenu) {
+      setPlacedItemMenu(null);
+    }
+
+    refreshPlayerInventory();
+    widgetRef.current?.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
+    setTransferHistoryItem(currentItemInstance => {
+      if (!currentItemInstance || currentItemInstance.id !== placedObject.itemInstanceId) {
+        return currentItemInstance;
+      }
+
+      return itemService.getItemInstance(placedObject.itemInstanceId) ?? null;
+    });
+    return true;
+  }, [refreshPlayerInventory]);
+
+  const startPickupChain = useCallback((placedObjectId: string) => {
+    const didPickup = pickupPlacedItem(placedObjectId, { closePlacedItemMenu: false });
+
+    if (!didPickup) {
+      return;
+    }
+
+    setPlacedItemMenu(null);
+    pickupChainRef.current = { actorId: PLAYER_ACTOR_ID };
+    setPickupChain({ actorId: PLAYER_ACTOR_ID });
+  }, [pickupPlacedItem]);
+
   const startPlacingItem = useCallback((itemInstance: ItemInstance) => {
     const latestItemInstance = itemService.getItemInstance(itemInstance.id);
 
@@ -225,22 +306,23 @@ export function TownMapContainer({
       return;
     }
 
-    if (latestItemInstance.quantity !== 1) {
-      window.alert('目前先只能把數量 1 的物品放到地圖上。');
-      return;
-    }
-
     setGiftDragState(null);
     setGiftTargetPicker(null);
+    setPlacedItemMenu(null);
+    cancelPickupChain();
     placementDraftRef.current = latestItemInstance;
     setPlacementDraft(latestItemInstance);
     widgetRef.current?.setCharacterDraggingEnabled(false);
-  }, [refreshPlayerInventory]);
+  }, [cancelPickupChain, refreshPlayerInventory]);
 
   useEffect(() => {
     placementDraftRef.current = placementDraft;
     widgetRef.current?.setCharacterDraggingEnabled(!placementDraft);
   }, [placementDraft]);
+
+  useEffect(() => {
+    pickupChainRef.current = pickupChain;
+  }, [pickupChain]);
 
   useEffect(() => {
     if (!canvasHostRef.current) {
@@ -285,7 +367,15 @@ export function TownMapContainer({
             return;
           }
 
-          cancelPlacementDraft();
+          const nextPlacementItem = itemService.getItemInstance(latestItemInstance.id);
+
+          if (nextPlacementItem?.ownerActorId === PLAYER_ACTOR_ID && nextPlacementItem.state === 'stored') {
+            placementDraftRef.current = nextPlacementItem;
+            setPlacementDraft(nextPlacementItem);
+          } else {
+            cancelPlacementDraft();
+          }
+
           setSelectedTile(tile);
           setSelectedMapObjects(widget.getMapObjectsAt(tile.x, tile.y).map(object => object.label));
           refreshPlayerInventory();
@@ -297,6 +387,10 @@ export function TownMapContainer({
 
             return itemService.getItemInstance(latestItemInstance.id) ?? currentItemInstance;
           });
+          return;
+        }
+
+        if (pickupChainRef.current) {
           return;
         }
 
@@ -312,27 +406,24 @@ export function TownMapContainer({
 
         const placedObject = itemPlacementService.getPlacedObject(objectId);
 
-        if (placedObject) {
-          try {
-            itemPlacementService.pickupPlacedItem({
-              placedObjectId: placedObject.id,
-              actorId: PLAYER_ACTOR_ID,
-            });
-          } catch (error) {
-            window.alert(error instanceof Error ? error.message : '撿起物品失敗。');
-            refreshPlayerInventory();
-            widget.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
+        if (pickupChainRef.current) {
+          if (placedObject) {
+            const didPickup = pickupPlacedItem(placedObject.id, { closePlacedItemMenu: false });
+
+            if (!didPickup) {
+              cancelPickupChain();
+            }
+
             return;
           }
 
-          refreshPlayerInventory();
-          widget.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
-          setTransferHistoryItem(currentItemInstance => {
-            if (!currentItemInstance || currentItemInstance.id !== placedObject.itemInstanceId) {
-              return currentItemInstance;
-            }
+          cancelPickupChain();
+          return;
+        }
 
-            return itemService.getItemInstance(placedObject.itemInstanceId) ?? currentItemInstance;
+        if (placedObject) {
+          setPlacedItemMenu({
+            placedObjectId: placedObject.id,
           });
           return;
         }
@@ -353,6 +444,11 @@ export function TownMapContainer({
       onCharacterPickUp: characterId => {
         if (placementDraftRef.current) {
           cancelPlacementDraft();
+          return false;
+        }
+
+        if (pickupChainRef.current) {
+          cancelPickupChain();
           return false;
         }
 
@@ -396,10 +492,11 @@ export function TownMapContainer({
       setIsApartmentPanelOpen(false);
       setIsShopPanelOpen(false);
       cancelPlacementDraft();
+      cancelPickupChain();
       void widget.destroy();
       canvasHost.replaceChildren();
     };
-  }, [cancelPlacementDraft, refreshPlayerInventory, refreshShopStock]);
+  }, [cancelPickupChain, cancelPlacementDraft, pickupPlacedItem, refreshPlayerInventory, refreshShopStock]);
 
   useEffect(() => {
     seedDemoPlayerInventory();
@@ -514,6 +611,21 @@ export function TownMapContainer({
         </div>
       ) : null}
 
+      {pickupChain ? (
+        <div className={styles.pickupChainHint}>
+          <div>
+            <strong>連續撿取中</strong>
+            <span>點地圖物品撿起</span>
+          </div>
+          <button
+            type="button"
+            onClick={cancelPickupChain}
+          >
+            取消
+          </button>
+        </div>
+      ) : null}
+
       {isApartmentPanelOpen ? (
         <ApartmentPanel
           title="大家的公寓"
@@ -544,6 +656,7 @@ export function TownMapContainer({
             giftTargetName={selectedCharacterName}
             onGiftItem={itemInstance => {
               cancelPlacementDraft();
+              cancelPickupChain();
               giftItemToCharacter(itemInstance, selectedCharacterId);
             }}
             onPlaceItem={startPlacingItem}
@@ -552,6 +665,7 @@ export function TownMapContainer({
             }}
             onStartDragItem={(itemInstance, pointer) => {
               cancelPlacementDraft();
+              cancelPickupChain();
               setGiftTargetPicker(null);
               setGiftDragState({
                 itemInstance,
@@ -575,6 +689,25 @@ export function TownMapContainer({
           <TransferHistoryPanel
             itemInstance={transferHistoryItem}
             itemName={transferHistoryDefinition?.nameKey ?? transferHistoryItem.definitionId}
+          />
+        </DraggablePanel>
+      ) : null}
+
+      {placedItemMenu && placedItemMenuView ? (
+        <DraggablePanel
+          title="地圖物品"
+          initialPosition={{ left: 426, top: 190 }}
+          closeAriaLabel="關閉地圖物品選單"
+          className={styles.floatingPlacedItemPanel}
+          contentClassName={styles.floatingPanelContent}
+          onClose={() => setPlacedItemMenu(null)}
+        >
+          <PlacedItemActionPanel
+            itemName={placedItemMenuName}
+            itemInstance={placedItemMenuView.itemInstance}
+            placedObject={placedItemMenuView.placedObject}
+            onPickup={() => pickupPlacedItem(placedItemMenuView.placedObject.id)}
+            onStartPickupChain={() => startPickupChain(placedItemMenuView.placedObject.id)}
           />
         </DraggablePanel>
       ) : null}
@@ -852,6 +985,83 @@ function getPlacedItemViews(mapId: MapId): readonly PlacedItemView[] {
       };
     })
     .filter((item): item is PlacedItemView => item !== null);
+}
+
+function getPlacedItemMenuView(placedObjectId: string): PlacedItemMenuView | null {
+  const placedObject = itemPlacementService.getPlacedObject(placedObjectId);
+
+  if (!placedObject) {
+    return null;
+  }
+
+  const itemInstance = itemService.getItemInstance(placedObject.itemInstanceId);
+
+  if (!itemInstance) {
+    return null;
+  }
+
+  const definition = itemService.getDefinition(itemInstance.definitionId);
+
+  if (!definition) {
+    return null;
+  }
+
+  return {
+    placedObject,
+    itemInstance,
+    definition,
+  };
+}
+
+function PlacedItemActionPanel({
+  itemName,
+  itemInstance,
+  placedObject,
+  onPickup,
+  onStartPickupChain,
+}: {
+  itemName: string;
+  itemInstance: ItemInstance;
+  placedObject: PlacedObject;
+  onPickup: () => void;
+  onStartPickupChain: () => void;
+}) {
+  return (
+    <div className={styles.placedItemActionPanel}>
+      <div className={styles.detailRow}>
+        <span>Item</span>
+        <strong>{itemName}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>State</span>
+        <strong>{itemInstance.state}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Tile</span>
+        <strong>
+          {placedObject.worldPosition
+            ? `${placedObject.worldPosition.x}, ${placedObject.worldPosition.y}`
+            : '-'}
+        </strong>
+      </div>
+      <div className={styles.placedItemActions}>
+        <button
+          className={styles.placedItemActionButton}
+          type="button"
+          onClick={onPickup}
+        >
+          撿起
+        </button>
+        <button
+          className={styles.placedItemActionButton}
+          type="button"
+          onClick={onStartPickupChain}
+        >
+          連續撿
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function GiftDragPreview({

@@ -41,6 +41,8 @@ export interface CreateItemInstanceInput {
   reason?: ItemTransferReason;
   day?: number;
   timeOfDay?: string;
+  stacking?: 'mergeStored' | 'separate';
+  transferHistory?: readonly ItemTransferHistoryEntry[];
 }
 
 export interface InventoryGroup {
@@ -211,13 +213,17 @@ export class ItemService {
   createItemInstance(input: CreateItemInstanceInput): ItemInstance {
     const definition = this.getDefinitionOrThrow(input.definitionId);
     const quantity = input.quantity ?? DEFAULT_ITEM_QUANTITY;
-    const transferHistoryEntry = this.createTransferHistoryEntry(input, quantity);
+    const transferHistoryEntry = input.transferHistory !== undefined
+      ? null
+      : this.createTransferHistoryEntry(input, quantity);
 
     this.assertValidQuantity(definition, quantity);
 
-    const stackableItemInstance = this.findStackableItemInstance(input.ownerActorId, definition.id, quantity);
+    const stackableItemInstance = input.stacking === 'separate'
+      ? null
+      : this.findStackableItemInstance(input.ownerActorId, definition.id, quantity);
 
-    if (stackableItemInstance) {
+    if (stackableItemInstance && transferHistoryEntry) {
       return this.store.updateItemInstance({
         ...stackableItemInstance,
         quantity: stackableItemInstance.quantity + quantity,
@@ -234,7 +240,7 @@ export class ItemService {
       ownerActorId: input.ownerActorId,
       state: input.state ?? 'stored',
       quantity,
-      transferHistory: input.ownerActorId ? [transferHistoryEntry] : undefined,
+      transferHistory: input.transferHistory ?? (input.ownerActorId && transferHistoryEntry ? [transferHistoryEntry] : undefined),
     });
   }
 
