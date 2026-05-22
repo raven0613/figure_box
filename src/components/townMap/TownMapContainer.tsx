@@ -25,7 +25,12 @@ import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDe
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
-import { TOWN_APARTMENT_OBJECT_ID, TOWN_APARTMENT_SPACE_ID, TOWN_ITEM_SHOP_OBJECT_ID } from '~/constants/townMap';
+import {
+  TOWN_APARTMENT_OBJECT_ID,
+  TOWN_APARTMENT_SPACE_ID,
+  TOWN_ITEM_SHOP_OBJECT_ID,
+  TOWN_WORLD_SPACE_ID,
+} from '~/constants/townMap';
 import {
   CharacterBodyActionState,
   CharacterBodyMoveState,
@@ -34,9 +39,17 @@ import {
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { TownMapTile } from '~/widgets/townMapGrid';
 import { itemService, type InventoryGroup } from '~/services/items/itemService';
+import { itemPlacementService } from '~/services/items/itemPlacementService';
 import { itemTransferService } from '~/services/items/itemTransferService';
 import { DEFAULT_ITEM_SHOP_ID, shopService } from '~/services/items/shopService';
-import type { ItemDefinitionId, ItemInstance, ShopStockItem } from '~/typing/item';
+import type {
+  ItemDefinition,
+  ItemDefinitionId,
+  ItemInstance,
+  MapId,
+  PlacedObject,
+  ShopStockItem,
+} from '~/typing/item';
 import { InventoryPanel } from '~/components/inventory/InventoryPanel';
 import { ShopPanel } from '~/components/shop/ShopPanel';
 import { DraggablePanel } from '~/components/common/DraggablePanel';
@@ -82,10 +95,16 @@ interface CharacterInventoryWindowState {
   groups: readonly InventoryGroup[];
 }
 
+interface PlacedItemView {
+  placedObject: PlacedObject;
+  definition: ItemDefinition;
+}
+
 export function TownMapContainer({
   expressionByCharacterId = {},
   mapDialoguePresentation = null,
 }: TownMapContainerProps) {
+  const { t } = useTranslation();
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<FabricTownMapWidget | null>(null);
   const characterControllerRef = useRef<TownCharacterController | null>(null);
@@ -107,8 +126,10 @@ export function TownMapContainer({
   const [transferHistoryItem, setTransferHistoryItem] = useState<ItemInstance | null>(null);
   const [giftDragState, setGiftDragState] = useState<GiftDragState | null>(null);
   const [giftTargetPicker, setGiftTargetPicker] = useState<GiftTargetPickerState | null>(null);
+  const [placementDraft, setPlacementDraft] = useState<ItemInstance | null>(null);
   const [characterInventoryWindow, setCharacterInventoryWindow] = useState<CharacterInventoryWindowState | null>(null);
   const [mapZoom, setMapZoom] = useState(1);
+  const placementDraftRef = useRef<ItemInstance | null>(null);
   const requestListItems = useMemo(
     () => getRequestListItems({
       requests: characterRequests,
@@ -130,9 +151,13 @@ export function TownMapContainer({
   );
   const selectedCharacterName = CHARACTER_SEEDS.find(character => character.id === selectedCharacterId)?.name ?? selectedCharacterId;
   const transferHistoryDefinition = transferHistoryItem ? itemService.getDefinition(transferHistoryItem.definitionId) : null;
+  const placementDraftDefinition = placementDraft ? itemService.getDefinition(placementDraft.definitionId) : null;
+  const placementDraftName = placementDraftDefinition
+    ? t(placementDraftDefinition.nameKey)
+    : placementDraft?.definitionId ?? '';
 
   const refreshPlayerInventory = useCallback(() => {
-    setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID));
+    setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID, { states: ['stored'] }));
   }, []);
 
   const refreshShopStock = useCallback(() => {
@@ -173,6 +198,41 @@ export function TownMapContainer({
     });
   }, [refreshOpenCharacterInventory, refreshPlayerInventory]);
 
+  const startPlacingItem = useCallback((itemInstance: ItemInstance) => {
+    const latestItemInstance = itemService.getItemInstance(itemInstance.id);
+
+    if (!latestItemInstance || latestItemInstance.ownerActorId !== PLAYER_ACTOR_ID) {
+      refreshPlayerInventory();
+      return;
+    }
+
+    if (latestItemInstance.state !== 'stored') {
+      window.alert('這個物品目前不在玩家背包裡。');
+      refreshPlayerInventory();
+      return;
+    }
+
+    const definition = itemService.getDefinition(latestItemInstance.definitionId);
+
+    if (!definition?.placement) {
+      window.alert('這個物品目前沒有地圖放置設定。');
+      return;
+    }
+
+    if (latestItemInstance.quantity !== 1) {
+      window.alert('目前先只能把數量 1 的物品放到地圖上。');
+      return;
+    }
+
+    setGiftDragState(null);
+    setGiftTargetPicker(null);
+    setPlacementDraft(latestItemInstance);
+  }, [refreshPlayerInventory]);
+
+  useEffect(() => {
+    placementDraftRef.current = placementDraft;
+  }, [placementDraft]);
+
   useEffect(() => {
     if (!canvasHostRef.current) {
       return;
@@ -182,11 +242,87 @@ export function TownMapContainer({
     const widget = FabricTownMapWidget.mount(canvasHost, {
       cellSize: 10,
       onTileClick: tile => {
+        const placementItem = placementDraftRef.current;
+
+        if (placementItem) {
+          const latestItemInstance = itemService.getItemInstance(placementItem.id);
+
+          if (!latestItemInstance) {
+            setPlacementDraft(null);
+            refreshPlayerInventory();
+            return;
+          }
+
+          const placementBlockReason = getTilePlacementBlockReason(tile, widget);
+
+          if (placementBlockReason) {
+            window.alert(placementBlockReason);
+            return;
+          }
+
+          try {
+            itemPlacementService.placeItemOnMap({
+              itemInstanceId: latestItemInstance.id,
+              ownerActorId: PLAYER_ACTOR_ID,
+              mapId: TOWN_WORLD_SPACE_ID,
+              worldPosition: {
+                x: tile.x,
+                y: tile.y,
+              },
+            });
+          } catch (error) {
+            window.alert(error instanceof Error ? error.message : '放置物品失敗。');
+            refreshPlayerInventory();
+            return;
+          }
+
+          setPlacementDraft(null);
+          setSelectedTile(tile);
+          setSelectedMapObjects(widget.getMapObjectsAt(tile.x, tile.y).map(object => object.label));
+          refreshPlayerInventory();
+          widget.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
+          setTransferHistoryItem(currentItemInstance => {
+            if (!currentItemInstance || currentItemInstance.id !== latestItemInstance.id) {
+              return currentItemInstance;
+            }
+
+            return itemService.getItemInstance(latestItemInstance.id) ?? currentItemInstance;
+          });
+          return;
+        }
+
         setSelectedTile(tile);
         setSelectedMapObjects(widget.getMapObjectsAt(tile.x, tile.y).map(object => object.label));
         // setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
       },
       onMapObjectClick: objectId => {
+        const placedObject = itemPlacementService.getPlacedObject(objectId);
+
+        if (placedObject) {
+          try {
+            itemPlacementService.pickupPlacedItem({
+              placedObjectId: placedObject.id,
+              actorId: PLAYER_ACTOR_ID,
+            });
+          } catch (error) {
+            window.alert(error instanceof Error ? error.message : '撿起物品失敗。');
+            refreshPlayerInventory();
+            widget.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
+            return;
+          }
+
+          refreshPlayerInventory();
+          widget.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
+          setTransferHistoryItem(currentItemInstance => {
+            if (!currentItemInstance || currentItemInstance.id !== placedObject.itemInstanceId) {
+              return currentItemInstance;
+            }
+
+            return itemService.getItemInstance(placedObject.itemInstanceId) ?? currentItemInstance;
+          });
+          return;
+        }
+
         if (objectId === TOWN_APARTMENT_OBJECT_ID) {
           setIsApartmentPanelOpen(true);
         }
@@ -226,6 +362,7 @@ export function TownMapContainer({
 
     characterControllerRef.current = characterController;
     characterController.start();
+    widget.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
 
     return () => {
       characterController.dispose();
@@ -238,10 +375,11 @@ export function TownMapContainer({
       setSelectedMapObjects([]);
       setIsApartmentPanelOpen(false);
       setIsShopPanelOpen(false);
+      setPlacementDraft(null);
       void widget.destroy();
       canvasHost.replaceChildren();
     };
-  }, []);
+  }, [refreshPlayerInventory, refreshShopStock]);
 
   useEffect(() => {
     seedDemoPlayerInventory();
@@ -341,6 +479,21 @@ export function TownMapContainer({
         <div className={styles.canvasHost} ref={canvasHostRef} />
       </div>
 
+      {placementDraft ? (
+        <div className={styles.placementHint}>
+          <div>
+            <strong>放置中</strong>
+            <span>{placementDraftName}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPlacementDraft(null)}
+          >
+            取消
+          </button>
+        </div>
+      ) : null}
+
       {isApartmentPanelOpen ? (
         <ApartmentPanel
           title="大家的公寓"
@@ -369,6 +522,7 @@ export function TownMapContainer({
             onGiftItem={itemInstance => {
               giftItemToCharacter(itemInstance, selectedCharacterId);
             }}
+            onPlaceItem={startPlacingItem}
             onOpenTransferHistory={itemInstance => {
               setTransferHistoryItem(itemService.getItemInstance(itemInstance.id) ?? itemInstance);
             }}
@@ -630,6 +784,45 @@ function showGiftPreview(characterIds: readonly string[], widget: FabricTownMapW
 
 function areSameStringLists(first: readonly string[], second: readonly string[]): boolean {
   return first.length === second.length && first.every((value, index) => value === second[index]);
+}
+
+function getTilePlacementBlockReason(tile: TownMapTile, widget: FabricTownMapWidget): string | null {
+  if (!tile.cell.walkable) {
+    return '這格不能放置物品。';
+  }
+
+  if (tile.cell.occupantId) {
+    return '角色站著的格子目前不能放置物品。';
+  }
+
+  if (widget.getMapObjectsAt(tile.x, tile.y).length > 0) {
+    return '已有地圖物件的格子目前不能放置物品。';
+  }
+
+  return null;
+}
+
+function getPlacedItemViews(mapId: MapId): readonly PlacedItemView[] {
+  return itemPlacementService.getPlacedObjects(mapId)
+    .map(placedObject => {
+      const itemInstance = itemService.getItemInstance(placedObject.itemInstanceId);
+
+      if (!itemInstance) {
+        return null;
+      }
+
+      const definition = itemService.getDefinition(itemInstance.definitionId);
+
+      if (!definition) {
+        return null;
+      }
+
+      return {
+        placedObject,
+        definition,
+      };
+    })
+    .filter((item): item is PlacedItemView => item !== null);
 }
 
 function GiftDragPreview({

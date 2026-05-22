@@ -14,6 +14,7 @@ interface InventoryPanelProps {
   ownerLabel?: string;
   giftTargetName?: string;
   onGiftItem?: (itemInstance: ItemInstance) => void;
+  onPlaceItem?: (itemInstance: ItemInstance) => void;
   onOpenTransferHistory?: (itemInstance: ItemInstance) => void;
   onStartDragItem?: (itemInstance: ItemInstance, pointer: { x: number; y: number }) => void;
 }
@@ -39,6 +40,7 @@ export function InventoryPanel({
   ownerLabel,
   giftTargetName,
   onGiftItem,
+  onPlaceItem,
   onOpenTransferHistory,
   onStartDragItem,
 }: InventoryPanelProps) {
@@ -105,6 +107,15 @@ export function InventoryPanel({
                       onClick={() => onGiftItem(item.instance)}
                     >
                       {giftTargetName ? `送給${giftTargetName}` : '送出'}
+                    </button>
+                  ) : null}
+                  {onPlaceItem ? (
+                    <button
+                      className={styles.itemActionButton}
+                      type="button"
+                      onClick={() => onPlaceItem(item.instance)}
+                    >
+                      放地圖
                     </button>
                   ) : null}
                   {onOpenTransferHistory ? (

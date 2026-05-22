@@ -66,12 +66,14 @@ export type PlacementAnchor = 'center' | 'bottomCenter';
 
 export type ItemTransferReason =
   | 'gift'
+  | 'returnGift'
+  | 'exchange'
   | 'purchase'
+  | 'sell'
   | 'reward'
   | 'found'
   | 'crafted'
-  | 'system'
-  | (string & {});
+  | 'system';
 
 export interface ItemDefinition {
   id: ItemDefinitionId;

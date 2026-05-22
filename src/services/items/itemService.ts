@@ -14,6 +14,11 @@ import type {
   ItemState,
   ItemTransferHistoryEntry,
   ItemTransferReason,
+  ItemPosition,
+  MapId,
+  MapObjectId,
+  PlacedObject,
+  PlacementSurfaceType,
 } from '~/typing/item';
 import { EmptyItemSavePort, type ItemSavePort } from './itemSavePort';
 import { matchesItemDefinition } from './itemMatcher';
@@ -44,10 +49,25 @@ export interface InventoryGroup {
   itemInstances: readonly ItemInstance[];
 }
 
+export interface GetActorInventoryGroupsOptions {
+  states?: readonly ItemState[];
+}
+
+export interface CreatePlacedObjectInput {
+  itemInstanceId: ItemInstanceId;
+  mapId: MapId;
+  surfaceType: PlacementSurfaceType;
+  worldPosition?: ItemPosition;
+  localPosition?: ItemPosition;
+  parentObjectId?: MapObjectId;
+  layer?: string;
+}
+
 const DEFAULT_ITEM_QUANTITY = 1;
 
 export class ItemService {
   private nextInstanceNumber = 1;
+  private nextPlacedObjectNumber = 1;
   private readonly definitionsById: Map<ItemDefinitionId, ItemDefinition>;
   private readonly inventoryGroupRules: readonly InventoryGroupRule[];
   private readonly savePort: ItemSavePort;
@@ -77,6 +97,7 @@ export class ItemService {
   loadSnapshot(snapshot: ItemStoreSnapshot): void {
     this.store.loadSnapshot(snapshot);
     this.nextInstanceNumber = this.getNextInstanceNumber(snapshot.itemInstances);
+    this.nextPlacedObjectNumber = this.getNextPlacedObjectNumber(snapshot.placedObjects ?? []);
   }
 
   getSnapshot(): ItemStoreSnapshot {
@@ -125,8 +146,39 @@ export class ItemService {
     return this.store.getActorInventory(actorId);
   }
 
-  getActorInventoryGroups(actorId: ActorId): readonly InventoryGroup[] {
-    const itemInstances = this.getActorItems(actorId);
+  getPlacedObjects(mapId?: MapId): readonly PlacedObject[] {
+    return this.store.getPlacedObjects(mapId);
+  }
+
+  getPlacedObject(placedObjectId: MapObjectId): PlacedObject | null {
+    return this.store.getPlacedObject(placedObjectId);
+  }
+
+  createPlacedObject(input: CreatePlacedObjectInput): PlacedObject {
+    return this.store.addPlacedObject({
+      id: this.createPlacedObjectId(),
+      itemInstanceId: input.itemInstanceId,
+      mapId: input.mapId,
+      surfaceType: input.surfaceType,
+      ...(input.worldPosition ? { worldPosition: input.worldPosition } : {}),
+      ...(input.localPosition ? { localPosition: input.localPosition } : {}),
+      ...(input.parentObjectId ? { parentObjectId: input.parentObjectId } : {}),
+      ...(input.layer ? { layer: input.layer } : {}),
+    });
+  }
+
+  removePlacedObject(placedObjectId: MapObjectId): PlacedObject | null {
+    return this.store.removePlacedObject(placedObjectId);
+  }
+
+  getActorInventoryGroups(
+    actorId: ActorId,
+    options: GetActorInventoryGroupsOptions = {},
+  ): readonly InventoryGroup[] {
+    const allowedStates = options.states ? new Set<ItemState>(options.states) : null;
+    const itemInstances = allowedStates
+      ? this.getActorItems(actorId).filter(itemInstance => allowedStates.has(itemInstance.state))
+      : this.getActorItems(actorId);
     const groupedItemIds = new Set<ItemInstanceId>();
 
     return this.inventoryGroupRules.map(rule => {
@@ -189,6 +241,7 @@ export class ItemService {
   clear(): void {
     this.store.clear();
     this.nextInstanceNumber = 1;
+    this.nextPlacedObjectNumber = 1;
   }
 
   private assertValidQuantity(definition: ItemDefinition, quantity: number): void {
@@ -248,6 +301,13 @@ export class ItemService {
     return instanceId;
   }
 
+  private createPlacedObjectId(): MapObjectId {
+    const placedObjectId = `placed-item-${this.nextPlacedObjectNumber}`;
+    this.nextPlacedObjectNumber += 1;
+
+    return placedObjectId;
+  }
+
   private getNextInstanceNumber(itemInstances: readonly ItemInstance[]): number {
     const maxInstanceNumber = itemInstances.reduce((maxNumber, itemInstance) => {
       const match = itemInstance.id.match(/-(\d+)$/);
@@ -260,6 +320,20 @@ export class ItemService {
     }, 0);
 
     return maxInstanceNumber + 1;
+  }
+
+  private getNextPlacedObjectNumber(placedObjects: readonly PlacedObject[]): number {
+    const maxPlacedObjectNumber = placedObjects.reduce((maxNumber, placedObject) => {
+      const match = placedObject.id.match(/-(\d+)$/);
+
+      if (!match) {
+        return maxNumber;
+      }
+
+      return Math.max(maxNumber, Number(match[1]));
+    }, 0);
+
+    return maxPlacedObjectNumber + 1;
   }
 }
 

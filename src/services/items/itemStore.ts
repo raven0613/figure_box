@@ -3,14 +3,19 @@ import type {
   ActorInventory,
   ItemInstance,
   ItemInstanceId,
+  MapId,
+  MapObjectId,
+  PlacedObject,
 } from '~/typing/item';
 
 export interface ItemStoreSnapshot {
   itemInstances: readonly ItemInstance[];
+  placedObjects?: readonly PlacedObject[];
 }
 
 export class ItemStore {
   private readonly itemInstancesById = new Map<ItemInstanceId, ItemInstance>();
+  private readonly placedObjectsById = new Map<MapObjectId, PlacedObject>();
 
   constructor(snapshot?: ItemStoreSnapshot) {
     if (snapshot) {
@@ -20,15 +25,20 @@ export class ItemStore {
 
   loadSnapshot(snapshot: ItemStoreSnapshot): void {
     this.itemInstancesById.clear();
+    this.placedObjectsById.clear();
 
     snapshot.itemInstances.forEach(itemInstance => {
       this.itemInstancesById.set(itemInstance.id, itemInstance);
+    });
+    (snapshot.placedObjects ?? []).forEach(placedObject => {
+      this.placedObjectsById.set(placedObject.id, placedObject);
     });
   }
 
   getSnapshot(): ItemStoreSnapshot {
     return {
       itemInstances: this.getItemInstances(),
+      placedObjects: this.getPlacedObjects(),
     };
   }
 
@@ -52,6 +62,40 @@ export class ItemStore {
       itemInstanceIds: this.getItemInstancesByOwner(actorId)
         .map(itemInstance => itemInstance.id),
     };
+  }
+
+  getPlacedObjects(mapId?: MapId): readonly PlacedObject[] {
+    const placedObjects = Array.from(this.placedObjectsById.values());
+
+    if (!mapId) {
+      return placedObjects;
+    }
+
+    return placedObjects.filter(placedObject => placedObject.mapId === mapId);
+  }
+
+  getPlacedObject(placedObjectId: MapObjectId): PlacedObject | null {
+    return this.placedObjectsById.get(placedObjectId) ?? null;
+  }
+
+  addPlacedObject(placedObject: PlacedObject): PlacedObject {
+    if (this.placedObjectsById.has(placedObject.id)) {
+      throw new Error(`Placed object "${placedObject.id}" already exists.`);
+    }
+
+    this.placedObjectsById.set(placedObject.id, placedObject);
+    return placedObject;
+  }
+
+  removePlacedObject(placedObjectId: MapObjectId): PlacedObject | null {
+    const placedObject = this.getPlacedObject(placedObjectId);
+
+    if (!placedObject) {
+      return null;
+    }
+
+    this.placedObjectsById.delete(placedObjectId);
+    return placedObject;
   }
 
   addItemInstance(itemInstance: ItemInstance): ItemInstance {
@@ -85,5 +129,6 @@ export class ItemStore {
 
   clear(): void {
     this.itemInstancesById.clear();
+    this.placedObjectsById.clear();
   }
 }

@@ -226,6 +226,57 @@
   overflow-y: auto;
 }
 
+.placementHint {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 280px;
+  padding: 9px 10px;
+  border: 1px solid rgba(59, 119, 110, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #24313a;
+  box-shadow: 0 12px 28px rgba(20, 23, 28, 0.18);
+}
+
+.placementHint div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.placementHint strong {
+  color: #2d665e;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.placementHint span {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placementHint button {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid rgba(28, 31, 35, 0.16);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #5c6972;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .transferHistoryPanel {
   display: flex;
   flex-direction: column;

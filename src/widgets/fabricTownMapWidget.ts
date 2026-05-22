@@ -6,15 +6,16 @@ import { TownMapCharacterLayer } from './townMapCharacterLayer';
 import { TownMapFloatingTextLayer } from './townMapFloatingTextLayer';
 import { TownMapWalkAnimator } from './townMapWalkAnimator';
 import { TownMapPointerController } from './townMapPointerController';
+import { TownMapItemGlyphFactory } from './townMapItemGlyphFactory';
 import {
   MapObjectGlyphFactory,
   TerrainStyleCatalog,
 } from './townMapObjectGlyphFactory';
-import { sortEntityLayer } from './townMapLayerSorter';
+import { sortEntityLayer, updateEntitySortMetadata } from './townMapLayerSorter';
 import { DEFAULT_CELL_SIZE } from '../constants/townMapWidgetConstants';
 import type { Expression } from '~/constants/character';
 import type { PresentationId } from '~/constants/presentationAnimations';
-import type { ItemDefinition } from '~/typing/item';
+import type { ItemDefinition, PlacedObject } from '~/typing/item';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
 import {
@@ -46,8 +47,10 @@ export class FabricTownMapWidget {
   private readonly grid = new TownMapGrid();
   private readonly terrainStyles = new TerrainStyleCatalog();
   private readonly objectGlyphFactory = new MapObjectGlyphFactory();
+  private readonly itemGlyphFactory = new TownMapItemGlyphFactory();
   private readonly cellSize: number;
   private readonly mapObjectShapes = new Map<string, Group>();
+  private readonly placedItemShapes = new Map<string, Group>();
   private animationFrameId: number | null = null;
 
   constructor(canvasElement: HTMLCanvasElement | string, options: FabricTownMapOptions = {}) {
@@ -330,6 +333,26 @@ export class FabricTownMapWidget {
     return this.grid.getTile(x, y)?.cell ?? null;
   }
 
+  syncPlacedItems(items: readonly { placedObject: PlacedObject; definition: ItemDefinition }[]): void {
+    const nextPlacedObjectIds = new Set(items.map(item => item.placedObject.id));
+
+    Array.from(this.placedItemShapes.entries()).forEach(([placedObjectId, shape]) => {
+      if (nextPlacedObjectIds.has(placedObjectId)) {
+        return;
+      }
+
+      this.canvas.remove(shape);
+      this.placedItemShapes.delete(placedObjectId);
+    });
+
+    items.forEach(item => {
+      this.syncPlacedItem(item.placedObject, item.definition);
+    });
+
+    sortEntityLayer(this.canvas);
+    this.canvas.requestRenderAll();
+  }
+
   destroy(): Promise<boolean> {
     this.stopAnimationLoop();
     this.camera.dispose();
@@ -337,6 +360,7 @@ export class FabricTownMapWidget {
     this.floatingTextLayer.dispose();
     this.characterLayer.dispose();
     this.mapObjectShapes.clear();
+    this.placedItemShapes.clear();
     return this.canvas.dispose();
   }
 
@@ -516,5 +540,35 @@ export class FabricTownMapWidget {
     const mapObjectId = maybeMapObject?.get?.('mapObjectId');
 
     return typeof mapObjectId === 'string' ? mapObjectId : null;
+  }
+
+  private syncPlacedItem(placedObject: PlacedObject, definition: ItemDefinition): void {
+    const position = placedObject.worldPosition;
+
+    if (!position) {
+      return;
+    }
+
+    const center = this.getCharacterPosition(position);
+    const existingShape = this.placedItemShapes.get(placedObject.id);
+
+    if (existingShape) {
+      existingShape.set({ left: center.x, top: center.y });
+      updateEntitySortMetadata(existingShape, center.y + this.cellSize * 0.5);
+      existingShape.setCoords();
+      return;
+    }
+
+    const shape = this.itemGlyphFactory.createPlacedItemGlyph(definition, this.cellSize);
+
+    shape.set({
+      left: center.x,
+      top: center.y,
+    });
+    shape.set('mapObjectId', placedObject.id);
+    shape.set('placedObjectId', placedObject.id);
+    updateEntitySortMetadata(shape, center.y + this.cellSize * 0.5);
+    this.placedItemShapes.set(placedObject.id, shape);
+    this.canvas.add(shape);
   }
 }

@@ -22,6 +22,21 @@ export class TownMapItemGlyphFactory {
     return glyph;
   }
 
+  createPlacedItemGlyph(itemDefinition: ItemDefinition, cellSize: number): Group {
+    const scale = itemDefinition.visual.scale?.placed ?? itemDefinition.visual.scale?.icon ?? 0.72;
+    const size = cellSize * scale;
+    const glyph = this.createGlyphByAssetId(itemDefinition.visual.assetId, itemDefinition.id, size);
+
+    glyph.set({
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: true,
+    });
+    glyph.set('itemDefinitionId', itemDefinition.id);
+    return glyph;
+  }
+
   private createGlyphByAssetId(assetId: string, itemId: string, size: number): Group {
     if (assetId === 'item/apple') {
       return this.createAppleGlyph(size);
