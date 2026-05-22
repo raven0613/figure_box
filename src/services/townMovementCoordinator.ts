@@ -1,10 +1,9 @@
 import { Expression, type Position } from '~/constants/character';
-import { DESTINATION_MAP, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
+import { TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
-import type { GridCoordinate } from '~/widgets/townMapGrid';
 
 interface TownMovementCoordinatorOptions {
   widget: FabricTownMapWidget;
@@ -99,7 +98,7 @@ export class TownMovementCoordinator {
     }
 
     const currentPosition = snapshot.context.position;
-    const path = this.widget.findPath(currentPosition, target, characterId);
+    const path = this.widget.findPath(currentPosition, target);
 
     if (!path) {
       this.sendToCharacter(characterId, { type: EventType.MoveBlocked });
@@ -132,16 +131,6 @@ export class TownMovementCoordinator {
 
     if (this.enterApartmentIfGoingHome(characterId, motivation)) {
       return;
-    }
-
-    if (context?.currentActivity || !DESTINATION_MAP[motivation]) {
-      return;
-    }
-
-    const dispersalTarget = this.findNearbyEmptyTile(arrivedPosition, characterId, 4);
-
-    if (dispersalTarget) {
-      this.sendToCharacter(characterId, { type: EventType.MoveTo, target: dispersalTarget });
     }
   }
 
@@ -189,19 +178,5 @@ export class TownMovementCoordinator {
 
     this.widget.cancelWalk(characterId);
     this.walkingCharacterIds.delete(characterId);
-  }
-
-  findNearbyEmptyTile(position: Position, occupantId: string, range: number): GridCoordinate | null {
-    const neighbors = this.widget.getNeighbors(position.x, position.y, range);
-    const candidates = neighbors.filter(tile =>
-      tile.cell.walkable && (!tile.cell.occupantId || tile.cell.occupantId === occupantId)
-    );
-
-    if (candidates.length === 0) {
-      return null;
-    }
-
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-    return { x: chosen.x, y: chosen.y };
   }
 }

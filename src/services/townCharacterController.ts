@@ -219,11 +219,7 @@ export class TownCharacterController {
       getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
       getCharacterPosition: characterId => this.getCharacterPosition(characterId),
       getNearbyCharacterIds: (characterId, range) => this.getNearbyCharacterIds(characterId, range),
-      getTravelTarget: (destination, characterId, index) => (
-        index === 0
-          ? destination
-          : this.movementCoordinator.findNearbyEmptyTile(destination, characterId, 2) ?? destination
-      ),
+      getTravelTarget: destination => destination,
       actorHasItem: (characterId, itemId) => (
         itemService.getActorItems(characterId)
           .some(itemInstance => (
@@ -1171,7 +1167,7 @@ export class TownCharacterController {
   private getAvailableApartmentEntrancePosition(): Position | null {
     const candidates = TOWN_APARTMENT_ENTRANCE_TILES.filter(tile => {
       const cell = this.widget.getCell(tile.x, tile.y);
-      return cell?.walkable && !cell.occupantId;
+      return cell?.walkable;
     });
 
     if (candidates.length === 0) {

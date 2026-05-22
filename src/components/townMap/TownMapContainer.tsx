@@ -672,7 +672,11 @@ export function TownMapContainer({
           </div>
           <div className={styles.detailRow}>
             <span>Occupant</span>
-            <strong>{selectedTile?.cell.occupantId ?? '-'}</strong>
+            <strong>
+              {selectedTile && widgetRef.current
+                ? widgetRef.current.getOccupantIdsAt(selectedTile.x, selectedTile.y).join(', ') || '-'
+                : '-'}
+            </strong>
           </div>
           <div className={styles.detailRow}>
             <span>Object</span>
@@ -791,7 +795,7 @@ function getTilePlacementBlockReason(tile: TownMapTile, widget: FabricTownMapWid
     return '這格不能放置物品。';
   }
 
-  if (tile.cell.occupantId) {
+  if (widget.getOccupantIdsAt(tile.x, tile.y).length > 0) {
     return '角色站著的格子目前不能放置物品。';
   }
 

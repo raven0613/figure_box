@@ -20,7 +20,7 @@ export class TownMapGrid {
   private readonly tiles: TownMapTile[];
   private readonly mapObjects: TownMapObjectData[];
   private readonly occupantToTile = new Map<string, number>();
-  private readonly tileToOccupant = new Map<number, string>();
+  private readonly tileToOccupants = new Map<number, Set<string>>();
 
   constructor(rows: TownMapCellData[][] = TOWN_MAP_GRID, mapObjects: readonly TownMapObjectData[] = TOWN_MAP_OBJECTS) {
     const gridRows = this.cloneRows(rows);
@@ -28,6 +28,7 @@ export class TownMapGrid {
     this.width = gridRows[0]?.length ?? 0;
     this.tiles = this.createFlatTiles(gridRows);
     this.mapObjects = this.createMapObjects(gridRows, mapObjects);
+    this.indexInitialOccupants();
   }
 
   getTiles(): readonly TownMapTile[] {
@@ -70,6 +71,16 @@ export class TownMapGrid {
     return { x: tile.x, y: tile.y };
   }
 
+  getOccupantIdsAt(x: number, y: number): string[] {
+    const tile = this.getTile(x, y);
+
+    if (!tile) {
+      return [];
+    }
+
+    return [...(this.tileToOccupants.get(tile.index) ?? [])];
+  }
+
   getOccupiedNeighborIds(x: number, y: number, radius: number, excludeId?: string): string[] {
     const normalizedRadius = Math.max(0, Math.floor(radius));
     const minX = Math.max(0, x - normalizedRadius);
@@ -82,14 +93,12 @@ export class TownMapGrid {
       const rowStart = currentY * this.width;
 
       for (let currentX = minX; currentX <= maxX; currentX++) {
-        if (currentX === x && currentY === y) {
-          continue;
-        }
+        const occupantIds = this.tileToOccupants.get(rowStart + currentX) ?? [];
 
-        const occupantId = this.tileToOccupant.get(rowStart + currentX);
-
-        if (occupantId && occupantId !== excludeId) {
-          result.push(occupantId);
+        for (const occupantId of occupantIds) {
+          if (occupantId !== excludeId) {
+            result.push(occupantId);
+          }
         }
       }
     }
@@ -137,20 +146,14 @@ export class TownMapGrid {
       return false;
     }
 
-    if (targetTile.cell.occupantId && targetTile.cell.occupantId !== occupantId) {
-      return false;
-    }
-
     const currentIndex = this.occupantToTile.get(occupantId);
 
     if (currentIndex !== undefined) {
-      this.tiles[currentIndex].cell.occupantId = null;
-      this.tileToOccupant.delete(currentIndex);
+      this.removeOccupantFromTileIndex(occupantId, currentIndex);
     }
 
-    targetTile.cell.occupantId = occupantId;
+    this.addOccupantToTileIndex(occupantId, targetTile.index);
     this.occupantToTile.set(occupantId, targetTile.index);
-    this.tileToOccupant.set(targetTile.index, occupantId);
     return true;
   }
 
@@ -162,13 +165,12 @@ export class TownMapGrid {
     const currentIndex = this.occupantToTile.get(occupantId);
 
     if (currentIndex !== undefined) {
-      this.tiles[currentIndex].cell.occupantId = null;
+      this.removeOccupantFromTileIndex(occupantId, currentIndex);
       this.occupantToTile.delete(occupantId);
-      this.tileToOccupant.delete(currentIndex);
     }
   }
 
-  findPath(from: GridCoordinate, to: GridCoordinate, occupantId: string): GridCoordinate[] | null {
+  findPath(from: GridCoordinate, to: GridCoordinate): GridCoordinate[] | null {
     if (!this.isInside(from.x, from.y) || !this.isInside(to.x, to.y)) {
       return null;
     }
@@ -212,10 +214,6 @@ export class TownMapGrid {
         const tile = this.tiles[neighborIndex];
 
         if (!this.isTileWalkableForOccupant(tile.x, tile.y)) {
-          continue;
-        }
-
-        if (tile.cell.occupantId && tile.cell.occupantId !== occupantId) {
           continue;
         }
 
@@ -286,6 +284,46 @@ export class TownMapGrid {
     }
 
     return path;
+  }
+
+  private indexInitialOccupants(): void {
+    this.tiles.forEach(tile => {
+      if (!tile.cell.occupantId) {
+        return;
+      }
+
+      this.addOccupantToTileIndex(tile.cell.occupantId, tile.index);
+      this.occupantToTile.set(tile.cell.occupantId, tile.index);
+    });
+  }
+
+  private addOccupantToTileIndex(occupantId: string, tileIndex: number): void {
+    const occupantIds = this.tileToOccupants.get(tileIndex) ?? new Set<string>();
+
+    occupantIds.add(occupantId);
+    this.tileToOccupants.set(tileIndex, occupantIds);
+    this.refreshTileOccupantId(tileIndex);
+  }
+
+  private removeOccupantFromTileIndex(occupantId: string, tileIndex: number): void {
+    const occupantIds = this.tileToOccupants.get(tileIndex);
+
+    if (!occupantIds) {
+      return;
+    }
+
+    occupantIds.delete(occupantId);
+
+    if (occupantIds.size === 0) {
+      this.tileToOccupants.delete(tileIndex);
+    }
+
+    this.refreshTileOccupantId(tileIndex);
+  }
+
+  private refreshTileOccupantId(tileIndex: number): void {
+    const occupantIds = this.tileToOccupants.get(tileIndex);
+    this.tiles[tileIndex].cell.occupantId = occupantIds ? [...occupantIds][0] ?? null : null;
   }
 
   private getObjectDistance(object: TownMapObjectData, x: number, y: number): number {

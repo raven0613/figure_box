@@ -102,6 +102,17 @@ export class TownMapCharacterLayer {
     this.canvas.requestRenderAll();
   }
 
+  positionCharacterToken(characterId: string, position: GridCoordinate): void {
+    const token = this.characterTokens.get(characterId);
+
+    if (!token) {
+      return;
+    }
+
+    this.positionToken(token, position);
+    this.canvas.requestRenderAll();
+  }
+
   updateCharacterStatus(characterId: string, statusText: string): void {
     const token = this.characterTokens.get(characterId);
     const status = token?.get('statusObject') as Text | undefined;

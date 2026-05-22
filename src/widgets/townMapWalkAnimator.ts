@@ -1,5 +1,5 @@
 import type { Group } from 'fabric';
-import type { GridCoordinate, TownMapGrid } from './townMapGrid';
+import type { GridCoordinate } from './townMapGrid';
 
 interface WalkState {
   token: Group;
@@ -17,11 +17,11 @@ interface WalkState {
 }
 
 interface TownMapWalkAnimatorOptions {
-  grid: TownMapGrid;
   cellSize: number;
   getCharacterToken: (characterId: string) => Group | undefined;
   getCharacterTile: (characterId: string) => GridCoordinate | null;
-  getCharacterPosition: (coordinate: GridCoordinate) => GridCoordinate;
+  getCharacterPosition: (characterId: string, coordinate: GridCoordinate) => GridCoordinate;
+  moveCharacterToTile: (characterId: string, target: GridCoordinate) => GridCoordinate | null;
   positionToken: (token: Group, position: GridCoordinate) => void;
   startAnimationLoop: () => void;
   stopAnimationLoopIfIdle: () => void;
@@ -31,22 +31,22 @@ const MAX_WALK_FRAME_DELTA_MS = 50;
 
 // 走路狀態與步進動畫
 export class TownMapWalkAnimator {
-  private readonly grid: TownMapGrid;
   private readonly cellSize: number;
   private readonly getCharacterToken: (characterId: string) => Group | undefined;
   private readonly getCharacterTile: (characterId: string) => GridCoordinate | null;
-  private readonly getCharacterPosition: (coordinate: GridCoordinate) => GridCoordinate;
+  private readonly getCharacterPosition: (characterId: string, coordinate: GridCoordinate) => GridCoordinate;
+  private readonly moveCharacterToTile: (characterId: string, target: GridCoordinate) => GridCoordinate | null;
   private readonly positionToken: (token: Group, position: GridCoordinate) => void;
   private readonly startAnimationLoop: () => void;
   private readonly stopAnimationLoopIfIdle: () => void;
   private readonly walkers = new Map<string, WalkState>();
 
   constructor(options: TownMapWalkAnimatorOptions) {
-    this.grid = options.grid;
     this.cellSize = options.cellSize;
     this.getCharacterToken = options.getCharacterToken;
     this.getCharacterTile = options.getCharacterTile;
     this.getCharacterPosition = options.getCharacterPosition;
+    this.moveCharacterToTile = options.moveCharacterToTile;
     this.positionToken = options.positionToken;
     this.startAnimationLoop = options.startAnimationLoop;
     this.stopAnimationLoopIfIdle = options.stopAnimationLoopIfIdle;
@@ -58,6 +58,10 @@ export class TownMapWalkAnimator {
 
   hasActiveAnimations(): boolean {
     return this.walkers.size > 0;
+  }
+
+  isWalking(characterId: string): boolean {
+    return this.walkers.has(characterId);
   }
 
   walkCharacterAlongPath(
@@ -75,15 +79,22 @@ export class TownMapWalkAnimator {
       return;
     }
 
-    const moved = this.grid.moveOccupant(characterId, path[0]);
+    const firstWaypoint = this.moveCharacterToTile(characterId, path[0]);
 
-    if (!moved) {
+    if (!firstWaypoint) {
       const currentTile = this.getCharacterTile(characterId);
       onBlocked(currentTile ?? path[0]);
       return;
     }
 
-    this.walkers.set(characterId, this.createWalkState(characterId, token, path, onArrive, onBlocked));
+    this.walkers.set(characterId, this.createWalkState(
+      characterId,
+      token,
+      path,
+      firstWaypoint,
+      onArrive,
+      onBlocked,
+    ));
     this.startAnimationLoop();
   }
 
@@ -127,10 +138,13 @@ export class TownMapWalkAnimator {
     characterId: string,
     token: Group,
     path: GridCoordinate[],
+    firstWaypoint: GridCoordinate,
     onArrive: (position: GridCoordinate) => void,
     onBlocked: (position: GridCoordinate) => void,
   ): WalkState {
-    const waypoints = path.map(point => this.getCharacterPosition(point));
+    const waypoints = path.map((point, index) => (
+      index === 0 ? firstWaypoint : this.getCharacterPosition(characterId, point)
+    ));
     const startPosition = { x: token.left ?? 0, y: token.top ?? 0 };
     const allPoints = [startPosition, ...waypoints];
 
@@ -193,9 +207,16 @@ export class TownMapWalkAnimator {
   }
 
   private moveToNextTile(walker: WalkState): boolean {
-    const nextMoved = this.grid.moveOccupant(walker.characterId, walker.path[walker.currentSegment]);
+    const nextWaypoint = this.moveCharacterToTile(walker.characterId, walker.path[walker.currentSegment]);
 
-    if (nextMoved) {
+    if (nextWaypoint) {
+      const nextPointIndex = walker.currentSegment + 1;
+
+      walker.allPoints[nextPointIndex] = nextWaypoint;
+      walker.segmentLengths[walker.currentSegment] = getSegmentLength(
+        walker.allPoints[walker.currentSegment],
+        nextWaypoint,
+      );
       return true;
     }
 
@@ -211,12 +232,17 @@ function getSegmentLengths(points: readonly GridCoordinate[]): number[] {
   const segmentLengths: number[] = [];
 
   for (let index = 0; index < points.length - 1; index++) {
-    const dx = points[index + 1].x - points[index].x;
-    const dy = points[index + 1].y - points[index].y;
-    segmentLengths.push(Math.sqrt(dx * dx + dy * dy));
+    segmentLengths.push(getSegmentLength(points[index], points[index + 1]));
   }
 
   return segmentLengths;
+}
+
+function getSegmentLength(from: GridCoordinate, to: GridCoordinate): number {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 function getInterpolatedPosition(walker: WalkState): GridCoordinate {

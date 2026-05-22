@@ -20,7 +20,7 @@ interface TownActivityCoordinatorOptions {
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   getCharacterPosition: (characterId: string) => Position | null;
   getNearbyCharacterIds: (characterId: string, range: number) => string[];
-  getTravelTarget: (destination: Position, characterId: string, index: number) => Position;
+  getTravelTarget: (destination: Position) => Position;
   actorHasItem: (characterId: string, itemId: string) => boolean;
   sendToCharacter: SendCharacterEvent;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
@@ -39,7 +39,7 @@ export class TownActivityCoordinator {
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   private readonly getCharacterPosition: (characterId: string) => Position | null;
   private readonly getNearbyCharacterIds: (characterId: string, range: number) => string[];
-  private readonly getTravelTarget: (destination: Position, characterId: string, index: number) => Position;
+  private readonly getTravelTarget: (destination: Position) => Position;
   private readonly actorHasItem: (characterId: string, itemId: string) => boolean;
   private readonly sendToCharacter: SendCharacterEvent;
   private readonly showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
@@ -158,7 +158,7 @@ export class TownActivityCoordinator {
     this.showCharacterBubble(characterId, this.getJoinBubbleText(joinedActivity), 2200);
 
     if (joinedActivity.phase === 'traveling') {
-      this.sendParticipantToActivityLocation(joinedActivity, characterId, joinedActivity.participantIds.length - 1);
+      this.sendParticipantToActivityLocation(joinedActivity, characterId);
     } else {
       this.playActivityPerformance(joinedActivity);
     }
@@ -588,15 +588,14 @@ export class TownActivityCoordinator {
   }
 
   private sendParticipantsToActivityLocation(activity: JoinableActivity): void {
-    activity.participantIds.forEach((participantId, index) => {
-      this.sendParticipantToActivityLocation(activity, participantId, index);
+    activity.participantIds.forEach(participantId => {
+      this.sendParticipantToActivityLocation(activity, participantId);
     });
   }
 
   private sendParticipantToActivityLocation(
     activity: JoinableActivity,
     characterId: string,
-    index: number,
   ): void {
     if (!activity.location) {
       return;
@@ -604,7 +603,7 @@ export class TownActivityCoordinator {
 
     this.sendToCharacter(characterId, {
       type: EventType.MoveTo,
-      target: this.getTravelTarget(activity.location, characterId, index),
+      target: this.getTravelTarget(activity.location),
     });
   }
 

@@ -35,6 +35,16 @@ export type {
   TownMapCharacter,
 } from './townMapWidgetTypes';
 
+interface MoveCharacterToTileResult {
+  moved: boolean;
+  position: GridCoordinate | null;
+}
+
+const OVERLAP_OFFSET_MIN_CELL_RATIO = 0.5;
+const OVERLAP_OFFSET_MAX_CELL_RATIO = 0.75;
+const OVERLAP_OFFSET_PUSH_DURATION_MS = 180;
+const ZERO_OFFSET: GridCoordinate = { x: 0, y: 0 };
+
 export class FabricTownMapWidget {
   private readonly baseCanvasElement: HTMLCanvasElement;
   private readonly baseContext: CanvasRenderingContext2D;
@@ -51,6 +61,8 @@ export class FabricTownMapWidget {
   private readonly cellSize: number;
   private readonly mapObjectShapes = new Map<string, Group>();
   private readonly placedItemShapes = new Map<string, Group>();
+  private readonly characterTileOffsets = new Map<string, GridCoordinate>();
+  private readonly characterOffsetAnimationFrameIds = new Map<string, number>();
   private animationFrameId: number | null = null;
 
   constructor(canvasElement: HTMLCanvasElement | string, options: FabricTownMapOptions = {}) {
@@ -112,11 +124,11 @@ export class FabricTownMapWidget {
       startAnimationLoop: () => this.startAnimationLoop(),
     });
     this.walkAnimator = new TownMapWalkAnimator({
-      grid: this.grid,
       cellSize: this.cellSize,
       getCharacterToken: characterId => this.characterLayer.getToken(characterId),
       getCharacterTile: characterId => this.getCharacterTile(characterId),
-      getCharacterPosition: coordinate => this.getCharacterPosition(coordinate),
+      getCharacterPosition: (characterId, coordinate) => this.getCharacterPosition(characterId, coordinate),
+      moveCharacterToTile: (characterId, target) => this.moveCharacterToTile(characterId, target).position,
       positionToken: (token, position) => {
         this.characterLayer.positionToken(token, position);
       },
@@ -133,7 +145,7 @@ export class FabricTownMapWidget {
       getMapObjectIdFromTarget: target => this.getMapObjectIdFromTarget(target),
       getCharacterTile: characterId => this.getCharacterTile(characterId),
       snapCharacterToGrid: (characterId, tile) => {
-        this.characterLayer.snapCharacterToGrid(characterId, tile);
+        this.snapCharacterToGrid(characterId, tile);
       },
       onTileClick: options.onTileClick,
       onMapObjectClick: options.onMapObjectClick,
@@ -160,6 +172,10 @@ export class FabricTownMapWidget {
 
   getOccupiedNeighborIds(x: number, y: number, radius: number, excludeId?: string): string[] {
     return this.grid.getOccupiedNeighborIds(x, y, radius, excludeId);
+  }
+
+  getOccupantIdsAt(x: number, y: number): string[] {
+    return this.grid.getOccupantIdsAt(x, y);
   }
 
   getMapObjectsAt(x: number, y: number): TownMapObjectData[] {
@@ -199,12 +215,7 @@ export class FabricTownMapWidget {
       return [];
     }
 
-    const occupantId = this.getCell(tile.x, tile.y)?.occupantId;
-
-    return [
-      ...(occupantId ? [occupantId] : []),
-      ...this.getOccupiedNeighborIds(tile.x, tile.y, radius, occupantId ?? undefined),
-    ];
+    return [...new Set(this.getOccupiedNeighborIds(tile.x, tile.y, radius))];
   }
 
   placeCharacter(character: TownMapCharacter): boolean {
@@ -215,18 +226,19 @@ export class FabricTownMapWidget {
     }
 
     this.characterLayer.renderCharacter(character);
+    this.syncTileOverlapOffsets({ x: character.x, y: character.y });
     this.canvas.requestRenderAll();
     return true;
   }
 
   moveCharacter(characterId: string, target: GridCoordinate): boolean {
-    const moved = this.grid.moveOccupant(characterId, target);
+    const { moved, position } = this.moveCharacterToTile(characterId, target);
 
-    if (!moved) {
+    if (!moved || !position) {
       return false;
     }
 
-    this.characterLayer.moveCharacterToken(characterId, target);
+    this.characterLayer.positionCharacterToken(characterId, position);
     return true;
   }
 
@@ -298,14 +310,19 @@ export class FabricTownMapWidget {
   }
 
   removeCharacter(characterId: string): void {
+    const previousTile = this.grid.getOccupantTile(characterId);
+
+    this.cancelCharacterOffsetAnimation(characterId);
     this.grid.removeOccupant(characterId);
+    this.characterTileOffsets.delete(characterId);
+    this.syncTileOverlapOffsets(previousTile);
     this.characterTracker.removeCharacter(characterId);
     this.characterLayer.removeCharacterToken(characterId);
     this.floatingTextLayer.removeCharacterUi(characterId);
   }
 
-  findPath(from: GridCoordinate, to: GridCoordinate, occupantId: string): GridCoordinate[] | null {
-    return this.grid.findPath(from, to, occupantId);
+  findPath(from: GridCoordinate, to: GridCoordinate): GridCoordinate[] | null {
+    return this.grid.findPath(from, to);
   }
 
   findBlockingTiles(from: GridCoordinate, to: GridCoordinate): GridCoordinate[] {
@@ -355,6 +372,7 @@ export class FabricTownMapWidget {
 
   destroy(): Promise<boolean> {
     this.stopAnimationLoop();
+    this.cancelAllCharacterOffsetAnimations();
     this.camera.dispose();
     this.walkAnimator.dispose();
     this.floatingTextLayer.dispose();
@@ -474,16 +492,15 @@ export class FabricTownMapWidget {
 
   private drawInitialCharacters(): void {
     this.grid.getTiles().forEach(tile => {
-      if (!tile.cell.occupantId) {
-        return;
-      }
-
-      this.characterLayer.renderCharacter({
-        id: tile.cell.occupantId,
-        x: tile.x,
-        y: tile.y,
-        color: '#f0cc5f',
+      this.grid.getOccupantIdsAt(tile.x, tile.y).forEach(characterId => {
+        this.characterLayer.renderCharacter({
+          id: characterId,
+          x: tile.x,
+          y: tile.y,
+          color: '#f0cc5f',
+        });
       });
+      this.syncTileOverlapOffsets(tile);
     });
   }
 
@@ -527,8 +544,131 @@ export class FabricTownMapWidget {
     return this.walkAnimator.hasActiveAnimations() || this.floatingTextLayer.hasActiveAnimations();
   }
 
-  private getCharacterPosition(coordinate: GridCoordinate): GridCoordinate {
-    return this.characterLayer.getCharacterPosition(coordinate);
+  private getCharacterPosition(characterId: string, coordinate: GridCoordinate): GridCoordinate {
+    const center = this.characterLayer.getCharacterPosition(coordinate);
+    const offset = this.characterTileOffsets.get(characterId) ?? ZERO_OFFSET;
+
+    return {
+      x: center.x + offset.x,
+      y: center.y + offset.y,
+    };
+  }
+
+  private moveCharacterToTile(characterId: string, target: GridCoordinate): MoveCharacterToTileResult {
+    const previousTile = this.grid.getOccupantTile(characterId);
+
+    this.cancelCharacterOffsetAnimation(characterId);
+
+    const moved = this.grid.moveOccupant(characterId, target);
+
+    if (!moved) {
+      return { moved: false, position: null };
+    }
+
+    this.syncTileOverlapOffsets(previousTile, new Set([characterId]));
+    this.syncTileOverlapOffsets(target, new Set([characterId]));
+
+    return {
+      moved: true,
+      position: this.getCharacterPosition(characterId, target),
+    };
+  }
+
+  private snapCharacterToGrid(characterId: string, tile: GridCoordinate | null): void {
+    if (!tile) {
+      return;
+    }
+
+    this.characterLayer.positionCharacterToken(characterId, this.getCharacterPosition(characterId, tile));
+  }
+
+  private syncTileOverlapOffsets(tile: GridCoordinate | null, skipPositionCharacterIds = new Set<string>()): void {
+    if (!tile) {
+      return;
+    }
+
+    const occupantIds = this.grid.getOccupantIdsAt(tile.x, tile.y);
+
+    occupantIds.forEach(characterId => {
+      const nextOffset = occupantIds.length > 1
+        ? this.getExistingOrRandomOverlapOffset(characterId)
+        : ZERO_OFFSET;
+
+      this.characterTileOffsets.set(characterId, nextOffset);
+
+      if (skipPositionCharacterIds.has(characterId) || this.walkAnimator.isWalking(characterId)) {
+        this.cancelCharacterOffsetAnimation(characterId);
+        return;
+      }
+
+      this.animateCharacterToPosition(characterId, this.getCharacterPosition(characterId, tile));
+    });
+  }
+
+  private getExistingOrRandomOverlapOffset(characterId: string): GridCoordinate {
+    const existingOffset = this.characterTileOffsets.get(characterId);
+
+    if (existingOffset && !isZeroOffset(existingOffset)) {
+      return existingOffset;
+    }
+
+    return createRandomOverlapOffset(this.cellSize);
+  }
+
+  private animateCharacterToPosition(characterId: string, targetPosition: GridCoordinate): void {
+    const startPosition = this.getCharacterCenter(characterId);
+
+    this.cancelCharacterOffsetAnimation(characterId);
+
+    if (!startPosition || areSamePosition(startPosition, targetPosition)) {
+      this.characterLayer.positionCharacterToken(characterId, targetPosition);
+      return;
+    }
+
+    const startedAt = performance.now();
+    const animate = (timestamp: number) => {
+      const elapsedRatio = Math.min(1, (timestamp - startedAt) / OVERLAP_OFFSET_PUSH_DURATION_MS);
+      const easedRatio = easeOutCubic(elapsedRatio);
+      const nextPosition = {
+        x: startPosition.x + (targetPosition.x - startPosition.x) * easedRatio,
+        y: startPosition.y + (targetPosition.y - startPosition.y) * easedRatio,
+      };
+
+      this.characterLayer.positionCharacterToken(characterId, nextPosition);
+
+      if (elapsedRatio < 1) {
+        this.characterOffsetAnimationFrameIds.set(
+          characterId,
+          window.requestAnimationFrame(animate),
+        );
+        return;
+      }
+
+      this.characterOffsetAnimationFrameIds.delete(characterId);
+      this.characterLayer.positionCharacterToken(characterId, targetPosition);
+    };
+
+    this.characterOffsetAnimationFrameIds.set(
+      characterId,
+      window.requestAnimationFrame(animate),
+    );
+  }
+
+  private cancelCharacterOffsetAnimation(characterId: string): void {
+    const frameId = this.characterOffsetAnimationFrameIds.get(characterId);
+
+    if (frameId === undefined) {
+      return;
+    }
+
+    window.cancelAnimationFrame(frameId);
+    this.characterOffsetAnimationFrameIds.delete(characterId);
+  }
+
+  private cancelAllCharacterOffsetAnimations(): void {
+    Array.from(this.characterOffsetAnimationFrameIds.keys()).forEach(characterId => {
+      this.cancelCharacterOffsetAnimation(characterId);
+    });
   }
 
   private getCharacterCenter(characterId: string): GridCoordinate | null {
@@ -549,7 +689,7 @@ export class FabricTownMapWidget {
       return;
     }
 
-    const center = this.getCharacterPosition(position);
+    const center = this.characterLayer.getCharacterPosition(position);
     const existingShape = this.placedItemShapes.get(placedObject.id);
 
     if (existingShape) {
@@ -571,4 +711,28 @@ export class FabricTownMapWidget {
     this.placedItemShapes.set(placedObject.id, shape);
     this.canvas.add(shape);
   }
+}
+
+function createRandomOverlapOffset(cellSize: number): GridCoordinate {
+  const minDistance = cellSize * OVERLAP_OFFSET_MIN_CELL_RATIO;
+  const maxDistance = cellSize * OVERLAP_OFFSET_MAX_CELL_RATIO;
+  const angle = Math.random() * Math.PI * 2;
+  const distance = minDistance + Math.random() * (maxDistance - minDistance);
+
+  return {
+    x: Math.cos(angle) * distance,
+    y: Math.sin(angle) * distance,
+  };
+}
+
+function isZeroOffset(offset: GridCoordinate): boolean {
+  return offset.x === 0 && offset.y === 0;
+}
+
+function areSamePosition(first: GridCoordinate, second: GridCoordinate): boolean {
+  return first.x === second.x && first.y === second.y;
+}
+
+function easeOutCubic(value: number): number {
+  return 1 - ((1 - value) ** 3);
 }
