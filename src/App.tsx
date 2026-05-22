@@ -4,6 +4,7 @@ import { Expression } from '~/constants/character';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
 import { MAP_DIALOGUE_BOUNCE_DEMO, MAP_DIALOGUE_FADE_DEMO } from '~/constants/mapDialogueDemo';
 import i18n from '~/i18n';
+import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { DialogueViewScript } from '~/typing/dialogueView';
 import { DialogueWindow } from './components/dialogue/DialogueWindow';
@@ -13,6 +14,7 @@ import { TownMapContainer } from './components/townMap/TownMapContainer';
 function App() {
   const [activeDialogueScript, setActiveDialogueScript] = useState<DialogueViewScript | null>(null);
   const [dialogueExpressionByCharacterId, setDialogueExpressionByCharacterId] = useState<Partial<Record<string, Expression>>>({});
+  const [characterExpressionById, setCharacterExpressionById] = useState<Partial<Record<string, Expression>>>({});
   const [mapDialoguePresentation, setMapDialoguePresentation] = useState<EventDialoguePresentation | null>(null);
   const handleDialogueLineChange = useCallback((line: { speakerId: string; expression: Expression }) => {
     setDialogueExpressionByCharacterId(current => {
@@ -26,6 +28,41 @@ function App() {
       };
     });
   }, []);
+  const handleDialogueRequest = useCallback((request: CharacterPerformanceDialogueRequest) => {
+    if (request.scriptId === DIALOGUE_DEMO_SCRIPT.id) {
+      setActiveDialogueScript(DIALOGUE_DEMO_SCRIPT);
+    }
+  }, []);
+  const handleCharacterExpressionsChange = useCallback((nextExpressionByCharacterId: Partial<Record<string, Expression>>) => {
+    setCharacterExpressionById(currentExpressionByCharacterId => {
+      const currentEntries = Object.entries(currentExpressionByCharacterId);
+      const nextEntries = Object.entries(nextExpressionByCharacterId);
+      const didChange = currentEntries.length !== nextEntries.length ||
+        nextEntries.some(([characterId, expression]) => currentExpressionByCharacterId[characterId] !== expression);
+
+      return didChange ? nextExpressionByCharacterId : currentExpressionByCharacterId;
+    });
+  }, []);
+  const resetDialogueParticipantExpressions = useCallback((script: DialogueViewScript) => {
+    setDialogueExpressionByCharacterId(current => {
+      const next = { ...current };
+
+      script.participants.forEach(participant => {
+        next[participant.id] = Expression.Normal;
+      });
+
+      return next;
+    });
+  }, []);
+  const closeActiveDialogue = useCallback(() => {
+    setActiveDialogueScript(currentScript => {
+      if (currentScript) {
+        resetDialogueParticipantExpressions(currentScript);
+      }
+
+      return null;
+    });
+  }, [resetDialogueParticipantExpressions]);
 
   return (
     <I18nextProvider i18n={i18n}>
@@ -63,14 +100,15 @@ function App() {
         <TownMapContainer
           expressionByCharacterId={dialogueExpressionByCharacterId}
           mapDialoguePresentation={mapDialoguePresentation}
+          onCharacterExpressionsChange={handleCharacterExpressionsChange}
+          onDialogueRequest={handleDialogueRequest}
         />
         {activeDialogueScript ? (
           <DialogueWindow
             script={activeDialogueScript}
+            expressionByCharacterId={characterExpressionById}
             onLineChange={handleDialogueLineChange}
-            onClose={() => {
-              setActiveDialogueScript(null);
-            }}
+            onClose={closeActiveDialogue}
           />
         ) : null}
       </div>

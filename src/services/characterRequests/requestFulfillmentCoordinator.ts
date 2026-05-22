@@ -4,7 +4,6 @@ import type {
 } from '~/services/activityInterruptionMomentCoordinator';
 import { CharacterControlReason } from '~/stateMachines/gameFlow/controlReasons';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
-import type { PresentationId } from '~/constants/presentationAnimations';
 import type { ItemDefinition } from '~/typing/item';
 import type { CharacterRequest } from './types';
 
@@ -13,7 +12,7 @@ interface CharacterRequestFulfillmentCoordinatorOptions {
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   holdItem?: (characterId: string, itemDefinition: ItemDefinition) => void;
   releaseHeldItem?: (characterId: string) => void;
-  playPresentation?: (characterId: string, presentationId: PresentationId) => void;
+  playPerformance?: (characterId: string, performanceId: string) => void;
   onFulfillmentFinished: (request: CharacterRequest) => void;
 }
 
@@ -36,7 +35,7 @@ export class CharacterRequestFulfillmentCoordinator {
   private readonly showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   private readonly holdItem?: (characterId: string, itemDefinition: ItemDefinition) => void;
   private readonly releaseHeldItem?: (characterId: string) => void;
-  private readonly playPresentation?: (characterId: string, presentationId: PresentationId) => void;
+  private readonly playPerformance?: (characterId: string, performanceId: string) => void;
   private readonly onFulfillmentFinished: (request: CharacterRequest) => void;
 
   constructor(options: CharacterRequestFulfillmentCoordinatorOptions) {
@@ -44,7 +43,7 @@ export class CharacterRequestFulfillmentCoordinator {
     this.showCharacterBubble = options.showCharacterBubble;
     this.holdItem = options.holdItem;
     this.releaseHeldItem = options.releaseHeldItem;
-    this.playPresentation = options.playPresentation;
+    this.playPerformance = options.playPerformance;
     this.onFulfillmentFinished = options.onFulfillmentFinished;
   }
 
@@ -80,7 +79,7 @@ export class CharacterRequestFulfillmentCoordinator {
       durationMs,
     );
     this.holdFulfilledItem(input);
-    this.playConfiguredPresentation(input);
+    this.playConfiguredPerformance(input);
     return moment;
   }
 
@@ -104,12 +103,12 @@ export class CharacterRequestFulfillmentCoordinator {
     this.releaseHeldItem(input.request.characterId);
   }
 
-  private playConfiguredPresentation(input: StartCharacterRequestFulfillmentInput): void {
-    if (!input.request.fulfillmentPresentationId || !this.playPresentation) {
+  private playConfiguredPerformance(input: StartCharacterRequestFulfillmentInput): void {
+    if (!input.request.fulfillmentPerformanceId || !this.playPerformance) {
       return;
     }
 
-    this.playPresentation(input.request.characterId, input.request.fulfillmentPresentationId);
+    this.playPerformance(input.request.characterId, input.request.fulfillmentPerformanceId);
   }
 }
 

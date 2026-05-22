@@ -535,5 +535,32 @@
         "durationMs": 5000
       }
     ]
+  },
+  {
+    "id": "request.fulfillment.receiveGiftHappy",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expression": "laugh",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "animation",
+        "target": "heldItem",
+        "animationId": "heldItemCelebrationAnim",
+        "durationMs": 920
+      },
+      {
+        "phase": "active",
+        "type": "animation",
+        "target": "initiator",
+        "animationId": "characterJumpAnim",
+        "delayMs": 920,
+        "durationMs": 760
+      }
+    ]
   }
 ]

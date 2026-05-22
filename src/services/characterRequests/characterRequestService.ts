@@ -113,7 +113,7 @@ export class CharacterRequestService {
       kind: definition.kind,
       status: 'active',
       label: candidate.label,
-      fulfillmentPresentationId: definition.fulfillmentPresentationId,
+      fulfillmentPerformanceId: definition.fulfillmentPerformanceId,
       target: candidate.target,
       satisfiedEffects: definition.satisfiedEffects,
       createdAt: timestamp,

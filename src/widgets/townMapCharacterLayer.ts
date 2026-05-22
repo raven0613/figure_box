@@ -1,6 +1,6 @@
 import { Canvas, Group, Text } from 'fabric';
 import { Expression } from '~/constants/character';
-import type { PresentationId } from '~/constants/presentationAnimations';
+import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import { PresentationAnimationService } from '~/services/presentationAnimationService';
 import type { ItemDefinition } from '~/typing/item';
@@ -236,24 +236,43 @@ export class TownMapCharacterLayer {
     this.canvas.requestRenderAll();
   }
 
-  playPresentation(characterId: string, presentationId: PresentationId): void {
-    const heldItem = this.heldItems.get(characterId);
+  playCharacterAnimation(
+    characterId: string,
+    animationId: CharacterPerformanceAnimationId,
+    durationMs?: number,
+  ): void {
     const token = this.characterTokens.get(characterId);
 
-    if (!heldItem || !token) {
+    if (!token) {
       return;
     }
 
-    this.presentationAnimations.play({
-      presentationId,
-      heldItem,
-      character: token,
-      canvas: this.canvas,
-      cellSize: this.cellSize,
-      heldItemAnimationKey: this.getHeldItemAnimationKey(characterId),
-      characterAnimationKey: this.getCharacterJumpAnimationKey(characterId),
-      isHeldItemCurrent: () => this.heldItems.get(characterId) === heldItem,
-    });
+    if (animationId === 'heldItemCelebrationAnim') {
+      const heldItem = this.heldItems.get(characterId);
+
+      if (!heldItem) {
+        return;
+      }
+
+      this.presentationAnimations.heldItemCelebrationAnim({
+        key: this.getHeldItemAnimationKey(characterId),
+        target: heldItem,
+        canvas: this.canvas,
+        radius: this.cellSize * 0.38,
+        durationMs,
+      });
+      return;
+    }
+
+    if (animationId === 'characterJumpAnim') {
+      this.presentationAnimations.characterJumpAnim({
+        key: this.getCharacterJumpAnimationKey(characterId),
+        target: token,
+        canvas: this.canvas,
+        jumpHeight: this.cellSize * 0.64,
+        durationMs,
+      });
+    }
   }
 
   snapCharacterToGrid(characterId: string, currentTile: GridCoordinate | null): void {

@@ -23,6 +23,7 @@ import {
 } from '~/services/characterRequests/visibility';
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDefinitions';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
+import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
 import {
@@ -69,6 +70,8 @@ const GIFT_DROP_CHARACTER_RADIUS = 1;
 interface TownMapContainerProps {
   expressionByCharacterId?: Partial<Record<string, Expression>>;
   mapDialoguePresentation?: EventDialoguePresentation | null;
+  onCharacterExpressionsChange?: (expressionByCharacterId: Partial<Record<string, Expression>>) => void;
+  onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
 }
 
 interface GiftDragState {
@@ -117,6 +120,8 @@ interface PickupChainState {
 export function TownMapContainer({
   expressionByCharacterId = {},
   mapDialoguePresentation = null,
+  onCharacterExpressionsChange,
+  onDialogueRequest,
 }: TownMapContainerProps) {
   const { t } = useTranslation();
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -178,6 +183,15 @@ export function TownMapContainer({
   const placedItemMenuName = placedItemMenuView
     ? t(placedItemMenuView.definition.nameKey)
     : '';
+  const snapshotExpressionByCharacterId = useMemo(
+    () => Object.fromEntries(
+      Object.entries(characterSnapshots).map(([characterId, snapshot]) => [
+        characterId,
+        snapshot.context.status.expression,
+      ]),
+    ) as Partial<Record<string, Expression>>,
+    [characterSnapshots],
+  );
 
   const refreshPlayerInventory = useCallback(() => {
     setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID, { states: ['stored'] }));
@@ -464,6 +478,7 @@ export function TownMapContainer({
     widgetRef.current = widget;
     const characterController = new TownCharacterController({
       widget,
+      onDialogueRequest,
       onCharacterSnapshot: (characterId, snapshot) => {
         setCharacterSnapshots(current => ({
           ...current,
@@ -496,7 +511,7 @@ export function TownMapContainer({
       void widget.destroy();
       canvasHost.replaceChildren();
     };
-  }, [cancelPickupChain, cancelPlacementDraft, pickupPlacedItem, refreshPlayerInventory, refreshShopStock]);
+  }, [cancelPickupChain, cancelPlacementDraft, onDialogueRequest, pickupPlacedItem, refreshPlayerInventory, refreshShopStock]);
 
   useEffect(() => {
     seedDemoPlayerInventory();
@@ -579,6 +594,10 @@ export function TownMapContainer({
       }
     });
   }, [expressionByCharacterId]);
+
+  useEffect(() => {
+    onCharacterExpressionsChange?.(snapshotExpressionByCharacterId);
+  }, [onCharacterExpressionsChange, snapshotExpressionByCharacterId]);
 
   useEffect(() => {
     const characterController = characterControllerRef.current;

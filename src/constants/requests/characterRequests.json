@@ -70,7 +70,7 @@
     "kind": "food",
     "label": "想吃點東西",
     "baseChance": 0.65,
-    "fulfillmentPresentationId": "receive_gift_happy",
+    "fulfillmentPerformanceId": "request.fulfillment.receiveGiftHappy",
     "conditions": [
       {
         "path": "character.status.saturation",
@@ -100,7 +100,7 @@
     "kind": "item",
     "label": "想要有點稀有又閃亮的東西",
     "baseChance": 0.8,
-    "fulfillmentPresentationId": "receive_gift_happy",
+    "fulfillmentPerformanceId": "request.fulfillment.receiveGiftHappy",
     "target": {
       "itemMatch": {
         "tagsAnyOf": ["shiny"],

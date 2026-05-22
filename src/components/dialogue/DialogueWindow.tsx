@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { Expression } from '~/constants/character';
 import type {
   DialogueViewChoice,
   DialogueViewLine,
@@ -12,6 +13,7 @@ import styles from './dialogue.module.scss';
 
 interface DialogueWindowProps {
   script: DialogueViewScript;
+  expressionByCharacterId?: Partial<Record<string, Expression>>;
   onClose: () => void;
   onLineChange?: (line: DialogueViewLine) => void;
 }
@@ -23,7 +25,12 @@ interface IdleDialogueFlow {
 
 const IDLE_DIALOGUE_LINE_DURATION_MS = 2200;
 
-export function DialogueWindow({ script, onClose, onLineChange }: DialogueWindowProps) {
+export function DialogueWindow({
+  script,
+  expressionByCharacterId = {},
+  onClose,
+  onLineChange,
+}: DialogueWindowProps) {
   const [instructions, setInstructions] = useState<DialogueViewInstruction[]>(script.lines);
   const [lineIndex, setLineIndex] = useState(0);
   const [idleDialogueFlow, setIdleDialogueFlow] = useState<IdleDialogueFlow | null>(null);
@@ -31,13 +38,14 @@ export function DialogueWindow({ script, onClose, onLineChange }: DialogueWindow
   const currentInstruction = instructions[lineIndex];
   const currentLine = currentInstruction;
   const currentIdleLine = idleDialogueFlow?.lines[idleDialogueFlow.lineIndex] ?? null;
+  const activeLine = currentIdleLine ?? currentLine;
   const isChoiceLine = currentInstruction.type === 'CHOICE';
   const currentChoiceLine = isChoiceLine && currentInstruction.type === 'CHOICE'
     ? currentInstruction
     : null;
   const activeSpeaker = useMemo(
-    () => script.participants.find(participant => participant.id === currentLine.speakerId),
-    [script.participants, currentLine.speakerId],
+    () => script.participants.find(participant => participant.id === activeLine.speakerId),
+    [activeLine.speakerId, script.participants],
   );
   const isLastLine = lineIndex >= instructions.length - 1;
   const nextButtonLabel = isLastLine ? 'Close' : 'Next';
@@ -45,6 +53,7 @@ export function DialogueWindow({ script, onClose, onLineChange }: DialogueWindow
     () => isChoiceLine ? script.participants.map(participant => participant.id) : [],
     [isChoiceLine, script.participants],
   );
+  const currentExpression = expressionByCharacterId[activeLine.speakerId] ?? activeLine.expression;
   const bubbleBySpeakerId = useMemo(() => {
     if (currentIdleLine) {
       return {
@@ -55,11 +64,11 @@ export function DialogueWindow({ script, onClose, onLineChange }: DialogueWindow
     return idleBubbleBySpeakerId;
   }, [currentIdleLine, idleBubbleBySpeakerId]);
   const avatarState = useMemo(() => ({
-    activeSpeakerId: currentLine.speakerId,
-    expression: currentLine.expression,
+    activeSpeakerId: activeLine.speakerId,
+    expression: currentExpression,
     thinkingSpeakerIds,
     bubbleBySpeakerId,
-  }), [bubbleBySpeakerId, currentLine.expression, currentLine.speakerId, thinkingSpeakerIds]);
+  }), [activeLine.speakerId, bubbleBySpeakerId, currentExpression, thinkingSpeakerIds]);
 
   useEffect(() => {
     setInstructions(script.lines);
@@ -70,13 +79,13 @@ export function DialogueWindow({ script, onClose, onLineChange }: DialogueWindow
 
   useEffect(() => {
     onLineChange?.({
-      id: currentLine.id,
+      id: activeLine.id,
       type: 'SAY',
-      speakerId: currentLine.speakerId,
-      text: currentLine.text,
-      expression: currentLine.expression,
+      speakerId: activeLine.speakerId,
+      text: activeLine.text,
+      expression: activeLine.expression,
     });
-  }, [currentLine.expression, currentLine.id, currentLine.speakerId, currentLine.text, onLineChange]);
+  }, [activeLine.expression, activeLine.id, activeLine.speakerId, activeLine.text, onLineChange]);
 
   useEffect(() => {
     setIdleDialogueFlow(null);
@@ -168,7 +177,7 @@ export function DialogueWindow({ script, onClose, onLineChange }: DialogueWindow
         <div className={styles.dialogueBox}>
           <div className={styles.speakerBar}>
             <strong>{activeSpeaker?.name ?? 'Unknown'}</strong>
-            <span>{currentLine.expression}</span>
+            <span>{currentExpression}</span>
           </div>
           <p className={styles.lineText}>{currentLine.text}</p>
           {currentChoiceLine ? (

@@ -14,7 +14,7 @@ import {
 import { sortEntityLayer, updateEntitySortMetadata } from './townMapLayerSorter';
 import { DEFAULT_CELL_SIZE } from '../constants/townMapWidgetConstants';
 import type { Expression } from '~/constants/character';
-import type { PresentationId } from '~/constants/presentationAnimations';
+import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { ItemDefinition, PlacedObject } from '~/typing/item';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
@@ -269,8 +269,12 @@ export class FabricTownMapWidget {
     this.characterLayer.setCharacterDraggingEnabled(isEnabled);
   }
 
-  playPresentation(characterId: string, presentationId: PresentationId): void {
-    this.characterLayer.playPresentation(characterId, presentationId);
+  playCharacterAnimation(
+    characterId: string,
+    animationId: CharacterPerformanceAnimationId,
+    durationMs?: number,
+  ): void {
+    this.characterLayer.playCharacterAnimation(characterId, animationId, durationMs);
   }
 
   showCharacterBubble(

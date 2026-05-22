@@ -1,11 +1,16 @@
 import type {
   CharacterPerformanceDefinition,
+  CharacterPerformanceAnimationTarget,
   CharacterPerformanceParticipantCountCondition,
   CharacterPerformancePhase,
   CharacterPerformanceStep,
   CharacterPerformanceTarget,
 } from './performances';
 import { Expression } from '~/constants/character';
+import {
+  CHARACTER_PERFORMANCE_ANIMATION_IDS,
+  type CharacterPerformanceAnimationId,
+} from '~/constants/presentationAnimations';
 
 const VALID_PERFORMANCE_PHASES = [
   'proposal',
@@ -19,7 +24,7 @@ const VALID_PERFORMANCE_PHASES = [
   'end',
 ] as const;
 const VALID_PERFORMANCE_TARGETS = ['initiator', 'target', 'both'] as const;
-const VALID_PERFORMANCE_STEP_TYPES = ['bubble', 'expression', 'emote', 'mapEffect', 'motion', 'dialogue'] as const;
+const VALID_PERFORMANCE_STEP_TYPES = ['bubble', 'expression', 'emote', 'mapEffect', 'motion', 'animation', 'dialogue'] as const;
 const VALID_EXPRESSIONS = Object.values(Expression);
 
 type CharacterPerformanceRecord = Record<string, unknown>;
@@ -84,6 +89,18 @@ function readPerformanceStep(
     throw new Error(`Character performance definition at index ${definitionIndex} has invalid step type "${type}".`);
   }
 
+  if (type === 'animation') {
+    return {
+      phase: readPerformancePhase(rawStep, definitionIndex),
+      target: readPerformanceAnimationTarget(rawStep, definitionIndex),
+      participantCount: readOptionalParticipantCount(rawStep, definitionIndex),
+      delayMs: readOptionalNonNegativeNumber(rawStep, 'delayMs', definitionIndex),
+      durationMs: readOptionalNonNegativeNumber(rawStep, 'durationMs', definitionIndex),
+      type,
+      animationId: readPerformanceAnimationId(rawStep, definitionIndex),
+    };
+  }
+
   const baseStep = readBasePerformanceStep(rawStep, definitionIndex);
 
   if (type === 'bubble') {
@@ -143,6 +160,22 @@ function readPerformanceStep(
     type,
     motionId: readRequiredString(rawStep, 'motionId', definitionIndex),
   };
+}
+
+function readPerformanceAnimationId(
+  step: CharacterPerformanceRecord,
+  index: number,
+): CharacterPerformanceAnimationId {
+  const value = readRequiredString(step, 'animationId', index);
+
+  if (!includesString(CHARACTER_PERFORMANCE_ANIMATION_IDS, value)) {
+    throw new Error(
+      `Character performance definition at index ${index} has invalid animationId "${value}". ` +
+      `Expected one of: ${CHARACTER_PERFORMANCE_ANIMATION_IDS.join(', ')}.`,
+    );
+  }
+
+  return value as CharacterPerformanceAnimationId;
 }
 
 function readOptionalDialogueDisplayMode(
@@ -214,6 +247,23 @@ function readPerformancePhase(
   }
 
   return value as CharacterPerformancePhase;
+}
+
+function readPerformanceAnimationTarget(
+  step: CharacterPerformanceRecord,
+  index: number,
+): CharacterPerformanceAnimationTarget {
+  const value = readRequiredString(step, 'target', index);
+
+  if (value === 'heldItem') {
+    return value;
+  }
+
+  if (!includesString(VALID_PERFORMANCE_TARGETS, value)) {
+    throw new Error(`Character performance definition at index ${index} has invalid target "${value}".`);
+  }
+
+  return value as CharacterPerformanceTarget;
 }
 
 function readPerformanceTarget(

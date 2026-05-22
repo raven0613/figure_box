@@ -1,6 +1,6 @@
-export const PRESENTATION_IDS = [
-  'receive_gift_happy',
+export const CHARACTER_PERFORMANCE_ANIMATION_IDS = [
+  'heldItemCelebrationAnim',
+  'characterJumpAnim',
 ] as const;
 
-export type PresentationId = typeof PRESENTATION_IDS[number];
-
+export type CharacterPerformanceAnimationId = typeof CHARACTER_PERFORMANCE_ANIMATION_IDS[number];

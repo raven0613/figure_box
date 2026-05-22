@@ -1,5 +1,6 @@
 import rawCharacterPerformanceDefinitions from '~/constants/events/characterPerformances.json';
 import type { Expression } from '~/constants/character';
+import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import { loadCharacterPerformanceDefinitions } from './performanceSchema';
 
 export type CharacterPerformancePhase =
@@ -13,6 +14,7 @@ export type CharacterPerformancePhase =
   | 'participantLeftGroup'
   | 'end';
 export type CharacterPerformanceTarget = 'initiator' | 'target' | 'both';
+export type CharacterPerformanceAnimationTarget = CharacterPerformanceTarget | 'heldItem';
 
 export interface CharacterPerformanceDefinition {
   id: string;
@@ -25,6 +27,7 @@ export type CharacterPerformanceStep =
   | CharacterPerformanceEmoteStep
   | CharacterPerformanceMapEffectStep
   | CharacterPerformanceMotionStep
+  | CharacterPerformanceAnimationStep
   | CharacterPerformanceDialogueStep;
 
 export interface CharacterPerformanceBubbleStep {
@@ -74,6 +77,16 @@ export interface CharacterPerformanceMotionStep {
   target: CharacterPerformanceTarget;
   participantCount?: CharacterPerformanceParticipantCountCondition;
   motionId: string;
+  delayMs?: number;
+  durationMs?: number;
+}
+
+export interface CharacterPerformanceAnimationStep {
+  type: 'animation';
+  phase: CharacterPerformancePhase;
+  target: CharacterPerformanceAnimationTarget;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
+  animationId: CharacterPerformanceAnimationId;
   delayMs?: number;
   durationMs?: number;
 }

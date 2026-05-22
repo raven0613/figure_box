@@ -1,7 +1,10 @@
 import { createActor } from 'xstate';
 import { CHARACTER_SEEDS, Expression, SocialStatus, type Position } from '~/constants/character';
 import { characterMachine } from '~/stateMachines/gameFlow/children/character';
-import { CharacterPerformanceRunner } from '~/services/characterEvents/characterPerformanceRunner';
+import {
+  CharacterPerformanceRunner,
+  type CharacterPerformanceDialogueRequest,
+} from '~/services/characterEvents/characterPerformanceRunner';
 import { getRandomDestinationTarget } from '~/services/characterEvents/targets';
 import { calculateCharacterUtilityScores } from '~/services/characterEvents/utility';
 import {
@@ -79,6 +82,7 @@ const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
+  onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
   onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
   onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
@@ -113,6 +117,7 @@ export class TownCharacterController {
   private readonly requestIdsByRelationshipOverlayId = new Map<string, string>();
   private readonly renderedHeldItemInstanceIdByCharacterId = new Map<string, string>();
   private readonly activityHeldItemsByCharacterId = new Map<string, ActivityHeldItemRecord>();
+  private readonly onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
   private readonly onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
@@ -121,6 +126,7 @@ export class TownCharacterController {
 
   constructor(options: TownCharacterControllerOptions) {
     this.widget = options.widget;
+    this.onDialogueRequest = options.onDialogueRequest;
     this.activityManager = createJoinableActivityManager();
     this.performanceRunner = new CharacterPerformanceRunner({
       getCharacterName: characterId => this.getCharacterName(characterId),
@@ -141,6 +147,12 @@ export class TownCharacterController {
       },
       removeMapActivity: activityId => {
         this.widget.removeMapActivity(activityId);
+      },
+      playCharacterAnimation: (characterId, animationId, durationMs) => {
+        this.widget.playCharacterAnimation(characterId, animationId, durationMs);
+      },
+      playDialogue: request => {
+        this.onDialogueRequest?.(request);
       },
     });
     this.movementCoordinator = new TownMovementCoordinator({
@@ -202,8 +214,12 @@ export class TownCharacterController {
           true,
         );
       },
-      playPresentation: (characterId, presentationId) => {
-        this.widget.playPresentation(characterId, presentationId);
+      playPerformance: (characterId, performanceId) => {
+        this.performanceRunner.playPerformanceStepsById({
+          performanceId,
+          phase: 'active',
+          initiatorId: characterId,
+        });
       },
       onFulfillmentFinished: request => {
         this.finishCharacterRequestFulfillment(request);

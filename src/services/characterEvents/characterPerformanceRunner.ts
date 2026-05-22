@@ -4,11 +4,14 @@ import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '../../constants/charactarEven
 import {
   getCharacterPerformanceBubbleStep,
   getCharacterPerformanceSteps,
+  type CharacterPerformanceAnimationTarget,
+  type CharacterPerformanceDialogueStep,
   type CharacterPerformancePhase,
   type CharacterPerformanceStep,
   type CharacterPerformanceTarget,
 } from './performances';
 import type { MapActivityView } from '~/typing/eventDialoguePresentation';
+import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 
 export interface CharacterPerformanceSelection {
   definitionId?: string;
@@ -40,6 +43,22 @@ interface CharacterActivityPerformanceInput {
   hostCharacterIds?: readonly string[];
 }
 
+interface CharacterPerformanceByIdInput {
+  performanceId: string;
+  phase: CharacterPerformancePhase;
+  initiatorId: string;
+  targetId?: string;
+}
+
+export interface CharacterPerformanceDialogueRequest {
+  dialogueGroupId?: string;
+  scriptId?: string;
+  displayMode?: CharacterPerformanceDialogueStep['displayMode'];
+  participantIds: readonly string[];
+  initiatorId: string;
+  targetId?: string;
+}
+
 interface CharacterPerformanceRunnerPorts {
   getCharacterName: (characterId: string) => string;
   setCharacterExpression: (characterId: string, expression: Expression) => void;
@@ -48,6 +67,12 @@ interface CharacterPerformanceRunnerPorts {
   showCharacterEmote: (characterId: string, text: string, durationMs?: number) => void;
   showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   removeMapActivity: (activityId: string) => void;
+  playCharacterAnimation?: (
+    characterId: string,
+    animationId: CharacterPerformanceAnimationId,
+    durationMs?: number,
+  ) => void;
+  playDialogue?: (request: CharacterPerformanceDialogueRequest) => void;
 }
 
 const PARTICIPANT_LEFT_REACTION_MS = 5000;
@@ -95,6 +120,17 @@ export class CharacterPerformanceRunner {
     steps.forEach(step => {
       this.schedulePerformanceStep(step, initiatorId, targetId);
     });
+  }
+
+  playPerformanceStepsById(input: CharacterPerformanceByIdInput): number {
+    const targetId = input.targetId ?? input.initiatorId;
+    const steps = getCharacterPerformanceSteps(input.performanceId, input.phase);
+
+    steps.forEach(step => {
+      this.schedulePerformanceStep(step, input.initiatorId, targetId);
+    });
+
+    return getPerformanceStepsDurationMs(steps);
   }
 
   playActivityPerformanceSteps(input: CharacterActivityPerformanceInput): number {
@@ -221,7 +257,28 @@ export class CharacterPerformanceRunner {
     initiatorId: string,
     targetId: string,
   ): void {
+    if (step.type === 'animation') {
+      resolvePerformanceAnimationTargetIds(step.target, initiatorId, targetId).forEach(characterId => {
+        this.ports.playCharacterAnimation?.(characterId, step.animationId, step.durationMs);
+      });
+      return;
+    }
+
     const characterIds = resolvePerformanceTargetIds(step.target, initiatorId, targetId);
+
+    if (step.type === 'bubble') {
+      const initiatorName = this.ports.getCharacterName(initiatorId);
+      const targetName = this.ports.getCharacterName(targetId);
+
+      characterIds.forEach(characterId => {
+        this.ports.showCharacterBubble(
+          characterId,
+          formatInteractionLine(step.text, initiatorName, targetName),
+          step.durationMs,
+        );
+      });
+      return;
+    }
 
     if (step.type === 'expression') {
       characterIds.forEach(characterId => {
@@ -258,7 +315,19 @@ export class CharacterPerformanceRunner {
       return;
     }
 
-    if (step.type === 'motion' || step.type === 'dialogue') {
+    if (step.type === 'dialogue') {
+      this.ports.playDialogue?.({
+        dialogueGroupId: step.dialogueGroupId,
+        scriptId: step.scriptId,
+        displayMode: step.displayMode,
+        participantIds: characterIds,
+        initiatorId,
+        targetId,
+      });
+      return;
+    }
+
+    if (step.type === 'motion') {
       return;
     }
   }
@@ -267,6 +336,17 @@ export class CharacterPerformanceRunner {
     step: CharacterPerformanceStep,
     input: CharacterActivityPerformanceInput,
   ): void {
+    if (step.type === 'animation') {
+      resolveActivityPerformanceAnimationTargetIds(
+        step.target,
+        input.participantIds,
+        input.hostCharacterIds,
+      ).forEach(characterId => {
+        this.ports.playCharacterAnimation?.(characterId, step.animationId, step.durationMs);
+      });
+      return;
+    }
+
     const characterIds = resolveActivityPerformanceTargetIds(
       step.target,
       input.participantIds,
@@ -339,7 +419,27 @@ export class CharacterPerformanceRunner {
       return;
     }
 
-    if (step.type === 'motion' || step.type === 'dialogue') {
+    if (step.type === 'dialogue') {
+      const initiatorId = input.hostCharacterIds?.[0] ?? input.participantIds[0];
+
+      if (!initiatorId) {
+        return;
+      }
+
+      const targetId = characterIds.find(characterId => characterId !== initiatorId);
+
+      this.ports.playDialogue?.({
+        dialogueGroupId: step.dialogueGroupId,
+        scriptId: step.scriptId,
+        displayMode: step.displayMode,
+        participantIds: characterIds,
+        initiatorId,
+        targetId,
+      });
+      return;
+    }
+
+    if (step.type === 'motion') {
       return;
     }
   }
@@ -500,6 +600,18 @@ function resolvePerformanceTargetIds(
   return [initiatorId, targetId];
 }
 
+function resolvePerformanceAnimationTargetIds(
+  target: CharacterPerformanceAnimationTarget,
+  initiatorId: string,
+  targetId: string,
+): string[] {
+  if (target === 'heldItem') {
+    return [initiatorId];
+  }
+
+  return resolvePerformanceTargetIds(target, initiatorId, targetId);
+}
+
 function resolveActivityPerformanceTargetIds(
   target: CharacterPerformanceTarget,
   participantIds: readonly string[],
@@ -521,6 +633,20 @@ function resolveActivityPerformanceTargetIds(
   return nonHostParticipantIds.length > 0
     ? nonHostParticipantIds
     : participantIds.slice(1);
+}
+
+function resolveActivityPerformanceAnimationTargetIds(
+  target: CharacterPerformanceAnimationTarget,
+  participantIds: readonly string[],
+  hostCharacterIds: readonly string[] = [],
+): string[] {
+  if (target === 'heldItem') {
+    return hostCharacterIds.length > 0
+      ? [...hostCharacterIds]
+      : participantIds.slice(0, 1);
+  }
+
+  return resolveActivityPerformanceTargetIds(target, participantIds, hostCharacterIds);
 }
 
 function matchesParticipantCount(step: CharacterPerformanceStep, participantCount: number): boolean {
