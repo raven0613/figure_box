@@ -15,7 +15,7 @@ interface TownMapPointerControllerOptions {
   snapCharacterToGrid: (characterId: string, tile: GridCoordinate | null) => void;
   onTileClick?: (tile: TownMapTile) => void;
   onMapObjectClick?: (objectId: string) => void;
-  onCharacterPickUp?: (characterId: string) => void;
+  onCharacterPickUp?: (characterId: string) => boolean | void;
   onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
 }
 
@@ -37,9 +37,10 @@ export class TownMapPointerController {
   private readonly snapCharacterToGrid: (characterId: string, tile: GridCoordinate | null) => void;
   private readonly onTileClick?: (tile: TownMapTile) => void;
   private readonly onMapObjectClick?: (objectId: string) => void;
-  private readonly onCharacterPickUp?: (characterId: string) => void;
+  private readonly onCharacterPickUp?: (characterId: string) => boolean | void;
   private readonly onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
   private pendingTileClick: TownMapTile | null = null;
+  private pickedUpCharacterId: string | null = null;
 
   constructor(options: TownMapPointerControllerOptions) {
     this.canvas = options.canvas;
@@ -77,6 +78,7 @@ export class TownMapPointerController {
 
   private handleMouseDown(event: TownMapPointerEvent): void {
     this.pendingTileClick = null;
+    this.pickedUpCharacterId = null;
 
     if (this.camera.isZoomControl(event.target) || this.characterTracker.isTrackingControl(event.target)) {
       return;
@@ -85,8 +87,12 @@ export class TownMapPointerController {
     const characterId = this.getCharacterIdFromTarget(event.target);
 
     if (characterId) {
+      if (this.onCharacterPickUp?.(characterId) === false) {
+        return;
+      }
+
+      this.pickedUpCharacterId = characterId;
       this.characterTracker.selectCharacter(characterId);
-      this.onCharacterPickUp?.(characterId);
       return;
     }
 
@@ -107,26 +113,27 @@ export class TownMapPointerController {
     }
 
     const didPan = this.camera.endPan();
-    const characterId = this.getCharacterIdFromTarget(event.target ?? this.canvas.getActiveObject());
+    const targetCharacterId = this.getCharacterIdFromTarget(event.target ?? this.canvas.getActiveObject());
     const mapObjectId = this.getMapObjectIdFromTarget(event.target);
 
-    if (!characterId && mapObjectId && !didPan) {
+    if (!this.pickedUpCharacterId && !targetCharacterId && mapObjectId && !didPan) {
       this.onMapObjectClick?.(mapObjectId);
-    } else if (!characterId && this.pendingTileClick && !didPan) {
+    } else if (!this.pickedUpCharacterId && !targetCharacterId && this.pendingTileClick && !didPan) {
       this.onTileClick?.(this.pendingTileClick);
     }
 
     this.pendingTileClick = null;
 
-    if (!characterId) {
+    if (!this.pickedUpCharacterId) {
       return;
     }
 
     const pointer = this.canvas.getScenePoint(event.e);
     const tile = this.getTileAtPointer(pointer.x, pointer.y);
 
-    this.onCharacterDrop?.(characterId, tile ? { x: tile.x, y: tile.y } : null);
-    this.snapCharacterToGrid(characterId, this.getCharacterTile(characterId));
+    this.onCharacterDrop?.(this.pickedUpCharacterId, tile ? { x: tile.x, y: tile.y } : null);
+    this.snapCharacterToGrid(this.pickedUpCharacterId, this.getCharacterTile(this.pickedUpCharacterId));
+    this.pickedUpCharacterId = null;
   }
 
   private getTileAtPointer(pointerX: number, pointerY: number): TownMapTile | null {

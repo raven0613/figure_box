@@ -14,6 +14,6 @@ export interface FabricTownMapOptions {
   onZoomChange?: (zoom: number) => void;
   onTileClick?: (tile: TownMapTile) => void;
   onMapObjectClick?: (objectId: string) => void;
-  onCharacterPickUp?: (characterId: string) => void;
+  onCharacterPickUp?: (characterId: string) => boolean | void;
   onCharacterDrop?: (characterId: string, tile: GridCoordinate | null) => void;
 }

@@ -265,6 +265,10 @@ export class FabricTownMapWidget {
     this.characterLayer.releaseHeldItem(characterId);
   }
 
+  setCharacterDraggingEnabled(isEnabled: boolean): void {
+    this.characterLayer.setCharacterDraggingEnabled(isEnabled);
+  }
+
   playPresentation(characterId: string, presentationId: PresentationId): void {
     this.characterLayer.playPresentation(characterId, presentationId);
   }

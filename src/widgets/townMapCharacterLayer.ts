@@ -28,6 +28,7 @@ export class TownMapCharacterLayer {
   private readonly characterTokens = new Map<string, Group>();
   private readonly heldItems = new Map<string, Group>();
   private readonly characters = new Map<string, TownMapCharacter>();
+  private isCharacterDraggingEnabled = true;
 
   constructor(options: TownMapCharacterLayerOptions) {
     this.canvas = options.canvas;
@@ -84,11 +85,26 @@ export class TownMapCharacterLayer {
 
     const token = this.characterTokenFactory.create(character, position, this.cellSize);
 
+    token.set('selectable', this.isCharacterDraggingEnabled);
     updateEntitySortMetadata(token, position.y);
     this.characterTokens.set(character.id, token);
     this.canvas.add(token);
     sortEntityLayer(this.canvas);
     this.characterTracker.update();
+  }
+
+  setCharacterDraggingEnabled(isEnabled: boolean): void {
+    if (this.isCharacterDraggingEnabled === isEnabled) {
+      return;
+    }
+
+    this.isCharacterDraggingEnabled = isEnabled;
+    this.characterTokens.forEach(token => {
+      token.set('selectable', isEnabled);
+      token.setCoords();
+    });
+    this.canvas.discardActiveObject();
+    this.canvas.requestRenderAll();
   }
 
   moveCharacterToken(characterId: string, target: GridCoordinate): void {

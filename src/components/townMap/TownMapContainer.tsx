@@ -198,6 +198,12 @@ export function TownMapContainer({
     });
   }, [refreshOpenCharacterInventory, refreshPlayerInventory]);
 
+  const cancelPlacementDraft = useCallback(() => {
+    placementDraftRef.current = null;
+    setPlacementDraft(null);
+    widgetRef.current?.setCharacterDraggingEnabled(true);
+  }, []);
+
   const startPlacingItem = useCallback((itemInstance: ItemInstance) => {
     const latestItemInstance = itemService.getItemInstance(itemInstance.id);
 
@@ -226,11 +232,14 @@ export function TownMapContainer({
 
     setGiftDragState(null);
     setGiftTargetPicker(null);
+    placementDraftRef.current = latestItemInstance;
     setPlacementDraft(latestItemInstance);
+    widgetRef.current?.setCharacterDraggingEnabled(false);
   }, [refreshPlayerInventory]);
 
   useEffect(() => {
     placementDraftRef.current = placementDraft;
+    widgetRef.current?.setCharacterDraggingEnabled(!placementDraft);
   }, [placementDraft]);
 
   useEffect(() => {
@@ -248,7 +257,7 @@ export function TownMapContainer({
           const latestItemInstance = itemService.getItemInstance(placementItem.id);
 
           if (!latestItemInstance) {
-            setPlacementDraft(null);
+            cancelPlacementDraft();
             refreshPlayerInventory();
             return;
           }
@@ -276,7 +285,7 @@ export function TownMapContainer({
             return;
           }
 
-          setPlacementDraft(null);
+          cancelPlacementDraft();
           setSelectedTile(tile);
           setSelectedMapObjects(widget.getMapObjectsAt(tile.x, tile.y).map(object => object.label));
           refreshPlayerInventory();
@@ -296,6 +305,11 @@ export function TownMapContainer({
         // setNearbyTiles(widget.getNeighbors(tile.x, tile.y, 1));
       },
       onMapObjectClick: objectId => {
+        if (placementDraftRef.current) {
+          cancelPlacementDraft();
+          return;
+        }
+
         const placedObject = itemPlacementService.getPlacedObject(objectId);
 
         if (placedObject) {
@@ -337,8 +351,14 @@ export function TownMapContainer({
         characterControllerRef.current?.syncRequestIndicators(zoom);
       },
       onCharacterPickUp: characterId => {
+        if (placementDraftRef.current) {
+          cancelPlacementDraft();
+          return false;
+        }
+
         setSelectedCharacterId(characterId);
         characterControllerRef.current?.pickUpCharacter(characterId);
+        return true;
       },
       onCharacterDrop: (characterId, tile) => {
         characterControllerRef.current?.dropCharacter(characterId, tile);
@@ -375,11 +395,11 @@ export function TownMapContainer({
       setSelectedMapObjects([]);
       setIsApartmentPanelOpen(false);
       setIsShopPanelOpen(false);
-      setPlacementDraft(null);
+      cancelPlacementDraft();
       void widget.destroy();
       canvasHost.replaceChildren();
     };
-  }, [refreshPlayerInventory, refreshShopStock]);
+  }, [cancelPlacementDraft, refreshPlayerInventory, refreshShopStock]);
 
   useEffect(() => {
     seedDemoPlayerInventory();
@@ -487,7 +507,7 @@ export function TownMapContainer({
           </div>
           <button
             type="button"
-            onClick={() => setPlacementDraft(null)}
+            onClick={cancelPlacementDraft}
           >
             取消
           </button>
@@ -513,13 +533,17 @@ export function TownMapContainer({
           closeAriaLabel="關閉物品欄"
           className={styles.floatingInventoryPanel}
           contentClassName={styles.floatingPanelContent}
-          onClose={() => setIsInventoryPanelOpen(false)}
+          onClose={() => {
+            cancelPlacementDraft();
+            setIsInventoryPanelOpen(false);
+          }}
         >
           <InventoryPanel
             groups={playerInventoryGroups}
             getDefinition={definitionId => itemService.getDefinition(definitionId)}
             giftTargetName={selectedCharacterName}
             onGiftItem={itemInstance => {
+              cancelPlacementDraft();
               giftItemToCharacter(itemInstance, selectedCharacterId);
             }}
             onPlaceItem={startPlacingItem}
@@ -527,6 +551,7 @@ export function TownMapContainer({
               setTransferHistoryItem(itemService.getItemInstance(itemInstance.id) ?? itemInstance);
             }}
             onStartDragItem={(itemInstance, pointer) => {
+              cancelPlacementDraft();
               setGiftTargetPicker(null);
               setGiftDragState({
                 itemInstance,
