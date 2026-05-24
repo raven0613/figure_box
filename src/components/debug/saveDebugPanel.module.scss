@@ -8,7 +8,8 @@
   width: min(860px, calc(100vw - 36px));
   max-height: calc(100vh - 96px);
   padding: 14px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   color: #182027;
   background: #f7f5ef;
   border: 1px solid rgba(24, 32, 39, 0.18);
@@ -91,8 +92,8 @@
 
 .secondaryButton,
 .dangerButton {
-  min-height: 32px;
-  padding: 6px 10px;
+  min-height: 24px;
+  padding: 3px 10px;
   font-size: 13px;
   border-radius: 6px;
 }
@@ -121,7 +122,7 @@
 
 .transferTextarea {
   width: 100%;
-  min-height: 84px;
+  min-height: 40px;
   max-height: 150px;
   padding: 8px;
   overflow: auto;
@@ -138,7 +139,9 @@
 .contentPackPreview {
   display: grid;
   gap: 8px;
+  max-height: min(420px, 42vh);
   padding: 8px;
+  overflow: auto;
   background: #f4f8fa;
   border: 1px solid #c9d6df;
   border-radius: 6px;
@@ -186,11 +189,23 @@
   overflow-wrap: anywhere;
 }
 
+.conflictSelect {
+  width: fit-content;
+  min-height: 26px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: #182027;
+  background: #fff7df;
+  border: 1px solid #d8bc72;
+  border-radius: 5px;
+}
+
 .contentGrid {
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: 210px minmax(0, 1fr);
   gap: 12px;
-  min-height: 0;
+  min-height: 280px;
   margin-top: 12px;
 }
 
@@ -287,6 +302,7 @@
   }
 
   .tableList {
+    min-height: 0;
     max-height: 160px;
   }
 }

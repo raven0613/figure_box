@@ -6,6 +6,8 @@ import {
   type CharacterAvatarRecord,
   type CharacterProfileRecord,
   type CharacterRuntimeSaveRecord,
+  type CustomObjectImageRecord,
+  type CustomObjectRecord,
   type ItemSaveRecord,
   type RelationshipSaveRecord,
   type SaveMetaRecord,
@@ -38,6 +40,18 @@ const LEGACY_V2_TABLE_SCHEMAS: Record<string, string> = {
   playerCharacters: 'id, source, templateId, updatedAt',
 };
 
+const LEGACY_V3_TABLE_SCHEMAS: Record<string, string> = {
+  saveMeta: 'id, schemaVersion, updatedAt',
+  worldProgress: 'id, day, updatedAt',
+  items: 'id, updatedAt',
+  settings: 'id, updatedAt',
+  shops: 'id, updatedAt',
+  relationships: 'id, updatedAt',
+  characters: 'id, source, templateId, updatedAt',
+  characterRuntime: 'id, seedId, updatedAt',
+  characterAvatars: 'id, characterId, updatedAt',
+};
+
 const TABLE_SCHEMAS: Record<SaveTableName, string> = {
   saveMeta: 'id, schemaVersion, updatedAt',
   worldProgress: 'id, day, updatedAt',
@@ -48,6 +62,8 @@ const TABLE_SCHEMAS: Record<SaveTableName, string> = {
   characters: 'id, source, templateId, updatedAt',
   characterRuntime: 'id, seedId, updatedAt',
   characterAvatars: 'id, characterId, updatedAt',
+  customObjects: 'id, source, imageId, updatedAt',
+  customObjectImages: 'id, objectId, updatedAt',
 };
 
 class FigureBoxSaveDatabase extends Dexie {
@@ -60,11 +76,14 @@ class FigureBoxSaveDatabase extends Dexie {
   characters!: Table<CharacterProfileRecord, string>;
   characterRuntime!: Table<CharacterRuntimeSaveRecord, string>;
   characterAvatars!: Table<CharacterAvatarRecord, string>;
+  customObjects!: Table<CustomObjectRecord, string>;
+  customObjectImages!: Table<CustomObjectImageRecord, string>;
 
   constructor() {
     super(SAVE_DATABASE_NAME);
     this.version(1).stores(LEGACY_V1_TABLE_SCHEMAS);
     this.version(2).stores(LEGACY_V2_TABLE_SCHEMAS);
+    this.version(3).stores(LEGACY_V3_TABLE_SCHEMAS);
     this.version(SAVE_DATABASE_VERSION).stores(TABLE_SCHEMAS);
   }
 }

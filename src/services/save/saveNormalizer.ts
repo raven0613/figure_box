@@ -32,6 +32,8 @@ import {
   type CharacterProfileRecord,
   type CharacterRuntimeSaveRecord,
   type CharacterRuntimeSnapshot,
+  type CustomObjectImageRecord,
+  type CustomObjectRecord,
   type ItemSaveRecord,
   type RelationshipSaveRecord,
   type SaveMetaRecord,
@@ -241,6 +243,86 @@ export function normalizeCharacterAvatarRecords(rawRecords: readonly unknown[]):
 
     return [normalizedRecord];
   });
+}
+
+export function normalizeCustomObjectRecords(rawRecords: readonly unknown[]): readonly CustomObjectRecord[] {
+  return rawRecords.flatMap(rawRecord => {
+    if (!isRecord(rawRecord) || typeof rawRecord.id !== 'string') {
+      return [];
+    }
+
+    const timestamp = Date.now();
+    const width = readPositiveInteger(rawRecord.width, 1);
+    const height = readPositiveInteger(rawRecord.height, 1);
+
+    return [{
+      id: rawRecord.id,
+      source: readCustomObjectSource(rawRecord.source),
+      name: typeof rawRecord.name === 'string' && rawRecord.name.length > 0
+        ? rawRecord.name
+        : rawRecord.id,
+      origin: readCustomObjectOrigin(rawRecord.origin),
+      imageId: typeof rawRecord.imageId === 'string' && rawRecord.imageId.length > 0
+        ? rawRecord.imageId
+        : rawRecord.id,
+      width,
+      height,
+      objectSchemaVersion: readPositiveInteger(rawRecord.objectSchemaVersion, 1),
+      createdAt: readFiniteNumber(rawRecord.createdAt, timestamp),
+      updatedAt: readFiniteNumber(rawRecord.updatedAt, timestamp),
+      metadata: isRecord(rawRecord.metadata) ? rawRecord.metadata : {},
+    }];
+  });
+}
+
+export function normalizeCustomObjectImageRecords(rawRecords: readonly unknown[]): readonly CustomObjectImageRecord[] {
+  return rawRecords.flatMap(rawRecord => {
+    if (
+      !isRecord(rawRecord) ||
+      typeof rawRecord.id !== 'string' ||
+      typeof rawRecord.objectId !== 'string' ||
+      typeof rawRecord.dataUrl !== 'string'
+    ) {
+      return [];
+    }
+
+    return [{
+      id: rawRecord.id,
+      objectId: rawRecord.objectId,
+      mimeType: typeof rawRecord.mimeType === 'string' && rawRecord.mimeType.length > 0
+        ? rawRecord.mimeType
+        : 'image/png',
+      dataUrl: rawRecord.dataUrl,
+      updatedAt: readFiniteNumber(rawRecord.updatedAt, Date.now()),
+    }];
+  });
+}
+
+function readCustomObjectSource(value: unknown): CustomObjectRecord['source'] {
+  return value === 'imported' || value === 'debug' ? value : 'playerCreated';
+}
+
+function readCustomObjectOrigin(value: unknown): CustomObjectRecord['origin'] {
+  if (!isRecord(value)) {
+    return {
+      kind: 'blank',
+      objectId: null,
+    };
+  }
+
+  if (value.kind === 'staticObject' || value.kind === 'customObject') {
+    return {
+      kind: value.kind,
+      objectId: typeof value.objectId === 'string' && value.objectId.length > 0
+        ? value.objectId
+        : null,
+    };
+  }
+
+  return {
+    kind: 'blank',
+    objectId: null,
+  };
 }
 
 function readItemInstances(value: unknown): readonly ItemInstance[] {

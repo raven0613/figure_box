@@ -4,7 +4,7 @@ import type { RelationshipStore } from '~/stateMachines/gameFlow/relationships';
 import type { ShopStockItem } from '~/typing/item';
 
 export const SAVE_DATABASE_NAME = 'figureBoxSaveDb';
-export const SAVE_DATABASE_VERSION = 3;
+export const SAVE_DATABASE_VERSION = 4;
 export const SAVE_SCHEMA_VERSION = 1;
 
 export type SaveTableName =
@@ -16,7 +16,9 @@ export type SaveTableName =
   | 'relationships'
   | 'characters'
   | 'characterRuntime'
-  | 'characterAvatars';
+  | 'characterAvatars'
+  | 'customObjects'
+  | 'customObjectImages';
 
 export interface SaveMetaRecord {
   id: 'current';
@@ -101,6 +103,31 @@ export interface CharacterAvatarRecord {
   updatedAt: number;
 }
 
+export interface CustomObjectRecord {
+  id: string;
+  source: 'playerCreated' | 'imported' | 'debug';
+  name: string;
+  origin: {
+    kind: 'blank' | 'staticObject' | 'customObject';
+    objectId: string | null;
+  };
+  imageId: string;
+  width: number;
+  height: number;
+  objectSchemaVersion: number;
+  createdAt: number;
+  updatedAt: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface CustomObjectImageRecord {
+  id: string;
+  objectId: string;
+  mimeType: string;
+  dataUrl: string;
+  updatedAt: number;
+}
+
 export type SaveDomain =
   | 'items'
   | 'shops'
@@ -109,7 +136,9 @@ export type SaveDomain =
   | 'relationships'
   | 'characters'
   | 'characterRuntime'
-  | 'characterAvatars';
+  | 'characterAvatars'
+  | 'customObjects'
+  | 'customObjectImages';
 
 export interface SaveTableSchemaSummary {
   name: SaveTableName;

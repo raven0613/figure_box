@@ -13,6 +13,8 @@ import {
   normalizeCharacterAvatarRecords,
   normalizeCharacterProfileRecords,
   normalizeCharacterRuntimeSaveRecords,
+  normalizeCustomObjectImageRecords,
+  normalizeCustomObjectRecords,
   normalizeItemSaveRecord,
   normalizeRelationshipSaveRecord,
   normalizeSaveMetaRecord,
@@ -24,6 +26,8 @@ import { settingsService } from './settingsService';
 import { characterAvatarSaveService } from './characterAvatarSaveService';
 import { characterRuntimeSaveService } from './characterRuntimeSaveService';
 import { characterProfileSaveService } from './characterProfileSaveService';
+import { customObjectImageSaveService } from './customObjectImageSaveService';
+import { customObjectSaveService } from './customObjectSaveService';
 import { relationshipStoreService } from './relationshipStoreService';
 import type {
   CharacterRuntimeSaveRecord,
@@ -31,17 +35,33 @@ import type {
   SaveDomain,
 } from './saveTypes';
 import {
+  exportContentPackString,
   exportCharacterContentPackString,
   exportFullSavePackageString,
+  exportObjectContentPackString,
+  importContentPackString,
   importCharacterContentPackString,
   importFullSavePackageString,
+  importObjectContentPackString,
+  previewContentPackString,
   previewCharacterContentPackString,
+  previewExportableContentPack,
   previewExportableCharacterContentPack,
+  previewExportableObjectContentPack,
+  previewObjectContentPackString,
   type CharacterContentPackPreview,
+  type CombinedContentPackPackageSummary,
+  type CombinedContentPackPreview,
   type ContentPackPackageSummary,
+  type CustomObjectContentPackPreview,
+  type ExportContentPackOptions,
   type ExportCharacterContentPackOptions,
+  type ExportObjectContentPackOptions,
   type FullSavePackageSummary,
+  type ImportContentPackOptions,
   type ImportCharacterContentPackOptions,
+  type ImportObjectContentPackOptions,
+  type ObjectContentPackPackageSummary,
 } from './saveTransferService';
 import { worldProgressService } from './worldProgressService';
 
@@ -100,8 +120,44 @@ class SaveService {
     return previewExportableCharacterContentPack();
   }
 
-  previewCharacterContentPackString(packageString: string): CharacterContentPackPreview {
+  async exportObjectContentPackString(
+    options: ExportObjectContentPackOptions = {},
+  ): Promise<string> {
+    await this.flushAutosave();
+
+    return exportObjectContentPackString(options);
+  }
+
+  async previewExportableObjectContentPack(): Promise<CustomObjectContentPackPreview> {
+    await this.flushAutosave();
+
+    return previewExportableObjectContentPack();
+  }
+
+  async exportContentPackString(
+    options: ExportContentPackOptions = {},
+  ): Promise<string> {
+    await this.flushAutosave();
+
+    return exportContentPackString(options);
+  }
+
+  async previewExportableContentPack(): Promise<CombinedContentPackPreview> {
+    await this.flushAutosave();
+
+    return previewExportableContentPack();
+  }
+
+  previewContentPackString(packageString: string): Promise<CombinedContentPackPreview> {
+    return previewContentPackString(packageString);
+  }
+
+  previewCharacterContentPackString(packageString: string): Promise<CharacterContentPackPreview> {
     return previewCharacterContentPackString(packageString);
+  }
+
+  previewObjectContentPackString(packageString: string): Promise<CustomObjectContentPackPreview> {
+    return previewObjectContentPackString(packageString);
   }
 
   async importCharacterContentPackString(
@@ -109,6 +165,32 @@ class SaveService {
     options: ImportCharacterContentPackOptions = {},
   ): Promise<ContentPackPackageSummary> {
     const summary = await importCharacterContentPackString(packageString, options);
+
+    this.initializationPromise = null;
+    await this.initializeGameInternal();
+    await this.touchSaveMeta();
+
+    return summary;
+  }
+
+  async importContentPackString(
+    packageString: string,
+    options: ImportContentPackOptions = {},
+  ): Promise<CombinedContentPackPackageSummary> {
+    const summary = await importContentPackString(packageString, options);
+
+    this.initializationPromise = null;
+    await this.initializeGameInternal();
+    await this.touchSaveMeta();
+
+    return summary;
+  }
+
+  async importObjectContentPackString(
+    packageString: string,
+    options: ImportObjectContentPackOptions = {},
+  ): Promise<ObjectContentPackPackageSummary> {
+    const summary = await importObjectContentPackString(packageString, options);
 
     this.initializationPromise = null;
     await this.initializeGameInternal();
@@ -172,6 +254,8 @@ class SaveService {
       rawCharacters,
       rawCharacterRuntime,
       rawCharacterAvatars,
+      rawCustomObjects,
+      rawCustomObjectImages,
     ] = await Promise.all([
       saveDb.saveMeta.get('current'),
       saveDb.worldProgress.get('current'),
@@ -182,6 +266,8 @@ class SaveService {
       saveDb.characters.toArray(),
       saveDb.characterRuntime.toArray(),
       saveDb.characterAvatars.toArray(),
+      saveDb.customObjects.toArray(),
+      saveDb.customObjectImages.toArray(),
     ]);
     const saveMeta = rawSaveMeta
       ? normalizeSaveMetaRecord(rawSaveMeta)
@@ -217,6 +303,10 @@ class SaveService {
       ...normalizeCharacterRuntimeSaveRecords(rawCharacterRuntime),
     ]);
     const characterAvatarRecords = normalizeCharacterAvatarRecords(rawCharacterAvatars);
+    const customObjectRecords = normalizeCustomObjectRecords(rawCustomObjects);
+    const customObjectIds = new Set(customObjectRecords.map(record => record.id));
+    const customObjectImageRecords = normalizeCustomObjectImageRecords(rawCustomObjectImages)
+      .filter(record => customObjectIds.has(record.objectId));
 
     worldProgressService.load(worldProgress);
     settingsService.load(settings);
@@ -224,6 +314,8 @@ class SaveService {
     characterProfileSaveService.load(characterProfileRecords);
     characterRuntimeSaveService.load(characterRuntimeRecords);
     characterAvatarSaveService.load(characterAvatarRecords);
+    customObjectSaveService.load(customObjectRecords);
+    customObjectImageSaveService.load(customObjectImageRecords);
 
     await saveDb.transaction('rw', [
       saveDb.saveMeta,
@@ -235,6 +327,8 @@ class SaveService {
       saveDb.characters,
       saveDb.characterRuntime,
       saveDb.characterAvatars,
+      saveDb.customObjects,
+      saveDb.customObjectImages,
     ], async () => {
       await saveDb.saveMeta.put(saveMeta);
       await saveDb.worldProgress.put(worldProgress);
@@ -251,6 +345,14 @@ class SaveService {
       }
       if (characterAvatarRecords.length > 0) {
         await saveDb.characterAvatars.bulkPut(characterAvatarRecords);
+      }
+      await saveDb.customObjects.clear();
+      if (customObjectRecords.length > 0) {
+        await saveDb.customObjects.bulkPut(customObjectRecords);
+      }
+      await saveDb.customObjectImages.clear();
+      if (customObjectImageRecords.length > 0) {
+        await saveDb.customObjectImages.bulkPut(customObjectImageRecords);
       }
     });
   }
@@ -292,6 +394,10 @@ class SaveService {
         return this.saveCharacterRuntime();
       case 'characterAvatars':
         return this.saveCharacterAvatars();
+      case 'customObjects':
+        return this.saveCustomObjects();
+      case 'customObjectImages':
+        return this.saveCustomObjectImages();
     }
   }
 
@@ -363,6 +469,34 @@ class SaveService {
     await saveDb.characterAvatars.clear();
     if (records.length > 0) {
       await saveDb.characterAvatars.bulkPut(records);
+    }
+    return true;
+  }
+
+  private async saveCustomObjects(): Promise<boolean> {
+    if (!customObjectSaveService.didRecordsChange()) {
+      return false;
+    }
+
+    const records = customObjectSaveService.getRecords();
+
+    await saveDb.customObjects.clear();
+    if (records.length > 0) {
+      await saveDb.customObjects.bulkPut(records);
+    }
+    return true;
+  }
+
+  private async saveCustomObjectImages(): Promise<boolean> {
+    if (!customObjectImageSaveService.didRecordsChange()) {
+      return false;
+    }
+
+    const records = customObjectImageSaveService.getRecords();
+
+    await saveDb.customObjectImages.clear();
+    if (records.length > 0) {
+      await saveDb.customObjectImages.bulkPut(records);
     }
     return true;
   }

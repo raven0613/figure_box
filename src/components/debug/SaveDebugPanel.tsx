@@ -10,9 +10,14 @@ import {
 } from '~/services/save/saveDebugService';
 import { characterAvatarSaveService } from '~/services/save/characterAvatarSaveService';
 import { characterProfileSaveService } from '~/services/save/characterProfileSaveService';
+import { customObjectImageSaveService } from '~/services/save/customObjectImageSaveService';
+import { customObjectSaveService } from '~/services/save/customObjectSaveService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
 import { saveService } from '~/services/save/saveService';
-import type { CharacterContentPackPreview } from '~/services/save/saveTransferService';
+import type {
+  CombinedContentPackPreview,
+  ContentPackConflictResolution,
+} from '~/services/save/saveTransferService';
 import type {
   BrowserStorageStatus,
   SaveTableName,
@@ -27,12 +32,12 @@ interface SaveDebugPanelProps {
 
 const REFRESH_ERROR_MESSAGE = '存檔資料讀取失敗。';
 const EXPORT_SUCCESS_MESSAGE = '完整存檔已匯出。';
-const CONTENT_EXPORT_SUCCESS_MESSAGE = '角色內容包已匯出。';
+const CONTENT_EXPORT_SUCCESS_MESSAGE = '內容包已匯出。';
 const IMPORT_RELOAD_MESSAGE = '匯入完成，重新載入遊戲。';
 
-interface CharacterContentPackPreviewState {
+interface ContentPackPreviewState {
   packageText: string;
-  preview: CharacterContentPackPreview;
+  preview: CombinedContentPackPreview;
 }
 
 export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
@@ -43,10 +48,14 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
   const [isDebugMutationPending, setIsDebugMutationPending] = useState(false);
   const [isTransferPending, setIsTransferPending] = useState(false);
   const [transferText, setTransferText] = useState('');
-  const [exportContentPackPreview, setExportContentPackPreview] = useState<CharacterContentPackPreview | null>(null);
+  const [exportContentPackPreview, setExportContentPackPreview] = useState<CombinedContentPackPreview | null>(null);
   const [selectedExportCharacterIds, setSelectedExportCharacterIds] = useState<readonly string[]>([]);
-  const [contentPackPreview, setContentPackPreview] = useState<CharacterContentPackPreviewState | null>(null);
+  const [contentPackPreview, setContentPackPreview] = useState<ContentPackPreviewState | null>(null);
   const [selectedContentCharacterIds, setSelectedContentCharacterIds] = useState<readonly string[]>([]);
+  const [characterConflictResolutions, setCharacterConflictResolutions] = useState<Record<string, ContentPackConflictResolution>>({});
+  const [selectedExportObjectIds, setSelectedExportObjectIds] = useState<readonly string[]>([]);
+  const [selectedContentObjectIds, setSelectedContentObjectIds] = useState<readonly string[]>([]);
+  const [objectConflictResolutions, setObjectConflictResolutions] = useState<Record<string, ContentPackConflictResolution>>({});
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedTableSnapshot = useMemo(
@@ -69,6 +78,14 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
   const selectedExportCharacterIdSet = useMemo(
     () => new Set(selectedExportCharacterIds),
     [selectedExportCharacterIds],
+  );
+  const selectedContentObjectIdSet = useMemo(
+    () => new Set(selectedContentObjectIds),
+    [selectedContentObjectIds],
+  );
+  const selectedExportObjectIdSet = useMemo(
+    () => new Set(selectedExportObjectIds),
+    [selectedExportObjectIds],
   );
 
   const refresh = useCallback(async () => {
@@ -192,6 +209,55 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
     }
   }, [refresh]);
 
+  const handleCreateTestObject = useCallback(async () => {
+    setIsDebugMutationPending(true);
+
+    try {
+      const record = customObjectSaveService.upsertDebugObject();
+
+      saveService.markDirty('customObjects');
+      await saveService.flushAutosave();
+      await refresh();
+      setMessage(`custom object saved: ${record.id}`);
+    } finally {
+      setIsDebugMutationPending(false);
+    }
+  }, [refresh]);
+
+  const handleWriteTestObjectImage = useCallback(async () => {
+    setIsDebugMutationPending(true);
+
+    try {
+      customObjectSaveService.upsertDebugObject();
+      const record = customObjectImageSaveService.writeDebugImage();
+
+      saveService.markDirty('customObjects');
+      saveService.markDirty('customObjectImages');
+      await saveService.flushAutosave();
+      await refresh();
+      setMessage(`custom object image saved: ${record.objectId}`);
+    } finally {
+      setIsDebugMutationPending(false);
+    }
+  }, [refresh]);
+
+  const handleDeleteTestObject = useCallback(async () => {
+    setIsDebugMutationPending(true);
+
+    try {
+      customObjectSaveService.deleteDebugObject();
+      customObjectImageSaveService.deleteDebugImage();
+
+      saveService.markDirty('customObjects');
+      saveService.markDirty('customObjectImages');
+      await saveService.flushAutosave();
+      await refresh();
+      setMessage('debug custom object and image deleted');
+    } finally {
+      setIsDebugMutationPending(false);
+    }
+  }, [refresh]);
+
   const handleExportFullSave = useCallback(async () => {
     setIsTransferPending(true);
 
@@ -235,18 +301,19 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
     }
   }, [transferText]);
 
-  const handleExportCharacterContentPack = useCallback(async () => {
+  const handleExportContentPack = useCallback(async () => {
     if (!exportContentPackPreview) {
       setIsTransferPending(true);
 
       try {
-        const preview = await saveService.previewExportableCharacterContentPack();
+        const preview = await saveService.previewExportableContentPack();
 
         setExportContentPackPreview(preview);
         setSelectedExportCharacterIds(preview.characters.map(character => character.id));
-        setMessage(`請確認要匯出的角色，預設已全選：${String(preview.characters.length)} 個。`);
+        setSelectedExportObjectIds(preview.objects.map(customObject => customObject.id));
+        setMessage(createContentPackCountMessage('請確認要匯出的內容，預設已全選：', preview));
       } catch (error) {
-        console.error('Character content pack export preview failed.', error);
+        console.error('Content pack export preview failed.', error);
         setMessage(getErrorMessage(error));
       } finally {
         setIsTransferPending(false);
@@ -254,18 +321,19 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
       return;
     }
 
-    if (selectedExportCharacterIds.length === 0) {
-      setMessage('請至少勾選一個要匯出的角色。');
+    if (selectedExportCharacterIds.length === 0 && selectedExportObjectIds.length === 0) {
+      setMessage('請至少勾選一個要匯出的角色或物件。');
       return;
     }
 
     setIsTransferPending(true);
 
     try {
-      const packageString = await saveService.exportCharacterContentPackString({
+      const packageString = await saveService.exportContentPackString({
         characterIds: selectedExportCharacterIds,
+        objectIds: selectedExportObjectIds,
       });
-      const preview = saveService.previewCharacterContentPackString(packageString);
+      const preview = await saveService.previewContentPackString(packageString);
 
       setTransferText(packageString);
       setContentPackPreview({
@@ -273,119 +341,136 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
         preview,
       });
       setSelectedContentCharacterIds(preview.characters.map(character => character.id));
+      setSelectedContentObjectIds(preview.objects.map(customObject => customObject.id));
+      setCharacterConflictResolutions(createCharacterConflictResolutions(preview));
+      setObjectConflictResolutions(createObjectConflictResolutions(preview));
       await refresh();
       setMessage(`${CONTENT_EXPORT_SUCCESS_MESSAGE} ${formatExportStringLength(packageString)}`);
     } catch (error) {
-      console.error('Character content pack export failed.', error);
+      console.error('Content pack export failed.', error);
       setMessage(getErrorMessage(error));
     } finally {
       setIsTransferPending(false);
     }
-  }, [exportContentPackPreview, refresh, selectedExportCharacterIds]);
+  }, [exportContentPackPreview, refresh, selectedExportCharacterIds, selectedExportObjectIds]);
 
-  const handlePreviewExportCharacterContentPack = useCallback(async () => {
+  const handlePreviewExportContentPack = useCallback(async () => {
     if (exportContentPackPreview) {
       setExportContentPackPreview(null);
       setSelectedExportCharacterIds([]);
+      setSelectedExportObjectIds([]);
       return;
     }
 
     setIsTransferPending(true);
 
     try {
-      const preview = await saveService.previewExportableCharacterContentPack();
+      const preview = await saveService.previewExportableContentPack();
 
       setExportContentPackPreview(preview);
       setSelectedExportCharacterIds(preview.characters.map(character => character.id));
-      setMessage(`可匯出角色：${String(preview.characters.length)} 個，已全選。`);
+      setSelectedExportObjectIds(preview.objects.map(customObject => customObject.id));
+      setMessage(createContentPackCountMessage('可匯出內容：', preview));
     } catch (error) {
-      console.error('Character content pack export preview failed.', error);
+      console.error('Content pack export preview failed.', error);
       setExportContentPackPreview(null);
       setSelectedExportCharacterIds([]);
+      setSelectedExportObjectIds([]);
       setMessage(getErrorMessage(error));
     } finally {
       setIsTransferPending(false);
     }
   }, [exportContentPackPreview]);
 
-  const handlePreviewCharacterContentPack = useCallback(() => {
+  const handlePreviewContentPack = useCallback(async () => {
     if (currentContentPackPreview) {
       setContentPackPreview(null);
       setSelectedContentCharacterIds([]);
+      setSelectedContentObjectIds([]);
+      setCharacterConflictResolutions({});
+      setObjectConflictResolutions({});
       return;
     }
 
     if (normalizedTransferText.length === 0) {
-      setMessage('請先貼上角色內容包字串。');
+      setMessage('請先貼上內容包字串。');
       return;
     }
 
     try {
-      const preview = saveService.previewCharacterContentPackString(normalizedTransferText);
+      const preview = await saveService.previewContentPackString(normalizedTransferText);
 
       setContentPackPreview({
         packageText: normalizedTransferText,
         preview,
       });
       setSelectedContentCharacterIds(preview.characters.map(character => character.id));
-      setMessage(`角色內容包：${String(preview.characters.length)} 個角色，已全選。`);
+      setSelectedContentObjectIds(preview.objects.map(customObject => customObject.id));
+      setCharacterConflictResolutions(createCharacterConflictResolutions(preview));
+      setObjectConflictResolutions(createObjectConflictResolutions(preview));
+      setMessage(createContentPackCountMessage('內容包已預覽，預設全選：', preview));
     } catch (error) {
-      console.error('Character content pack preview failed.', error);
+      console.error('Content pack preview failed.', error);
       setContentPackPreview(null);
       setSelectedContentCharacterIds([]);
+      setSelectedContentObjectIds([]);
+      setCharacterConflictResolutions({});
+      setObjectConflictResolutions({});
       setMessage(getErrorMessage(error));
     }
   }, [currentContentPackPreview, normalizedTransferText]);
 
-  const handleImportCharacterContentPack = useCallback(async () => {
+  const handleImportContentPack = useCallback(async () => {
     if (normalizedTransferText.length === 0) {
-      setMessage('請先貼上角色內容包字串。');
+      setMessage('請先貼上內容包字串。');
       return;
     }
 
     if (!currentContentPackPreview) {
-      try {
-        const preview = saveService.previewCharacterContentPackString(normalizedTransferText);
-
-        setContentPackPreview({
-          packageText: normalizedTransferText,
-          preview,
-        });
-        setSelectedContentCharacterIds(preview.characters.map(character => character.id));
-        setMessage('請確認要匯入的角色，預設已全選。');
-      } catch (error) {
-        console.error('Character content pack preview failed.', error);
-        setMessage(getErrorMessage(error));
-      }
+      setMessage('請先 Preview Content，確認勾選項目後再匯入。');
       return;
     }
 
-    if (selectedContentCharacterIds.length === 0) {
-      setMessage('請至少勾選一個角色。');
+    if (selectedContentCharacterIds.length === 0 && selectedContentObjectIds.length === 0) {
+      setMessage('請至少勾選一個角色或物件。');
       return;
     }
 
     setIsTransferPending(true);
 
     try {
-      const summary = await saveService.importCharacterContentPackString(normalizedTransferText, {
+      const summary = await saveService.importContentPackString(normalizedTransferText, {
         characterIds: selectedContentCharacterIds,
+        objectIds: selectedContentObjectIds,
+        characterConflictResolutions,
+        objectConflictResolutions,
       });
 
       await refresh();
-      setMessage(`角色內容包已匯入。characters=${String(summary.characterCount)}, avatars=${String(summary.avatarCount)}`);
+      setMessage(`內容包已匯入。characters=${String(summary.characterCount)}, avatars=${String(summary.avatarCount)}, objects=${String(summary.objectCount)}, images=${String(summary.imageCount)}`);
     } catch (error) {
-      console.error('Character content pack import failed.', error);
+      console.error('Content pack import failed.', error);
       setMessage(getErrorMessage(error));
     } finally {
       setIsTransferPending(false);
     }
-  }, [currentContentPackPreview, normalizedTransferText, refresh, selectedContentCharacterIds]);
+  }, [
+    characterConflictResolutions,
+    currentContentPackPreview,
+    normalizedTransferText,
+    objectConflictResolutions,
+    refresh,
+    selectedContentCharacterIds,
+    selectedContentObjectIds,
+  ]);
 
   const handleTransferTextChange = useCallback((value: string) => {
     setTransferText(value);
     setContentPackPreview(null);
     setSelectedContentCharacterIds([]);
+    setCharacterConflictResolutions({});
+    setSelectedContentObjectIds([]);
+    setObjectConflictResolutions({});
   }, []);
 
   const handleSelectAllContentCharacters = useCallback(() => {
@@ -418,6 +503,58 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
         ? currentCharacterIds.filter(currentCharacterId => currentCharacterId !== characterId)
         : [...currentCharacterIds, characterId]
     ));
+  }, []);
+
+  const handleSetCharacterConflictResolution = useCallback((
+    characterId: string,
+    resolution: ContentPackConflictResolution,
+  ) => {
+    setCharacterConflictResolutions(currentResolutions => ({
+      ...currentResolutions,
+      [characterId]: resolution,
+    }));
+  }, []);
+
+  const handleSelectAllExportObjects = useCallback(() => {
+    setSelectedExportObjectIds(exportContentPackPreview?.objects.map(customObject => customObject.id) ?? []);
+  }, [exportContentPackPreview]);
+
+  const handleClearExportObjects = useCallback(() => {
+    setSelectedExportObjectIds([]);
+  }, []);
+
+  const handleToggleExportObject = useCallback((objectId: string) => {
+    setSelectedExportObjectIds(currentObjectIds => (
+      currentObjectIds.includes(objectId)
+        ? currentObjectIds.filter(currentObjectId => currentObjectId !== objectId)
+        : [...currentObjectIds, objectId]
+    ));
+  }, []);
+
+  const handleSelectAllContentObjects = useCallback(() => {
+    setSelectedContentObjectIds(currentContentPackPreview?.objects.map(customObject => customObject.id) ?? []);
+  }, [currentContentPackPreview]);
+
+  const handleClearContentObjects = useCallback(() => {
+    setSelectedContentObjectIds([]);
+  }, []);
+
+  const handleToggleContentObject = useCallback((objectId: string) => {
+    setSelectedContentObjectIds(currentObjectIds => (
+      currentObjectIds.includes(objectId)
+        ? currentObjectIds.filter(currentObjectId => currentObjectId !== objectId)
+        : [...currentObjectIds, objectId]
+    ));
+  }, []);
+
+  const handleSetObjectConflictResolution = useCallback((
+    objectId: string,
+    resolution: ContentPackConflictResolution,
+  ) => {
+    setObjectConflictResolutions(currentResolutions => ({
+      ...currentResolutions,
+      [objectId]: resolution,
+    }));
   }, []);
 
   const handleReset = useCallback(async () => {
@@ -502,6 +639,30 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
           >
             Delete Test Character
           </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={handleCreateTestObject}
+            disabled={isDebugMutationPending}
+          >
+            Create Test Object
+          </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={handleWriteTestObjectImage}
+            disabled={isDebugMutationPending}
+          >
+            Write Test Object Image
+          </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={handleDeleteTestObject}
+            disabled={isDebugMutationPending}
+          >
+            Delete Test Object
+          </button>
           <button className={styles.dangerButton} type="button" onClick={handleReset}>
             Reset DB
           </button>
@@ -527,75 +688,120 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
             <button
               className={styles.secondaryButton}
               type="button"
-              onClick={handlePreviewExportCharacterContentPack}
+              onClick={handlePreviewExportContentPack}
               disabled={isTransferPending}
             >
-              {exportContentPackPreview ? 'Close Export Characters' : 'Choose Export Characters'}
+              {exportContentPackPreview ? 'Close Export Content' : 'Choose Export Content'}
             </button>
             <button
               className={styles.secondaryButton}
               type="button"
-              onClick={handleExportCharacterContentPack}
-              disabled={isTransferPending}
-            >
-              Export Characters
-            </button>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={handlePreviewCharacterContentPack}
+              onClick={handlePreviewContentPack}
               disabled={isTransferPending || normalizedTransferText.length === 0}
             >
-              {currentContentPackPreview ? 'Close Preview Characters' : 'Preview Characters'}
-            </button>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={handleImportCharacterContentPack}
-              disabled={isTransferPending || normalizedTransferText.length === 0}
-            >
-              Import Characters
+              {currentContentPackPreview ? 'Close Preview Content' : 'Preview Content'}
             </button>
           </div>
           {exportContentPackPreview ? (
             <div className={styles.contentPackPreview}>
               <div className={styles.previewHeader}>
-                <strong>Export Characters</strong>
-                <span>{selectedExportCharacterIds.length} / {exportContentPackPreview.characters.length}</span>
+                <strong>Export Content</strong>
+                <span>
+                  {selectedExportCharacterIds.length} / {exportContentPackPreview.characters.length} characters · {selectedExportObjectIds.length} / {exportContentPackPreview.objects.length} objects
+                </span>
               </div>
               <div className={styles.actionRow}>
                 <button
                   className={styles.secondaryButton}
                   type="button"
-                  onClick={handleSelectAllExportCharacters}
-                  disabled={selectedExportCharacterIds.length === exportContentPackPreview.characters.length}
+                  onClick={handleExportContentPack}
+                  disabled={isTransferPending || (selectedExportCharacterIds.length === 0 && selectedExportObjectIds.length === 0)}
                 >
-                  Select All
-                </button>
-                <button
-                  className={styles.secondaryButton}
-                  type="button"
-                  onClick={handleClearExportCharacters}
-                  disabled={selectedExportCharacterIds.length === 0}
-                >
-                  Clear
+                  Export Content
                 </button>
               </div>
-              <div className={styles.characterImportList}>
-                {exportContentPackPreview.characters.map(character => (
-                  <label className={styles.characterImportRow} key={character.id}>
-                    <input
-                      type="checkbox"
-                      checked={selectedExportCharacterIdSet.has(character.id)}
-                      onChange={() => handleToggleExportCharacter(character.id)}
-                    />
-                    <span>
-                      <strong>{character.name}</strong>
-                      <small>{character.id} · {character.source} · avatar={character.hasAvatar ? 'yes' : 'no'}</small>
-                    </span>
-                  </label>
-                ))}
-              </div>
+              {exportContentPackPreview.characters.length > 0 ? (
+                <>
+                  <div className={styles.previewHeader}>
+                    <strong>Characters</strong>
+                    <span>{selectedExportCharacterIds.length} / {exportContentPackPreview.characters.length}</span>
+                  </div>
+                  <div className={styles.actionRow}>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={handleSelectAllExportCharacters}
+                      disabled={selectedExportCharacterIds.length === exportContentPackPreview.characters.length}
+                    >
+                      Select All Characters
+                    </button>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={handleClearExportCharacters}
+                      disabled={selectedExportCharacterIds.length === 0}
+                    >
+                      Clear Characters
+                    </button>
+                  </div>
+                  <div className={styles.characterImportList}>
+                    {exportContentPackPreview.characters.map(character => (
+                      <label className={styles.characterImportRow} key={character.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedExportCharacterIdSet.has(character.id)}
+                          onChange={() => handleToggleExportCharacter(character.id)}
+                        />
+                        <span>
+                          <strong>{character.name}</strong>
+                          <small>{character.id} · {character.source} · avatar={character.hasAvatar ? 'yes' : 'no'}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              {exportContentPackPreview.objects.length > 0 ? (
+                <>
+                  <div className={styles.previewHeader}>
+                    <strong>Objects</strong>
+                    <span>{selectedExportObjectIds.length} / {exportContentPackPreview.objects.length}</span>
+                  </div>
+                  <div className={styles.actionRow}>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={handleSelectAllExportObjects}
+                      disabled={selectedExportObjectIds.length === exportContentPackPreview.objects.length}
+                    >
+                      Select All Objects
+                    </button>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={handleClearExportObjects}
+                      disabled={selectedExportObjectIds.length === 0}
+                    >
+                      Clear Objects
+                    </button>
+                  </div>
+                  <div className={styles.characterImportList}>
+                    {exportContentPackPreview.objects.map(customObject => (
+                      <label className={styles.characterImportRow} key={customObject.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedExportObjectIdSet.has(customObject.id)}
+                          onChange={() => handleToggleExportObject(customObject.id)}
+                        />
+                        <span>
+                          <strong>{customObject.name}</strong>
+                          <small>{customObject.id} · {customObject.source} · origin={customObject.originKind} · image={customObject.hasImage ? 'yes' : 'no'}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </div>
           ) : null}
           <textarea
@@ -603,47 +809,134 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
             value={transferText}
             onChange={event => handleTransferTextChange(event.target.value)}
             spellCheck={false}
-            placeholder="Full save or character content pack string"
+            placeholder="Full save or content pack string"
           />
           {currentContentPackPreview ? (
             <div className={styles.contentPackPreview}>
               <div className={styles.previewHeader}>
-                <strong>Characters</strong>
-                <span>{selectedContentCharacterIds.length} / {currentContentPackPreview.characters.length}</span>
+                <strong>Preview Content</strong>
+                <span>
+                  {selectedContentCharacterIds.length} / {currentContentPackPreview.characters.length} characters · {selectedContentObjectIds.length} / {currentContentPackPreview.objects.length} objects
+                </span>
               </div>
               <div className={styles.actionRow}>
                 <button
                   className={styles.secondaryButton}
                   type="button"
-                  onClick={handleSelectAllContentCharacters}
-                  disabled={selectedContentCharacterIds.length === currentContentPackPreview.characters.length}
+                  onClick={handleImportContentPack}
+                  disabled={isTransferPending || (selectedContentCharacterIds.length === 0 && selectedContentObjectIds.length === 0)}
                 >
-                  Select All
-                </button>
-                <button
-                  className={styles.secondaryButton}
-                  type="button"
-                  onClick={handleClearContentCharacters}
-                  disabled={selectedContentCharacterIds.length === 0}
-                >
-                  Clear
+                  Import Content
                 </button>
               </div>
-              <div className={styles.characterImportList}>
-                {currentContentPackPreview.characters.map(character => (
-                  <label className={styles.characterImportRow} key={character.id}>
-                    <input
-                      type="checkbox"
-                      checked={selectedContentCharacterIdSet.has(character.id)}
-                      onChange={() => handleToggleContentCharacter(character.id)}
-                    />
-                    <span>
-                      <strong>{character.name}</strong>
-                      <small>{character.id} · {character.source} · avatar={character.hasAvatar ? 'yes' : 'no'}</small>
-                    </span>
-                  </label>
-                ))}
-              </div>
+              {currentContentPackPreview.characters.length > 0 ? (
+                <>
+                  <div className={styles.previewHeader}>
+                    <strong>Characters</strong>
+                    <span>{selectedContentCharacterIds.length} / {currentContentPackPreview.characters.length}</span>
+                  </div>
+                  <div className={styles.actionRow}>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={handleSelectAllContentCharacters}
+                      disabled={selectedContentCharacterIds.length === currentContentPackPreview.characters.length}
+                    >
+                      Select All Characters
+                    </button>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={handleClearContentCharacters}
+                      disabled={selectedContentCharacterIds.length === 0}
+                    >
+                      Clear Characters
+                    </button>
+                  </div>
+                  <div className={styles.characterImportList}>
+                    {currentContentPackPreview.characters.map(character => (
+                      <label className={styles.characterImportRow} key={character.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedContentCharacterIdSet.has(character.id)}
+                          onChange={() => handleToggleContentCharacter(character.id)}
+                        />
+                        <span>
+                          <strong>{character.name}</strong>
+                          <small>{character.id} · {character.source} · avatar={character.hasAvatar ? 'yes' : 'no'} · conflict={character.hasConflict ? 'yes' : 'no'}</small>
+                          {character.hasConflict ? (
+                            <select
+                              className={styles.conflictSelect}
+                              value={characterConflictResolutions[character.id] ?? 'newId'}
+                              onChange={event => handleSetCharacterConflictResolution(
+                                character.id,
+                                event.target.value as ContentPackConflictResolution,
+                              )}
+                            >
+                              <option value="newId">Save as new id</option>
+                              <option value="overwrite">Overwrite</option>
+                            </select>
+                          ) : null}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              {currentContentPackPreview.objects.length > 0 ? (
+                <>
+                  <div className={styles.previewHeader}>
+                    <strong>Objects</strong>
+                    <span>{selectedContentObjectIds.length} / {currentContentPackPreview.objects.length}</span>
+                  </div>
+                  <div className={styles.actionRow}>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={handleSelectAllContentObjects}
+                      disabled={selectedContentObjectIds.length === currentContentPackPreview.objects.length}
+                    >
+                      Select All Objects
+                    </button>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={handleClearContentObjects}
+                      disabled={selectedContentObjectIds.length === 0}
+                    >
+                      Clear Objects
+                    </button>
+                  </div>
+                  <div className={styles.characterImportList}>
+                    {currentContentPackPreview.objects.map(customObject => (
+                      <label className={styles.characterImportRow} key={customObject.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedContentObjectIdSet.has(customObject.id)}
+                          onChange={() => handleToggleContentObject(customObject.id)}
+                        />
+                        <span>
+                          <strong>{customObject.name}</strong>
+                          <small>{customObject.id} · {customObject.source} · origin={customObject.originKind} · image={customObject.hasImage ? 'yes' : 'no'} · conflict={customObject.hasConflict ? 'yes' : 'no'}</small>
+                          {customObject.hasConflict ? (
+                            <select
+                              className={styles.conflictSelect}
+                              value={objectConflictResolutions[customObject.id] ?? 'newId'}
+                              onChange={event => handleSetObjectConflictResolution(
+                                customObject.id,
+                                event.target.value as ContentPackConflictResolution,
+                              )}
+                            >
+                              <option value="newId">Save as new id</option>
+                              <option value="overwrite">Overwrite</option>
+                            </select>
+                          ) : null}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -738,6 +1031,33 @@ function formatBytes(value: number): string {
 
 function formatExportStringLength(value: string): string {
   return `${value.length.toLocaleString()} chars`;
+}
+
+function createContentPackCountMessage(
+  prefix: string,
+  preview: CombinedContentPackPreview,
+): string {
+  return `${prefix}${String(preview.characters.length)} 個角色、${String(preview.objects.length)} 個物件。`;
+}
+
+function createCharacterConflictResolutions(
+  preview: CombinedContentPackPreview,
+): Record<string, ContentPackConflictResolution> {
+  return Object.fromEntries(
+    preview.characters
+      .filter(character => character.hasConflict)
+      .map(character => [character.id, 'newId' as const]),
+  );
+}
+
+function createObjectConflictResolutions(
+  preview: CombinedContentPackPreview,
+): Record<string, ContentPackConflictResolution> {
+  return Object.fromEntries(
+    preview.objects
+      .filter(customObject => customObject.hasConflict)
+      .map(customObject => [customObject.id, 'newId' as const]),
+  );
 }
 
 function getErrorMessage(error: unknown): string {
