@@ -1,5 +1,5 @@
 import type { Position } from '~/constants/character';
-import { WORLD_EVENT_DEFINITIONS_BY_ID } from '~/constants/worldEventDefinitions';
+import { WORLD_EVENT_DEFINITIONS_BY_ID } from '~/services/eventOccurrences/worldEventDefinitions';
 import type { EventOccurrence, WorldEventDefinition } from './worldEventTypes';
 
 interface PlayTransientEventPerformanceInput {
