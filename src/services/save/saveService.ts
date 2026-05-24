@@ -10,7 +10,9 @@ import {
   createDefaultWorldProgress,
 } from './saveDefaults';
 import {
-  normalizeCharacterSaveRecords,
+  normalizeCharacterAvatarRecords,
+  normalizeCharacterProfileRecords,
+  normalizeCharacterRuntimeSaveRecords,
   normalizeItemSaveRecord,
   normalizeRelationshipSaveRecord,
   normalizeSaveMetaRecord,
@@ -19,9 +21,28 @@ import {
   normalizeWorldProgressRecord,
 } from './saveNormalizer';
 import { settingsService } from './settingsService';
+import { characterAvatarSaveService } from './characterAvatarSaveService';
 import { characterRuntimeSaveService } from './characterRuntimeSaveService';
+import { characterProfileSaveService } from './characterProfileSaveService';
 import { relationshipStoreService } from './relationshipStoreService';
-import type { RelationshipSaveRecord, SaveDomain } from './saveTypes';
+import type {
+  CharacterRuntimeSaveRecord,
+  RelationshipSaveRecord,
+  SaveDomain,
+} from './saveTypes';
+import {
+  exportCharacterContentPackString,
+  exportFullSavePackageString,
+  importCharacterContentPackString,
+  importFullSavePackageString,
+  previewCharacterContentPackString,
+  previewExportableCharacterContentPack,
+  type CharacterContentPackPreview,
+  type ContentPackPackageSummary,
+  type ExportCharacterContentPackOptions,
+  type FullSavePackageSummary,
+  type ImportCharacterContentPackOptions,
+} from './saveTransferService';
 import { worldProgressService } from './worldProgressService';
 
 const AUTOSAVE_DELAY_MS = 600;
@@ -42,6 +63,58 @@ class SaveService {
   async saveItemsNow(): Promise<void> {
     await itemService.save();
     await this.touchSaveMeta();
+  }
+
+  async exportFullSaveString(): Promise<string> {
+    await this.flushAutosave();
+    await this.touchBackupMeta();
+
+    return exportFullSavePackageString();
+  }
+
+  async importFullSaveString(packageString: string): Promise<FullSavePackageSummary> {
+    if (this.autosaveTimer !== null) {
+      window.clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+
+    this.dirtyDomains.clear();
+    const summary = await importFullSavePackageString(packageString);
+    this.initializationPromise = null;
+    await this.initializeGameInternal();
+
+    return summary;
+  }
+
+  async exportCharacterContentPackString(
+    options: ExportCharacterContentPackOptions = {},
+  ): Promise<string> {
+    await this.flushAutosave();
+
+    return exportCharacterContentPackString(options);
+  }
+
+  async previewExportableCharacterContentPack(): Promise<CharacterContentPackPreview> {
+    await this.flushAutosave();
+
+    return previewExportableCharacterContentPack();
+  }
+
+  previewCharacterContentPackString(packageString: string): CharacterContentPackPreview {
+    return previewCharacterContentPackString(packageString);
+  }
+
+  async importCharacterContentPackString(
+    packageString: string,
+    options: ImportCharacterContentPackOptions = {},
+  ): Promise<ContentPackPackageSummary> {
+    const summary = await importCharacterContentPackString(packageString, options);
+
+    this.initializationPromise = null;
+    await this.initializeGameInternal();
+    await this.touchSaveMeta();
+
+    return summary;
   }
 
   scheduleSaveItems(): void {
@@ -89,7 +162,17 @@ class SaveService {
 
   private async ensureCoreRecords(): Promise<void> {
     const timestamp = Date.now();
-    const [rawSaveMeta, rawWorldProgress, rawItems, rawShops, rawSettings, rawRelationships, rawCharacters] = await Promise.all([
+    const [
+      rawSaveMeta,
+      rawWorldProgress,
+      rawItems,
+      rawShops,
+      rawSettings,
+      rawRelationships,
+      rawCharacters,
+      rawCharacterRuntime,
+      rawCharacterAvatars,
+    ] = await Promise.all([
       saveDb.saveMeta.get('current'),
       saveDb.worldProgress.get('current'),
       saveDb.items.get('current'),
@@ -97,6 +180,8 @@ class SaveService {
       saveDb.settings.get('current'),
       saveDb.relationships.get('current'),
       saveDb.characters.toArray(),
+      saveDb.characterRuntime.toArray(),
+      saveDb.characterAvatars.toArray(),
     ]);
     const saveMeta = rawSaveMeta
       ? normalizeSaveMetaRecord(rawSaveMeta)
@@ -123,22 +208,49 @@ class SaveService {
     const relationshipStore = rawRelationships
       ? normalizeRelationshipSaveRecord(rawRelationships)
       : createDefaultRelationshipSaveRecord(timestamp);
-    const characterSaveRecords = normalizeCharacterSaveRecords(rawCharacters);
+    const characterProfileRecords = normalizeCharacterProfileRecords(rawCharacters);
+    const legacyCharacterRuntimeRecords = normalizeCharacterRuntimeSaveRecords(rawCharacters, {
+      requireRuntimeShape: true,
+    });
+    const characterRuntimeRecords = mergeCharacterRuntimeRecords([
+      ...legacyCharacterRuntimeRecords,
+      ...normalizeCharacterRuntimeSaveRecords(rawCharacterRuntime),
+    ]);
+    const characterAvatarRecords = normalizeCharacterAvatarRecords(rawCharacterAvatars);
 
     worldProgressService.load(worldProgress);
     settingsService.load(settings);
     relationshipStoreService.load(relationshipStore.snapshot);
-    characterRuntimeSaveService.load(characterSaveRecords);
+    characterProfileSaveService.load(characterProfileRecords);
+    characterRuntimeSaveService.load(characterRuntimeRecords);
+    characterAvatarSaveService.load(characterAvatarRecords);
 
-    await saveDb.transaction('rw', [saveDb.saveMeta, saveDb.worldProgress, saveDb.items, saveDb.shops, saveDb.settings, saveDb.relationships, saveDb.characters], async () => {
+    await saveDb.transaction('rw', [
+      saveDb.saveMeta,
+      saveDb.worldProgress,
+      saveDb.items,
+      saveDb.shops,
+      saveDb.settings,
+      saveDb.relationships,
+      saveDb.characters,
+      saveDb.characterRuntime,
+      saveDb.characterAvatars,
+    ], async () => {
       await saveDb.saveMeta.put(saveMeta);
       await saveDb.worldProgress.put(worldProgress);
       await saveDb.items.put(itemSaveRecord);
       await saveDb.shops.put(shopSaveRecord);
       await saveDb.settings.put(settings);
       await saveDb.relationships.put(relationshipStore);
-      if (characterSaveRecords.length > 0) {
-        await saveDb.characters.bulkPut(characterSaveRecords);
+      await saveDb.characters.clear();
+      if (characterProfileRecords.length > 0) {
+        await saveDb.characters.bulkPut(characterProfileRecords);
+      }
+      if (characterRuntimeRecords.length > 0) {
+        await saveDb.characterRuntime.bulkPut(characterRuntimeRecords);
+      }
+      if (characterAvatarRecords.length > 0) {
+        await saveDb.characterAvatars.bulkPut(characterAvatarRecords);
       }
     });
   }
@@ -175,7 +287,11 @@ class SaveService {
       case 'relationships':
         return this.saveRelationships();
       case 'characters':
-        return this.saveCharacters();
+        return this.saveCharacterProfiles();
+      case 'characterRuntime':
+        return this.saveCharacterRuntime();
+      case 'characterAvatars':
+        return this.saveCharacterAvatars();
     }
   }
 
@@ -198,7 +314,7 @@ class SaveService {
     return true;
   }
 
-  private async saveCharacters(): Promise<boolean> {
+  private async saveCharacterRuntime(): Promise<boolean> {
     const timestamp = Date.now();
 
     if (
@@ -218,8 +334,36 @@ class SaveService {
       return false;
     }
 
-    await saveDb.characters.bulkPut(records);
+    await saveDb.characterRuntime.bulkPut(records);
     this.lastCharacterSaveAt = timestamp;
+    return true;
+  }
+
+  private async saveCharacterProfiles(): Promise<boolean> {
+    if (!characterProfileSaveService.didRecordsChange()) {
+      return false;
+    }
+
+    const records = characterProfileSaveService.getRecords();
+
+    await saveDb.characters.clear();
+    if (records.length > 0) {
+      await saveDb.characters.bulkPut(records);
+    }
+    return true;
+  }
+
+  private async saveCharacterAvatars(): Promise<boolean> {
+    if (!characterAvatarSaveService.didRecordsChange()) {
+      return false;
+    }
+
+    const records = characterAvatarSaveService.getRecords();
+
+    await saveDb.characterAvatars.clear();
+    if (records.length > 0) {
+      await saveDb.characterAvatars.bulkPut(records);
+    }
     return true;
   }
 
@@ -231,6 +375,23 @@ class SaveService {
       updatedAt: Date.now(),
     });
   }
+
+  private async touchBackupMeta(): Promise<void> {
+    const timestamp = Date.now();
+    const currentRecord = normalizeSaveMetaRecord(await saveDb.saveMeta.get('current'));
+
+    await saveDb.saveMeta.put({
+      ...currentRecord,
+      lastBackupAt: timestamp,
+      updatedAt: timestamp,
+    });
+  }
 }
 
 export const saveService = new SaveService();
+
+function mergeCharacterRuntimeRecords(
+  records: readonly CharacterRuntimeSaveRecord[],
+): readonly CharacterRuntimeSaveRecord[] {
+  return Array.from(new Map(records.map(record => [record.id, record])).values());
+}

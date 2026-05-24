@@ -617,7 +617,7 @@ export class TownCharacterController {
 
   private handleCharacterSnapshot(characterId: string, snapshot: CharacterSnapshot): void {
     if (characterRuntimeSaveService.captureSnapshot(snapshot)) {
-      saveService.markDirty('characters');
+      saveService.markDirty('characterRuntime');
     }
 
     this.onCharacterSnapshot?.(characterId, snapshot);

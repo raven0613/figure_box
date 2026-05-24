@@ -4,7 +4,7 @@ import type { RelationshipStore } from '~/stateMachines/gameFlow/relationships';
 import type { ShopStockItem } from '~/typing/item';
 
 export const SAVE_DATABASE_NAME = 'figureBoxSaveDb';
-export const SAVE_DATABASE_VERSION = 1;
+export const SAVE_DATABASE_VERSION = 3;
 export const SAVE_SCHEMA_VERSION = 1;
 
 export type SaveTableName =
@@ -15,6 +15,7 @@ export type SaveTableName =
   | 'shops'
   | 'relationships'
   | 'characters'
+  | 'characterRuntime'
   | 'characterAvatars';
 
 export interface SaveMetaRecord {
@@ -74,14 +75,41 @@ export interface CharacterRuntimeSnapshot {
   relationships: CharacterContext['relationships'];
 }
 
-export interface CharacterSaveRecord {
+export interface CharacterRuntimeSaveRecord {
   id: string;
   seedId: string;
   snapshot: CharacterRuntimeSnapshot;
   updatedAt: number;
 }
 
-export type SaveDomain = 'items' | 'shops' | 'settings' | 'worldProgress' | 'relationships' | 'characters';
+export interface CharacterProfileRecord {
+  id: string;
+  source: 'playerCreated' | 'imported' | 'debug';
+  templateId?: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  profile: Record<string, unknown>;
+}
+
+export interface CharacterAvatarRecord {
+  id: string;
+  characterId: string;
+  avatarSchemaVersion: number;
+  avatarState?: unknown;
+  appearanceOverride?: unknown;
+  updatedAt: number;
+}
+
+export type SaveDomain =
+  | 'items'
+  | 'shops'
+  | 'settings'
+  | 'worldProgress'
+  | 'relationships'
+  | 'characters'
+  | 'characterRuntime'
+  | 'characterAvatars';
 
 export interface SaveTableSchemaSummary {
   name: SaveTableName;

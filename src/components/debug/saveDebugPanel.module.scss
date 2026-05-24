@@ -114,6 +114,78 @@
   color: #385f34;
 }
 
+.transferBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.transferTextarea {
+  width: 100%;
+  min-height: 84px;
+  max-height: 150px;
+  padding: 8px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #182027;
+  resize: vertical;
+  background: #fbfcfd;
+  border: 1px solid #b9c7d1;
+  border-radius: 6px;
+}
+
+.contentPackPreview {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: #f4f8fa;
+  border: 1px solid #c9d6df;
+  border-radius: 6px;
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.previewHeader span {
+  color: #68717a;
+}
+
+.characterImportList {
+  display: grid;
+  gap: 6px;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.characterImportRow {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: #ffffff;
+  border: 1px solid rgba(24, 32, 39, 0.1);
+  border-radius: 6px;
+}
+
+.characterImportRow span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.characterImportRow small {
+  color: #68717a;
+  overflow-wrap: anywhere;
+}
+
 .contentGrid {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);

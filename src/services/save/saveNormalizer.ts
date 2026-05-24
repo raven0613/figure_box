@@ -28,7 +28,9 @@ import {
 } from './saveDefaults';
 import {
   SAVE_SCHEMA_VERSION,
-  type CharacterSaveRecord,
+  type CharacterAvatarRecord,
+  type CharacterProfileRecord,
+  type CharacterRuntimeSaveRecord,
   type CharacterRuntimeSnapshot,
   type ItemSaveRecord,
   type RelationshipSaveRecord,
@@ -158,9 +160,16 @@ export function normalizeRelationshipSaveRecord(rawRecord: unknown): Relationshi
   };
 }
 
-export function normalizeCharacterSaveRecords(rawRecords: readonly unknown[]): readonly CharacterSaveRecord[] {
+export function normalizeCharacterRuntimeSaveRecords(
+  rawRecords: readonly unknown[],
+  options: { requireRuntimeShape?: boolean } = {},
+): readonly CharacterRuntimeSaveRecord[] {
   return rawRecords.flatMap(rawRecord => {
     if (!isRecord(rawRecord) || typeof rawRecord.id !== 'string') {
+      return [];
+    }
+
+    if (options.requireRuntimeShape && rawRecord.snapshot === undefined && rawRecord.seedId === undefined) {
       return [];
     }
 
@@ -173,6 +182,64 @@ export function normalizeCharacterSaveRecords(rawRecords: readonly unknown[]): r
       snapshot,
       updatedAt: readFiniteNumber(rawRecord.updatedAt, Date.now()),
     }];
+  });
+}
+
+export function normalizeCharacterProfileRecords(
+  rawRecords: readonly unknown[],
+): readonly CharacterProfileRecord[] {
+  return rawRecords.flatMap(rawRecord => {
+    if (!isRecord(rawRecord) || typeof rawRecord.id !== 'string' || rawRecord.snapshot !== undefined) {
+      return [];
+    }
+
+    const timestamp = Date.now();
+    const source = readCharacterProfileSource(rawRecord.source);
+
+    return [{
+      id: rawRecord.id,
+      source,
+      ...(typeof rawRecord.templateId === 'string' ? { templateId: rawRecord.templateId } : {}),
+      name: typeof rawRecord.name === 'string' && rawRecord.name.length > 0
+        ? rawRecord.name
+        : rawRecord.id,
+      createdAt: readFiniteNumber(rawRecord.createdAt, timestamp),
+      updatedAt: readFiniteNumber(rawRecord.updatedAt, timestamp),
+      profile: isRecord(rawRecord.profile) ? rawRecord.profile : {},
+    }];
+  });
+}
+
+function readCharacterProfileSource(value: unknown): CharacterProfileRecord['source'] {
+  return value === 'imported' || value === 'debug' ? value : 'playerCreated';
+}
+
+export function normalizeCharacterAvatarRecords(rawRecords: readonly unknown[]): readonly CharacterAvatarRecord[] {
+  return rawRecords.flatMap(rawRecord => {
+    if (
+      !isRecord(rawRecord) ||
+      typeof rawRecord.id !== 'string' ||
+      typeof rawRecord.characterId !== 'string'
+    ) {
+      return [];
+    }
+
+    const normalizedRecord: CharacterAvatarRecord = {
+      id: rawRecord.id,
+      characterId: rawRecord.characterId,
+      avatarSchemaVersion: readPositiveInteger(rawRecord.avatarSchemaVersion, 1),
+      updatedAt: readFiniteNumber(rawRecord.updatedAt, Date.now()),
+    };
+
+    if (rawRecord.avatarState !== undefined) {
+      normalizedRecord.avatarState = rawRecord.avatarState;
+    }
+
+    if (rawRecord.appearanceOverride !== undefined) {
+      normalizedRecord.appearanceOverride = rawRecord.appearanceOverride;
+    }
+
+    return [normalizedRecord];
   });
 }
 

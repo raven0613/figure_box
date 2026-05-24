@@ -3,7 +3,9 @@ import Dexie, { type Table } from 'dexie';
 import {
   SAVE_DATABASE_NAME,
   SAVE_DATABASE_VERSION,
-  type CharacterSaveRecord,
+  type CharacterAvatarRecord,
+  type CharacterProfileRecord,
+  type CharacterRuntimeSaveRecord,
   type ItemSaveRecord,
   type RelationshipSaveRecord,
   type SaveMetaRecord,
@@ -20,7 +22,7 @@ export interface GenericSaveRecord {
   [key: string]: unknown;
 }
 
-const TABLE_SCHEMAS: Record<SaveTableName, string> = {
+const LEGACY_V1_TABLE_SCHEMAS: Record<string, string> = {
   saveMeta: 'id, schemaVersion, updatedAt',
   worldProgress: 'id, day, updatedAt',
   items: 'id, updatedAt',
@@ -31,6 +33,23 @@ const TABLE_SCHEMAS: Record<SaveTableName, string> = {
   characterAvatars: 'id, characterId, updatedAt',
 };
 
+const LEGACY_V2_TABLE_SCHEMAS: Record<string, string> = {
+  ...LEGACY_V1_TABLE_SCHEMAS,
+  playerCharacters: 'id, source, templateId, updatedAt',
+};
+
+const TABLE_SCHEMAS: Record<SaveTableName, string> = {
+  saveMeta: 'id, schemaVersion, updatedAt',
+  worldProgress: 'id, day, updatedAt',
+  items: 'id, updatedAt',
+  settings: 'id, updatedAt',
+  shops: 'id, updatedAt',
+  relationships: 'id, updatedAt',
+  characters: 'id, source, templateId, updatedAt',
+  characterRuntime: 'id, seedId, updatedAt',
+  characterAvatars: 'id, characterId, updatedAt',
+};
+
 class FigureBoxSaveDatabase extends Dexie {
   saveMeta!: Table<SaveMetaRecord, string>;
   worldProgress!: Table<WorldProgressRecord, string>;
@@ -38,11 +57,14 @@ class FigureBoxSaveDatabase extends Dexie {
   settings!: Table<SettingsRecord, string>;
   shops!: Table<ShopSaveRecord, string>;
   relationships!: Table<RelationshipSaveRecord, string>;
-  characters!: Table<CharacterSaveRecord, string>;
-  characterAvatars!: Table<GenericSaveRecord, string>;
+  characters!: Table<CharacterProfileRecord, string>;
+  characterRuntime!: Table<CharacterRuntimeSaveRecord, string>;
+  characterAvatars!: Table<CharacterAvatarRecord, string>;
 
   constructor() {
     super(SAVE_DATABASE_NAME);
+    this.version(1).stores(LEGACY_V1_TABLE_SCHEMAS);
+    this.version(2).stores(LEGACY_V2_TABLE_SCHEMAS);
     this.version(SAVE_DATABASE_VERSION).stores(TABLE_SCHEMAS);
   }
 }

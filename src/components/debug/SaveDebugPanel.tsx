@@ -8,8 +8,11 @@ import {
   getSaveDebugDatabaseSnapshot,
   type SaveDebugDatabaseSnapshot,
 } from '~/services/save/saveDebugService';
+import { characterAvatarSaveService } from '~/services/save/characterAvatarSaveService';
+import { characterProfileSaveService } from '~/services/save/characterProfileSaveService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
 import { saveService } from '~/services/save/saveService';
+import type { CharacterContentPackPreview } from '~/services/save/saveTransferService';
 import type {
   BrowserStorageStatus,
   SaveTableName,
@@ -23,6 +26,14 @@ interface SaveDebugPanelProps {
 }
 
 const REFRESH_ERROR_MESSAGE = '存檔資料讀取失敗。';
+const EXPORT_SUCCESS_MESSAGE = '完整存檔已匯出。';
+const CONTENT_EXPORT_SUCCESS_MESSAGE = '角色內容包已匯出。';
+const IMPORT_RELOAD_MESSAGE = '匯入完成，重新載入遊戲。';
+
+interface CharacterContentPackPreviewState {
+  packageText: string;
+  preview: CharacterContentPackPreview;
+}
 
 export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
   const [snapshot, setSnapshot] = useState<SaveDebugDatabaseSnapshot | null>(null);
@@ -30,6 +41,12 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
   const [selectedTable, setSelectedTable] = useState<SaveTableName>('saveMeta');
   const [isLoading, setIsLoading] = useState(false);
   const [isDebugMutationPending, setIsDebugMutationPending] = useState(false);
+  const [isTransferPending, setIsTransferPending] = useState(false);
+  const [transferText, setTransferText] = useState('');
+  const [exportContentPackPreview, setExportContentPackPreview] = useState<CharacterContentPackPreview | null>(null);
+  const [selectedExportCharacterIds, setSelectedExportCharacterIds] = useState<readonly string[]>([]);
+  const [contentPackPreview, setContentPackPreview] = useState<CharacterContentPackPreviewState | null>(null);
+  const [selectedContentCharacterIds, setSelectedContentCharacterIds] = useState<readonly string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedTableSnapshot = useMemo(
@@ -41,6 +58,18 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
     [snapshot],
   );
   const selectedSchema = schemaByTable.get(selectedTable) ?? null;
+  const normalizedTransferText = transferText.trim();
+  const currentContentPackPreview = contentPackPreview?.packageText === normalizedTransferText
+    ? contentPackPreview.preview
+    : null;
+  const selectedContentCharacterIdSet = useMemo(
+    () => new Set(selectedContentCharacterIds),
+    [selectedContentCharacterIds],
+  );
+  const selectedExportCharacterIdSet = useMemo(
+    () => new Set(selectedExportCharacterIds),
+    [selectedExportCharacterIds],
+  );
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -117,6 +146,280 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
     }
   }, [refresh]);
 
+  const handleCreateTestCharacter = useCallback(async () => {
+    setIsDebugMutationPending(true);
+
+    try {
+      const record = characterProfileSaveService.upsertDebugCharacter();
+
+      saveService.markDirty('characters');
+      await saveService.flushAutosave();
+      await refresh();
+      setMessage(`character saved: ${record.id}`);
+    } finally {
+      setIsDebugMutationPending(false);
+    }
+  }, [refresh]);
+
+  const handleDeleteTestCharacter = useCallback(async () => {
+    setIsDebugMutationPending(true);
+
+    try {
+      characterProfileSaveService.deleteDebugCharacter();
+      characterAvatarSaveService.deleteDebugAvatar();
+      saveService.markDirty('characters');
+      saveService.markDirty('characterAvatars');
+      await saveService.flushAutosave();
+      await refresh();
+      setMessage('debug character and avatar deleted');
+    } finally {
+      setIsDebugMutationPending(false);
+    }
+  }, [refresh]);
+
+  const handleWriteTestAvatar = useCallback(async () => {
+    setIsDebugMutationPending(true);
+
+    try {
+      const record = characterAvatarSaveService.writeDebugAvatar();
+
+      saveService.markDirty('characterAvatars');
+      await saveService.flushAutosave();
+      await refresh();
+      setMessage(`avatar saved: ${record.characterId}`);
+    } finally {
+      setIsDebugMutationPending(false);
+    }
+  }, [refresh]);
+
+  const handleExportFullSave = useCallback(async () => {
+    setIsTransferPending(true);
+
+    try {
+      const packageString = await saveService.exportFullSaveString();
+
+      setTransferText(packageString);
+      await refresh();
+      setMessage(`${EXPORT_SUCCESS_MESSAGE} ${formatExportStringLength(packageString)}`);
+    } catch (error) {
+      console.error('Full save export failed.', error);
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsTransferPending(false);
+    }
+  }, [refresh]);
+
+  const handleImportFullSave = useCallback(async () => {
+    if (transferText.trim().length === 0) {
+      setMessage('請先貼上完整存檔字串。');
+      return;
+    }
+
+    const shouldImport = window.confirm('匯入完整存檔會覆蓋目前 IndexedDB 存檔並重新載入。確定匯入嗎？');
+
+    if (!shouldImport) {
+      return;
+    }
+
+    setIsTransferPending(true);
+
+    try {
+      const summary = await saveService.importFullSaveString(transferText);
+
+      setMessage(`${IMPORT_RELOAD_MESSAGE} rows=${String(summary.rowCount)}`);
+      window.location.reload();
+    } catch (error) {
+      console.error('Full save import failed.', error);
+      setMessage(getErrorMessage(error));
+      setIsTransferPending(false);
+    }
+  }, [transferText]);
+
+  const handleExportCharacterContentPack = useCallback(async () => {
+    if (!exportContentPackPreview) {
+      setIsTransferPending(true);
+
+      try {
+        const preview = await saveService.previewExportableCharacterContentPack();
+
+        setExportContentPackPreview(preview);
+        setSelectedExportCharacterIds(preview.characters.map(character => character.id));
+        setMessage(`請確認要匯出的角色，預設已全選：${String(preview.characters.length)} 個。`);
+      } catch (error) {
+        console.error('Character content pack export preview failed.', error);
+        setMessage(getErrorMessage(error));
+      } finally {
+        setIsTransferPending(false);
+      }
+      return;
+    }
+
+    if (selectedExportCharacterIds.length === 0) {
+      setMessage('請至少勾選一個要匯出的角色。');
+      return;
+    }
+
+    setIsTransferPending(true);
+
+    try {
+      const packageString = await saveService.exportCharacterContentPackString({
+        characterIds: selectedExportCharacterIds,
+      });
+      const preview = saveService.previewCharacterContentPackString(packageString);
+
+      setTransferText(packageString);
+      setContentPackPreview({
+        packageText: packageString,
+        preview,
+      });
+      setSelectedContentCharacterIds(preview.characters.map(character => character.id));
+      await refresh();
+      setMessage(`${CONTENT_EXPORT_SUCCESS_MESSAGE} ${formatExportStringLength(packageString)}`);
+    } catch (error) {
+      console.error('Character content pack export failed.', error);
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsTransferPending(false);
+    }
+  }, [exportContentPackPreview, refresh, selectedExportCharacterIds]);
+
+  const handlePreviewExportCharacterContentPack = useCallback(async () => {
+    if (exportContentPackPreview) {
+      setExportContentPackPreview(null);
+      setSelectedExportCharacterIds([]);
+      return;
+    }
+
+    setIsTransferPending(true);
+
+    try {
+      const preview = await saveService.previewExportableCharacterContentPack();
+
+      setExportContentPackPreview(preview);
+      setSelectedExportCharacterIds(preview.characters.map(character => character.id));
+      setMessage(`可匯出角色：${String(preview.characters.length)} 個，已全選。`);
+    } catch (error) {
+      console.error('Character content pack export preview failed.', error);
+      setExportContentPackPreview(null);
+      setSelectedExportCharacterIds([]);
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsTransferPending(false);
+    }
+  }, [exportContentPackPreview]);
+
+  const handlePreviewCharacterContentPack = useCallback(() => {
+    if (currentContentPackPreview) {
+      setContentPackPreview(null);
+      setSelectedContentCharacterIds([]);
+      return;
+    }
+
+    if (normalizedTransferText.length === 0) {
+      setMessage('請先貼上角色內容包字串。');
+      return;
+    }
+
+    try {
+      const preview = saveService.previewCharacterContentPackString(normalizedTransferText);
+
+      setContentPackPreview({
+        packageText: normalizedTransferText,
+        preview,
+      });
+      setSelectedContentCharacterIds(preview.characters.map(character => character.id));
+      setMessage(`角色內容包：${String(preview.characters.length)} 個角色，已全選。`);
+    } catch (error) {
+      console.error('Character content pack preview failed.', error);
+      setContentPackPreview(null);
+      setSelectedContentCharacterIds([]);
+      setMessage(getErrorMessage(error));
+    }
+  }, [currentContentPackPreview, normalizedTransferText]);
+
+  const handleImportCharacterContentPack = useCallback(async () => {
+    if (normalizedTransferText.length === 0) {
+      setMessage('請先貼上角色內容包字串。');
+      return;
+    }
+
+    if (!currentContentPackPreview) {
+      try {
+        const preview = saveService.previewCharacterContentPackString(normalizedTransferText);
+
+        setContentPackPreview({
+          packageText: normalizedTransferText,
+          preview,
+        });
+        setSelectedContentCharacterIds(preview.characters.map(character => character.id));
+        setMessage('請確認要匯入的角色，預設已全選。');
+      } catch (error) {
+        console.error('Character content pack preview failed.', error);
+        setMessage(getErrorMessage(error));
+      }
+      return;
+    }
+
+    if (selectedContentCharacterIds.length === 0) {
+      setMessage('請至少勾選一個角色。');
+      return;
+    }
+
+    setIsTransferPending(true);
+
+    try {
+      const summary = await saveService.importCharacterContentPackString(normalizedTransferText, {
+        characterIds: selectedContentCharacterIds,
+      });
+
+      await refresh();
+      setMessage(`角色內容包已匯入。characters=${String(summary.characterCount)}, avatars=${String(summary.avatarCount)}`);
+    } catch (error) {
+      console.error('Character content pack import failed.', error);
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsTransferPending(false);
+    }
+  }, [currentContentPackPreview, normalizedTransferText, refresh, selectedContentCharacterIds]);
+
+  const handleTransferTextChange = useCallback((value: string) => {
+    setTransferText(value);
+    setContentPackPreview(null);
+    setSelectedContentCharacterIds([]);
+  }, []);
+
+  const handleSelectAllContentCharacters = useCallback(() => {
+    setSelectedContentCharacterIds(currentContentPackPreview?.characters.map(character => character.id) ?? []);
+  }, [currentContentPackPreview]);
+
+  const handleClearContentCharacters = useCallback(() => {
+    setSelectedContentCharacterIds([]);
+  }, []);
+
+  const handleSelectAllExportCharacters = useCallback(() => {
+    setSelectedExportCharacterIds(exportContentPackPreview?.characters.map(character => character.id) ?? []);
+  }, [exportContentPackPreview]);
+
+  const handleClearExportCharacters = useCallback(() => {
+    setSelectedExportCharacterIds([]);
+  }, []);
+
+  const handleToggleExportCharacter = useCallback((characterId: string) => {
+    setSelectedExportCharacterIds(currentCharacterIds => (
+      currentCharacterIds.includes(characterId)
+        ? currentCharacterIds.filter(currentCharacterId => currentCharacterId !== characterId)
+        : [...currentCharacterIds, characterId]
+    ));
+  }, []);
+
+  const handleToggleContentCharacter = useCallback((characterId: string) => {
+    setSelectedContentCharacterIds(currentCharacterIds => (
+      currentCharacterIds.includes(characterId)
+        ? currentCharacterIds.filter(currentCharacterId => currentCharacterId !== characterId)
+        : [...currentCharacterIds, characterId]
+    ));
+  }, []);
+
   const handleReset = useCallback(async () => {
     const shouldReset = window.confirm('確定要刪除 IndexedDB 存檔並重新載入嗎？');
 
@@ -175,9 +478,174 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
           >
             Toggle Relationship
           </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={handleCreateTestCharacter}
+            disabled={isDebugMutationPending}
+          >
+            Create Test Character
+          </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={handleWriteTestAvatar}
+            disabled={isDebugMutationPending}
+          >
+            Write Test Avatar
+          </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={handleDeleteTestCharacter}
+            disabled={isDebugMutationPending}
+          >
+            Delete Test Character
+          </button>
           <button className={styles.dangerButton} type="button" onClick={handleReset}>
             Reset DB
           </button>
+        </div>
+        <div className={styles.transferBlock}>
+          <div className={styles.actionRow}>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={handleExportFullSave}
+              disabled={isTransferPending}
+            >
+              Export Full Save
+            </button>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={handleImportFullSave}
+              disabled={isTransferPending || transferText.trim().length === 0}
+            >
+              Import Full Save
+            </button>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={handlePreviewExportCharacterContentPack}
+              disabled={isTransferPending}
+            >
+              {exportContentPackPreview ? 'Close Export Characters' : 'Choose Export Characters'}
+            </button>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={handleExportCharacterContentPack}
+              disabled={isTransferPending}
+            >
+              Export Characters
+            </button>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={handlePreviewCharacterContentPack}
+              disabled={isTransferPending || normalizedTransferText.length === 0}
+            >
+              {currentContentPackPreview ? 'Close Preview Characters' : 'Preview Characters'}
+            </button>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={handleImportCharacterContentPack}
+              disabled={isTransferPending || normalizedTransferText.length === 0}
+            >
+              Import Characters
+            </button>
+          </div>
+          {exportContentPackPreview ? (
+            <div className={styles.contentPackPreview}>
+              <div className={styles.previewHeader}>
+                <strong>Export Characters</strong>
+                <span>{selectedExportCharacterIds.length} / {exportContentPackPreview.characters.length}</span>
+              </div>
+              <div className={styles.actionRow}>
+                <button
+                  className={styles.secondaryButton}
+                  type="button"
+                  onClick={handleSelectAllExportCharacters}
+                  disabled={selectedExportCharacterIds.length === exportContentPackPreview.characters.length}
+                >
+                  Select All
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  type="button"
+                  onClick={handleClearExportCharacters}
+                  disabled={selectedExportCharacterIds.length === 0}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className={styles.characterImportList}>
+                {exportContentPackPreview.characters.map(character => (
+                  <label className={styles.characterImportRow} key={character.id}>
+                    <input
+                      type="checkbox"
+                      checked={selectedExportCharacterIdSet.has(character.id)}
+                      onChange={() => handleToggleExportCharacter(character.id)}
+                    />
+                    <span>
+                      <strong>{character.name}</strong>
+                      <small>{character.id} · {character.source} · avatar={character.hasAvatar ? 'yes' : 'no'}</small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <textarea
+            className={styles.transferTextarea}
+            value={transferText}
+            onChange={event => handleTransferTextChange(event.target.value)}
+            spellCheck={false}
+            placeholder="Full save or character content pack string"
+          />
+          {currentContentPackPreview ? (
+            <div className={styles.contentPackPreview}>
+              <div className={styles.previewHeader}>
+                <strong>Characters</strong>
+                <span>{selectedContentCharacterIds.length} / {currentContentPackPreview.characters.length}</span>
+              </div>
+              <div className={styles.actionRow}>
+                <button
+                  className={styles.secondaryButton}
+                  type="button"
+                  onClick={handleSelectAllContentCharacters}
+                  disabled={selectedContentCharacterIds.length === currentContentPackPreview.characters.length}
+                >
+                  Select All
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  type="button"
+                  onClick={handleClearContentCharacters}
+                  disabled={selectedContentCharacterIds.length === 0}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className={styles.characterImportList}>
+                {currentContentPackPreview.characters.map(character => (
+                  <label className={styles.characterImportRow} key={character.id}>
+                    <input
+                      type="checkbox"
+                      checked={selectedContentCharacterIdSet.has(character.id)}
+                      onChange={() => handleToggleContentCharacter(character.id)}
+                    />
+                    <span>
+                      <strong>{character.name}</strong>
+                      <small>{character.id} · {character.source} · avatar={character.hasAvatar ? 'yes' : 'no'}</small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
         {message ? <div className={styles.message}>{message}</div> : null}
       </section>
@@ -266,4 +734,12 @@ function formatBytes(value: number): string {
   }
 
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatExportStringLength(value: string): string {
+  return `${value.length.toLocaleString()} chars`;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '存檔操作失敗。';
 }

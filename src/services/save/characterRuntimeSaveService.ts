@@ -5,14 +5,14 @@ import type { CharacterSnapshot } from '~/services/townCharacterTypes';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import type {
   CharacterRuntimeSnapshot,
-  CharacterSaveRecord,
+  CharacterRuntimeSaveRecord,
 } from './saveTypes';
 
 class CharacterRuntimeSaveService {
   private readonly snapshotsByCharacterId = new Map<string, CharacterRuntimeSnapshot>();
   private lastSnapshotHash = '';
 
-  load(records: readonly CharacterSaveRecord[]): void {
+  load(records: readonly CharacterRuntimeSaveRecord[]): void {
     this.snapshotsByCharacterId.clear();
 
     records.forEach(record => {
@@ -39,7 +39,7 @@ class CharacterRuntimeSaveService {
     return snapshot ? cloneCharacterRuntimeSnapshot(snapshot) : null;
   }
 
-  getSaveRecords(): readonly CharacterSaveRecord[] {
+  getSaveRecords(): readonly CharacterRuntimeSaveRecord[] {
     const timestamp = Date.now();
 
     return Array.from(this.snapshotsByCharacterId.values()).map(snapshot => ({
