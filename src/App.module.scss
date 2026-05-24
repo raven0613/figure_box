@@ -24,3 +24,16 @@
   background: #ffd36a;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
 }
+
+.saveStatus {
+  position: absolute;
+  top: 72px;
+  left: 18px;
+  z-index: 12;
+  padding: 8px 10px;
+  color: #1f2428;
+  background: #fff4c9;
+  border: 1px solid #d9b84c;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}

@@ -22,6 +22,7 @@ interface TownRelationshipCoordinatorOptions {
   getCharacterSnapshot: (characterId: string) => CharacterSnapshot | null;
   sendToCharacter: SendCharacterEvent;
   characterSeeds?: readonly CharacterSeed[];
+  initialRelationshipStore?: RelationshipStore;
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
 }
 
@@ -30,7 +31,7 @@ export class TownRelationshipCoordinator {
   private readonly getCharacterSnapshot: (characterId: string) => CharacterSnapshot | null;
   private readonly characterSeeds: readonly CharacterSeed[];
   private readonly onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
-  private relationshipStore = createRelationshipStore();
+  private relationshipStore: RelationshipStore;
 
   constructor(options: TownRelationshipCoordinatorOptions) {
     this.relationshipTicker = new TownRelationshipTicker({
@@ -40,17 +41,24 @@ export class TownRelationshipCoordinator {
     this.getCharacterSnapshot = options.getCharacterSnapshot;
     this.characterSeeds = options.characterSeeds ?? CHARACTER_SEEDS;
     this.onRelationshipStoreChange = options.onRelationshipStoreChange;
+    this.relationshipStore = options.initialRelationshipStore ?? createRelationshipStore();
   }
 
   tickPassByRelationships(
     characterActors: ReadonlyMap<string, CharacterActor>,
     timestamp: number,
   ): void {
-    this.relationshipStore = this.relationshipTicker.triggerPassByRelationships(
+    const nextRelationshipStore = this.relationshipTicker.triggerPassByRelationships(
       characterActors,
       this.relationshipStore,
       timestamp,
     );
+
+    if (nextRelationshipStore === this.relationshipStore) {
+      return;
+    }
+
+    this.relationshipStore = nextRelationshipStore;
     this.notifyRelationshipStoreChanged();
   }
 
@@ -59,13 +67,19 @@ export class TownRelationshipCoordinator {
     targetCharacterId: string,
     timestamp: number,
   ): void {
-    this.relationshipStore = updateMutualRelationshipStatus(
+    const nextRelationshipStore = updateMutualRelationshipStatus(
       this.relationshipStore,
       actorId,
       targetCharacterId,
       SocialStatus.Acquaintance,
       timestamp,
     );
+
+    if (nextRelationshipStore === this.relationshipStore) {
+      return;
+    }
+
+    this.relationshipStore = nextRelationshipStore;
     this.notifyRelationshipStoreChanged();
   }
 

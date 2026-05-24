@@ -46,6 +46,8 @@ import { CharacterHeldItemCoordinator } from '~/services/characterHeldItemCoordi
 import { RelationshipMomentFlowCoordinator } from '~/services/relationshipMomentFlowCoordinator';
 import { TownRelationshipCoordinator } from '~/services/townRelationshipCoordinator';
 import { TownCharacterTickCoordinator } from '~/services/townCharacterTickCoordinator';
+import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSaveService';
+import { saveService } from '~/services/save/saveService';
 
 export type { CharacterSnapshot } from '~/services/townCharacterTypes';
 
@@ -57,6 +59,7 @@ const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
+  initialRelationshipStore?: RelationshipStore;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
   onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
@@ -108,6 +111,7 @@ export class TownCharacterController {
       widget: this.widget,
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+      initialRelationshipStore: options.initialRelationshipStore,
       onRelationshipStoreChange: options.onRelationshipStoreChange,
     });
     this.activityManager = createJoinableActivityManager();
@@ -592,21 +596,30 @@ export class TownCharacterController {
 
   private spawnCharacterActor(character: CharacterSeed): void {
     const previousContext = this.actorRegistry.getSnapshot(character.id)?.context;
+    const savedRuntime = previousContext
+      ? null
+      : characterRuntimeSaveService.getRuntimeSnapshot(character.id);
+    const runtime = previousContext ?? savedRuntime ?? undefined;
 
-    this.movementCoordinator.placeCharacter(character.id, character, previousContext);
+    this.movementCoordinator.placeCharacter(character.id, character, runtime);
 
     this.actorRegistry.spawn(character, {
       id: character.id,
       name: character.name,
-      position: previousContext?.position ?? character.position,
+      position: runtime?.position ?? character.position,
       ownItems: previousContext?.ownItems ?? ('ownItems' in character ? character.ownItems : undefined),
-      saturation: previousContext?.status.saturation ?? character.saturation,
-      relationships: previousContext?.relationships,
-      heldItem: previousContext?.heldItem ?? this.heldItemCoordinator.restoreHeldItemForCharacter(character.id),
+      saturation: runtime?.status.saturation ?? character.saturation,
+      relationships: runtime?.relationships,
+      heldItem: runtime?.heldItem ?? this.heldItemCoordinator.restoreHeldItemForCharacter(character.id),
+      runtime,
     });
   }
 
   private handleCharacterSnapshot(characterId: string, snapshot: CharacterSnapshot): void {
+    if (characterRuntimeSaveService.captureSnapshot(snapshot)) {
+      saveService.markDirty('characters');
+    }
+
     this.onCharacterSnapshot?.(characterId, snapshot);
     this.movementCoordinator.syncCharacterWithWidget(characterId, snapshot);
     this.activityCoordinator.handleCurrentActivity(characterId, snapshot);

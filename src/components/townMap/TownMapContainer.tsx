@@ -4,7 +4,6 @@ import {
   getCharacterStateSummary,
 } from '~/stateMachines/gameFlow/children/character';
 import {
-  createRelationshipStore,
   normalizeRelationshipPair,
   type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
@@ -12,6 +11,8 @@ import {
   TownCharacterController,
   type CharacterSnapshot,
 } from '~/services/townCharacterController';
+import { saveService } from '~/services/save/saveService';
+import { relationshipStoreService } from '~/services/save/relationshipStoreService';
 import type { GodDropOpportunity } from '~/services/godDropOpportunityService';
 import type { CharacterRequest } from '~/services/characterRequests/types';
 import {
@@ -127,7 +128,7 @@ export function TownMapContainer({
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<FabricTownMapWidget | null>(null);
   const characterControllerRef = useRef<TownCharacterController | null>(null);
-  const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(createRelationshipStore);
+  const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(() => relationshipStoreService.getSnapshot());
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
   const [selectedMapObjects, setSelectedMapObjects] = useState<string[]>([]);
   // const [nearbyTiles, setNearbyTiles] = useState<TownMapTile[]>([]);
@@ -195,10 +196,18 @@ export function TownMapContainer({
 
   const refreshPlayerInventory = useCallback(() => {
     setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID, { states: ['stored'] }));
+    saveService.scheduleSaveItems();
   }, []);
 
   const refreshShopStock = useCallback(() => {
     setShopStockItems(shopService.getStock(DEFAULT_ITEM_SHOP_ID));
+    saveService.markDirty('shops');
+  }, []);
+
+  const handleRelationshipStoreChange = useCallback((nextRelationshipStore: RelationshipStore) => {
+    relationshipStoreService.load(nextRelationshipStore);
+    setRelationshipStore(nextRelationshipStore);
+    saveService.markDirty('relationships');
   }, []);
 
   const refreshOpenCharacterInventory = useCallback((characterId: string) => {
@@ -503,6 +512,7 @@ export function TownMapContainer({
     widgetRef.current = widget;
     const characterController = new TownCharacterController({
       widget,
+      initialRelationshipStore: relationshipStoreService.getSnapshot(),
       onDialogueRequest,
       onCharacterSnapshot: (characterId, snapshot) => {
         setCharacterSnapshots(current => ({
@@ -510,7 +520,7 @@ export function TownMapContainer({
           [characterId]: snapshot,
         }));
       },
-      onRelationshipStoreChange: setRelationshipStore,
+      onRelationshipStoreChange: handleRelationshipStoreChange,
       onJoinableActivitiesChange: setJoinableActivities,
       onGodDropOpportunityChange: setGodDropOpportunity,
       onCharacterRequestsChange: setCharacterRequests,
@@ -536,7 +546,7 @@ export function TownMapContainer({
       void widget.destroy();
       canvasHost.replaceChildren();
     };
-  }, [cancelPickupChain, cancelPlacementDraft, onDialogueRequest, pickupPlacedItem, refreshPlayerInventory, refreshShopStock]);
+  }, [cancelPickupChain, cancelPlacementDraft, handleRelationshipStoreChange, onDialogueRequest, pickupPlacedItem, refreshPlayerInventory, refreshShopStock]);
 
   useEffect(() => {
     seedDemoPlayerInventory();

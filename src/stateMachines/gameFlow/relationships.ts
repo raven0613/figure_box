@@ -149,9 +149,15 @@ export function ensureMutualRelationship(
   ));
 
   if (relationshipExists) {
+    const relationshipRecords = ensureRelationshipRecord(store.relationshipRecords, charIds, timestamp);
+
+    if (relationshipRecords === store.relationshipRecords) {
+      return store;
+    }
+
     return {
       ...store,
-      relationshipRecords: ensureRelationshipRecord(store.relationshipRecords, charIds, timestamp),
+      relationshipRecords,
     };
   }
 
@@ -181,6 +187,16 @@ export function updateMutualRelationshipStatus(
   }
 
   const ensuredStore = ensureMutualRelationship(store, charId, targetCharId, timestamp);
+  const existingRelationship = ensuredStore.mutualRelationships.find(relationship => (
+    isSameRelationshipPair(relationship.charIds, charIds)
+  ));
+
+  if (
+    existingRelationship?.status === status &&
+    ensuredStore.relationshipRecords === store.relationshipRecords
+  ) {
+    return store;
+  }
 
   return {
     mutualRelationships: ensuredStore.mutualRelationships.map(relationship => (

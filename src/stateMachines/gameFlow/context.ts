@@ -53,6 +53,16 @@ export type CharacterPresence =
     spaceId: string;
   };
 
+export interface CharacterRuntimeInput {
+  status: CharacterContext['status'];
+  position: Position;
+  presence: CharacterPresence;
+  heldItem: CharacterHeldItem | null;
+  activityCooldowns: CharacterActivityCooldowns;
+  locks: CharacterContext['locks'];
+  relationships: DirectedRelationship[];
+}
+
 // 創建角色時必須輸入的 initial data
 export interface CharacterMachineInput {
   id: string;
@@ -62,6 +72,7 @@ export interface CharacterMachineInput {
   saturation?: number;
   relationships?: DirectedRelationship[];
   heldItem?: CharacterHeldItem | null;
+  runtime?: CharacterRuntimeInput;
 }
 
 export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'chat' | 'goHome' | 'controllingByGod';

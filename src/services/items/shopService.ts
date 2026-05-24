@@ -4,7 +4,10 @@ import type {
   ShopId,
   ShopStockItem,
 } from '~/typing/item';
+import { IndexedDbShopSavePort } from '~/services/save/adapters/indexedDbShopSavePort';
+import type { ShopStoreSnapshot } from '~/services/save/saveTypes';
 import { itemService, type ItemService } from './itemService';
+import { EmptyShopSavePort, type ShopSavePort } from './shopSavePort';
 
 export interface PurchaseShopItemInput {
   shopId: ShopId;
@@ -46,11 +49,39 @@ const DEFAULT_DAILY_STOCK: readonly Omit<ShopStockItem, 'generatedAtDay'>[] = [
 
 export class ShopService {
   private readonly items: ItemService;
+  private readonly savePort: ShopSavePort;
   private readonly stockById = new Map<string, ShopStockItem>();
 
-  constructor(items: ItemService = itemService) {
+  constructor(items: ItemService = itemService, savePort: ShopSavePort = new EmptyShopSavePort()) {
     this.items = items;
+    this.savePort = savePort;
     this.loadDefaultDailyStock(1);
+  }
+
+  async load(): Promise<void> {
+    const snapshot = await this.savePort.loadShopSnapshot();
+
+    if (snapshot && snapshot.stockItems.length > 0) {
+      this.loadSnapshot(snapshot);
+    }
+  }
+
+  async save(): Promise<void> {
+    await this.savePort.saveShopSnapshot(this.getSnapshot());
+  }
+
+  loadSnapshot(snapshot: ShopStoreSnapshot): void {
+    this.stockById.clear();
+
+    snapshot.stockItems.forEach(stockItem => {
+      this.stockById.set(stockItem.id, stockItem);
+    });
+  }
+
+  getSnapshot(): ShopStoreSnapshot {
+    return {
+      stockItems: Array.from(this.stockById.values()),
+    };
   }
 
   getStock(shopId: ShopId): readonly ShopStockItem[] {
@@ -102,4 +133,4 @@ export class ShopService {
 }
 
 export const DEFAULT_ITEM_SHOP_ID = DEFAULT_SHOP_ID;
-export const shopService = new ShopService();
+export const shopService = new ShopService(itemService, new IndexedDbShopSavePort());

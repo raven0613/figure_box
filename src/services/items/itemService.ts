@@ -24,6 +24,7 @@ import { EmptyItemSavePort, type ItemSavePort } from './itemSavePort';
 import { matchesItemDefinition } from './itemMatcher';
 import { ItemStore, type ItemStoreSnapshot } from './itemStore';
 import { appendItemTransferHistoryEntry } from './itemTransferHistory';
+import { IndexedDbItemSavePort } from '~/services/save/adapters/indexedDbItemSavePort';
 
 interface ItemServiceOptions {
   definitions?: readonly ItemDefinition[];
@@ -343,4 +344,6 @@ export class ItemService {
   }
 }
 
-export const itemService = new ItemService();
+export const itemService = new ItemService({
+  savePort: new IndexedDbItemSavePort(),
+});

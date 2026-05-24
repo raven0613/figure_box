@@ -66,7 +66,7 @@ export const characterMachine = createMachine(
             id: input.id,
             name: input.name,
             ownItems: [...(input.ownItems ?? [])],
-            status: {
+            status: input.runtime?.status ?? {
                 mood: getMoodForMoodValue(65),
                 expression: Expression.Normal,
                 saturation: input.saturation ?? 70,
@@ -80,17 +80,17 @@ export const characterMachine = createMachine(
             controlState: CharacterControlState.Normal,
             pendingActivityJoin: null,
             currentActivity: null,
-            heldItem: input.heldItem ?? null,
-            activityCooldowns: createEmptyActivityCooldowns(),
-            position: input.position,
-            presence: {
+            heldItem: input.runtime?.heldItem ?? input.heldItem ?? null,
+            activityCooldowns: input.runtime?.activityCooldowns ?? createEmptyActivityCooldowns(),
+            position: input.runtime?.position ?? input.position,
+            presence: input.runtime?.presence ?? {
                 kind: 'positioned',
                 spaceId: TOWN_WORLD_SPACE_ID,
                 position: input.position,
             },
             target: null,
-            relationships: input.relationships ?? [],
-            locks: {
+            relationships: input.runtime?.relationships ?? input.relationships ?? [],
+            locks: input.runtime?.locks ?? {
                 bodyAction: [],
                 bodyMove: [],
                 mind: [],

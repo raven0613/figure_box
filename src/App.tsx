@@ -1,10 +1,13 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
+import { SaveDebugPanel } from '~/components/debug/SaveDebugPanel';
 import { Expression } from '~/constants/character';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
 import { MAP_DIALOGUE_BOUNCE_DEMO, MAP_DIALOGUE_FADE_DEMO } from '~/constants/mapDialogueDemo';
 import i18n from '~/i18n';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
+import { saveService } from '~/services/save/saveService';
+import { settingsService } from '~/services/save/settingsService';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { DialogueViewScript } from '~/typing/dialogueView';
 import { DialogueWindow } from './components/dialogue/DialogueWindow';
@@ -12,6 +15,9 @@ import styles from './App.module.scss';
 import { TownMapContainer } from './components/townMap/TownMapContainer';
 
 function App() {
+  const [isSaveReady, setIsSaveReady] = useState(false);
+  const [saveInitializationError, setSaveInitializationError] = useState<string | null>(null);
+  const [isSaveDebugOpen, setIsSaveDebugOpen] = useState(false);
   const [activeDialogueScript, setActiveDialogueScript] = useState<DialogueViewScript | null>(null);
   const [dialogueExpressionByCharacterId, setDialogueExpressionByCharacterId] = useState<Partial<Record<string, Expression>>>({});
   const [characterExpressionById, setCharacterExpressionById] = useState<Partial<Record<string, Expression>>>({});
@@ -63,6 +69,34 @@ function App() {
       return null;
     });
   }, [resetDialogueParticipantExpressions]);
+  const setSaveDebugOpen = useCallback((isOpen: boolean) => {
+    setIsSaveDebugOpen(isOpen);
+    settingsService.setSaveDebugPanelOpen(isOpen);
+    saveService.markDirty('settings');
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    saveService.initializeGame()
+      .then(() => {
+        if (isMounted) {
+          setIsSaveDebugOpen(settingsService.getSnapshot().isSaveDebugPanelOpen);
+          setIsSaveReady(true);
+        }
+      })
+      .catch(error => {
+        console.error('Save initialization failed.', error);
+
+        if (isMounted) {
+          setSaveInitializationError('存檔系統初始化失敗。');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <I18nextProvider i18n={i18n}>
@@ -89,7 +123,20 @@ function App() {
           >
             Map Bounce
           </button>
+          <button
+            className={styles.demoButton}
+            type="button"
+            onClick={() => setSaveDebugOpen(!isSaveDebugOpen)}
+          >
+            Save DB
+          </button>
         </div>
+        {saveInitializationError ? (
+          <div className={styles.saveStatus}>{saveInitializationError}</div>
+        ) : null}
+        {!isSaveReady && !saveInitializationError ? (
+          <div className={styles.saveStatus}>Loading save...</div>
+        ) : null}
         {/* <FabricDrawingBoardContainer
           isOpen={true}
           initialData={[]}
@@ -97,12 +144,17 @@ function App() {
           onClose={() => { }}
         /> */}
         {/* <AvatarEditorContainer /> */}
-        <TownMapContainer
-          expressionByCharacterId={dialogueExpressionByCharacterId}
-          mapDialoguePresentation={mapDialoguePresentation}
-          onCharacterExpressionsChange={handleCharacterExpressionsChange}
-          onDialogueRequest={handleDialogueRequest}
-        />
+        {isSaveReady ? (
+          <TownMapContainer
+            expressionByCharacterId={dialogueExpressionByCharacterId}
+            mapDialoguePresentation={mapDialoguePresentation}
+            onCharacterExpressionsChange={handleCharacterExpressionsChange}
+            onDialogueRequest={handleDialogueRequest}
+          />
+        ) : null}
+        {isSaveDebugOpen ? (
+          <SaveDebugPanel onClose={() => setSaveDebugOpen(false)} />
+        ) : null}
         {activeDialogueScript ? (
           <DialogueWindow
             script={activeDialogueScript}

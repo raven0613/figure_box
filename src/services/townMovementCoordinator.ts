@@ -65,7 +65,7 @@ export class TownMovementCoordinator {
     position: Position;
     color: string;
     label: string;
-  }, previousContext?: CharacterSnapshot['context']): void {
+  }, previousContext?: Pick<CharacterSnapshot['context'], 'position' | 'status'>): void {
     this.characterRenderDataById.set(characterId, {
       color: character.color,
       label: character.label,
