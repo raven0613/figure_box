@@ -178,3 +178,49 @@ describe('character held item context', () => {
         expect(actor.getSnapshot().context.heldItem).toBeNull();
     });
 });
+
+describe('character request fulfillment movement recovery', () => {
+    test('resumes the original need target after request fulfillment control ends', () => {
+        const actor = createTestCharacterActor();
+        const originalTarget = { x: 8, y: 41 };
+        const interruptedTarget = { x: 10, y: 41 };
+
+        actor.send({ type: EventType.GoEat, target: originalTarget });
+
+        actor.send({
+            type: EventType.SetControlState,
+            controlState: CharacterControlState.RequestFulfillment,
+            reason: CharacterControlReason.RequestFulfillment,
+        });
+        actor.send({
+            type: EventType.AddLock,
+            parts: ['bodyAction', 'bodyMove', 'mind', 'communication'],
+            reason: CharacterControlReason.RequestFulfillment,
+        });
+        actor.send({ type: EventType.MoveTo, target: interruptedTarget });
+
+        const lockedSnapshot = actor.getSnapshot();
+
+        expect(lockedSnapshot.context.currentMotivation).toBe('findFood');
+        expect(lockedSnapshot.context.target).toEqual(originalTarget);
+
+        actor.send({
+            type: EventType.RemoveLock,
+            parts: ['bodyAction', 'bodyMove', 'mind', 'communication'],
+            reason: CharacterControlReason.RequestFulfillment,
+        });
+        actor.send({
+            type: EventType.SetControlState,
+            controlState: CharacterControlState.Normal,
+            reason: CharacterControlReason.RequestFulfillment,
+        });
+        actor.send({ type: EventType.MoveTo, target: originalTarget });
+
+        const resumedSnapshot = actor.getSnapshot();
+
+        expect(resumedSnapshot.context.controlState).toBe(CharacterControlState.Normal);
+        expect(resumedSnapshot.context.currentMotivation).toBe('findFood');
+        expect(resumedSnapshot.context.target).toEqual(originalTarget);
+        expect(getCharacterStateSummary(resumedSnapshot.value).bodyMove).toBe(CharacterBodyMoveState.Walking);
+    });
+});

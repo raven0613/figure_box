@@ -1,0 +1,22 @@
+[
+  {
+    "id": "world.mapItem.placed",
+    "audience": {
+      "type": "nearbyCharacters",
+      "radius": 10
+    },
+    "characterReaction": {
+      "performanceId": "mapItem.notice.placed"
+    }
+  },
+  {
+    "id": "world.mapItem.pickedUp",
+    "audience": {
+      "type": "nearbyCharacters",
+      "radius": 10
+    },
+    "characterReaction": {
+      "performanceId": "mapItem.notice.pickedUp"
+    }
+  }
+]

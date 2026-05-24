@@ -48,6 +48,19 @@ export class TownMovementCoordinator {
     }
   }
 
+  resumeCharacterWalk(characterId: string): void {
+    this.widget.cancelWalk(characterId);
+    this.walkingCharacterIds.delete(characterId);
+
+    const snapshot = this.getCharacterSnapshot(characterId);
+
+    if (!snapshot) {
+      return;
+    }
+
+    this.syncCharacterWithWidget(characterId, snapshot);
+  }
+
   placeCharacter(characterId: string, character: {
     position: Position;
     color: string;
@@ -93,11 +106,13 @@ export class TownMovementCoordinator {
       return;
     }
 
-    if (this.walkingCharacterIds.has(characterId)) {
+    if (this.walkingCharacterIds.has(characterId) && this.widget.isWalking(characterId)) {
       return;
     }
 
-    const currentPosition = snapshot.context.position;
+    this.walkingCharacterIds.delete(characterId);
+
+    const currentPosition = this.widget.getCharacterTile(characterId) ?? snapshot.context.position;
     const path = this.widget.findPath(currentPosition, target);
 
     if (!path) {

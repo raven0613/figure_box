@@ -6,7 +6,12 @@ import type { MapActivityView } from '~/typing/eventDialoguePresentation';
 
 type CharacterLockPart = 'bodyAction' | 'bodyMove' | 'mind' | 'communication';
 
-export interface ActivityInterruptionMoment {
+interface PlayTransientPerformanceInput {
+  performanceId: string;
+  characterId: string;
+}
+
+export interface TransientMoment {
   id: string;
   participantIds: readonly string[];
   observerIds: readonly string[];
@@ -16,7 +21,7 @@ export interface ActivityInterruptionMoment {
   endsAt: number;
 }
 
-export interface StartActivityInterruptionMomentInput {
+export interface StartTransientMomentInput {
   id: string;
   participantIds: readonly string[];
   observerIds?: readonly string[];
@@ -24,55 +29,69 @@ export interface StartActivityInterruptionMomentInput {
   sourceActivityIds?: readonly string[];
   timestamp: number;
   durationMs: number;
-  lockReason: CharacterControlReason;
+  lockReason?: CharacterControlReason;
   lockParts?: readonly CharacterLockPart[];
   controlState?: CharacterControlState;
   pauseParticipantWalks?: boolean;
   curiosityLabel?: string;
-  onFinished?: (moment: ActivityInterruptionMoment) => void;
+  performanceId?: string;
+  performanceCharacterIds?: readonly string[];
+  restoreActiveVisuals?: boolean;
+  onFinished?: (moment: TransientMoment) => void;
 }
 
-interface ActivityInterruptionMomentCoordinatorOptions {
+interface TransientMomentCoordinatorOptions {
   sendToCharacter: SendCharacterEvent;
   showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   pauseActivity: (activityId: string, timestamp: number) => void;
   resumeActivity: (activityId: string, timestamp: number) => void;
+  playPerformance?: (input: PlayTransientPerformanceInput) => number;
+  restoreActiveVisualsForCharacters?: (characterIds: readonly string[]) => void;
   pauseCharacterWalk?: (characterId: string, durationMs: number) => void;
+  resumeCharacterWalk?: (characterId: string) => void;
 }
 
-interface ActiveActivityInterruptionMoment extends ActivityInterruptionMoment {
-  lockReason: CharacterControlReason;
+interface ActiveTransientMoment extends TransientMoment {
+  lockReason?: CharacterControlReason;
   lockParts: readonly CharacterLockPart[];
   controlState?: CharacterControlState;
-  onFinished?: (moment: ActivityInterruptionMoment) => void;
+  pauseParticipantWalks: boolean;
+  restoreActiveVisuals: boolean;
+  onFinished?: (moment: TransientMoment) => void;
 }
 
-export class ActivityInterruptionMomentCoordinator {
-  private readonly activeMomentsById = new Map<string, ActiveActivityInterruptionMoment>();
+export class TransientMomentCoordinator {
+  private readonly activeMomentsById = new Map<string, ActiveTransientMoment>();
   private readonly momentIdsByCharacterId = new Map<string, string>();
   private readonly timerIdsByMomentId = new Map<string, number>();
   private readonly sendToCharacter: SendCharacterEvent;
   private readonly showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   private readonly pauseActivity: (activityId: string, timestamp: number) => void;
   private readonly resumeActivity: (activityId: string, timestamp: number) => void;
+  private readonly playPerformance?: (input: PlayTransientPerformanceInput) => number;
+  private readonly restoreActiveVisualsForCharacters?: (characterIds: readonly string[]) => void;
   private readonly pauseCharacterWalk?: (characterId: string, durationMs: number) => void;
+  private readonly resumeCharacterWalk?: (characterId: string) => void;
 
-  constructor(options: ActivityInterruptionMomentCoordinatorOptions) {
+  constructor(options: TransientMomentCoordinatorOptions) {
     this.sendToCharacter = options.sendToCharacter;
     this.showMapActivity = options.showMapActivity;
     this.pauseActivity = options.pauseActivity;
     this.resumeActivity = options.resumeActivity;
+    this.playPerformance = options.playPerformance;
+    this.restoreActiveVisualsForCharacters = options.restoreActiveVisualsForCharacters;
     this.pauseCharacterWalk = options.pauseCharacterWalk;
+    this.resumeCharacterWalk = options.resumeCharacterWalk;
   }
 
-  start(input: StartActivityInterruptionMomentInput): ActivityInterruptionMoment | null {
+  start(input: StartTransientMomentInput): TransientMoment | null {
     const affectedCharacterIds = getAffectedCharacterIds(input.participantIds, input.observerIds ?? []);
 
     if (affectedCharacterIds.some(characterId => this.isCharacterInMoment(characterId))) {
       return null;
     }
 
-    const moment = this.createMoment(input);
+    let moment = this.createMoment(input);
     const momentCharacterIds = this.getAffectedCharacterIds(moment);
 
     this.activeMomentsById.set(moment.id, moment);
@@ -80,14 +99,12 @@ export class ActivityInterruptionMomentCoordinator {
       this.momentIdsByCharacterId.set(characterId, moment.id);
     });
 
-    if (moment.controlState) {
-      this.setControlState(momentCharacterIds, moment.controlState, input.lockReason);
+    if (moment.controlState && moment.lockReason) {
+      this.setControlState(momentCharacterIds, moment.controlState, moment.lockReason);
     }
 
-    this.lockCharacters(momentCharacterIds, input.lockReason, moment.lockParts);
-
-    if (input.pauseParticipantWalks) {
-      this.pauseCharacterWalks(momentCharacterIds, input.durationMs);
+    if (moment.lockReason) {
+      this.lockCharacters(momentCharacterIds, moment.lockReason, moment.lockParts);
     }
 
     moment.sourceActivityIds.forEach(activityId => {
@@ -95,13 +112,27 @@ export class ActivityInterruptionMomentCoordinator {
     });
 
     this.showObserverCuriosity(moment, input.durationMs, input.curiosityLabel ?? '好奇');
+    const performanceDurationMs = this.playMomentPerformance(moment, input);
+    const durationMs = Math.max(input.durationMs, performanceDurationMs);
+
+    if (durationMs !== input.durationMs) {
+      moment = {
+        ...moment,
+        endsAt: input.timestamp + durationMs,
+      };
+      this.activeMomentsById.set(moment.id, moment);
+    }
+
+    if (input.pauseParticipantWalks) {
+      this.pauseCharacterWalks(momentCharacterIds, durationMs);
+    }
 
     const timerId = window.setTimeout(() => {
       this.finish(moment.id);
-    }, input.durationMs);
+    }, durationMs);
     this.timerIdsByMomentId.set(moment.id, timerId);
 
-    return moment;
+    return toPublicMoment(moment);
   }
 
   isCharacterInMoment(characterId: string): boolean {
@@ -123,9 +154,16 @@ export class ActivityInterruptionMomentCoordinator {
       this.timerIdsByMomentId.delete(momentId);
     }
 
-    this.unlockCharacters(momentCharacterIds, moment.lockReason, moment.lockParts);
-    if (moment.controlState) {
+    if (moment.lockReason) {
+      this.unlockCharacters(momentCharacterIds, moment.lockReason, moment.lockParts);
+    }
+
+    if (moment.controlState && moment.lockReason) {
       this.setControlState(momentCharacterIds, CharacterControlState.Normal, moment.lockReason);
+    }
+
+    if (moment.pauseParticipantWalks) {
+      this.resumeCharacterWalks(momentCharacterIds);
     }
 
     moment.sourceActivityIds.forEach(activityId => {
@@ -137,6 +175,7 @@ export class ActivityInterruptionMomentCoordinator {
     });
     this.activeMomentsById.delete(momentId);
     moment.onFinished?.(toPublicMoment(moment));
+    this.restoreActiveVisuals(moment, momentCharacterIds);
   }
 
   dispose(): void {
@@ -145,7 +184,7 @@ export class ActivityInterruptionMomentCoordinator {
     });
   }
 
-  private createMoment(input: StartActivityInterruptionMomentInput): ActiveActivityInterruptionMoment {
+  private createMoment(input: StartTransientMomentInput): ActiveTransientMoment {
     const sourceActivityIds = uniqueStrings([
       ...(input.sourceActivityId ? [input.sourceActivityId] : []),
       ...(input.sourceActivityIds ?? []),
@@ -162,8 +201,44 @@ export class ActivityInterruptionMomentCoordinator {
       lockReason: input.lockReason,
       lockParts: input.lockParts ?? ['mind'],
       controlState: input.controlState,
+      pauseParticipantWalks: input.pauseParticipantWalks ?? false,
+      restoreActiveVisuals: input.restoreActiveVisuals ?? true,
       onFinished: input.onFinished,
     };
+  }
+
+  private playMomentPerformance(
+    moment: TransientMoment,
+    input: StartTransientMomentInput,
+  ): number {
+    if (!input.performanceId || !this.playPerformance) {
+      return 0;
+    }
+
+    const performanceCharacterIds = input.performanceCharacterIds ?? moment.participantIds;
+
+    const performanceId = input.performanceId;
+
+    return Math.max(
+      0,
+      ...performanceCharacterIds.map(characterId => this.playPerformance?.({
+        performanceId,
+        characterId,
+      }) ?? 0),
+    );
+  }
+
+  private restoreActiveVisuals(
+    moment: ActiveTransientMoment,
+    characterIds: readonly string[],
+  ): void {
+    if (!moment.restoreActiveVisuals || !this.restoreActiveVisualsForCharacters) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      this.restoreActiveVisualsForCharacters?.(characterIds);
+    }, 0);
   }
 
   private setControlState(
@@ -218,12 +293,22 @@ export class ActivityInterruptionMomentCoordinator {
     });
   }
 
-  private getAffectedCharacterIds(moment: ActivityInterruptionMoment): string[] {
+  private resumeCharacterWalks(characterIds: readonly string[]): void {
+    if (!this.resumeCharacterWalk) {
+      return;
+    }
+
+    characterIds.forEach(characterId => {
+      this.resumeCharacterWalk?.(characterId);
+    });
+  }
+
+  private getAffectedCharacterIds(moment: TransientMoment): string[] {
     return getAffectedCharacterIds(moment.participantIds, moment.observerIds);
   }
 
   private showObserverCuriosity(
-    moment: ActivityInterruptionMoment,
+    moment: TransientMoment,
     durationMs: number,
     label: string,
   ): void {
@@ -237,7 +322,7 @@ export class ActivityInterruptionMomentCoordinator {
   }
 }
 
-function toPublicMoment(moment: ActiveActivityInterruptionMoment): ActivityInterruptionMoment {
+function toPublicMoment(moment: ActiveTransientMoment): TransientMoment {
   return {
     id: moment.id,
     participantIds: moment.participantIds,

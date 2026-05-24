@@ -260,10 +260,22 @@ export function TownMapContainer({
     }
 
     try {
-      itemPlacementService.pickupPlacedItem({
+      const pickedUpPlacedObject = itemPlacementService.pickupPlacedItem({
         placedObjectId: placedObject.id,
         actorId: PLAYER_ACTOR_ID,
       });
+
+      if (pickedUpPlacedObject.worldPosition) {
+        characterControllerRef.current?.dispatchEventOccurrence({
+          eventId: 'world.mapItem.pickedUp',
+          sourceActorId: PLAYER_ACTOR_ID,
+          position: pickedUpPlacedObject.worldPosition,
+          payload: {
+            placedObjectId: pickedUpPlacedObject.id,
+            itemInstanceId: pickedUpPlacedObject.itemInstanceId,
+          },
+        });
+      }
     } catch (error) {
       window.alert(error instanceof Error ? error.message : '撿起物品失敗。');
       refreshPlayerInventory();
@@ -366,13 +378,26 @@ export function TownMapContainer({
           }
 
           try {
-            itemPlacementService.placeItemOnMap({
+            const placedObject = itemPlacementService.placeItemOnMap({
               itemInstanceId: latestItemInstance.id,
               ownerActorId: PLAYER_ACTOR_ID,
               mapId: TOWN_WORLD_SPACE_ID,
               worldPosition: {
                 x: tile.x,
                 y: tile.y,
+              },
+            });
+            characterControllerRef.current?.dispatchEventOccurrence({
+              eventId: 'world.mapItem.placed',
+              sourceActorId: PLAYER_ACTOR_ID,
+              position: {
+                x: tile.x,
+                y: tile.y,
+              },
+              payload: {
+                placedObjectId: placedObject.id,
+                itemInstanceId: placedObject.itemInstanceId,
+                itemDefinitionId: latestItemInstance.definitionId,
               },
             });
           } catch (error) {

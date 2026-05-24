@@ -1,7 +1,7 @@
 import {
-  ActivityInterruptionMomentCoordinator,
-  type ActivityInterruptionMoment,
-} from '~/services/activityInterruptionMomentCoordinator';
+  TransientMomentCoordinator,
+  type TransientMoment,
+} from '~/services/transientMomentCoordinator';
 import { CharacterControlReason } from '~/stateMachines/gameFlow/controlReasons';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 
@@ -27,8 +27,7 @@ interface StartRelationshipMomentOverlayInput {
 }
 
 interface RelationshipMomentOverlayCoordinatorOptions {
-  momentCoordinator: ActivityInterruptionMomentCoordinator;
-  pauseCharacterWalk: (characterId: string, durationMs: number) => void;
+  momentCoordinator: TransientMomentCoordinator;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   onOverlayFinished: (overlay: RelationshipMomentOverlay) => void;
 }
@@ -36,14 +35,12 @@ interface RelationshipMomentOverlayCoordinatorOptions {
 export class RelationshipMomentOverlayCoordinator {
   private readonly activeOverlaysById = new Map<string, RelationshipMomentOverlay>();
   private readonly overlayIdsByCharacterId = new Map<string, string>();
-  private readonly momentCoordinator: ActivityInterruptionMomentCoordinator;
-  private readonly pauseCharacterWalk: (characterId: string, durationMs: number) => void;
+  private readonly momentCoordinator: TransientMomentCoordinator;
   private readonly showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   private readonly onOverlayFinished: (overlay: RelationshipMomentOverlay) => void;
 
   constructor(options: RelationshipMomentOverlayCoordinatorOptions) {
     this.momentCoordinator = options.momentCoordinator;
-    this.pauseCharacterWalk = options.pauseCharacterWalk;
     this.showCharacterBubble = options.showCharacterBubble;
     this.onOverlayFinished = options.onOverlayFinished;
   }
@@ -80,7 +77,6 @@ export class RelationshipMomentOverlayCoordinator {
       this.overlayIdsByCharacterId.set(characterId, overlay.id);
     });
 
-    this.pauseCharacterWalk(input.targetCharacterId, input.durationMs);
     this.showCharacterBubble(input.actorId, input.label, input.durationMs);
     this.showCharacterBubble(input.targetCharacterId, input.targetBubbleText, input.durationMs);
     return overlay;
@@ -108,7 +104,7 @@ export class RelationshipMomentOverlayCoordinator {
     };
   }
 
-  private finish(moment: ActivityInterruptionMoment): void {
+  private finish(moment: TransientMoment): void {
     const overlay = this.activeOverlaysById.get(moment.id);
 
     if (!overlay) {

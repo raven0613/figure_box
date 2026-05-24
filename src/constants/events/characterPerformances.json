@@ -562,5 +562,43 @@
         "durationMs": 760
       }
     ]
+  },
+  {
+    "id": "mapItem.notice.placed",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expression": "curious",
+        "durationMs": 1200
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "咦？",
+        "durationMs": 1200
+      }
+    ]
+  },
+  {
+    "id": "mapItem.notice.pickedUp",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expression": "surprised",
+        "durationMs": 1000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "欸？",
+        "durationMs": 1000
+      }
+    ]
   }
 ]

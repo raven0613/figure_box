@@ -361,6 +361,23 @@ export class TownActivityCoordinator {
     this.playActivityPerformance(activity);
   }
 
+  replayActiveVisualsForCharacters(characterIds: readonly string[]): void {
+    const characterIdSet = new Set(characterIds);
+    const activityIdsToReplay = new Set(
+      this.activityManager.getActivities()
+        .filter(activity => (
+          activity.phase === 'active' &&
+          activity.pausedAt === undefined &&
+          activity.participantIds.some(participantId => characterIdSet.has(participantId))
+        ))
+        .map(activity => activity.id),
+    );
+
+    activityIdsToReplay.forEach(activityId => {
+      this.replayActivityActiveVisuals(activityId);
+    });
+  }
+
   joinActivityByGodDrop(characterId: string, activityId: string): boolean {
     const activity = this.activityManager.getActivity(activityId);
 

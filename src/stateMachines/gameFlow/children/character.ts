@@ -605,6 +605,7 @@ export const characterMachine = createMachine(
                     nearbyCharacterIds: event.nearbyCharacterIds,
                     nearbyRelationships: event.nearbyRelationships,
                     nearbyJoinableActivities: event.nearbyJoinableActivities,
+                    nearbyVisibleItems: event.nearbyVisibleItems,
                     ownItemIds: event.ownItemIds,
                     globalEventTags: event.globalEventTags,
                     timestamp: event.timestamp,

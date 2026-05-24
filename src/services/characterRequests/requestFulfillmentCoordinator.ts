@@ -1,18 +1,17 @@
 import type {
-  ActivityInterruptionMoment,
-  ActivityInterruptionMomentCoordinator,
-} from '~/services/activityInterruptionMomentCoordinator';
+  TransientMoment,
+  TransientMomentCoordinator,
+} from '~/services/transientMomentCoordinator';
 import { CharacterControlReason } from '~/stateMachines/gameFlow/controlReasons';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { ItemDefinition } from '~/typing/item';
 import type { CharacterRequest } from './types';
 
 interface CharacterRequestFulfillmentCoordinatorOptions {
-  momentCoordinator: ActivityInterruptionMomentCoordinator;
+  momentCoordinator: TransientMomentCoordinator;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   holdItem?: (characterId: string, itemDefinition: ItemDefinition) => void;
   releaseHeldItem?: (characterId: string) => void;
-  playPerformance?: (characterId: string, performanceId: string) => void;
   onFulfillmentFinished: (request: CharacterRequest) => void;
 }
 
@@ -31,11 +30,10 @@ interface StartCharacterRequestFulfillmentInput {
 const DEFAULT_FULFILLMENT_DURATION_MS = 4000;
 
 export class CharacterRequestFulfillmentCoordinator {
-  private readonly momentCoordinator: ActivityInterruptionMomentCoordinator;
+  private readonly momentCoordinator: TransientMomentCoordinator;
   private readonly showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   private readonly holdItem?: (characterId: string, itemDefinition: ItemDefinition) => void;
   private readonly releaseHeldItem?: (characterId: string) => void;
-  private readonly playPerformance?: (characterId: string, performanceId: string) => void;
   private readonly onFulfillmentFinished: (request: CharacterRequest) => void;
 
   constructor(options: CharacterRequestFulfillmentCoordinatorOptions) {
@@ -43,13 +41,14 @@ export class CharacterRequestFulfillmentCoordinator {
     this.showCharacterBubble = options.showCharacterBubble;
     this.holdItem = options.holdItem;
     this.releaseHeldItem = options.releaseHeldItem;
-    this.playPerformance = options.playPerformance;
     this.onFulfillmentFinished = options.onFulfillmentFinished;
   }
 
-  start(input: StartCharacterRequestFulfillmentInput): ActivityInterruptionMoment | null {
+  start(input: StartCharacterRequestFulfillmentInput): TransientMoment | null {
     const durationMs = input.durationMs ?? DEFAULT_FULFILLMENT_DURATION_MS;
     const participantIds = input.participantIds ?? [input.request.characterId];
+    this.holdFulfilledItem(input);
+
     const moment = this.momentCoordinator.start({
       id: `request-fulfillment-${input.request.id}-${input.timestamp}`,
       participantIds,
@@ -63,6 +62,8 @@ export class CharacterRequestFulfillmentCoordinator {
       controlState: CharacterControlState.RequestFulfillment,
       pauseParticipantWalks: true,
       curiosityLabel: '好奇',
+      performanceId: input.request.fulfillmentPerformanceId,
+      performanceCharacterIds: [input.request.characterId],
       onFinished: () => {
         this.releaseFulfilledItem(input);
         this.onFulfillmentFinished(input.request);
@@ -70,6 +71,7 @@ export class CharacterRequestFulfillmentCoordinator {
     });
 
     if (!moment) {
+      this.releaseFulfilledItem(input);
       return null;
     }
 
@@ -78,8 +80,6 @@ export class CharacterRequestFulfillmentCoordinator {
       input.rewardText ?? getDefaultRewardText(input.request),
       durationMs,
     );
-    this.holdFulfilledItem(input);
-    this.playConfiguredPerformance(input);
     return moment;
   }
 
@@ -103,13 +103,6 @@ export class CharacterRequestFulfillmentCoordinator {
     this.releaseHeldItem(input.request.characterId);
   }
 
-  private playConfiguredPerformance(input: StartCharacterRequestFulfillmentInput): void {
-    if (!input.request.fulfillmentPerformanceId || !this.playPerformance) {
-      return;
-    }
-
-    this.playPerformance(input.request.characterId, input.request.fulfillmentPerformanceId);
-  }
 }
 
 function getDefaultRewardText(request: CharacterRequest): string {

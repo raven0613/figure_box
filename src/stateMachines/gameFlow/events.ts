@@ -4,7 +4,10 @@ import type { CharacterRequestSatisfiedEffect } from "~/services/characterReques
 import type { CharacterControlReason } from "./controlReasons";
 import type { CharacterControlState } from "./states";
 import type { ItemDefinitionId, ItemInstanceId } from "~/typing/item";
-import type { CharacterEventNearbyRelationship } from "~/services/characterEvents/types";
+import type {
+  CharacterEventNearbyRelationship,
+  CharacterEventNearbyVisibleItem,
+} from "~/services/characterEvents/types";
 import type { JoinableActivity } from "~/services/characterEvents/joinableActivities";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
 
@@ -28,6 +31,7 @@ export type CharacterEvent =
     nearbyCharacterIds?: string[];
     nearbyRelationships?: readonly CharacterEventNearbyRelationship[];
     nearbyJoinableActivities?: readonly JoinableActivity[];
+    nearbyVisibleItems?: readonly CharacterEventNearbyVisibleItem[];
     ownItemIds?: readonly string[];
     globalEventTags?: string[];
     timestamp?: number;

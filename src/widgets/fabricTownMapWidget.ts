@@ -354,6 +354,10 @@ export class FabricTownMapWidget {
     return this.walkAnimator.pauseWalk(characterId, durationMs);
   }
 
+  isWalking(characterId: string): boolean {
+    return this.walkAnimator.isWalking(characterId);
+  }
+
   getCell(x: number, y: number): TownMapCellData | null {
     return this.grid.getTile(x, y)?.cell ?? null;
   }

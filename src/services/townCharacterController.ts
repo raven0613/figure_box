@@ -24,7 +24,7 @@ import {
 import { TownActivityCoordinator } from '~/services/townActivityCoordinator';
 import { TownMovementCoordinator } from '~/services/townMovementCoordinator';
 import { TownRelationshipTicker } from '~/services/townRelationshipTicker';
-import { ActivityInterruptionMomentCoordinator } from '~/services/activityInterruptionMomentCoordinator';
+import { TransientMomentCoordinator } from '~/services/transientMomentCoordinator';
 import {
   GOD_DROP_SCAN_RADIUS,
   GodDropOpportunityService,
@@ -47,7 +47,10 @@ import type {
   CharacterSeed,
   CharacterSnapshot,
 } from '~/services/townCharacterTypes';
-import type { CharacterEventNearbyRelationship } from '~/services/characterEvents/types';
+import type {
+  CharacterEventNearbyRelationship,
+  CharacterEventNearbyVisibleItem,
+} from '~/services/characterEvents/types';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import type { GridCoordinate } from '~/widgets/townMapGrid';
@@ -59,6 +62,8 @@ import {
 import type { ItemDefinition, ItemDefinitionId, ItemInstanceId } from '~/typing/item';
 import { itemHoldingService } from '~/services/items/itemHoldingService';
 import { itemService } from '~/services/items/itemService';
+import { EventOccurrenceCoordinator } from '~/services/eventOccurrences/eventOccurrenceCoordinator';
+import type { EventOccurrence } from '~/services/eventOccurrences/worldEventTypes';
 
 type Subscription = {
   unsubscribe: () => void;
@@ -79,6 +84,7 @@ const RELATIONSHIP_MOMENT_DECISION_GRACE_MS = 1800;
 const GOD_DROP_DECISION_GRACE_MS = 2600;
 const APARTMENT_EXIT_FOOD_SCORE_THRESHOLD = 65;
 const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
+const ITEM_VISIBILITY_RADIUS = 10;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
@@ -99,9 +105,10 @@ export class TownCharacterController {
   private readonly activityCoordinator: TownActivityCoordinator;
   private readonly movementCoordinator: TownMovementCoordinator;
   private readonly relationshipTicker: TownRelationshipTicker;
-  private readonly activityInterruptionMomentCoordinator: ActivityInterruptionMomentCoordinator;
+  private readonly transientMomentCoordinator: TransientMomentCoordinator;
   private readonly relationshipMomentOverlayCoordinator: RelationshipMomentOverlayCoordinator;
   private readonly requestFulfillmentCoordinator: CharacterRequestFulfillmentCoordinator;
+  private readonly eventOccurrenceCoordinator: EventOccurrenceCoordinator;
   private readonly godDropOpportunityService = new GodDropOpportunityService();
   private readonly characterRequestService = new CharacterRequestService({
     definitions: CHARACTER_REQUEST_DEFINITIONS,
@@ -115,6 +122,7 @@ export class TownCharacterController {
   private readonly activeRequestIndicatorCharacterIds = new Set<string>();
   private readonly activeRequestMapMarkerIds = new Set<string>();
   private readonly requestIdsByRelationshipOverlayId = new Map<string, string>();
+  private readonly requestFulfillmentResumeTargetsByRequestId = new Map<string, Map<string, Position>>();
   private readonly renderedHeldItemInstanceIdByCharacterId = new Map<string, string>();
   private readonly activityHeldItemsByCharacterId = new Map<string, ActivityHeldItemRecord>();
   private readonly onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
@@ -160,7 +168,7 @@ export class TownCharacterController {
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
     });
-    this.activityInterruptionMomentCoordinator = new ActivityInterruptionMomentCoordinator({
+    this.transientMomentCoordinator = new TransientMomentCoordinator({
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
       showMapActivity: (activity, durationMs) => {
         this.widget.showMapActivity(activity, durationMs);
@@ -170,27 +178,28 @@ export class TownCharacterController {
         this.notifyJoinableActivitiesChanged();
       },
       resumeActivity: (activityId, timestamp) => {
-        const resumedActivity = this.activityManager.resumeActivity(activityId, timestamp);
+        this.activityManager.resumeActivity(activityId, timestamp);
         this.notifyJoinableActivitiesChanged();
-
-        if (!resumedActivity) {
-          return;
-        }
-
-        // Let interruption cleanup release temporary presentation items before restoring activity visuals.
-        window.setTimeout(() => {
-          this.activityCoordinator.replayActivityActiveVisuals(activityId);
-        }, 0);
+      },
+      playPerformance: ({ characterId, performanceId }) => (
+        this.performanceRunner.playPerformanceStepsById({
+          performanceId,
+          phase: 'active',
+          initiatorId: characterId,
+        })
+      ),
+      restoreActiveVisualsForCharacters: characterIds => {
+        this.activityCoordinator.replayActiveVisualsForCharacters(characterIds);
       },
       pauseCharacterWalk: (characterId, durationMs) => {
         this.movementCoordinator.pauseCharacterWalk(characterId, durationMs);
+      },
+      resumeCharacterWalk: characterId => {
+        this.movementCoordinator.resumeCharacterWalk(characterId);
       },
     });
     this.relationshipMomentOverlayCoordinator = new RelationshipMomentOverlayCoordinator({
-      momentCoordinator: this.activityInterruptionMomentCoordinator,
-      pauseCharacterWalk: (characterId, durationMs) => {
-        this.movementCoordinator.pauseCharacterWalk(characterId, durationMs);
-      },
+      momentCoordinator: this.transientMomentCoordinator,
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
       },
@@ -199,7 +208,7 @@ export class TownCharacterController {
       },
     });
     this.requestFulfillmentCoordinator = new CharacterRequestFulfillmentCoordinator({
-      momentCoordinator: this.activityInterruptionMomentCoordinator,
+      momentCoordinator: this.transientMomentCoordinator,
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
       },
@@ -214,15 +223,20 @@ export class TownCharacterController {
           true,
         );
       },
-      playPerformance: (characterId, performanceId) => {
-        this.performanceRunner.playPerformanceStepsById({
-          performanceId,
-          phase: 'active',
-          initiatorId: characterId,
-        });
-      },
       onFulfillmentFinished: request => {
         this.finishCharacterRequestFulfillment(request);
+      },
+    });
+    this.eventOccurrenceCoordinator = new EventOccurrenceCoordinator({
+      getCharacterIdsNearPosition: (position, radius) => this.getCharacterIdsNearPosition(position, radius),
+      playTransientPerformance: input => {
+        this.transientMomentCoordinator.start({
+          id: `event-occurrence-${input.eventId}-${input.characterId}-${input.timestamp}`,
+          participantIds: [input.characterId],
+          timestamp: input.timestamp,
+          durationMs: 0,
+          performanceId: input.performanceId,
+        });
       },
     });
     this.relationshipTicker = new TownRelationshipTicker({
@@ -413,6 +427,10 @@ export class TownCharacterController {
     });
   }
 
+  dispatchEventOccurrence(occurrence: EventOccurrence): void {
+    this.eventOccurrenceCoordinator.dispatchEventOccurrence(occurrence);
+  }
+
   dispose(): void {
     if (this.tickTimer !== null) {
       window.clearInterval(this.tickTimer);
@@ -421,7 +439,7 @@ export class TownCharacterController {
 
     this.movementCoordinator.dispose();
     this.relationshipMomentOverlayCoordinator.dispose();
-    this.activityInterruptionMomentCoordinator.dispose();
+    this.transientMomentCoordinator.dispose();
     this.performanceRunner.dispose();
     itemHoldingService.clear();
     this.activityManager.clear();
@@ -616,7 +634,7 @@ export class TownCharacterController {
 
   private isCharacterInBlockingMoment(characterId: string): boolean {
     return this.relationshipMomentOverlayCoordinator.isCharacterInOverlay(characterId) ||
-      this.activityInterruptionMomentCoordinator.isCharacterInMoment(characterId);
+      this.transientMomentCoordinator.isCharacterInMoment(characterId);
   }
 
   private handleRelationshipMomentFinished(overlay: RelationshipMomentOverlay): void {
@@ -643,8 +661,13 @@ export class TownCharacterController {
     const sourceActivityIds = this.getActivityIdsByParticipants(participantIds);
     const observerIds = this.getObserverIdsForActivities(sourceActivityIds, participantIds);
     const timestamp = Date.now();
+    const resumeTargets = this.captureRequestFulfillmentResumeTargets(participantIds);
 
     this.clearPendingActivityJoins(participantIds, timestamp);
+
+    if (resumeTargets.size > 0) {
+      this.requestFulfillmentResumeTargetsByRequestId.set(request.id, resumeTargets);
+    }
 
     const fulfillment = this.requestFulfillmentCoordinator.start({
       request,
@@ -668,9 +691,14 @@ export class TownCharacterController {
   }
 
   private finishCharacterRequestFulfillment(request: CharacterRequest): void {
+    const resumeTargets = this.requestFulfillmentResumeTargetsByRequestId.get(request.id)
+      ?? new Map<string, Position>();
+    this.requestFulfillmentResumeTargetsByRequestId.delete(request.id);
+
     const completedRequest = this.characterRequestService.completeRequest(request.id);
 
     if (!completedRequest) {
+      this.resumeRequestFulfillmentTargets(resumeTargets);
       return;
     }
 
@@ -681,7 +709,39 @@ export class TownCharacterController {
       });
     }
 
+    this.resumeRequestFulfillmentTargets(resumeTargets);
     this.notifyCharacterRequestsChanged();
+  }
+
+  private captureRequestFulfillmentResumeTargets(participantIds: readonly string[]): Map<string, Position> {
+    const resumeTargets = new Map<string, Position>();
+
+    participantIds.forEach(participantId => {
+      const context = this.getCharacterSnapshot(participantId)?.context;
+
+      if (!context?.target || context.presence.kind !== 'positioned') {
+        return;
+      }
+
+      resumeTargets.set(participantId, { ...context.target });
+    });
+
+    return resumeTargets;
+  }
+
+  private resumeRequestFulfillmentTargets(resumeTargets: ReadonlyMap<string, Position>): void {
+    resumeTargets.forEach((target, characterId) => {
+      const context = this.getCharacterSnapshot(characterId)?.context;
+
+      if (!context || context.presence.kind !== 'positioned') {
+        return;
+      }
+
+      this.sendToCharacter(characterId, {
+        type: EventType.MoveTo,
+        target,
+      });
+    });
   }
 
   private getRequestResolvedByRelationshipMoment(overlay: RelationshipMomentOverlay): CharacterRequest | null {
@@ -1049,12 +1109,14 @@ export class TownCharacterController {
       const allowAutonomousDecision = this.canCharacterDecideNow(character.id, timestamp);
       const didLeaveApartment = allowAutonomousDecision && this.maybeLeaveApartmentForOutsideNeed(character.id);
       const nearbyCharacterIds = this.getNearbyCharacterIds(character.id, 2);
+      const nearbyVisibleItems = this.getNearbyVisibleItems(character.id, ITEM_VISIBILITY_RADIUS);
 
       this.sendToCharacter(character.id, {
         type: EventType.Tick,
         nearbyCharacterIds,
         nearbyRelationships: this.getNearbyRelationshipSnapshots(character.id, nearbyCharacterIds),
         nearbyJoinableActivities: this.activityCoordinator.getNearbyJoinableActivities(character.id, timestamp),
+        nearbyVisibleItems,
         ownItemIds: this.getAvailableActorItemDefinitionIds(character.id),
         timestamp,
         allowAutonomousDecision: allowAutonomousDecision && !didLeaveApartment,
@@ -1204,6 +1266,25 @@ export class TownCharacterController {
     return this.widget.getOccupiedNeighborIds(tile.x, tile.y, range, characterId);
   }
 
+  private getCharacterIdsNearPosition(position: Position, radius: number): string[] {
+    return CHARACTER_SEEDS
+      .flatMap(character => {
+        const characterPosition = this.getCharacterPosition(character.id);
+
+        if (!characterPosition) {
+          return [];
+        }
+
+        const candidate = {
+          characterId: character.id,
+          distance: getGridDistance(position, characterPosition),
+        };
+
+        return candidate.distance <= radius ? [candidate] : [];
+      })
+      .map(candidate => candidate.characterId);
+  }
+
   private getCharacterPosition(characterId: string): Position | null {
     const tile = this.widget.getCharacterTile(characterId);
 
@@ -1212,6 +1293,48 @@ export class TownCharacterController {
     }
 
     return { x: tile.x, y: tile.y };
+  }
+
+  private getNearbyVisibleItems(
+    characterId: string,
+    radius: number,
+  ): CharacterEventNearbyVisibleItem[] {
+    const position = this.getCharacterPosition(characterId);
+
+    if (!position) {
+      return [];
+    }
+
+    return itemService.getPlacedObjects(TOWN_WORLD_SPACE_ID)
+      .flatMap(placedObject => {
+        if (!placedObject.worldPosition) {
+          return [];
+        }
+
+        const distance = getGridDistance(position, placedObject.worldPosition);
+
+        if (distance > radius) {
+          return [];
+        }
+
+        const itemInstance = itemService.getItemInstance(placedObject.itemInstanceId);
+        const definition = itemInstance ? itemService.getDefinition(itemInstance.definitionId) : null;
+
+        if (!itemInstance || !definition) {
+          return [];
+        }
+
+        return [{
+          placedObjectId: placedObject.id,
+          itemInstanceId: itemInstance.id,
+          definitionId: definition.id,
+          category: definition.category,
+          tags: definition.tags,
+          rarity: definition.rarity,
+          position: placedObject.worldPosition,
+          distance,
+        }];
+      });
   }
 
   private notifyJoinableActivitiesChanged(): void {
@@ -1312,6 +1435,10 @@ export class TownCharacterController {
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
+}
+
+function getGridDistance(from: Position, to: Position): number {
+  return Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y));
 }
 
 function uniqueStrings(values: readonly string[]): string[] {

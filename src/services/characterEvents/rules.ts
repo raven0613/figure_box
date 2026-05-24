@@ -37,6 +37,11 @@ interface CharacterEventRuleInputSnapshot {
   nearbyRelationshipIntimacies: number[];
   nearbySocialStatuses: string[];
   nearbyJoinableActivityCount: number;
+  nearbyVisibleItemDefinitionIds: string[];
+  nearbyVisibleItemCategories: string[];
+  nearbyVisibleItemTags: string[];
+  nearbyVisibleItemRarities: string[];
+  nearbyVisibleItemCount: number;
   ownItemIds: readonly string[];
   ownItemCount: number;
   globalEventTags: string[];
@@ -50,8 +55,10 @@ export function createCharacterEventRuleContext(
   const nearbyCharacterIds = input.nearbyCharacterIds ?? [];
   const nearbyRelationships = input.nearbyRelationships ?? [];
   const nearbyJoinableActivities = input.nearbyJoinableActivities ?? [];
+  const nearbyVisibleItems = input.nearbyVisibleItems ?? [];
   const globalEventTags = input.globalEventTags ?? [];
   const ownItemIds = input.ownItemIds ?? character.ownItems.map(item => item.definitionId);
+  const nearbyVisibleItemTags = [...new Set(nearbyVisibleItems.flatMap(item => [...item.tags]))];
 
   return {
     character,
@@ -63,6 +70,11 @@ export function createCharacterEventRuleContext(
       nearbyRelationshipIntimacies: nearbyRelationships.map(relationship => relationship.intimacy),
       nearbySocialStatuses: nearbyRelationships.map(relationship => relationship.socialStatus),
       nearbyJoinableActivityCount: nearbyJoinableActivities.length,
+      nearbyVisibleItemDefinitionIds: nearbyVisibleItems.map(item => item.definitionId),
+      nearbyVisibleItemCategories: nearbyVisibleItems.map(item => item.category),
+      nearbyVisibleItemTags,
+      nearbyVisibleItemRarities: nearbyVisibleItems.map(item => item.rarity),
+      nearbyVisibleItemCount: nearbyVisibleItems.length,
       ownItemIds,
       ownItemCount: ownItemIds.length,
       globalEventTags,
