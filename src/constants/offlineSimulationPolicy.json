@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "elapsedTime": {
+    "ignoreBelowMs": 60000,
+    "maxSimulatedMs": 21600000,
+    "slotDurationMs": 900000,
+    "maxSlots": 8
+  },
+  "events": {
+    "default": {
+      "enabled": true,
+      "weightMultiplier": 1,
+      "recap": "auto",
+      "maxPerReturn": 3
+    },
+    "bucket": {
+      "baseline": {
+        "weightMultiplier": 0.15,
+        "recap": "none",
+        "maxPerReturn": 1
+      },
+      "need": {
+        "weightMultiplier": 1,
+        "recap": "auto",
+        "maxPerReturn": 4
+      },
+      "environment": {
+        "weightMultiplier": 0.45,
+        "recap": "auto",
+        "maxPerReturn": 2
+      },
+      "global": {
+        "weightMultiplier": 0,
+        "recap": "none",
+        "maxPerReturn": 0
+      }
+    },
+    "motivation": {
+      "idle": {
+        "weightMultiplier": 0.25,
+        "recap": "none"
+      },
+      "findFood": {
+        "weightMultiplier": 1.1
+      },
+      "rest": {
+        "weightMultiplier": 0.9
+      },
+      "play": {
+        "weightMultiplier": 0.75
+      },
+      "chat": {
+        "weightMultiplier": 0.5,
+        "maxPerReturn": 1
+      }
+    },
+    "eventOverrides": {
+      "baseline.idle": {
+        "recap": "none"
+      },
+      "environment.nearbyCharacter.chat": {
+        "weightMultiplier": 0.6,
+        "recap": "always",
+        "maxPerReturn": 1
+      }
+    }
+  },
+  "requests": {
+    "level": {
+      "critical": {
+        "mode": "pendingOnly"
+      },
+      "social": {
+        "mode": "allow",
+        "weightMultiplier": 0.6,
+        "maxPerReturn": 1
+      },
+      "minor": {
+        "mode": "allow",
+        "weightMultiplier": 0.9,
+        "maxPerReturn": 2
+      }
+    }
+  },
+  "recap": {
+    "maxItems": 6,
+    "maxDetailedItems": 3
+  }
+}

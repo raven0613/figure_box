@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "fallback": {
+    "summary": "{characterName} 做了點事情。"
+  },
+  "motivation": {
+    "idle": {
+      "summary": "{characterName} 在附近待了一會兒。"
+    },
+    "findFood": {
+      "summary": "{characterName} 去找了點東西吃。",
+      "detail": "{characterName} 離開原本的位置，最後在食物附近停了下來。"
+    },
+    "rest": {
+      "summary": "{characterName} 休息了一段時間。"
+    },
+    "play": {
+      "summary": "{characterName} 自己玩了一會兒。"
+    },
+    "chat": {
+      "summary": "{characterName} 想找人聊聊。"
+    }
+  },
+  "eventType": {
+    "goIdle": {
+      "summary": "{characterName} 在附近待了一會兒。"
+    },
+    "goEat": {
+      "summary": "{characterName} 去找了點東西吃。",
+      "detail": "{characterName} 看起來比剛才有精神一點。"
+    },
+    "goRest": {
+      "summary": "{characterName} 找了個地方休息。"
+    },
+    "goPlay": {
+      "summary": "{characterName} 找了地方玩。"
+    },
+    "goHome": {
+      "summary": "{characterName} 回家待了一會兒。"
+    },
+    "startActivity": {
+      "summary": "{characterName} 開始做了點事情。"
+    },
+    "joinActivity": {
+      "summary": "{characterName} 加入了附近的活動。"
+    }
+  },
+  "activityType": {
+    "chat": {
+      "summary": "{characterName} 和 {targetName} 聊了一會兒。",
+      "detail": "兩人短暫停下來說了些話。"
+    },
+    "playWithItem": {
+      "summary": "{characterName} 拿著 {itemName} 玩了一會兒。"
+    },
+    "playAtLocation": {
+      "summary": "{characterName} 在附近玩了一會兒。"
+    }
+  },
+  "eventOverrides": {
+    "environment.nearbyCharacter.chat": {
+      "summary": "{characterName} 主動找 {targetName} 聊了一下。",
+      "detail": "看起來氣氛還不錯。"
+    }
+  }
+}

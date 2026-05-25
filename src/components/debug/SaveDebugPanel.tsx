@@ -8,6 +8,8 @@ import {
   getSaveDebugDatabaseSnapshot,
   type SaveDebugDatabaseSnapshot,
 } from '~/services/save/saveDebugService';
+import { createOfflineSimulationDryRun } from '~/services/offlineSimulation/offlineCandidateDryRunService';
+import type { OfflineSimulationDryRun } from '~/services/offlineSimulation/types';
 import { characterAvatarSaveService } from '~/services/save/characterAvatarSaveService';
 import { characterProfileSaveService } from '~/services/save/characterProfileSaveService';
 import { customObjectImageSaveService } from '~/services/save/customObjectImageSaveService';
@@ -56,6 +58,7 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
   const [selectedExportObjectIds, setSelectedExportObjectIds] = useState<readonly string[]>([]);
   const [selectedContentObjectIds, setSelectedContentObjectIds] = useState<readonly string[]>([]);
   const [objectConflictResolutions, setObjectConflictResolutions] = useState<Record<string, ContentPackConflictResolution>>({});
+  const [offlineDryRun, setOfflineDryRun] = useState<OfflineSimulationDryRun | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedTableSnapshot = useMemo(
@@ -257,6 +260,19 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
       setIsDebugMutationPending(false);
     }
   }, [refresh]);
+
+  const handleOfflineDryRun = useCallback(() => {
+    if (offlineDryRun) {
+      setOfflineDryRun(null);
+      setMessage('offline dry run closed');
+      return;
+    }
+
+    const dryRun = createOfflineSimulationDryRun();
+
+    setOfflineDryRun(dryRun);
+    setMessage(`offline dry run: ${String(dryRun.characters.length)} characters, elapsed=${formatDuration(dryRun.elapsedMs)}`);
+  }, [offlineDryRun]);
 
   const handleExportFullSave = useCallback(async () => {
     setIsTransferPending(true);
@@ -663,6 +679,13 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
           >
             Delete Test Object
           </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={handleOfflineDryRun}
+          >
+            {offlineDryRun ? 'Close Offline Dry Run' : 'Offline Dry Run'}
+          </button>
           <button className={styles.dangerButton} type="button" onClick={handleReset}>
             Reset DB
           </button>
@@ -941,6 +964,19 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
           ) : null}
         </div>
         {message ? <div className={styles.message}>{message}</div> : null}
+        {offlineDryRun ? (
+          <div className={styles.contentPackPreview}>
+            <div className={styles.previewHeader}>
+              <strong>Offline Candidate Dry Run</strong>
+              <span>
+                policy v{offlineDryRun.policyVersion} · elapsed={formatDuration(offlineDryRun.elapsedMs)}
+              </span>
+            </div>
+            <pre className={styles.jsonPreview}>
+              {JSON.stringify(offlineDryRun, null, 2)}
+            </pre>
+          </div>
+        ) : null}
       </section>
 
       <div className={styles.contentGrid}>
@@ -1031,6 +1067,26 @@ function formatBytes(value: number): string {
 
 function formatExportStringLength(value: string): string {
   return `${value.length.toLocaleString()} chars`;
+}
+
+function formatDuration(value: number | null): string {
+  if (value === null) {
+    return 'unknown';
+  }
+
+  if (value < 1000) {
+    return `${Math.round(value)} ms`;
+  }
+
+  if (value < 60 * 1000) {
+    return `${Math.round(value / 1000)} sec`;
+  }
+
+  if (value < 60 * 60 * 1000) {
+    return `${Math.round(value / 60000)} min`;
+  }
+
+  return `${(value / 60 / 60 / 1000).toFixed(1)} hr`;
 }
 
 function createContentPackCountMessage(

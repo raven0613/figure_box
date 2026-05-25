@@ -5,6 +5,7 @@ import type {
   CharacterEventInterruptPolicy,
   CharacterEventInteractionPresentation,
 } from '../../constants/charactarEventsDefinitions';
+import type { OfflineRecapTemplate } from '~/services/offlineSimulation/types';
 import { Mood } from '../../constants/character';
 import { readCharacterEventAction } from './actionSchema';
 import {
@@ -74,6 +75,7 @@ function parseCharacterEventDefinition(
   const cooldowns = readOptionalCooldowns(rawDefinition, index);
   const interruptPolicy = readOptionalInterruptPolicy(rawDefinition, 'interruptPolicy', index);
   const commitment = readOptionalNumber(rawDefinition, 'commitment', index);
+  const offlineRecap = readOptionalOfflineRecap(rawDefinition, index);
   const onInterrupted = readOptionalTransitionPresentations(rawDefinition, 'onInterrupted', index);
   const onInterruptRejected = readOptionalTransitionPresentations(rawDefinition, 'onInterruptRejected', index);
 
@@ -96,9 +98,37 @@ function parseCharacterEventDefinition(
     cooldowns,
     interruptPolicy,
     commitment,
+    offlineRecap,
     onInterrupted,
     onInterruptRejected,
   };
+}
+
+function readOptionalOfflineRecap(
+  definition: CharacterEventDefinitionRecord,
+  index: number,
+): OfflineRecapTemplate | undefined {
+  const value = definition.offlineRecap;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid offlineRecap.`);
+  }
+
+  const offlineRecap = {
+    summary: readOptionalString(value, 'summary', index),
+    detail: readOptionalString(value, 'detail', index),
+    quote: readOptionalString(value, 'quote', index),
+  };
+
+  if (!offlineRecap.summary && !offlineRecap.detail && !offlineRecap.quote) {
+    throw new Error(`Character event definition at index ${index} has empty offlineRecap.`);
+  }
+
+  return offlineRecap;
 }
 
 function readOptionalInteractionPresentation(

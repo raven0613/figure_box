@@ -26,6 +26,8 @@ export interface SaveMetaRecord {
   createdAt: number;
   updatedAt: number;
   lastBackupAt: number | null;
+  lastActiveAt: number | null;
+  lastOfflineSimulationAt: number | null;
 }
 
 export interface WorldProgressRecord {

@@ -10,6 +10,7 @@ import type {
   CharacterEventRuleClause,
   CharacterEventWeightModifier,
 } from '../services/characterEvents/rules';
+import type { OfflineRecapTemplate } from '~/services/offlineSimulation/types';
 
 export interface CharacterEventDefinition {
   id: string;
@@ -30,6 +31,7 @@ export interface CharacterEventDefinition {
   cooldowns?: CharacterEventCooldowns;
   interruptPolicy?: CharacterEventInterruptPolicy;
   commitment?: number;
+  offlineRecap?: OfflineRecapTemplate;
   onInterrupted?: readonly CharacterEventTransitionPresentation[];
   onInterruptRejected?: readonly CharacterEventTransitionPresentation[];
 }

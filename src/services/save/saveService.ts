@@ -64,6 +64,7 @@ import {
   type ObjectContentPackPackageSummary,
 } from './saveTransferService';
 import { worldProgressService } from './worldProgressService';
+import { offlineSessionService } from '~/services/offlineSimulation/offlineSessionService';
 
 const AUTOSAVE_DELAY_MS = 600;
 const CHARACTER_SAVE_MIN_INTERVAL_MS = 5000;
@@ -238,6 +239,7 @@ class SaveService {
 
   private async initializeGameInternal(): Promise<void> {
     await this.ensureCoreRecords();
+    await offlineSessionService.start();
     await itemService.load();
     await shopService.load();
   }

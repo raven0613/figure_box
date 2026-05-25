@@ -72,6 +72,12 @@ export function normalizeSaveMetaRecord(rawRecord: unknown): SaveMetaRecord {
     lastBackupAt: rawRecord.lastBackupAt === null
       ? null
       : readOptionalFiniteNumber(rawRecord.lastBackupAt),
+    lastActiveAt: rawRecord.lastActiveAt === null
+      ? null
+      : readOptionalFiniteNumber(rawRecord.lastActiveAt) ?? null,
+    lastOfflineSimulationAt: rawRecord.lastOfflineSimulationAt === null
+      ? null
+      : readOptionalFiniteNumber(rawRecord.lastOfflineSimulationAt) ?? null,
   };
 }
 

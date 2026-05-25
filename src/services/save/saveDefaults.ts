@@ -20,6 +20,8 @@ export function createDefaultSaveMeta(timestamp = Date.now()): SaveMetaRecord {
     createdAt: timestamp,
     updatedAt: timestamp,
     lastBackupAt: null,
+    lastActiveAt: timestamp,
+    lastOfflineSimulationAt: null,
   };
 }
 
