@@ -16,6 +16,7 @@ import {
   normalizeCustomObjectImageRecords,
   normalizeCustomObjectRecords,
   normalizeItemSaveRecord,
+  normalizeOfflineRecapSaveRecords,
   normalizeRelationshipSaveRecord,
   normalizeSaveMetaRecord,
   normalizeSettingsRecord,
@@ -29,6 +30,7 @@ import { characterProfileSaveService } from './characterProfileSaveService';
 import { customObjectImageSaveService } from './customObjectImageSaveService';
 import { customObjectSaveService } from './customObjectSaveService';
 import { relationshipStoreService } from './relationshipStoreService';
+import { offlineRecapSaveService } from './offlineRecapSaveService';
 import type {
   CharacterRuntimeSaveRecord,
   RelationshipSaveRecord,
@@ -226,6 +228,19 @@ class SaveService {
     await this.saveDirtyDomains();
   }
 
+  async saveOfflineSimulationNow(lastOfflineSimulationAt: number = Date.now()): Promise<void> {
+    const [didSaveCharacterRuntime, didSaveOfflineRecaps] = await Promise.all([
+      this.saveCharacterRuntime({ ignoreMinInterval: true }),
+      this.saveOfflineRecaps(),
+    ]);
+
+    await offlineSessionService.recordOfflineSimulation(lastOfflineSimulationAt);
+
+    if (didSaveCharacterRuntime || didSaveOfflineRecaps) {
+      await this.touchSaveMeta();
+    }
+  }
+
   async resetGameSave(): Promise<void> {
     if (this.autosaveTimer !== null) {
       window.clearTimeout(this.autosaveTimer);
@@ -258,6 +273,7 @@ class SaveService {
       rawCharacterAvatars,
       rawCustomObjects,
       rawCustomObjectImages,
+      rawOfflineRecaps,
     ] = await Promise.all([
       saveDb.saveMeta.get('current'),
       saveDb.worldProgress.get('current'),
@@ -270,6 +286,7 @@ class SaveService {
       saveDb.characterAvatars.toArray(),
       saveDb.customObjects.toArray(),
       saveDb.customObjectImages.toArray(),
+      saveDb.offlineRecaps.toArray(),
     ]);
     const saveMeta = rawSaveMeta
       ? normalizeSaveMetaRecord(rawSaveMeta)
@@ -309,6 +326,7 @@ class SaveService {
     const customObjectIds = new Set(customObjectRecords.map(record => record.id));
     const customObjectImageRecords = normalizeCustomObjectImageRecords(rawCustomObjectImages)
       .filter(record => customObjectIds.has(record.objectId));
+    const offlineRecapRecords = normalizeOfflineRecapSaveRecords(rawOfflineRecaps);
 
     worldProgressService.load(worldProgress);
     settingsService.load(settings);
@@ -318,6 +336,7 @@ class SaveService {
     characterAvatarSaveService.load(characterAvatarRecords);
     customObjectSaveService.load(customObjectRecords);
     customObjectImageSaveService.load(customObjectImageRecords);
+    offlineRecapSaveService.load(offlineRecapRecords);
 
     await saveDb.transaction('rw', [
       saveDb.saveMeta,
@@ -331,6 +350,7 @@ class SaveService {
       saveDb.characterAvatars,
       saveDb.customObjects,
       saveDb.customObjectImages,
+      saveDb.offlineRecaps,
     ], async () => {
       await saveDb.saveMeta.put(saveMeta);
       await saveDb.worldProgress.put(worldProgress);
@@ -355,6 +375,9 @@ class SaveService {
       await saveDb.customObjectImages.clear();
       if (customObjectImageRecords.length > 0) {
         await saveDb.customObjectImages.bulkPut(customObjectImageRecords);
+      }
+      if (offlineRecapRecords.length > 0) {
+        await saveDb.offlineRecaps.bulkPut(offlineRecapRecords);
       }
     });
   }
@@ -400,6 +423,8 @@ class SaveService {
         return this.saveCustomObjects();
       case 'customObjectImages':
         return this.saveCustomObjectImages();
+      case 'offlineRecaps':
+        return this.saveOfflineRecaps();
     }
   }
 
@@ -422,10 +447,13 @@ class SaveService {
     return true;
   }
 
-  private async saveCharacterRuntime(): Promise<boolean> {
+  private async saveCharacterRuntime(
+    options: { ignoreMinInterval?: boolean } = {},
+  ): Promise<boolean> {
     const timestamp = Date.now();
 
     if (
+      !options.ignoreMinInterval &&
       this.lastCharacterSaveAt > 0 &&
       timestamp - this.lastCharacterSaveAt < CHARACTER_SAVE_MIN_INTERVAL_MS
     ) {
@@ -499,6 +527,20 @@ class SaveService {
     await saveDb.customObjectImages.clear();
     if (records.length > 0) {
       await saveDb.customObjectImages.bulkPut(records);
+    }
+    return true;
+  }
+
+  private async saveOfflineRecaps(): Promise<boolean> {
+    if (!offlineRecapSaveService.didRecordsChange()) {
+      return false;
+    }
+
+    const records = offlineRecapSaveService.getRecords();
+
+    await saveDb.offlineRecaps.clear();
+    if (records.length > 0) {
+      await saveDb.offlineRecaps.bulkPut(records);
     }
     return true;
   }

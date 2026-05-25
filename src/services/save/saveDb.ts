@@ -9,6 +9,7 @@ import {
   type CustomObjectImageRecord,
   type CustomObjectRecord,
   type ItemSaveRecord,
+  type OfflineRecapSaveRecord,
   type RelationshipSaveRecord,
   type SaveMetaRecord,
   type SaveTableName,
@@ -52,7 +53,9 @@ const LEGACY_V3_TABLE_SCHEMAS: Record<string, string> = {
   characterAvatars: 'id, characterId, updatedAt',
 };
 
-const TABLE_SCHEMAS: Record<SaveTableName, string> = {
+type LegacyV4SaveTableName = Exclude<SaveTableName, 'offlineRecaps'>;
+
+const TABLE_SCHEMAS: Record<LegacyV4SaveTableName, string> = {
   saveMeta: 'id, schemaVersion, updatedAt',
   worldProgress: 'id, day, updatedAt',
   items: 'id, updatedAt',
@@ -64,6 +67,15 @@ const TABLE_SCHEMAS: Record<SaveTableName, string> = {
   characterAvatars: 'id, characterId, updatedAt',
   customObjects: 'id, source, imageId, updatedAt',
   customObjectImages: 'id, objectId, updatedAt',
+};
+
+const LEGACY_V4_TABLE_SCHEMAS: Record<string, string> = {
+  ...TABLE_SCHEMAS,
+};
+
+const CURRENT_TABLE_SCHEMAS: Record<SaveTableName, string> = {
+  ...TABLE_SCHEMAS,
+  offlineRecaps: 'id, simulationSeed, characterId, eventId, timestamp, isRead, updatedAt',
 };
 
 class FigureBoxSaveDatabase extends Dexie {
@@ -78,23 +90,25 @@ class FigureBoxSaveDatabase extends Dexie {
   characterAvatars!: Table<CharacterAvatarRecord, string>;
   customObjects!: Table<CustomObjectRecord, string>;
   customObjectImages!: Table<CustomObjectImageRecord, string>;
+  offlineRecaps!: Table<OfflineRecapSaveRecord, string>;
 
   constructor() {
     super(SAVE_DATABASE_NAME);
     this.version(1).stores(LEGACY_V1_TABLE_SCHEMAS);
     this.version(2).stores(LEGACY_V2_TABLE_SCHEMAS);
     this.version(3).stores(LEGACY_V3_TABLE_SCHEMAS);
-    this.version(SAVE_DATABASE_VERSION).stores(TABLE_SCHEMAS);
+    this.version(4).stores(LEGACY_V4_TABLE_SCHEMAS);
+    this.version(SAVE_DATABASE_VERSION).stores(CURRENT_TABLE_SCHEMAS);
   }
 }
 
 export const saveDb = new FigureBoxSaveDatabase();
 
-export const SAVE_TABLES = Object.keys(TABLE_SCHEMAS) as SaveTableName[];
+export const SAVE_TABLES = Object.keys(CURRENT_TABLE_SCHEMAS) as SaveTableName[];
 
 export function getSaveTableSchemaSummaries(): readonly SaveTableSchemaSummary[] {
   return SAVE_TABLES.map(tableName => {
-    const [primaryKey, ...indexes] = TABLE_SCHEMAS[tableName]
+    const [primaryKey, ...indexes] = CURRENT_TABLE_SCHEMAS[tableName]
       .split(',')
       .map(part => part.trim())
       .filter(Boolean);

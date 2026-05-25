@@ -46,6 +46,20 @@ class OfflineSessionService {
     return { ...this.snapshot };
   }
 
+  async recordOfflineSimulation(timestamp: number = Date.now()): Promise<void> {
+    const saveMeta = normalizeSaveMetaRecord(await saveDb.saveMeta.get('current'));
+
+    await saveDb.saveMeta.put({
+      ...saveMeta,
+      lastOfflineSimulationAt: timestamp,
+      updatedAt: timestamp,
+    });
+    this.snapshot = {
+      ...this.snapshot,
+      lastOfflineSimulationAt: timestamp,
+    };
+  }
+
   private listen(): void {
     if (this.isListening) {
       return;

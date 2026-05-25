@@ -8,6 +8,7 @@ import {
   getSaveDebugDatabaseSnapshot,
   type SaveDebugDatabaseSnapshot,
 } from '~/services/save/saveDebugService';
+import { applyOfflineSimulationDryRun } from '~/services/offlineSimulation/offlineSimulationApplyService';
 import { createOfflineSimulationDryRun } from '~/services/offlineSimulation/offlineCandidateDryRunService';
 import type { OfflineSimulationDryRun } from '~/services/offlineSimulation/types';
 import { characterAvatarSaveService } from '~/services/save/characterAvatarSaveService';
@@ -273,6 +274,34 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
     setOfflineDryRun(dryRun);
     setMessage(`offline dry run: ${String(dryRun.characters.length)} characters, elapsed=${formatDuration(dryRun.elapsedMs)}`);
   }, [offlineDryRun]);
+
+  const handleApplyOfflinePreview = useCallback(async () => {
+    if (!offlineDryRun) {
+      setMessage('請先執行 Offline Dry Run。');
+      return;
+    }
+
+    setIsDebugMutationPending(true);
+
+    try {
+      const result = await applyOfflineSimulationDryRun(offlineDryRun);
+
+      if (!result.success) {
+        setMessage(`offline apply skipped: ${result.reason}`);
+        return;
+      }
+
+      await saveService.saveOfflineSimulationNow(result.appliedAt);
+      await refresh();
+      setOfflineDryRun(null);
+      setMessage(`offline applied: characters=${String(result.appliedCharacterCount)}, recaps=${String(result.recapCount)}`);
+    } catch (error) {
+      console.error('Offline apply failed.', error);
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsDebugMutationPending(false);
+    }
+  }, [offlineDryRun, refresh]);
 
   const handleExportFullSave = useCallback(async () => {
     setIsTransferPending(true);
@@ -683,8 +712,17 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
             className={styles.secondaryButton}
             type="button"
             onClick={handleOfflineDryRun}
+            disabled={isDebugMutationPending}
           >
             {offlineDryRun ? 'Close Offline Dry Run' : 'Offline Dry Run'}
+          </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={handleApplyOfflinePreview}
+            disabled={!offlineDryRun || isDebugMutationPending}
+          >
+            Apply Offline Preview
           </button>
           <button className={styles.dangerButton} type="button" onClick={handleReset}>
             Reset DB

@@ -4,7 +4,7 @@ import type { RelationshipStore } from '~/stateMachines/gameFlow/relationships';
 import type { ShopStockItem } from '~/typing/item';
 
 export const SAVE_DATABASE_NAME = 'figureBoxSaveDb';
-export const SAVE_DATABASE_VERSION = 4;
+export const SAVE_DATABASE_VERSION = 5;
 export const SAVE_SCHEMA_VERSION = 1;
 
 export type SaveTableName =
@@ -18,7 +18,8 @@ export type SaveTableName =
   | 'characterRuntime'
   | 'characterAvatars'
   | 'customObjects'
-  | 'customObjectImages';
+  | 'customObjectImages'
+  | 'offlineRecaps';
 
 export interface SaveMetaRecord {
   id: 'current';
@@ -130,6 +131,21 @@ export interface CustomObjectImageRecord {
   updatedAt: number;
 }
 
+export interface OfflineRecapSaveRecord {
+  id: string;
+  simulationSeed: string;
+  eventId: string;
+  characterId: string;
+  characterName: string;
+  timestamp: number;
+  summary: string;
+  detail?: string;
+  quote?: string;
+  isRead: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type SaveDomain =
   | 'items'
   | 'shops'
@@ -140,7 +156,8 @@ export type SaveDomain =
   | 'characterRuntime'
   | 'characterAvatars'
   | 'customObjects'
-  | 'customObjectImages';
+  | 'customObjectImages'
+  | 'offlineRecaps';
 
 export interface SaveTableSchemaSummary {
   name: SaveTableName;

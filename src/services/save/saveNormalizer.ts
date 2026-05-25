@@ -35,6 +35,7 @@ import {
   type CustomObjectImageRecord,
   type CustomObjectRecord,
   type ItemSaveRecord,
+  type OfflineRecapSaveRecord,
   type RelationshipSaveRecord,
   type SaveMetaRecord,
   type SettingsRecord,
@@ -300,6 +301,39 @@ export function normalizeCustomObjectImageRecords(rawRecords: readonly unknown[]
         : 'image/png',
       dataUrl: rawRecord.dataUrl,
       updatedAt: readFiniteNumber(rawRecord.updatedAt, Date.now()),
+    }];
+  });
+}
+
+export function normalizeOfflineRecapSaveRecords(rawRecords: readonly unknown[]): readonly OfflineRecapSaveRecord[] {
+  return rawRecords.flatMap(rawRecord => {
+    if (
+      !isRecord(rawRecord) ||
+      typeof rawRecord.id !== 'string' ||
+      typeof rawRecord.simulationSeed !== 'string' ||
+      typeof rawRecord.eventId !== 'string' ||
+      typeof rawRecord.characterId !== 'string' ||
+      typeof rawRecord.characterName !== 'string' ||
+      typeof rawRecord.summary !== 'string'
+    ) {
+      return [];
+    }
+
+    const timestamp = Date.now();
+
+    return [{
+      id: rawRecord.id,
+      simulationSeed: rawRecord.simulationSeed,
+      eventId: rawRecord.eventId,
+      characterId: rawRecord.characterId,
+      characterName: rawRecord.characterName,
+      timestamp: readFiniteNumber(rawRecord.timestamp, timestamp),
+      summary: rawRecord.summary,
+      ...(typeof rawRecord.detail === 'string' ? { detail: rawRecord.detail } : {}),
+      ...(typeof rawRecord.quote === 'string' ? { quote: rawRecord.quote } : {}),
+      isRead: typeof rawRecord.isRead === 'boolean' ? rawRecord.isRead : false,
+      createdAt: readFiniteNumber(rawRecord.createdAt, timestamp),
+      updatedAt: readFiniteNumber(rawRecord.updatedAt, timestamp),
     }];
   });
 }

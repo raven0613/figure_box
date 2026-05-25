@@ -3,6 +3,7 @@ import type {
   UtilityDrivenMotivation,
 } from '~/stateMachines/gameFlow/context';
 import type { CharacterEventActivityType } from '~/constants/charactarEventsDefinitions';
+import type { Position } from '~/constants/character';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 
 export type OfflineRecapMode = 'none' | 'auto' | 'always';
@@ -87,6 +88,44 @@ export interface OfflineRecapPreview {
   quote?: string;
 }
 
+export interface OfflineNumericPatchPreview {
+  from: number;
+  to: number;
+  delta: number;
+}
+
+export interface OfflineStatusPatchPreview {
+  saturation?: OfflineNumericPatchPreview;
+  moodValue?: OfflineNumericPatchPreview;
+  playNeed?: OfflineNumericPatchPreview;
+}
+
+export type OfflinePositionPatchMode =
+  | 'none'
+  | 'nearbyDrift'
+  | 'destination'
+  | 'contained';
+
+export interface OfflinePositionPatchPreview {
+  mode: OfflinePositionPatchMode;
+  reason: string;
+  target?: Position;
+  spaceId?: string;
+}
+
+export type OfflineResolutionPreview =
+  | {
+    kind: 'solo';
+    statusPatch: OfflineStatusPatchPreview | null;
+    positionPatch: OfflinePositionPatchPreview | null;
+    currentMotivation: string;
+    notes: readonly string[];
+  }
+  | {
+    kind: 'unsupported';
+    reason: string;
+  };
+
 export interface ResolvedOfflineEventPolicy {
   enabled: boolean;
   weightMultiplier: number;
@@ -104,6 +143,79 @@ export interface OfflineCharacterCandidateDebug {
   eventType: string;
   activityType?: CharacterEventActivityType;
   recapPreview: OfflineRecapPreview | null;
+  resolutionPreview: OfflineResolutionPreview;
+}
+
+export interface OfflineSimulationPreviewEvent {
+  slotIndex: number;
+  timestamp: number;
+  characterId: string;
+  characterName: string;
+  eventId: string;
+  bucketId: CharacterEventBucketId;
+  motivation: UtilityDrivenMotivation;
+  eventType: string;
+  offlineWeight: number;
+  recapPreview: OfflineRecapPreview | null;
+  resolutionPreview: OfflineResolutionPreview;
+}
+
+export interface OfflineSimulationPreviewSuppressedEvent {
+  slotIndex: number;
+  timestamp: number;
+  characterId: string;
+  eventId: string;
+  reason: string;
+}
+
+export interface OfflineSimulationRunPreview {
+  seed: string;
+  events: readonly OfflineSimulationPreviewEvent[];
+  suppressed: readonly OfflineSimulationPreviewSuppressedEvent[];
+}
+
+export interface OfflineFinalCharacterStatePreview {
+  characterId: string;
+  characterName: string;
+  statusPatch: OfflineStatusPatchPreview | null;
+  position: {
+    from: Position;
+    to: Position;
+    mode: OfflinePositionPatchMode;
+    reason: string;
+  } | null;
+  presence: {
+    from: string;
+    to: string;
+    kind: 'positioned' | 'contained';
+  } | null;
+  appliedEventIds: readonly string[];
+  unsupportedEventIds: readonly string[];
+}
+
+export interface OfflineRecapListItemPreview {
+  eventId: string;
+  characterId: string;
+  characterName: string;
+  timestamp: number;
+  summary: string;
+  detail?: string;
+  quote?: string;
+  hasDetail: boolean;
+}
+
+export interface OfflineApplyReadinessPreview {
+  canApplyAll: boolean;
+  eventCount: number;
+  supportedEventCount: number;
+  unsupportedEventCount: number;
+  unsupportedEventIds: readonly string[];
+}
+
+export interface OfflineSimulationAggregatePreview {
+  finalStateByCharacterId: Record<string, OfflineFinalCharacterStatePreview>;
+  recapListPreview: readonly OfflineRecapListItemPreview[];
+  applyReadiness: OfflineApplyReadinessPreview;
 }
 
 export interface OfflineCharacterDryRun {
@@ -121,5 +233,7 @@ export interface OfflineSimulationDryRun {
   elapsedMs: number | null;
   policyVersion: number;
   plan: OfflineSimulationPlan;
+  simulationPreview: OfflineSimulationRunPreview;
+  aggregatePreview: OfflineSimulationAggregatePreview;
   characters: readonly OfflineCharacterDryRun[];
 }

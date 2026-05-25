@@ -1,6 +1,7 @@
 import { CHARACTER_SEEDS, Expression, getMoodForMoodValue } from '~/constants/character';
 import { TOWN_WORLD_SPACE_ID } from '~/constants/townMap';
 import { createEmptyActivityCooldowns } from '~/services/characterEvents/activityCooldowns';
+import type { OfflineFinalCharacterStatePreview } from '~/services/offlineSimulation/types';
 import type { CharacterSnapshot } from '~/services/townCharacterTypes';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import type {
@@ -43,6 +44,36 @@ class CharacterRuntimeSaveService {
     return Array.from(this.snapshotsByCharacterId.values()).map(cloneCharacterRuntimeSnapshot);
   }
 
+  applyOfflineFinalStatePreview(preview: OfflineFinalCharacterStatePreview): CharacterRuntimeSnapshot {
+    const currentSnapshot = this.getRuntimeSnapshot(preview.characterId) ??
+      createDefaultCharacterRuntimeSnapshot(preview.characterId);
+    const nextStatus = {
+      ...currentSnapshot.status,
+      saturation: preview.statusPatch?.saturation?.to ?? currentSnapshot.status.saturation,
+      moodValue: preview.statusPatch?.moodValue?.to ?? currentSnapshot.status.moodValue,
+      playNeed: preview.statusPatch?.playNeed?.to ?? currentSnapshot.status.playNeed,
+    };
+    const nextPosition = preview.position?.to
+      ? { ...preview.position.to }
+      : { ...currentSnapshot.position };
+    const nextSnapshot: CharacterRuntimeSnapshot = {
+      ...currentSnapshot,
+      status: {
+        ...nextStatus,
+        mood: getMoodForMoodValue(nextStatus.moodValue),
+      },
+      position: nextPosition,
+      presence: createOfflinePresence({
+        currentPresence: currentSnapshot.presence,
+        nextPosition,
+        preview,
+      }),
+    };
+
+    this.snapshotsByCharacterId.set(preview.characterId, cloneCharacterRuntimeSnapshot(nextSnapshot));
+    return cloneCharacterRuntimeSnapshot(nextSnapshot);
+  }
+
   getSaveRecords(): readonly CharacterRuntimeSaveRecord[] {
     const timestamp = Date.now();
 
@@ -71,6 +102,39 @@ class CharacterRuntimeSaveService {
         .sort(([leftId], [rightId]) => leftId.localeCompare(rightId)),
     );
   }
+}
+
+function createOfflinePresence(input: {
+  currentPresence: CharacterRuntimeSnapshot['presence'];
+  nextPosition: CharacterRuntimeSnapshot['position'];
+  preview: OfflineFinalCharacterStatePreview;
+}): CharacterRuntimeSnapshot['presence'] {
+  if (input.preview.presence?.kind === 'contained') {
+    return {
+      kind: 'contained',
+      spaceId: input.preview.presence.to,
+    };
+  }
+
+  if (input.preview.presence?.kind === 'positioned') {
+    return {
+      kind: 'positioned',
+      spaceId: input.preview.presence.to,
+      position: { ...input.nextPosition },
+    };
+  }
+
+  if (input.preview.position?.to) {
+    return {
+      kind: 'positioned',
+      spaceId: input.currentPresence.kind === 'positioned'
+        ? input.currentPresence.spaceId
+        : TOWN_WORLD_SPACE_ID,
+      position: { ...input.nextPosition },
+    };
+  }
+
+  return clonePresence(input.currentPresence);
 }
 
 export function createDefaultCharacterRuntimeSnapshot(
