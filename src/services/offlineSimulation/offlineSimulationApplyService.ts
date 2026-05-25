@@ -1,6 +1,14 @@
-import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSaveService';
+import { CHARACTER_SEEDS } from '~/constants/character';
+import {
+  characterRuntimeSaveService,
+  createDefaultCharacterRuntimeSnapshot,
+} from '~/services/save/characterRuntimeSaveService';
 import { offlineRecapSaveService } from '~/services/save/offlineRecapSaveService';
-import type { OfflineRecapSaveRecord } from '~/services/save/saveTypes';
+import type {
+  CharacterRuntimeSnapshot,
+  OfflineRecapSaveRecord,
+} from '~/services/save/saveTypes';
+import { normalizeOfflineBaselineSnapshots } from './offlineBaselineNormalizer';
 import type {
   OfflineFinalCharacterStatePreview,
   OfflineRecapListItemPreview,
@@ -9,7 +17,6 @@ import type {
 
 export type OfflineSimulationApplyFailureReason =
   | 'planIgnoredByElapsedTime'
-  | 'noEvents'
   | 'unsupportedEvents'
   | 'alreadyApplied';
 
@@ -18,8 +25,10 @@ export type OfflineSimulationApplyResult =
     success: true;
     simulationSeed: string;
     appliedCharacterCount: number;
+    baselineNormalizedCount: number;
     recapCount: number;
     appliedAt: number;
+    appliedRuntimeSnapshots: readonly CharacterRuntimeSnapshot[];
   }
   | {
     success: false;
@@ -41,14 +50,6 @@ export async function applyOfflineSimulationDryRun(
     };
   }
 
-  if (dryRun.simulationPreview.events.length === 0) {
-    return {
-      success: false,
-      simulationSeed,
-      reason: 'noEvents',
-    };
-  }
-
   if (!dryRun.aggregatePreview.applyReadiness.canApplyAll) {
     return {
       success: false,
@@ -67,9 +68,19 @@ export async function applyOfflineSimulationDryRun(
 
   const appliedPreviews = Object.values(dryRun.aggregatePreview.finalStateByCharacterId)
     .filter(hasAppliedEvents);
+  const baseline = createCurrentOfflineBaseline();
+  const runtimeSnapshotsById = new Map(
+    baseline.snapshots.map(snapshot => {
+      const nextSnapshot = characterRuntimeSaveService.applyOfflineBaselineSnapshot(snapshot);
+
+      return [nextSnapshot.id, nextSnapshot];
+    }),
+  );
 
   appliedPreviews.forEach(preview => {
-    characterRuntimeSaveService.applyOfflineFinalStatePreview(preview);
+    const nextSnapshot = characterRuntimeSaveService.applyOfflineFinalStatePreview(preview);
+
+    runtimeSnapshotsById.set(nextSnapshot.id, nextSnapshot);
   });
 
   const recapRecords = dryRun.aggregatePreview.recapListPreview
@@ -86,9 +97,26 @@ export async function applyOfflineSimulationDryRun(
     success: true,
     simulationSeed,
     appliedCharacterCount: appliedPreviews.length,
+    baselineNormalizedCount: baseline.preview.normalizedCharacterCount,
     recapCount: addedRecapRecords.length,
     appliedAt: timestamp,
+    appliedRuntimeSnapshots: Array.from(runtimeSnapshotsById.values()),
   };
+}
+
+function createCurrentOfflineBaseline() {
+  const runtimeSnapshotsByCharacterId = new Map(
+    characterRuntimeSaveService.getRuntimeSnapshots().map(snapshot => [snapshot.id, snapshot]),
+  );
+  const characterNameById = new Map(CHARACTER_SEEDS.map(character => [character.id, character.name]));
+
+  return normalizeOfflineBaselineSnapshots({
+    characterNameById,
+    snapshots: CHARACTER_SEEDS.map(character => (
+      runtimeSnapshotsByCharacterId.get(character.id) ??
+      createDefaultCharacterRuntimeSnapshot(character.id)
+    )),
+  });
 }
 
 function hasAppliedEvents(

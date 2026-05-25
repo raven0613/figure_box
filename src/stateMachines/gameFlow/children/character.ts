@@ -14,7 +14,13 @@ import {
     CharacterStateSummary,
 } from '../states';
 import { CharacterEvent, EventType } from '../events';
-import { CharacterContext, CharacterMachineInput, CharacterUtilityScores } from '../context';
+import {
+    CharacterActivityCooldowns,
+    CharacterContext,
+    CharacterMachineInput,
+    CharacterPresence,
+    CharacterUtilityScores,
+} from '../context';
 import {
     changeRelationshipIntimacy,
     decreaseRelationshipIntimacyToFeelingMin,
@@ -359,6 +365,16 @@ export const characterMachine = createMachine(
                     actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget', 'clearActivity'],
                 },
             ],
+            [EventType.ApplyOfflineRuntime]: {
+                target: [
+                    '.bodyAction.idle',
+                    '.bodyMove.stand',
+                    '.mind.null',
+                    '.communication.null',
+                    '.control.normal',
+                ],
+                actions: ['applyOfflineRuntime', 'setIdleMotivation', 'clearTarget', 'clearActivity', 'setNormalControl'],
+            },
             [EventType.StartThinking]: {
                 guard: 'canReceiveLogicCommand',
                 target: '.mind.thinking',
@@ -764,6 +780,69 @@ export const characterMachine = createMachine(
                         : context.status
                 ),
             }),
+            applyOfflineRuntime: assign({
+                status: ({ context, event }) => (
+                    event.type === EventType.ApplyOfflineRuntime
+                        ? { ...event.runtime.status }
+                        : context.status
+                ),
+                position: ({ context, event }) => (
+                    event.type === EventType.ApplyOfflineRuntime
+                        ? { ...event.runtime.position }
+                        : context.position
+                ),
+                presence: ({ context, event }) => (
+                    event.type === EventType.ApplyOfflineRuntime
+                        ? cloneCharacterPresence(event.runtime.presence)
+                        : context.presence
+                ),
+                heldItem: ({ context, event }) => (
+                    event.type === EventType.ApplyOfflineRuntime
+                        ? event.runtime.heldItem ? { ...event.runtime.heldItem } : null
+                        : context.heldItem
+                ),
+                activityCooldowns: ({ context, event }) => (
+                    event.type === EventType.ApplyOfflineRuntime
+                        ? cloneActivityCooldowns(event.runtime.activityCooldowns)
+                        : context.activityCooldowns
+                ),
+                locks: ({ context, event }) => (
+                    event.type === EventType.ApplyOfflineRuntime
+                        ? {
+                            bodyAction: [...event.runtime.locks.bodyAction],
+                            bodyMove: [...event.runtime.locks.bodyMove],
+                            mind: [...event.runtime.locks.mind],
+                            communication: [...event.runtime.locks.communication],
+                        }
+                        : context.locks
+                ),
+                relationships: ({ context, event }) => (
+                    event.type === EventType.ApplyOfflineRuntime
+                        ? event.runtime.relationships.map(relationship => ({
+                            ...relationship,
+                            memories: {
+                                impression: { ...relationship.memories.impression },
+                                argument: { ...relationship.memories.argument },
+                                fight: { ...relationship.memories.fight },
+                            },
+                        }))
+                        : context.relationships
+                ),
+                utilityScores: ({ context, event }) => (
+                    event.type === EventType.ApplyOfflineRuntime
+                        ? calculateCharacterUtilityScores({
+                            ...context,
+                            status: event.runtime.status,
+                            position: event.runtime.position,
+                            presence: event.runtime.presence,
+                            heldItem: event.runtime.heldItem,
+                            activityCooldowns: event.runtime.activityCooldowns,
+                            locks: event.runtime.locks,
+                            relationships: event.runtime.relationships,
+                        })
+                        : context.utilityScores
+                ),
+            }),
             clearTarget: assign({
                 target: () => null,
             }),
@@ -887,6 +966,34 @@ export const characterMachine = createMachine(
         },
     }
 );
+
+function cloneCharacterPresence(presence: CharacterPresence): CharacterPresence {
+    return presence.kind === 'positioned'
+        ? {
+            kind: 'positioned',
+            spaceId: presence.spaceId,
+            position: { ...presence.position },
+        }
+        : {
+            kind: 'contained',
+            spaceId: presence.spaceId,
+        };
+}
+
+function cloneActivityCooldowns(
+    activityCooldowns: CharacterActivityCooldowns,
+): CharacterActivityCooldowns {
+    return {
+        categoryUntilByKey: { ...activityCooldowns.categoryUntilByKey },
+        pairUntilByKey: { ...activityCooldowns.pairUntilByKey },
+        repeatByKey: Object.fromEntries(
+            Object.entries(activityCooldowns.repeatByKey).map(([key, record]) => [
+                key,
+                { ...record },
+            ]),
+        ),
+    };
+}
 
 export function getCharacterStateSummary(value: StateValue): CharacterStateSummary {
     const parallelValue = value as Partial<Record<keyof CharacterStateSummary, string>>;

@@ -11,6 +11,7 @@ import { createOfflineSimulationRunPreview } from './offlineSimulationPreviewRun
 import { createOfflineSimulationAggregatePreview } from './offlineSimulationAggregator';
 import { createOfflineCandidateDebug } from './offlineCandidateDebugFactory';
 import { createOfflineDecisionInput } from './offlineDecisionInputFactory';
+import { normalizeOfflineBaselineSnapshots } from './offlineBaselineNormalizer';
 import { offlineSessionService } from './offlineSessionService';
 import type {
   OfflineSimulationDryRun,
@@ -27,10 +28,15 @@ export function createOfflineSimulationDryRun(now: number = Date.now()): Offline
     now,
     policy: OFFLINE_SIMULATION_POLICY.elapsedTime,
   });
-  const runtimeSnapshots = getRuntimeSnapshotsByCharacterId();
-  const contexts = CHARACTER_SEEDS.map(character => createCharacterContext(
-    runtimeSnapshots.get(character.id) ?? createDefaultCharacterRuntimeSnapshot(character.id),
-  ));
+  const runtimeSnapshotsByCharacterId = getRuntimeSnapshotsByCharacterId();
+  const characterNameById = new Map(CHARACTER_SEEDS.map(character => [character.id, character.name]));
+  const baseline = normalizeOfflineBaselineSnapshots({
+    characterNameById,
+    snapshots: CHARACTER_SEEDS.map(character => (
+      runtimeSnapshotsByCharacterId.get(character.id) ?? createDefaultCharacterRuntimeSnapshot(character.id)
+    )),
+  });
+  const contexts = baseline.snapshots.map(snapshot => createCharacterContext(snapshot));
   const simulationPreview = createOfflineSimulationRunPreview({
     plan,
     contexts,
@@ -43,6 +49,7 @@ export function createOfflineSimulationDryRun(now: number = Date.now()): Offline
     elapsedMs,
     policyVersion: OFFLINE_SIMULATION_POLICY.version,
     plan,
+    baselinePreview: baseline.preview,
     simulationPreview,
     aggregatePreview: createOfflineSimulationAggregatePreview({
       contexts,

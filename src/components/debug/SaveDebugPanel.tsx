@@ -10,6 +10,7 @@ import {
 } from '~/services/save/saveDebugService';
 import { applyOfflineSimulationDryRun } from '~/services/offlineSimulation/offlineSimulationApplyService';
 import { createOfflineSimulationDryRun } from '~/services/offlineSimulation/offlineCandidateDryRunService';
+import { offlineRuntimeSyncService } from '~/services/offlineSimulation/offlineRuntimeSyncService';
 import type { OfflineSimulationDryRun } from '~/services/offlineSimulation/types';
 import { characterAvatarSaveService } from '~/services/save/characterAvatarSaveService';
 import { characterProfileSaveService } from '~/services/save/characterProfileSaveService';
@@ -292,9 +293,11 @@ export function SaveDebugPanel({ onClose }: SaveDebugPanelProps) {
       }
 
       await saveService.saveOfflineSimulationNow(result.appliedAt);
+      const syncedCharacterCount = offlineRuntimeSyncService.applyRuntimeSnapshots(result.appliedRuntimeSnapshots);
+
       await refresh();
       setOfflineDryRun(null);
-      setMessage(`offline applied: characters=${String(result.appliedCharacterCount)}, recaps=${String(result.recapCount)}`);
+      setMessage(`offline applied: characters=${String(result.appliedCharacterCount)}, baseline=${String(result.baselineNormalizedCount)}, synced=${String(syncedCharacterCount)}, recaps=${String(result.recapCount)}`);
     } catch (error) {
       console.error('Offline apply failed.', error);
       setMessage(getErrorMessage(error));

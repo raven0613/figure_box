@@ -1,20 +1,38 @@
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
-import type { CharacterEventCandidate } from '~/services/characterEvents/types';
+import type {
+  CharacterEventCandidate,
+  CharacterEventDecisionInput,
+} from '~/services/characterEvents/types';
 import type { OfflineResolutionPreview } from './types';
-import { resolveOfflineSoloEventPreview } from './offlineSoloEventResolver';
+import { resolveOfflineActivityPreview } from './resolvers/offlineActivityResolver';
+import { resolveOfflineActionPreview } from './resolvers/offlineActionResolver';
 
 export function resolveOfflineEventPreview(
   candidate: CharacterEventCandidate,
   context: CharacterContext,
+  input: CharacterEventDecisionInput,
+  contexts: readonly CharacterContext[],
 ): OfflineResolutionPreview {
-  const soloPreview = resolveOfflineSoloEventPreview(candidate, context);
+  const resolverContext = {
+    candidate,
+    character: context,
+    input,
+    contexts,
+  };
+  const activityPreview = resolveOfflineActivityPreview(resolverContext);
 
-  if (soloPreview) {
-    return soloPreview;
+  if (activityPreview) {
+    return activityPreview;
+  }
+
+  const actionPreview = resolveOfflineActionPreview(resolverContext);
+
+  if (actionPreview) {
+    return actionPreview;
   }
 
   return {
     kind: 'unsupported',
-    reason: `Offline resolver preview is not implemented for "${candidate.id}".`,
+    reason: `unsupportedActionType:${candidate.event.type}`,
   };
 }

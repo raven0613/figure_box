@@ -48,12 +48,15 @@ import { TownRelationshipCoordinator } from '~/services/townRelationshipCoordina
 import { TownCharacterTickCoordinator } from '~/services/townCharacterTickCoordinator';
 import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSaveService';
 import { saveService } from '~/services/save/saveService';
+import { offlineRuntimeSyncService } from '~/services/offlineSimulation/offlineRuntimeSyncService';
+import type { CharacterRuntimeSnapshot } from '~/services/save/saveTypes';
 
 export type { CharacterSnapshot } from '~/services/townCharacterTypes';
 
 const RELATIONSHIP_MOMENT_DURATION_MS = 3000;
 const RELATIONSHIP_MOMENT_DECISION_GRACE_MS = 1800;
 const GOD_DROP_DECISION_GRACE_MS = 2600;
+const OFFLINE_RUNTIME_SYNC_DECISION_GRACE_MS = 1800;
 const APARTMENT_EXIT_FOOD_SCORE_THRESHOLD = 65;
 const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
 
@@ -93,6 +96,7 @@ export class TownCharacterController {
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
   private readonly onCharacterRequestsChange?: (requests: readonly CharacterRequest[]) => void;
+  private readonly unregisterOfflineRuntimeSync: () => void;
 
   constructor(options: TownCharacterControllerOptions) {
     this.widget = options.widget;
@@ -353,6 +357,9 @@ export class TownCharacterController {
     this.onCharacterSnapshot = options.onCharacterSnapshot;
     this.onJoinableActivitiesChange = options.onJoinableActivitiesChange;
     this.onCharacterRequestsChange = options.onCharacterRequestsChange;
+    this.unregisterOfflineRuntimeSync = offlineRuntimeSyncService.registerApplier(
+      snapshots => this.applyOfflineRuntimeSnapshots(snapshots),
+    );
   }
 
   start(): void {
@@ -449,6 +456,7 @@ export class TownCharacterController {
   }
 
   dispose(): void {
+    this.unregisterOfflineRuntimeSync();
     this.tickCoordinator.clear();
 
     this.movementCoordinator.dispose();
@@ -613,6 +621,34 @@ export class TownCharacterController {
       heldItem: runtime?.heldItem ?? this.heldItemCoordinator.restoreHeldItemForCharacter(character.id),
       runtime,
     });
+  }
+
+  private applyOfflineRuntimeSnapshots(
+    snapshots: readonly CharacterRuntimeSnapshot[],
+  ): number {
+    this.activityCoordinator.clearLiveActivitiesForOfflineApply();
+
+    const syncedCharacterIds = snapshots.flatMap(snapshot => {
+      const didSyncActor = this.sendToCharacter(snapshot.id, {
+        type: EventType.ApplyOfflineRuntime,
+        runtime: snapshot,
+      });
+
+      if (!didSyncActor) {
+        return [];
+      }
+
+      this.movementCoordinator.applyRuntimeSnapshot(snapshot);
+      this.tickCoordinator.deferCharacterDecision(
+        snapshot.id,
+        OFFLINE_RUNTIME_SYNC_DECISION_GRACE_MS,
+      );
+
+      return [snapshot.id];
+    });
+
+    this.syncRequestIndicators();
+    return syncedCharacterIds.length;
   }
 
   private handleCharacterSnapshot(characterId: string, snapshot: CharacterSnapshot): void {

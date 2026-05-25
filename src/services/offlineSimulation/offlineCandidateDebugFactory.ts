@@ -26,6 +26,7 @@ export function createOfflineCandidateDebug(
   const policy = resolveOfflineEventPolicy(OFFLINE_SIMULATION_POLICY, candidate);
   const offlineWeight = policy.enabled ? candidate.weight * policy.weightMultiplier : 0;
   const activityType = getOfflineCandidateActivityType(candidate);
+  const resolutionPreview = resolveOfflineEventPreview(candidate, context, input, contexts);
 
   return {
     id: candidate.id,
@@ -38,8 +39,8 @@ export function createOfflineCandidateDebug(
     activityType,
     recapPreview: policy.recap === 'none'
       ? null
-      : createRecapPreview(candidate, context, input, contexts),
-    resolutionPreview: resolveOfflineEventPreview(candidate, context),
+      : createRecapPreview(candidate, context, input, contexts, resolutionPreview),
+    resolutionPreview,
   };
 }
 
@@ -48,9 +49,15 @@ function createRecapPreview(
   context: CharacterContext,
   input: CharacterEventDecisionInput,
   contexts: readonly CharacterContext[],
+  resolutionPreview: ReturnType<typeof resolveOfflineEventPreview>,
 ): OfflineRecapPreview {
   const resolvedTemplate = resolveOfflineRecapTemplate(candidate);
-  const variables = createTemplateVariables(context, input, contexts);
+  const variables = {
+    ...createTemplateVariables(context, input, contexts),
+    ...(resolutionPreview.kind === 'solo'
+      ? resolutionPreview.variables
+      : resolutionPreview.variables ?? {}),
+  };
 
   return {
     templateSource: resolvedTemplate.source,

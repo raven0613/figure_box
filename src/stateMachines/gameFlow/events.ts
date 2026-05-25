@@ -1,6 +1,7 @@
 import { Expression, Position } from "~/constants/character";
 import type { CharacterEventActivityEffects } from "~/constants/charactarEventsDefinitions";
 import type { CharacterRequestSatisfiedEffect } from "~/services/characterRequests/types";
+import type { CharacterRuntimeInput } from "./context";
 import type { CharacterControlReason } from "./controlReasons";
 import type { CharacterControlState } from "./states";
 import type { ItemDefinitionId, ItemInstanceId } from "~/typing/item";
@@ -73,6 +74,7 @@ export type CharacterEvent =
   | { type: EventType.MoveTo; target: Position }
   | { type: EventType.Arrive; position: Position }
   | { type: EventType.MoveBlocked; position?: Position }
+  | { type: EventType.ApplyOfflineRuntime; runtime: CharacterRuntimeInput }
   | { type: EventType.StartThinking }
   | { type: EventType.StopThinking }
   | { type: EventType.SetExpression; expression: Expression }
@@ -116,6 +118,7 @@ export enum EventType {
   MoveTo = "moveTo",
   Arrive = "arrive",
   MoveBlocked = "moveBlocked",
+  ApplyOfflineRuntime = "applyOfflineRuntime",
   StartThinking = "startThinking",
   StopThinking = "stopThinking",
   SetExpression = "setExpression",

@@ -106,6 +106,11 @@ export type OfflinePositionPatchMode =
   | 'destination'
   | 'contained';
 
+export type OfflineResolverSource =
+  | `action.${string}`
+  | `activity.${string}`
+  | `eventOverride.${string}`;
+
 export interface OfflinePositionPatchPreview {
   mode: OfflinePositionPatchMode;
   reason: string;
@@ -116,14 +121,18 @@ export interface OfflinePositionPatchPreview {
 export type OfflineResolutionPreview =
   | {
     kind: 'solo';
+    resolverSource: OfflineResolverSource;
     statusPatch: OfflineStatusPatchPreview | null;
     positionPatch: OfflinePositionPatchPreview | null;
     currentMotivation: string;
+    variables: Record<string, string>;
     notes: readonly string[];
   }
   | {
     kind: 'unsupported';
+    resolverSource?: OfflineResolverSource;
     reason: string;
+    variables?: Record<string, string>;
   };
 
 export interface ResolvedOfflineEventPolicy {
@@ -218,6 +227,36 @@ export interface OfflineSimulationAggregatePreview {
   applyReadiness: OfflineApplyReadinessPreview;
 }
 
+export interface OfflineBaselineCharacterPreview {
+  characterId: string;
+  characterName: string;
+  changed: boolean;
+  clearedLocks: {
+    bodyAction: readonly string[];
+    bodyMove: readonly string[];
+    mind: readonly string[];
+    communication: readonly string[];
+  };
+  position: {
+    from: Position;
+    to: Position;
+    reason: string;
+  } | null;
+  presence: {
+    from: string;
+    to: string;
+    kind: 'positioned' | 'contained';
+    reason: string;
+  } | null;
+  notes: readonly string[];
+}
+
+export interface OfflineBaselinePreview {
+  settlementPolicy: 'committedOnly';
+  normalizedCharacterCount: number;
+  characters: readonly OfflineBaselineCharacterPreview[];
+}
+
 export interface OfflineCharacterDryRun {
   characterId: string;
   characterName: string;
@@ -233,6 +272,7 @@ export interface OfflineSimulationDryRun {
   elapsedMs: number | null;
   policyVersion: number;
   plan: OfflineSimulationPlan;
+  baselinePreview: OfflineBaselinePreview;
   simulationPreview: OfflineSimulationRunPreview;
   aggregatePreview: OfflineSimulationAggregatePreview;
   characters: readonly OfflineCharacterDryRun[];

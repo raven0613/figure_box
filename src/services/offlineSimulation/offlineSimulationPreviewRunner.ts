@@ -131,6 +131,10 @@ function getSuppressionReason(
     return 'policyDisabled';
   }
 
+  if (candidate.resolutionPreview.kind === 'unsupported') {
+    return 'unsupportedOfflineResolution';
+  }
+
   if (candidate.offlineWeight <= 0) {
     return 'zeroOfflineWeight';
   }

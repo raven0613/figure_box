@@ -275,6 +275,26 @@ export class TownActivityCoordinator {
     return true;
   }
 
+  clearLiveActivitiesForOfflineApply(): void {
+    const activities = this.activityManager.getActivities();
+
+    if (activities.length === 0) {
+      this.arrivedCharacterIdsByActivityId.clear();
+      this.endingActivityIds.clear();
+      return;
+    }
+
+    activities.forEach(activity => {
+      this.clearActivityVisuals(activity);
+      this.arrivedCharacterIdsByActivityId.delete(activity.id);
+      this.endingActivityIds.delete(activity.id);
+    });
+    this.activityManager.clear();
+    this.arrivedCharacterIdsByActivityId.clear();
+    this.endingActivityIds.clear();
+    this.notifyActivitiesChanged();
+  }
+
   removeStaleActivityParticipations(characterId: string, snapshot: CharacterSnapshot): void {
     const staleActivities = this.activityManager.getActivities()
       .filter(activity => (

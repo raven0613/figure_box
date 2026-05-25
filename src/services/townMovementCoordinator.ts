@@ -3,6 +3,7 @@ import { TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
+import type { CharacterRuntimeSnapshot } from '~/services/save/saveTypes';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 
 interface TownMovementCoordinatorOptions {
@@ -134,6 +135,42 @@ export class TownMovementCoordinator {
       arrivedPosition => this.handleWalkArrived(characterId, arrivedPosition),
       blockedPosition => this.handleWalkBlocked(characterId, blockedPosition),
     );
+  }
+
+  applyRuntimeSnapshot(snapshot: CharacterRuntimeSnapshot): void {
+    this.cancelWalkIfNeeded(snapshot.id);
+
+    if (snapshot.presence.kind === 'contained') {
+      this.widget.removeCharacter(snapshot.id);
+      this.visibleCharacterIds.delete(snapshot.id);
+      return;
+    }
+
+    if (
+      !this.visibleCharacterIds.has(snapshot.id) ||
+      !this.widget.moveCharacter(snapshot.id, snapshot.position)
+    ) {
+      this.placePositionedRuntimeSnapshot(snapshot);
+    }
+
+    this.widget.updateCharacterStatus(snapshot.id, 'idle');
+    this.widget.updateCharacterExpression(snapshot.id, snapshot.status.expression);
+  }
+
+  private placePositionedRuntimeSnapshot(snapshot: CharacterRuntimeSnapshot): void {
+    const renderData = this.characterRenderDataById.get(snapshot.id);
+    const placed = this.widget.placeCharacter({
+      id: snapshot.id,
+      x: snapshot.position.x,
+      y: snapshot.position.y,
+      color: renderData?.color ?? '#f0cc5f',
+      label: renderData?.label ?? snapshot.id,
+      expression: snapshot.status.expression,
+    });
+
+    if (placed) {
+      this.visibleCharacterIds.add(snapshot.id);
+    }
   }
 
   private handleWalkArrived(characterId: string, arrivedPosition: Position): void {

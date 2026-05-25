@@ -74,6 +74,11 @@ class CharacterRuntimeSaveService {
     return cloneCharacterRuntimeSnapshot(nextSnapshot);
   }
 
+  applyOfflineBaselineSnapshot(snapshot: CharacterRuntimeSnapshot): CharacterRuntimeSnapshot {
+    this.snapshotsByCharacterId.set(snapshot.id, cloneCharacterRuntimeSnapshot(snapshot));
+    return cloneCharacterRuntimeSnapshot(snapshot);
+  }
+
   getSaveRecords(): readonly CharacterRuntimeSaveRecord[] {
     const timestamp = Date.now();
 
