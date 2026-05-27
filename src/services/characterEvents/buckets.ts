@@ -154,7 +154,7 @@ function createEventFactoryInput(
   definition: CharacterEventDefinition,
   params: CharacterEventBucketParams,
 ): CharacterEventDecisionInput {
-  if (!isActivityInviteAction(definition)) {
+  if (!requiresGroupInviteTarget(definition)) {
     return params.input;
   }
 
@@ -173,7 +173,7 @@ function calculateActivityRepeatMultiplier(
   definition: CharacterEventDefinition,
   params: CharacterEventBucketParams,
 ): number {
-  if (!isActivityInviteAction(definition)) {
+  if (!requiresGroupInviteTarget(definition)) {
     return 1;
   }
 
@@ -196,7 +196,9 @@ function calculateActivityRepeatMultiplier(
   );
 }
 
-function isActivityInviteAction(definition: CharacterEventDefinition): boolean {
+function requiresGroupInviteTarget(definition: CharacterEventDefinition): boolean {
   return definition.characterEvent.type === 'startActivity' &&
-    definition.presentationVariants?.some(variant => variant.activity?.invite) === true;
+    definition.presentationVariants?.some(variant => (
+      (variant.activity?.group.minParticipants ?? 1) > 1
+    )) === true;
 }

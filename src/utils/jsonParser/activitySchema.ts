@@ -6,13 +6,14 @@ import {
   readOptionalBoolean,
   readOptionalNonNegativeNumber,
   readOptionalNumber,
+  readOptionalString,
   readRequiredNonNegativeNumber,
   readRequiredString,
   type CharacterEventDefinitionRecord,
 } from './schemaReaders';
 
 const VALID_ACTIVITY_TYPES = ['chat', 'playWithItem', 'playAtLocation'] as const;
-const VALID_ACTIVITY_START_PHASES = ['inviting', 'active', 'traveling'] as const;
+const VALID_ACTIVITY_START_PHASES = ['active', 'traveling'] as const;
 const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
 const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
 const VALID_MOODS = Object.values(Mood) as Mood[];
@@ -37,13 +38,13 @@ export function readOptionalActivity(
     type: readActivityType(value, index),
     startPhase: readOptionalStartPhase(value, index),
     destination: readOptionalDestination(value, index),
-    invite: readOptionalInvite(value, index),
-    group: readOptionalGroupActivity(value, index),
+    group: readRequiredGroupActivity(value, index),
     joinable: readOptionalBoolean(value, 'joinable', index),
     durationMs: readRequiredNonNegativeNumber(value, 'durationMs', index),
     refreshDurationOnJoin: readOptionalBoolean(value, 'refreshDurationOnJoin', index),
     joinWindowMs: readOptionalNonNegativeNumber(value, 'joinWindowMs', index),
     joinRequirements: readOptionalJoinRequirement(value, index),
+    cooldowns: readRequiredCooldowns(value, index),
     effects: readOptionalActivityEffects(value, index),
   };
 }
@@ -106,33 +107,6 @@ function readOptionalMood(
   return value;
 }
 
-function readOptionalInvite(
-  activity: CharacterEventDefinitionRecord,
-  index: number,
-): CharacterEventActivity['invite'] {
-  const value = activity.invite;
-
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!isRecord(value)) {
-    throw new Error(`Character event definition at index ${index} has invalid activity.invite.`);
-  }
-
-  const target = readRequiredString(value, 'target', index);
-
-  if (target !== 'randomNearbyCharacter') {
-    throw new Error(`Character event definition at index ${index} has invalid activity.invite.target.`);
-  }
-
-  return {
-    target,
-    range: readOptionalNonNegativeNumber(value, 'range', index),
-    requiredAcceptCount: readOptionalNonNegativeNumber(value, 'requiredAcceptCount', index),
-  };
-}
-
 function readOptionalStartPhase(
   activity: CharacterEventDefinitionRecord,
   index: number,
@@ -180,23 +154,86 @@ function readOptionalDestination(
   throw new Error(`Character event definition at index ${index} has invalid activity.destination.`);
 }
 
-function readOptionalGroupActivity(
+function readRequiredGroupActivity(
   activity: CharacterEventDefinitionRecord,
   index: number,
 ): CharacterEventActivity['group'] {
   const value = activity.group;
 
   if (value === undefined) {
-    return undefined;
+    throw new Error(`Character event definition at index ${index} is missing activity.group.`);
   }
 
   if (!isRecord(value)) {
     throw new Error(`Character event definition at index ${index} has invalid activity.group.`);
   }
 
-  return {
+  const group = {
     inviteNearbyRange: readOptionalNonNegativeNumber(value, 'inviteNearbyRange', index),
+    minParticipants: readOptionalNonNegativeNumber(value, 'minParticipants', index),
     maxParticipants: readOptionalNonNegativeNumber(value, 'maxParticipants', index),
+  };
+
+  if (
+    group.minParticipants !== undefined &&
+    group.maxParticipants !== undefined &&
+    group.minParticipants > group.maxParticipants
+  ) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.group participant range.`);
+  }
+
+  return group;
+}
+
+function readRequiredCooldowns(
+  activity: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['cooldowns'] {
+  const value = activity.cooldowns;
+
+  if (value === undefined) {
+    throw new Error(`Character event definition at index ${index} is missing activity.cooldowns.`);
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.cooldowns.`);
+  }
+
+  return {
+    selfMs: readOptionalNonNegativeNumber(value, 'selfMs', index),
+    targetMs: readOptionalNonNegativeNumber(value, 'targetMs', index),
+    pairMs: readOptionalNonNegativeNumber(value, 'pairMs', index),
+    category: readOptionalString(value, 'category', index),
+    repeatPenalty: readOptionalRepeatPenalty(value, index),
+  };
+}
+
+function readOptionalRepeatPenalty(
+  cooldowns: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['cooldowns']['repeatPenalty'] {
+  const value = cooldowns.repeatPenalty;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.cooldowns.repeatPenalty.`);
+  }
+
+  const weightMultiplierPerRepeat = readRequiredNonNegativeNumber(value, 'weightMultiplierPerRepeat', index);
+
+  if (weightMultiplierPerRepeat > 1) {
+    throw new Error(
+      `Character event definition at index ${index} must include activity.cooldowns.repeatPenalty.weightMultiplierPerRepeat <= 1.`,
+    );
+  }
+
+  return {
+    windowMs: readRequiredNonNegativeNumber(value, 'windowMs', index),
+    weightMultiplierPerRepeat,
+    maxRepeats: readOptionalNonNegativeNumber(value, 'maxRepeats', index),
   };
 }
 

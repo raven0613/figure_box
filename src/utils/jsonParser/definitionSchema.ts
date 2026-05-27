@@ -1,12 +1,11 @@
 import type {
   CharacterEventAcceptance,
-  CharacterEventCooldowns,
   CharacterEventDefinition,
   CharacterEventInterruptPolicy,
   CharacterEventInteractionPresentation,
 } from '../../constants/charactarEventsDefinitions';
 import type { OfflineRecapTemplate } from '~/services/offlineSimulation/types';
-import { Mood } from '../../constants/character';
+import { Feeling, Mood, SocialStatus } from '../../constants/character';
 import { readCharacterEventAction } from './actionSchema';
 import {
   readOptionalRuleClauses,
@@ -28,7 +27,6 @@ import {
   readOptionalNumber,
   readOptionalProbability,
   readOptionalString,
-  readRequiredNonNegativeNumber,
   readRequiredNumber,
   readRequiredString,
   type CharacterEventDefinitionRecord,
@@ -36,6 +34,8 @@ import {
 
 const VALID_INTERRUPT_POLICIES = ['none', 'soft', 'always', 'critical'] as const;
 const VALID_MOODS = Object.values(Mood) as Mood[];
+const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
+const VALID_SOCIAL_STATUSES = Object.values(SocialStatus) as SocialStatus[];
 
 // 把 characterEvents.json 轉成強型別 CharacterEventDefinition[] 的 parser + validator
 export function loadCharacterEventDefinitions(rawDefinitions: unknown): CharacterEventDefinition[] {
@@ -72,7 +72,6 @@ function parseCharacterEventDefinition(
   const presentationVariants = readOptionalPresentationVariants(rawDefinition, index);
   const interactionPresentation = readOptionalInteractionPresentation(rawDefinition, index);
   const acceptance = readOptionalAcceptance(rawDefinition, index);
-  const cooldowns = readOptionalCooldowns(rawDefinition, index);
   const interruptPolicy = readOptionalInterruptPolicy(rawDefinition, 'interruptPolicy', index);
   const commitment = readOptionalNumber(rawDefinition, 'commitment', index);
   const offlineRecap = readOptionalOfflineRecap(rawDefinition, index);
@@ -95,7 +94,6 @@ function parseCharacterEventDefinition(
     presentationVariants,
     interactionPresentation,
     acceptance,
-    cooldowns,
     interruptPolicy,
     commitment,
     offlineRecap,
@@ -170,8 +168,31 @@ function readOptionalAcceptance(
   return {
     minMoodValue: readOptionalNonNegativeNumber(value, 'minMoodValue', index),
     allowedMoods: readOptionalMoodList(value, 'allowedMoods', index),
+    relationships: readOptionalRelationshipAcceptanceList(value, index),
     fallbackChance: readOptionalProbability(value, 'fallbackChance', index),
   };
+}
+
+function readOptionalRelationshipAcceptanceList(
+  acceptance: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventAcceptance['relationships'] {
+  const value = acceptance.relationships;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value) || !value.every(isRecord)) {
+    throw new Error(`Character event definition at index ${index} has invalid acceptance.relationships.`);
+  }
+
+  return value.map(relationship => ({
+    minIntimacy: readOptionalNumber(relationship, 'minIntimacy', index),
+    maxIntimacy: readOptionalNumber(relationship, 'maxIntimacy', index),
+    allowedFeelings: readOptionalFeelingList(relationship, 'allowedFeelings', index),
+    allowedSocialStatuses: readOptionalSocialStatusList(relationship, 'allowedSocialStatuses', index),
+  }));
 }
 
 function readOptionalMoodList(
@@ -195,56 +216,46 @@ function readOptionalMoodList(
   return value;
 }
 
-function readOptionalCooldowns(
+function readOptionalFeelingList(
   definition: CharacterEventDefinitionRecord,
+  key: string,
   index: number,
-): CharacterEventCooldowns | undefined {
-  const value = definition.cooldowns;
+): Feeling[] | undefined {
+  const value = definition[key];
 
   if (value === undefined) {
     return undefined;
   }
 
-  if (!isRecord(value)) {
-    throw new Error(`Character event definition at index ${index} has invalid cooldowns.`);
+  if (
+    !Array.isArray(value) ||
+    !value.every(item => typeof item === 'string' && includesString(VALID_FEELINGS, item))
+  ) {
+    throw new Error(`Character event definition at index ${index} has invalid ${key}.`);
   }
 
-  return {
-    selfMs: readOptionalNonNegativeNumber(value, 'selfMs', index),
-    targetMs: readOptionalNonNegativeNumber(value, 'targetMs', index),
-    pairMs: readOptionalNonNegativeNumber(value, 'pairMs', index),
-    category: readOptionalString(value, 'category', index),
-    repeatPenalty: readOptionalRepeatPenalty(value, index),
-  };
+  return value;
 }
 
-function readOptionalRepeatPenalty(
-  cooldowns: CharacterEventDefinitionRecord,
+function readOptionalSocialStatusList(
+  definition: CharacterEventDefinitionRecord,
+  key: string,
   index: number,
-): CharacterEventCooldowns['repeatPenalty'] {
-  const value = cooldowns.repeatPenalty;
+): SocialStatus[] | undefined {
+  const value = definition[key];
 
   if (value === undefined) {
     return undefined;
   }
 
-  if (!isRecord(value)) {
-    throw new Error(`Character event definition at index ${index} has invalid cooldowns.repeatPenalty.`);
+  if (
+    !Array.isArray(value) ||
+    !value.every(item => typeof item === 'string' && includesString(VALID_SOCIAL_STATUSES, item))
+  ) {
+    throw new Error(`Character event definition at index ${index} has invalid ${key}.`);
   }
 
-  const weightMultiplierPerRepeat = readRequiredNonNegativeNumber(value, 'weightMultiplierPerRepeat', index);
-
-  if (weightMultiplierPerRepeat > 1) {
-    throw new Error(
-      `Character event definition at index ${index} must include cooldowns.repeatPenalty.weightMultiplierPerRepeat <= 1.`,
-    );
-  }
-
-  return {
-    windowMs: readRequiredNonNegativeNumber(value, 'windowMs', index),
-    weightMultiplierPerRepeat,
-    maxRepeats: readOptionalNonNegativeNumber(value, 'maxRepeats', index),
-  };
+  return value;
 }
 
 function readOptionalInterruptPolicy(

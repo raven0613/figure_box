@@ -1,4 +1,4 @@
-import type { Position } from '~/constants/character';
+import { Feeling, SocialStatus, type Position } from '~/constants/character';
 import {
   CHARACTER_EVENT_DEFINITIONS_BY_ID,
   type CharacterEventActivity,
@@ -19,6 +19,7 @@ interface TownActivityCoordinatorOptions {
   performanceRunner: CharacterPerformanceRunner;
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   getCharacterPosition: (characterId: string) => Position | null;
+  getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
   getNearbyCharacterIds: (characterId: string, range: number) => string[];
   getTravelTarget: (destination: Position) => Position;
   actorHasItem: (characterId: string, itemId: string) => boolean;
@@ -38,6 +39,7 @@ export class TownActivityCoordinator {
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   private readonly getCharacterPosition: (characterId: string) => Position | null;
+  private readonly getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
   private readonly getNearbyCharacterIds: (characterId: string, range: number) => string[];
   private readonly getTravelTarget: (destination: Position) => Position;
   private readonly actorHasItem: (characterId: string, itemId: string) => boolean;
@@ -50,6 +52,7 @@ export class TownActivityCoordinator {
     this.performanceRunner = options.performanceRunner;
     this.getCharacterContext = options.getCharacterContext;
     this.getCharacterPosition = options.getCharacterPosition;
+    this.getRelationshipStatus = options.getRelationshipStatus;
     this.getNearbyCharacterIds = options.getNearbyCharacterIds;
     this.getTravelTarget = options.getTravelTarget;
     this.actorHasItem = options.actorHasItem;
@@ -84,17 +87,10 @@ export class TownActivityCoordinator {
     const currentPosition = this.getCharacterPosition(characterId) ?? snapshot.context.position;
     const destination = resolveActivityDestination(activityDefinition.destination);
     const location = destination ?? currentPosition;
-    const phase = activityDefinition.startPhase ?? 'active';
-    const participantIds = this.getInitialParticipantIds(characterId, activityDefinition);
-
-    if (participantIds.length < 2 && activityDefinition.invite) {
-      this.sendToCharacter(characterId, {
-        type: EventType.EndJoinedActivity,
-        activityId: currentActivity.activityId,
-        timestamp: Date.now(),
-      });
-      return;
-    }
+    const phase = shouldResolveGroupInvites(activityDefinition)
+      ? 'inviting'
+      : getPostInviteActivityPhase(activityDefinition);
+    const participantIds = this.getInvitedParticipantIds(characterId, activityDefinition);
 
     const activity = this.activityManager.createActivity({
       id: currentActivity.activityId,
@@ -108,7 +104,7 @@ export class TownActivityCoordinator {
     });
 
     if (phase === 'inviting') {
-      this.handleInvitingActivity(activity, characterId);
+      this.handleGroupInviteResolution(activity, characterId, activityDefinition);
       this.notifyActivitiesChanged();
       return;
     }
@@ -361,6 +357,12 @@ export class TownActivityCoordinator {
       return false;
     }
 
+    const activityDefinition = this.getActivityDefinition(activity);
+
+    if (activityDefinition && activity.participantIds.length >= getGroupMaxParticipants(activityDefinition)) {
+      return false;
+    }
+
     const joinRequirements = activity.joinRequirements;
 
     switch (joinRequirements.type) {
@@ -419,23 +421,14 @@ export class TownActivityCoordinator {
     });
   }
 
-  private getInitialParticipantIds(hostCharacterId: string, activityDefinition: CharacterEventActivity): string[] {
-    if (activityDefinition.invite) {
-      const inviteRange = activityDefinition.invite.range ?? 2;
-      const maxInvitees = activityDefinition.invite.requiredAcceptCount ?? 1;
-      const invitedParticipantIds = this.getNearbyCharacterIds(hostCharacterId, inviteRange)
-        .filter(characterId => this.canInviteCharacterToActivity(characterId, activityDefinition))
-        .slice(0, maxInvitees);
+  private getInvitedParticipantIds(hostCharacterId: string, activityDefinition: CharacterEventActivity): string[] {
+    const maxParticipants = getGroupMaxParticipants(activityDefinition);
 
-      return [hostCharacterId, ...invitedParticipantIds];
-    }
-
-    if (!activityDefinition.group) {
+    if (maxParticipants <= 1) {
       return [hostCharacterId];
     }
 
-    const maxParticipants = activityDefinition.group?.maxParticipants ?? 4;
-    const inviteNearbyRange = activityDefinition.group?.inviteNearbyRange ?? 8;
+    const inviteNearbyRange = activityDefinition.group.inviteNearbyRange ?? 0;
     const invitedParticipantIds = this.getNearbyCharacterIds(hostCharacterId, inviteNearbyRange)
       .filter(characterId => this.canInviteCharacterToActivity(characterId, activityDefinition))
       .slice(0, Math.max(0, maxParticipants - 1));
@@ -472,20 +465,29 @@ export class TownActivityCoordinator {
     return this.actorHasItem(characterId, requiredItemId);
   }
 
-  private handleInvitingActivity(activity: JoinableActivity, hostCharacterId: string): void {
-    this.performanceRunner.playActivityPerformanceSteps({
-      selection: this.getActivityPerformanceSelection(activity),
-      phase: 'proposal',
-      activityId: activity.id,
-      participantIds: activity.participantIds,
-      hostCharacterIds: activity.hostCharacterIds,
-    });
-
+  private handleGroupInviteResolution(
+    activity: JoinableActivity,
+    hostCharacterId: string,
+    activityDefinition: CharacterEventActivity,
+  ): void {
     const inviteeIds = activity.participantIds.filter(participantId => participantId !== hostCharacterId);
-    const acceptedInviteeIds = inviteeIds.filter(inviteeId => this.canInviteeAcceptActivity(inviteeId, activity));
+    const acceptedInviteeIds = inviteeIds.filter(inviteeId => (
+      this.canInviteeAcceptActivity(inviteeId, hostCharacterId, activity)
+    ));
+    const acceptedParticipantIds = [hostCharacterId, ...acceptedInviteeIds];
 
-    if (acceptedInviteeIds.length === 0) {
+    if (inviteeIds.length > 0) {
+      this.performanceRunner.playActivityPerformanceSteps({
+        selection: this.getActivityPerformanceSelection(activity),
+        phase: 'proposal',
+        activityId: activity.id,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+      });
       this.recordInviteCooldowns(activity, hostCharacterId, inviteeIds);
+    }
+
+    if (acceptedParticipantIds.length < getGroupMinParticipants(activityDefinition)) {
       this.performanceRunner.playActivityPerformanceSteps({
         selection: this.getActivityPerformanceSelection(activity),
         phase: 'rejectedMood',
@@ -510,8 +512,6 @@ export class TownActivityCoordinator {
       return;
     }
 
-    this.recordInviteCooldowns(activity, hostCharacterId, inviteeIds);
-
     const acceptedInviteeIdSet = new Set(acceptedInviteeIds);
     const acceptedActivity = inviteeIds
       .filter(inviteeId => !acceptedInviteeIdSet.has(inviteeId))
@@ -522,18 +522,21 @@ export class TownActivityCoordinator {
         activity,
       );
 
-    this.performanceRunner.playActivityPerformanceSteps({
-      selection: this.getActivityPerformanceSelection(acceptedActivity),
-      phase: 'accepted',
-      activityId: acceptedActivity.id,
-      participantIds: acceptedActivity.participantIds,
-      hostCharacterIds: acceptedActivity.hostCharacterIds,
-    });
+    if (acceptedInviteeIds.length > 0) {
+      this.performanceRunner.playActivityPerformanceSteps({
+        selection: this.getActivityPerformanceSelection(acceptedActivity),
+        phase: 'accepted',
+        activityId: acceptedActivity.id,
+        participantIds: acceptedActivity.participantIds,
+        hostCharacterIds: acceptedActivity.hostCharacterIds,
+      });
+    }
 
     window.setTimeout(() => {
+      const nextPhase = getPostInviteActivityPhase(activityDefinition);
       const activeActivity = this.activityManager.updateActivityPhase(
         acceptedActivity.id,
-        'active',
+        nextPhase,
         acceptedActivity.location,
       );
       const refreshedActivity = activeActivity
@@ -551,12 +554,20 @@ export class TownActivityCoordinator {
           sourceEventId: refreshedActivity.sourceEventId,
         });
       });
-      this.playActivityPerformance(refreshedActivity);
+      if (nextPhase === 'traveling') {
+        this.sendParticipantsToActivityLocation(refreshedActivity);
+      } else {
+        this.playActivityPerformance(refreshedActivity);
+      }
       this.notifyActivitiesChanged();
     }, DEFAULT_ACTIVITY_RESPONSE_DELAY_MS);
   }
 
-  private canInviteeAcceptActivity(inviteeId: string, activity: JoinableActivity): boolean {
+  private canInviteeAcceptActivity(
+    inviteeId: string,
+    hostCharacterId: string,
+    activity: JoinableActivity,
+  ): boolean {
     const context = this.getCharacterContext(inviteeId);
     const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId];
 
@@ -574,8 +585,37 @@ export class TownActivityCoordinator {
       context.status.moodValue >= acceptance.minMoodValue;
     const meetsAllowedMood = !acceptance.allowedMoods?.length ||
       acceptance.allowedMoods.includes(context.status.mood);
+    const meetsRelationship = !acceptance.relationships?.length ||
+      acceptance.relationships.some(requirement => {
+        const relationship = context.relationships.find(entry => entry.targetCharId === hostCharacterId);
+        const intimacy = relationship?.intimacy ?? 0;
+        const socialStatus = this.getRelationshipStatus(inviteeId, hostCharacterId) ?? SocialStatus.Stranger;
 
-    if (meetsMinMood && meetsAllowedMood) {
+        if (requirement.minIntimacy !== undefined && intimacy < requirement.minIntimacy) {
+          return false;
+        }
+
+        if (requirement.maxIntimacy !== undefined && intimacy > requirement.maxIntimacy) {
+          return false;
+        }
+
+        const feeling = relationship?.feeling ?? Feeling.Neutral;
+
+        if (requirement.allowedFeelings?.length && !requirement.allowedFeelings.includes(feeling)) {
+          return false;
+        }
+
+        if (
+          requirement.allowedSocialStatuses?.length &&
+          !requirement.allowedSocialStatuses.includes(socialStatus)
+        ) {
+          return false;
+        }
+
+        return true;
+      });
+
+    if (meetsMinMood && meetsAllowedMood && meetsRelationship) {
       return true;
     }
 
@@ -753,6 +793,12 @@ export class TownActivityCoordinator {
     }, 5000);
   }
 
+  private getActivityDefinition(activity: JoinableActivity): CharacterEventActivity | undefined {
+    return CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId]?.presentationVariants
+      ?.find(variant => variant.activity?.key === activity.activityKey)
+      ?.activity;
+  }
+
   private getActivityPerformanceSelection(activity: JoinableActivity) {
     return {
       definitionId: activity.sourceEventId,
@@ -783,4 +829,25 @@ function isNearPosition(position: Position, target: Position, range: number): bo
     Math.abs(position.x - target.x),
     Math.abs(position.y - target.y),
   ) <= range;
+}
+
+function shouldResolveGroupInvites(activityDefinition: CharacterEventActivity): boolean {
+  return getGroupMaxParticipants(activityDefinition) > 1 || getGroupMinParticipants(activityDefinition) > 1;
+}
+
+function getPostInviteActivityPhase(activityDefinition: CharacterEventActivity): 'active' | 'traveling' {
+  if (activityDefinition.startPhase) {
+    return activityDefinition.startPhase;
+  }
+
+  return activityDefinition.destination ? 'traveling' : 'active';
+}
+
+function getGroupMinParticipants(activityDefinition: CharacterEventActivity): number {
+  return activityDefinition.group.minParticipants ?? 1;
+}
+
+function getGroupMaxParticipants(activityDefinition: CharacterEventActivity): number {
+  const minParticipants = getGroupMinParticipants(activityDefinition);
+  return Math.max(minParticipants, activityDefinition.group.maxParticipants ?? minParticipants);
 }

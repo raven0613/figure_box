@@ -105,7 +105,7 @@ function resolvePlayAtLocationActivity(
   context: OfflineResolverContext,
   activity: CharacterEventActivity,
 ): OfflineResolutionPreview {
-  if (activity.invite || activity.group) {
+  if ((activity.group.maxParticipants ?? 1) > 1 || (activity.group.minParticipants ?? 1) > 1) {
     return {
       kind: 'unsupported',
       resolverSource: 'activity.playAtLocation',

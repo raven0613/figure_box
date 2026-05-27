@@ -183,10 +183,26 @@
         "activity": {
           "key": "play.item.toy-ball",
           "type": "playWithItem",
+          "group": {
+            "inviteNearbyRange": 4,
+            "minParticipants": 1,
+            "maxParticipants": 4
+          },
           "joinable": true,
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
+          "cooldowns": {
+            "selfMs": 8000,
+            "targetMs": 6000,
+            "pairMs": 24000,
+            "category": "play_item",
+            "repeatPenalty": {
+              "windowMs": 120000,
+              "weightMultiplierPerRepeat": 0.5,
+              "maxRepeats": 3
+            }
+          },
           "effects": {
             "relationshipIntimacyDelta": 1
           },
@@ -211,10 +227,26 @@
         "activity": {
           "key": "play.item.cards",
           "type": "playWithItem",
+          "group": {
+            "inviteNearbyRange": 4,
+            "minParticipants": 1,
+            "maxParticipants": 4
+          },
           "joinable": true,
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
+          "cooldowns": {
+            "selfMs": 8000,
+            "targetMs": 6000,
+            "pairMs": 24000,
+            "category": "play_item",
+            "repeatPenalty": {
+              "windowMs": 120000,
+              "weightMultiplierPerRepeat": 0.5,
+              "maxRepeats": 3
+            }
+          },
           "effects": {
             "relationshipIntimacyDelta": 1
           },
@@ -266,6 +298,18 @@
     "maxWeight": 85,
     "interruptPolicy": "soft",
     "commitment": 16,
+    "acceptance": {
+      "minMoodValue": 14,
+      "allowedMoods": ["peaceful", "relaxed", "happy", "ecstatic"],
+      "relationships": [
+        {
+          "minIntimacy": -10,
+          "allowedFeelings": ["neutral", "warm", "like", "fond", "secret_crush", "open_crush", "love"],
+          "allowedSocialStatuses": ["stranger", "acquaintance", "friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
+        }
+      ],
+      "fallbackChance": 0.65
+    },
     "conditions": [
       {
         "path": "input.nearbyCharacterCount",
@@ -286,12 +330,24 @@
           "destination": "randomDestination.play",
           "group": {
             "inviteNearbyRange": 8,
+            "minParticipants": 2,
             "maxParticipants": 4
           },
           "joinable": true,
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
+          "cooldowns": {
+            "selfMs": 12000,
+            "targetMs": 9000,
+            "pairMs": 35000,
+            "category": "social",
+            "repeatPenalty": {
+              "windowMs": 120000,
+              "weightMultiplierPerRepeat": 0.4,
+              "maxRepeats": 3
+            }
+          },
           "effects": {
             "relationshipIntimacyDelta": 1
           },
@@ -333,18 +389,14 @@
     "acceptance": {
       "minMoodValue": 10,
       "allowedMoods": ["nervous", "peaceful", "relaxed", "happy", "ecstatic"],
+      "relationships": [
+        {
+          "minIntimacy": -30,
+          "allowedFeelings": ["wary", "neutral", "warm", "like", "fond", "secret_crush", "open_crush", "love"],
+          "allowedSocialStatuses": ["stranger", "acquaintance", "friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
+        }
+      ],
       "fallbackChance": 0.82
-    },
-    "cooldowns": {
-      "selfMs": 10000,
-      "targetMs": 8000,
-      "pairMs": 28000,
-      "category": "social",
-      "repeatPenalty": {
-        "windowMs": 120000,
-        "weightMultiplierPerRepeat": 0.45,
-        "maxRepeats": 3
-      }
     },
     "presentationVariants": [
       {
@@ -355,16 +407,27 @@
         "activity": {
           "key": "chat.casual",
           "type": "chat",
-          "startPhase": "inviting",
-          "invite": {
-            "target": "randomNearbyCharacter",
-            "range": 2,
-            "requiredAcceptCount": 1
+          "startPhase": "active",
+          "group": {
+            "inviteNearbyRange": 2,
+            "minParticipants": 2,
+            "maxParticipants": 2
           },
           "joinable": true,
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 8000,
+          "cooldowns": {
+            "selfMs": 10000,
+            "targetMs": 8000,
+            "pairMs": 28000,
+            "category": "social",
+            "repeatPenalty": {
+              "windowMs": 120000,
+              "weightMultiplierPerRepeat": 0.45,
+              "maxRepeats": 3
+            }
+          },
           "effects": {
             "relationshipIntimacyDelta": 1
           },
@@ -407,18 +470,14 @@
     "acceptance": {
       "minMoodValue": 14,
       "allowedMoods": ["peaceful", "relaxed", "happy", "ecstatic"],
+      "relationships": [
+        {
+          "minIntimacy": -10,
+          "allowedFeelings": ["neutral", "warm", "like", "fond", "secret_crush", "open_crush", "love"],
+          "allowedSocialStatuses": ["stranger", "acquaintance", "friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
+        }
+      ],
       "fallbackChance": 0.75
-    },
-    "cooldowns": {
-      "selfMs": 12000,
-      "targetMs": 9000,
-      "pairMs": 35000,
-      "category": "social",
-      "repeatPenalty": {
-        "windowMs": 120000,
-        "weightMultiplierPerRepeat": 0.4,
-        "maxRepeats": 3
-      }
     },
     "presentationVariants": [
       {
@@ -429,16 +488,27 @@
         "activity": {
           "key": "play.location.casual",
           "type": "playAtLocation",
-          "startPhase": "inviting",
-          "invite": {
-            "target": "randomNearbyCharacter",
-            "range": 2,
-            "requiredAcceptCount": 1
+          "startPhase": "active",
+          "group": {
+            "inviteNearbyRange": 2,
+            "minParticipants": 2,
+            "maxParticipants": 2
           },
           "joinable": true,
           "durationMs": 20000,
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
+          "cooldowns": {
+            "selfMs": 12000,
+            "targetMs": 9000,
+            "pairMs": 35000,
+            "category": "social",
+            "repeatPenalty": {
+              "windowMs": 120000,
+              "weightMultiplierPerRepeat": 0.4,
+              "maxRepeats": 3
+            }
+          },
           "effects": {
             "relationshipIntimacyDelta": 1
           },

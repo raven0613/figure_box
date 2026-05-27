@@ -2,7 +2,12 @@ import type {
   CharacterActivityCooldowns,
   CharacterContext,
 } from '~/stateMachines/gameFlow/context';
-import { CHARACTER_EVENT_DEFINITIONS_BY_ID, type CharacterEventDefinition } from '../../constants/charactarEventsDefinitions';
+import {
+  CHARACTER_EVENT_DEFINITIONS_BY_ID,
+  type CharacterEventActivity,
+  type CharacterEventCooldowns,
+  type CharacterEventDefinition,
+} from '../../constants/charactarEventsDefinitions';
 
 export interface ActivityCooldownRecordInput {
   partnerCharIds: readonly string[];
@@ -44,7 +49,8 @@ export function getActivityRepeatWeightMultiplier(
   targetIds: readonly string[],
   timestamp: number,
 ): number {
-  const repeatPenalty = eventDefinition.cooldowns?.repeatPenalty;
+  const cooldowns = getDefinitionActivityCooldowns(eventDefinition);
+  const repeatPenalty = cooldowns?.repeatPenalty;
 
   if (!repeatPenalty || targetIds.length === 0) {
     return 1;
@@ -74,22 +80,25 @@ export function recordActivityCooldowns(
   input: ActivityCooldownRecordInput,
 ): CharacterActivityCooldowns {
   const eventDefinition = CHARACTER_EVENT_DEFINITIONS_BY_ID[input.sourceEventId];
+  const activityCooldowns = eventDefinition
+    ? getDefinitionActivityCooldowns(eventDefinition)
+    : undefined;
 
-  if (!eventDefinition?.cooldowns || input.partnerCharIds.length === 0) {
+  if (!eventDefinition || !activityCooldowns || input.partnerCharIds.length === 0) {
     return cooldowns;
   }
 
   const category = getCooldownCategory(eventDefinition);
   const ownCooldownMs = input.role === 'initiator'
-    ? eventDefinition.cooldowns.selfMs
-    : eventDefinition.cooldowns.targetMs;
+    ? activityCooldowns.selfMs
+    : activityCooldowns.targetMs;
   const categoryUntilByKey = ownCooldownMs
     ? {
       ...cooldowns.categoryUntilByKey,
       [category]: input.timestamp + ownCooldownMs,
     }
     : cooldowns.categoryUntilByKey;
-  const pairCooldownMs = eventDefinition.cooldowns.pairMs;
+  const pairCooldownMs = activityCooldowns.pairMs;
   const pairUntilByKey = pairCooldownMs
     ? input.partnerCharIds.reduce<Record<string, number>>(
       (nextPairUntilByKey, partnerCharId) => ({
@@ -122,7 +131,7 @@ function updateRepeatRecord(
   timestamp: number,
   eventDefinition: CharacterEventDefinition,
 ) {
-  const repeatPenalty = eventDefinition.cooldowns?.repeatPenalty;
+  const repeatPenalty = getDefinitionActivityCooldowns(eventDefinition)?.repeatPenalty;
 
   if (!repeatPenalty) {
     return repeatByKey;
@@ -160,9 +169,18 @@ function isPairCoolingDown(
 }
 
 function getCooldownCategory(eventDefinition: CharacterEventDefinition): string {
-  return eventDefinition.cooldowns?.category ?? DEFAULT_COOLDOWN_CATEGORY;
+  return getDefinitionActivityCooldowns(eventDefinition)?.category ?? DEFAULT_COOLDOWN_CATEGORY;
 }
 
 function createPairCategoryKey(targetId: string, category: string): string {
   return `${targetId}::${category}`;
+}
+
+function getDefinitionActivityCooldowns(
+  eventDefinition: CharacterEventDefinition,
+): CharacterEventCooldowns | undefined {
+  return eventDefinition.presentationVariants
+    ?.map(variant => variant.activity)
+    .find((activity): activity is CharacterEventActivity => activity !== undefined)
+    ?.cooldowns;
 }

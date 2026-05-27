@@ -271,6 +271,9 @@ export class TownCharacterController {
       performanceRunner: this.performanceRunner,
       getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
       getCharacterPosition: characterId => this.spatialQueries.getCharacterPosition(characterId),
+      getRelationshipStatus: (characterId, targetCharacterId) => (
+        this.relationshipCoordinator.getMutualRelationshipStatus(characterId, targetCharacterId)
+      ),
       getNearbyCharacterIds: (characterId, range) => this.spatialQueries.getNearbyCharacterIds(characterId, range),
       getTravelTarget: destination => destination,
       actorHasItem: (characterId, itemId) => (

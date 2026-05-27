@@ -183,8 +183,8 @@ export function createJoinableActivityManager(): JoinableActivityManager {
 
       const nextActivity = {
         ...activity,
-        activeStartedAt: timestamp,
-        endsAt: timestamp + activityDefinition.durationMs,
+        activeStartedAt: activity.phase === 'active' ? timestamp : activity.activeStartedAt,
+        endsAt: timestamp + getActivityDurationForPhase(activityDefinition, activity.phase),
       };
 
       activitiesById.set(activityId, nextActivity);

@@ -2,7 +2,7 @@ import type {
   CharacterEventBucketId,
   UtilityDrivenMotivation,
 } from '~/stateMachines/gameFlow/context';
-import type { Feeling, Mood, Position } from '~/constants/character';
+import type { Feeling, Mood, Position, SocialStatus } from '~/constants/character';
 import rawCharacterEventDefinitions from '~/constants/events/characterEvents.json';
 import { loadCharacterEventDefinitions } from '../utils/jsonParser/definitionSchema';
 import type {
@@ -28,7 +28,6 @@ export interface CharacterEventDefinition {
   presentationVariants?: readonly CharacterEventPresentationVariant[];
   interactionPresentation?: CharacterEventInteractionPresentation;
   acceptance?: CharacterEventAcceptance;
-  cooldowns?: CharacterEventCooldowns;
   interruptPolicy?: CharacterEventInterruptPolicy;
   commitment?: number;
   offlineRecap?: OfflineRecapTemplate;
@@ -55,7 +54,6 @@ export type CharacterEventTarget =
   | 'randomDestination.findFood'
   | Position;
 
-export type CharacterEventInviteTarget = 'randomNearbyCharacter';
 export type CharacterEventActivityTarget = 'nearbyJoinableActivity';
 
 export interface CharacterEventPresentationVariant {
@@ -83,7 +81,15 @@ export interface CharacterEventInteractionPresentation {
 export interface CharacterEventAcceptance {
   minMoodValue?: number;
   allowedMoods?: readonly Mood[];
+  relationships?: readonly CharacterEventRelationshipAcceptance[];
   fallbackChance?: number;
+}
+
+export interface CharacterEventRelationshipAcceptance {
+  minIntimacy?: number;
+  maxIntimacy?: number;
+  allowedFeelings?: readonly Feeling[];
+  allowedSocialStatuses?: readonly SocialStatus[];
 }
 
 export interface CharacterEventActivity {
@@ -91,30 +97,25 @@ export interface CharacterEventActivity {
   type: CharacterEventActivityType;
   startPhase?: CharacterEventActivityStartPhase;
   destination?: CharacterEventActivityDestination;
-  invite?: CharacterEventActivityInvite;
-  group?: CharacterEventGroupActivity;
+  group: CharacterEventGroupActivity;
   joinable?: boolean;
   durationMs: number;
   refreshDurationOnJoin?: boolean;
   joinWindowMs?: number;
   joinRequirements?: CharacterEventJoinRequirement;
+  cooldowns: CharacterEventCooldowns;
   effects?: CharacterEventActivityEffects;
 }
 
 export type CharacterEventActivityType = 'chat' | 'playWithItem' | 'playAtLocation';
-export type CharacterEventActivityStartPhase = 'inviting' | 'active' | 'traveling';
+export type CharacterEventActivityStartPhase = 'active' | 'traveling';
 export type CharacterEventActivityDestination =
   | 'randomDestination.play'
   | Position;
 
-export interface CharacterEventActivityInvite {
-  target: CharacterEventInviteTarget;
-  range?: number;
-  requiredAcceptCount?: number;
-}
-
 export interface CharacterEventGroupActivity {
   inviteNearbyRange?: number;
+  minParticipants?: number;
   maxParticipants?: number;
 }
 
