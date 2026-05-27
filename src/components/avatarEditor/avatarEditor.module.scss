@@ -140,6 +140,22 @@
   border-radius: 6px;
 }
 
+.toggleField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.toggleField input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
 .controlGroup {
   display: flex;
   flex-direction: column;

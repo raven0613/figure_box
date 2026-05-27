@@ -1,15 +1,19 @@
-import { Canvas, Circle, Ellipse, FabricObject, Group, Path, Rect, Text } from 'fabric';
+import { Canvas, Circle, FabricImage, FabricObject, Group } from 'fabric';
 
 export type AvatarGroupKey = 'eyes' | 'hair';
-export type AvatarTransformProperty = 'offsetX' | 'offsetY' | 'rotate' | 'scale';
-export type AvatarEditableProperty = AvatarTransformProperty | 'color';
+export type AvatarTransformProperty = 'offsetX' | 'offsetY' | 'rotate' | 'scale' | 'flipX';
+export type AvatarEditableProperty = AvatarTransformProperty | 'color' | 'lineColor';
 
 export type AvatarPartKey =
   | 'face'
+  | 'face.color'
+  | 'face.line'
+  | 'ear'
   | AvatarGroupKey
   | 'eyes.sclera'
   | 'eyes.color'
-  | 'eyes.pupil'
+  | 'eyes.eyebrow'
+  | 'eyes.eyelid'
   | 'eyes.upperEyelid'
   | 'eyes.lowerEyelid'
   | 'eyes.light'
@@ -17,7 +21,6 @@ export type AvatarPartKey =
   | 'hair.sideburns'
   | 'hair.topHair'
   | 'hair.backHair'
-  | 'hair.light'
   | 'mouth'
   | 'nose';
 
@@ -31,18 +34,25 @@ export interface AvatarPartDefinition {
   label: string;
   zIndex: number;
   defaultColor?: string;
+  defaultLineColor?: string;
   editableProperties: AvatarEditableProperty[];
   options: AvatarPartOption[];
   parentKey?: AvatarGroupKey;
+  isEditorHidden?: boolean;
 }
 
 export interface AvatarPartState {
   optionId: number;
   color?: string;
+  lineColor?: string;
   offsetX?: number;
   offsetY?: number;
   rotate?: number;
   scale?: number;
+  flipX?: boolean;
+  leftVisible?: boolean;
+  rightVisible?: boolean;
+  lightDistance?: number;
 }
 
 export type AvatarState = Record<AvatarPartKey, AvatarPartState>;
@@ -60,6 +70,7 @@ interface AvatarPartContext {
   centerX: number;
   faceCenterY: number;
   getGroupState: (key: AvatarGroupKey) => AvatarPartState;
+  getPartState: (key: AvatarPartKey) => AvatarPartState;
 }
 
 interface Point2D {
@@ -67,164 +78,111 @@ interface Point2D {
   y: number;
 }
 
+interface AvatarImageLayer {
+  folder: string;
+  file: string;
+  tint?: 'color' | 'line' | 'skin';
+  shouldDropLightPixels?: boolean;
+}
+
 const DEFAULT_CANVAS_WIDTH = 520;
 const DEFAULT_CANVAS_HEIGHT = 560;
 const DEFAULT_SCALE = 1;
-const LABEL_FONT_SIZE = 12;
-const EYE_DISTANCE = 48;
+const DEFAULT_LINE_COLOR = '#262626';
+const BASE_TINT_LUMINANCE = 128;
+const BLACK_MASK_MAX_LUMINANCE = 8;
+const LINE_LAYER_FILL_LUMINANCE_THRESHOLD = 180;
+const AVATAR_PIXEL_SCALE = 3;
+const EYE_GROUP_OFFSET_Y = -10;
+const EYE_DISTANCE = 50;
+const tintCache = new Map<string, string>();
+
+const avatarAssetUrls = import.meta.glob<string>('../assets/avatar_system/**/*.png', {
+  eager: true,
+  import: 'default',
+  query: '?url',
+}) as Record<string, string>;
 
 export const AVATAR_PART_DEFINITIONS: AvatarPartDefinition[] = [
+  createDefinition('hair.backHair', 'back hair bottom', 0, '#302030', 5, 'hair'),
+  createDefinition('hair.topHair', 'back hair top', 1, '#302030', 6, 'hair'),
+  createDefinition('face.color', 'face color', 2, '#f2c7a7', 2, undefined, ['color', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], true),
+  createDefinition('ear', 'ear', 3, '#f2c7a7', 1, undefined, ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
+  createDefinition('face', 'face', 4, '#f2c7a7', 2),
   {
-    key: 'face',
-    label: 'face',
-    zIndex: 0,
-    defaultColor: '#f2c7a7',
-    editableProperties: ['color'],
-    options: [{ id: 0, label: 'face z-index 0' }],
-  },
-  {
-    key: 'hair.backHair',
-    label: 'backHair',
-    zIndex: 1,
-    defaultColor: '#27212a',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'backHair z-index 1' }],
-    parentKey: 'hair',
+    key: 'hair',
+    label: 'hair',
+    zIndex: 5,
+    editableProperties: ['offsetX', 'offsetY', 'rotate', 'scale', 'flipX'],
+    options: [{ id: 1, label: 'hair group 1' }],
   },
   {
     key: 'eyes',
     label: 'eyes',
-    zIndex: 2,
-    editableProperties: ['offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'eyes group z-index 2' }],
-  },
-  {
-    key: 'hair',
-    label: 'hair',
-    zIndex: 3,
-    editableProperties: ['offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'hair group z-index 3' }],
-  },
-  {
-    key: 'eyes.sclera',
-    label: 'sclera',
-    zIndex: 4,
-    defaultColor: '#fff9ef',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'scale'],
-    options: [{ id: 0, label: 'sclera z-index 4' }],
-    parentKey: 'eyes',
-  },
-  {
-    key: 'eyes.color',
-    label: 'eyes color',
-    zIndex: 5,
-    defaultColor: '#5a86b8',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'scale'],
-    options: [{ id: 0, label: 'eyes color z-index 5' }],
-    parentKey: 'eyes',
-  },
-  {
-    key: 'eyes.pupil',
-    label: 'pupil',
     zIndex: 6,
-    defaultColor: '#172033',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'scale'],
-    options: [{ id: 0, label: 'pupil z-index 6' }],
-    parentKey: 'eyes',
+    editableProperties: ['offsetX', 'offsetY', 'rotate', 'scale', 'flipX'],
+    options: [{ id: 1, label: 'eyes group 1' }],
   },
-  {
-    key: 'eyes.light',
-    label: 'eye light',
-    zIndex: 7,
-    defaultColor: '#ffffff',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'eye light z-index 7' }],
-    parentKey: 'eyes',
-  },
-  {
-    key: 'eyes.lowerEyelid',
-    label: 'lowerEyelid',
-    zIndex: 8,
-    defaultColor: '#6f3f3a',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'lowerEyelid z-index 8' }],
-    parentKey: 'eyes',
-  },
-  {
-    key: 'eyes.upperEyelid',
-    label: 'upperEyelid',
-    zIndex: 9,
-    defaultColor: '#6f3f3a',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'upperEyelid z-index 9' }],
-    parentKey: 'eyes',
-  },
-  {
-    key: 'nose',
-    label: 'nose',
-    zIndex: 10,
-    defaultColor: '#b36f61',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'nose z-index 10' }],
-  },
-  {
-    key: 'mouth',
-    label: 'mouth',
-    zIndex: 11,
-    defaultColor: '#b34a55',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'mouth z-index 11' }],
-  },
-  {
-    key: 'hair.sideburns',
-    label: 'sideburns',
-    zIndex: 12,
-    defaultColor: '#302030',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'sideburns z-index 12' }],
-    parentKey: 'hair',
-  },
-  {
-    key: 'hair.topHair',
-    label: 'topHair',
-    zIndex: 13,
-    defaultColor: '#302030',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'topHair z-index 13' }],
-    parentKey: 'hair',
-  },
-  {
-    key: 'hair.bangs',
-    label: 'bangs',
-    zIndex: 14,
-    defaultColor: '#302030',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'bangs z-index 14' }],
-    parentKey: 'hair',
-  },
-  {
-    key: 'hair.light',
-    label: 'hair light',
-    zIndex: 15,
-    defaultColor: '#7c667e',
-    editableProperties: ['color', 'offsetX', 'offsetY', 'rotate', 'scale'],
-    options: [{ id: 0, label: 'hair light z-index 15' }],
-    parentKey: 'hair',
-  },
+  createDefinition('eyes.sclera', 'sclera', 6.5, '#ffffff', 1, 'eyes', ['color', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
+  createDefinition('eyes.color', 'eye ball', 7, '#5a86b8', 6, 'eyes'),
+  createDefinition('eyes.light', 'eye light', 8, '#ffffff', 1, 'eyes'),
+  createDefinition('eyes.lowerEyelid', 'lower eyelid', 9, '#ad7663', 3, 'eyes', ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
+  createDefinition('eyes.upperEyelid', 'upper eyelid', 10, '#6f3f3a', 5, 'eyes', ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
+  createDefinition('eyes.eyelid', 'eyelid', 11, '#6f3f3a', 5, 'eyes'),
+  createDefinition('eyes.eyebrow', 'eyebrow', 12, '#302030', 6, 'eyes'),
+  createDefinition('nose', 'nose', 13, '#b36f61', 5),
+  createDefinition('mouth', 'mouth', 14, '#b34a55', 3),
+  createDefinition('face.line', 'face line', 15, '#f2c7a7', 2, undefined, ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], true),
+  createDefinition('hair.sideburns', 'side hair', 16, '#302030', 5, 'hair'),
+  createDefinition('hair.bangs', 'bangs', 17, '#302030', 4, 'hair'),
 ];
+
+export const AVATAR_EDITOR_PART_DEFINITIONS: AvatarPartDefinition[] = AVATAR_PART_DEFINITIONS
+  .filter(definition => definition.isEditorHidden !== true);
 
 export function createDefaultAvatarState(): AvatarState {
   return AVATAR_PART_DEFINITIONS.reduce((state, definition) => {
     state[definition.key] = {
-      optionId: definition.options[0]?.id ?? 0,
+      optionId: definition.options[0]?.id ?? 1,
       color: definition.defaultColor,
+      lineColor: definition.defaultLineColor ?? DEFAULT_LINE_COLOR,
       offsetX: 0,
       offsetY: 0,
       rotate: 0,
       scale: DEFAULT_SCALE,
+      flipX: false,
+      leftVisible: true,
+      rightVisible: true,
+      lightDistance: EYE_DISTANCE - 5,
     };
     return state;
   }, {} as AvatarState);
+}
+
+function createDefinition(
+  key: AvatarPartKey,
+  label: string,
+  zIndex: number,
+  defaultColor: string,
+  optionCount: number,
+  parentKey?: AvatarGroupKey,
+  editableProperties: AvatarEditableProperty[] = ['color', 'lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'],
+  isEditorHidden = false,
+): AvatarPartDefinition {
+  return {
+    key,
+    label,
+    zIndex,
+    defaultColor,
+    defaultLineColor: DEFAULT_LINE_COLOR,
+    editableProperties,
+    isEditorHidden,
+    options: Array.from({ length: optionCount }, (_, index) => ({
+      id: index + 1,
+      label: `${label} ${index + 1}`,
+    })),
+    parentKey,
+  };
 }
 
 abstract class AvatarPart {
@@ -248,7 +206,7 @@ abstract class AvatarPart {
   }
 
   createObject(): Group {
-    this.object = new Group([...this.createArtwork(), ...this.createLabel()], {
+    this.object = new Group(this.createArtwork(), {
       originX: 'center',
       originY: 'center',
       selectable: false,
@@ -269,6 +227,10 @@ abstract class AvatarPart {
     this.applyTransform();
   }
 
+  refreshArtwork(): void {
+    // Non-image parts do not need artwork refreshes.
+  }
+
   protected abstract get baseX(): number;
   protected abstract get baseY(): number;
   protected abstract createArtwork(): FabricObject[];
@@ -277,37 +239,20 @@ abstract class AvatarPart {
     return this.state.color ?? this.definition.defaultColor ?? '#333333';
   }
 
+  protected get lineColor(): string {
+    return this.state.lineColor ?? this.definition.defaultLineColor ?? DEFAULT_LINE_COLOR;
+  }
+
+  protected getFaceColor(): string {
+    return this.context.getPartState('face').color ?? '#f2c7a7';
+  }
+
   protected get scale(): number {
     return this.state.scale ?? DEFAULT_SCALE;
   }
 
-  protected createLabel(): FabricObject[] {
-    return [
-      new Text(`${this.definition.label} z-index ${this.definition.zIndex}`, {
-        left: 0,
-        top: -14,
-        originX: 'center',
-        originY: 'center',
-        fontSize: LABEL_FONT_SIZE,
-        fill: '#111827',
-        fontFamily: 'Inter, Arial, sans-serif',
-        selectable: false,
-        evented: false,
-        backgroundColor: 'rgba(255,255,255,0.58)',
-      }),
-      new Text('0', {
-        left: 0,
-        top: 16,
-        originX: 'center',
-        originY: 'center',
-        fontSize: LABEL_FONT_SIZE,
-        fill: '#111827',
-        fontFamily: 'Inter, Arial, sans-serif',
-        selectable: false,
-        evented: false,
-        backgroundColor: 'rgba(255,255,255,0.58)',
-      }),
-    ];
+  protected get flipMultiplier(): 1 | -1 {
+    return this.state.flipX ? -1 : 1;
   }
 
   protected getPartOffset(): Point2D {
@@ -345,7 +290,7 @@ abstract class AvatarPart {
         left: this.baseX + offset.x,
         top: this.baseY + offset.y,
         angle: rotation,
-        scaleX: scale,
+        scaleX: scale * this.flipMultiplier,
         scaleY: scale,
       };
     }
@@ -354,8 +299,9 @@ abstract class AvatarPart {
     const parentBase = this.getGroupBase(parentKey);
     const parentScale = parentState.scale ?? DEFAULT_SCALE;
     const parentRotation = parentState.rotate ?? 0;
+    const parentFlip = parentState.flipX ? -1 : 1;
     const localPoint = {
-      x: this.baseX - parentBase.x + offset.x,
+      x: (this.baseX - parentBase.x + offset.x) * parentFlip,
       y: this.baseY - parentBase.y + offset.y,
     };
     const rotatedPoint = rotatePoint({
@@ -366,8 +312,8 @@ abstract class AvatarPart {
     return {
       left: parentBase.x + (parentState.offsetX ?? 0) + rotatedPoint.x,
       top: parentBase.y + (parentState.offsetY ?? 0) + rotatedPoint.y,
-      angle: parentRotation + rotation,
-      scaleX: parentScale * scale,
+      angle: parentRotation + rotation * parentFlip,
+      scaleX: parentScale * scale * parentFlip * this.flipMultiplier,
       scaleY: parentScale * scale,
     };
   }
@@ -376,31 +322,18 @@ abstract class AvatarPart {
     if (key === 'eyes') {
       return {
         x: this.context.centerX,
-        y: this.context.faceCenterY - 34,
+        y: this.context.faceCenterY + EYE_GROUP_OFFSET_Y,
       };
     }
 
     return {
       x: this.context.centerX,
-      y: this.context.faceCenterY - 44,
+      y: this.context.faceCenterY - 54,
     };
   }
 
   protected updateArtworkColor(): void {
-    if (!this.object) {
-      return;
-    }
-
-    this.object.getObjects().forEach(object => {
-      if (object.get('data') === 'avatar-art') {
-        object.set('fill', this.color);
-      }
-    });
-  }
-
-  protected markAsArtwork<T extends FabricObject>(object: T): T {
-    object.set('data', 'avatar-art');
-    return object;
+    // Image-backed parts override this when they have tintable layers.
   }
 }
 
@@ -428,7 +361,7 @@ abstract class AvatarControlGroupPart extends AvatarPart {
       left: this.baseX + (this.state.offsetX ?? 0),
       top: this.baseY + (this.state.offsetY ?? 0),
       angle: this.state.rotate ?? 0,
-      scaleX: this.state.scale ?? DEFAULT_SCALE,
+      scaleX: (this.state.scale ?? DEFAULT_SCALE) * this.flipMultiplier,
       scaleY: this.state.scale ?? DEFAULT_SCALE,
     };
   }
@@ -440,41 +373,9 @@ class EyeGroupPart extends AvatarControlGroupPart {
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 34;
+    return this.context.faceCenterY + EYE_GROUP_OFFSET_Y;
   }
 
-  protected createLabel(): FabricObject[] {
-    return this.createWideLabel(86);
-  }
-
-  private createWideLabel(distance: number): FabricObject[] {
-    return [
-      new Text(`${this.definition.label} z-index ${this.definition.zIndex}`, {
-        left: 0,
-        top: -distance,
-        originX: 'center',
-        originY: 'center',
-        fontSize: LABEL_FONT_SIZE,
-        fill: '#111827',
-        fontFamily: 'Inter, Arial, sans-serif',
-        backgroundColor: 'rgba(255,255,255,0.58)',
-        selectable: false,
-        evented: false,
-      }),
-      new Text('0', {
-        left: 0,
-        top: distance,
-        originX: 'center',
-        originY: 'center',
-        fontSize: LABEL_FONT_SIZE,
-        fill: '#111827',
-        fontFamily: 'Inter, Arial, sans-serif',
-        backgroundColor: 'rgba(255,255,255,0.58)',
-        selectable: false,
-        evented: false,
-      }),
-    ];
-  }
 }
 
 class HairGroupPart extends AvatarControlGroupPart {
@@ -483,82 +384,151 @@ class HairGroupPart extends AvatarControlGroupPart {
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 44;
+    return this.context.faceCenterY - 54;
   }
 
-  protected createLabel(): FabricObject[] {
-    return [
-      new Text(`${this.definition.label} z-index ${this.definition.zIndex}`, {
-        left: 0,
-        top: -172,
-        originX: 'center',
-        originY: 'center',
-        fontSize: LABEL_FONT_SIZE,
-        fill: '#111827',
-        fontFamily: 'Inter, Arial, sans-serif',
-        backgroundColor: 'rgba(255,255,255,0.58)',
-        selectable: false,
-        evented: false,
-      }),
-      new Text('0', {
-        left: 0,
-        top: 172,
-        originX: 'center',
-        originY: 'center',
-        fontSize: LABEL_FONT_SIZE,
-        fill: '#111827',
-        fontFamily: 'Inter, Arial, sans-serif',
-        backgroundColor: 'rgba(255,255,255,0.58)',
-        selectable: false,
-        evented: false,
-      }),
-    ];
-  }
 }
 
-class FacePart extends AvatarPart {
-  protected get baseX(): number {
-    return this.context.centerX;
+abstract class ImageAvatarPart extends AvatarPart {
+  private readonly images: FabricImage[] = [];
+  private loadVersion = 0;
+
+  createObject(): Group {
+    const group = super.createObject();
+    void this.reloadImages();
+    return group;
   }
 
-  protected get baseY(): number {
-    return this.context.faceCenterY;
+  update(nextState: AvatarPartState): void {
+    const previousOptionId = this.state.optionId;
+    const previousColor = this.state.color;
+    const previousLineColor = this.state.lineColor;
+    this.state = { ...this.state, ...nextState };
+    this.applyTransform();
+
+    if (
+      previousOptionId !== this.state.optionId ||
+      previousColor !== this.state.color ||
+      previousLineColor !== this.state.lineColor
+    ) {
+      void this.reloadImages();
+    }
   }
 
   protected createArtwork(): FabricObject[] {
-    return [
-      this.markAsArtwork(new Ellipse({
-        rx: 118,
-        ry: 146,
-        fill: this.color,
-        stroke: '#6e4d45',
-        strokeWidth: 2,
-        originX: 'center',
-        originY: 'center',
-      })),
-    ];
+    return [];
+  }
+
+  refreshArtwork(): void {
+    void this.reloadImages();
+  }
+
+  protected abstract resolveLayers(): AvatarImageLayer[];
+  protected abstract configureImage(image: FabricImage, layer: AvatarImageLayer): void;
+
+  private async reloadImages(): Promise<void> {
+    if (!this.object) {
+      return;
+    }
+
+    const currentLoadVersion = this.loadVersion + 1;
+    this.loadVersion = currentLoadVersion;
+    this.removeCurrentImages();
+
+    const nextImages = await Promise.all(
+      this.resolveLayers().map(async layer => {
+        const assetUrl = getAvatarAssetUrl(layer.folder, layer.file);
+        const imageUrl = layer.tint
+          ? await tintImageByLuminance(
+            assetUrl,
+            this.getTintColor(layer.tint),
+            layer.tint,
+            layer.folder === 'face' && layer.tint === 'color',
+            layer.shouldDropLightPixels === true,
+          )
+          : assetUrl;
+        const image = await FabricImage.fromURL(imageUrl);
+        image.set({
+          selectable: false,
+          evented: false,
+          objectCaching: false,
+          imageSmoothing: false,
+          originX: 'center',
+          originY: 'center',
+          data: 'avatar-image',
+          'data-tint': layer.tint,
+        });
+        this.configureImage(image, layer);
+
+        return image;
+      }),
+    );
+
+    if (!this.object || currentLoadVersion !== this.loadVersion) {
+      return;
+    }
+
+    this.images.push(...nextImages);
+    this.object.add(...nextImages);
+    nextImages
+      .slice()
+      .reverse()
+      .forEach(image => this.object?.sendObjectToBack(image));
+    this.applyTransform();
+    this.object.setCoords();
+    this.object.canvas?.requestRenderAll();
+  }
+
+  private removeCurrentImages(): void {
+    if (!this.object || this.images.length === 0) {
+      return;
+    }
+
+    this.object.remove(...this.images);
+    this.images.splice(0, this.images.length);
+  }
+
+  protected getTintColor(tint: 'color' | 'line' | 'skin'): string {
+    if (tint === 'skin') {
+      return this.getFaceColor();
+    }
+
+    return tint === 'color' ? this.color : this.lineColor;
   }
 }
 
-abstract class MirroredEyePart extends AvatarPart {
-  protected get baseX(): number {
-    return this.context.centerX;
+abstract class CenterAssetPart extends ImageAvatarPart {
+  protected configureImage(image: FabricImage): void {
+    image.set({
+      left: 0,
+      top: 0,
+      scaleX: AVATAR_PIXEL_SCALE,
+      scaleY: AVATAR_PIXEL_SCALE,
+    });
   }
+}
 
-  protected get baseY(): number {
-    return this.context.faceCenterY - 34;
-  }
-
-  protected createArtwork(): FabricObject[] {
-    return [
-      ...this.createSideArtwork(-1),
-      ...this.createSideArtwork(1),
-    ];
+abstract class MirroredAssetPart extends ImageAvatarPart {
+  protected configureImage(image: FabricImage, layer: AvatarImageLayer): void {
+    const side = layer.file.includes('__right') ? 1 : -1;
+    const shouldFlip = this.shouldFlipMirroredSide(side);
+    image.set({
+      left: this.getSideBaseX(side) + this.getSideOffsetX(side),
+      top: this.getSideBaseY() + (this.state.offsetY ?? 0),
+      angle: this.getSideBaseAngle() + side * (this.state.rotate ?? 0),
+      flipX: shouldFlip,
+      flipY: false,
+      scaleX: AVATAR_PIXEL_SCALE * this.scale,
+      scaleY: AVATAR_PIXEL_SCALE * this.scale,
+      visible: this.isSideVisible(side),
+      data: 'avatar-image',
+      'data-side': side,
+    });
   }
 
   update(nextState: AvatarPartState): void {
     super.update(nextState);
-    this.updateMirroredChildren();
+    this.updateMirroredImages();
   }
 
   protected applyTransform(): void {
@@ -566,71 +536,23 @@ abstract class MirroredEyePart extends AvatarPart {
       return;
     }
 
-    this.updateMirroredChildren();
+    this.updateMirroredImages();
     const transform = this.resolveWorldTransform({ x: 0, y: 0 }, 0, 1);
     this.object.set(transform);
     this.object.setCoords();
   }
 
-  protected createSideLabel(side: -1 | 1): FabricObject[] {
+  protected resolveLayers(): AvatarImageLayer[] {
     return [
-      new Text(`${this.definition.label} z-index ${this.definition.zIndex}`, {
-        left: side * EYE_DISTANCE,
-        top: -34,
-        originX: 'center',
-        originY: 'center',
-        fontSize: LABEL_FONT_SIZE,
-        fill: '#111827',
-        fontFamily: 'Inter, Arial, sans-serif',
-        backgroundColor: 'rgba(255,255,255,0.58)',
-        selectable: false,
-        evented: false,
-      }),
-      new Text('0', {
-        left: side * EYE_DISTANCE,
-        top: 34,
-        originX: 'center',
-        originY: 'center',
-        fontSize: LABEL_FONT_SIZE,
-        fill: '#111827',
-        fontFamily: 'Inter, Arial, sans-serif',
-        backgroundColor: 'rgba(255,255,255,0.58)',
-        selectable: false,
-        evented: false,
-      }),
+      ...this.resolveSideLayers(-1),
+      ...this.resolveSideLayers(1).map(layer => ({
+        ...layer,
+        file: `${layer.file}__right`,
+      })),
     ];
   }
 
-  protected createLabel(): FabricObject[] {
-    return [
-      ...this.createSideLabel(-1),
-      ...this.createSideLabel(1),
-    ];
-  }
-
-  protected abstract createSideArtwork(side: -1 | 1): FabricObject[];
-
-  protected updateMirroredChildren(): void {
-    if (!this.object) {
-      return;
-    }
-
-    this.object.getObjects().forEach(object => {
-      const side = object.get('data-side') as -1 | 1 | undefined;
-
-      if (!side) {
-        return;
-      }
-
-      object.set({
-        left: this.getSideBaseX(side) + side * (this.state.offsetX ?? 0),
-        top: this.getSideBaseY() + (this.state.offsetY ?? 0),
-        angle: this.getSideBaseAngle() + side * (this.state.rotate ?? 0),
-        scaleX: this.scale,
-        scaleY: this.scale,
-      });
-    });
-  }
+  protected abstract resolveSideLayers(side: -1 | 1): AvatarImageLayer[];
 
   protected getSideBaseX(side: -1 | 1): number {
     return side * EYE_DISTANCE;
@@ -644,249 +566,411 @@ abstract class MirroredEyePart extends AvatarPart {
     return 0;
   }
 
-  protected markAsSideArtwork<T extends FabricObject>(object: T, side: -1 | 1): T {
-    this.markAsArtwork(object);
-    object.set('data-side', side);
-    return object;
+  protected shouldMirrorRightSide(): boolean {
+    return true;
+  }
+
+  protected shouldMirrorSides(): boolean {
+    return true;
+  }
+
+  protected getMirroredSourceSide(): -1 | 1 {
+    return this.shouldMirrorRightSide() ? 1 : -1;
+  }
+
+  protected isSideVisible(side: -1 | 1): boolean {
+    return side === -1
+      ? this.state.leftVisible !== false
+      : this.state.rightVisible !== false;
+  }
+
+  private updateMirroredImages(): void {
+    if (!this.object) {
+      return;
+    }
+
+    this.object.getObjects().forEach(object => {
+      const side = object.get('data-side') as -1 | 1 | undefined;
+
+      if (!side) {
+        return;
+      }
+
+      const shouldFlip = this.shouldFlipMirroredSide(side);
+      object.set({
+        left: this.getSideBaseX(side) + this.getSideOffsetX(side),
+        top: this.getSideBaseY() + (this.state.offsetY ?? 0),
+        angle: this.getSideBaseAngle() + side * (this.state.rotate ?? 0),
+        flipX: shouldFlip,
+        flipY: false,
+        scaleX: AVATAR_PIXEL_SCALE * this.scale,
+        scaleY: AVATAR_PIXEL_SCALE * this.scale,
+        visible: this.isSideVisible(side),
+      });
+    });
+  }
+
+  private shouldFlipMirroredSide(side: -1 | 1): boolean {
+    const userFlip = this.state.flipX === true;
+
+    if (!this.shouldMirrorSides()) {
+      return userFlip;
+    }
+
+    return side !== this.getMirroredSourceSide() ? !userFlip : userFlip;
+  }
+
+  protected getSideOffsetX(side: -1 | 1): number {
+    return side * (this.state.offsetX ?? 0);
   }
 }
 
-class ScleraPart extends MirroredEyePart {
-  protected createSideArtwork(side: -1 | 1): FabricObject[] {
-    return [
-      this.markAsSideArtwork(new Ellipse({
-        rx: 34,
-        ry: 19,
-        fill: this.color,
-        stroke: '#413633',
-        strokeWidth: 2,
-        originX: 'center',
-        originY: 'center',
-      }), side),
-    ];
+class FaceControlPart extends AvatarControlGroupPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.context.faceCenterY;
   }
 }
 
-class IrisPart extends MirroredEyePart {
-  protected createSideArtwork(side: -1 | 1): FabricObject[] {
-    return [
-      this.markAsSideArtwork(new Circle({
-        radius: 13,
-        fill: this.color,
-        originX: 'center',
-        originY: 'center',
-      }), side),
-    ];
+class FaceColorPart extends CenterAssetPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.context.faceCenterY;
+  }
+
+  protected resolveLayers(): AvatarImageLayer[] {
+    return [{ folder: 'face', file: `${formatOptionId(this.state.optionId)}_color.png`, tint: 'color' }];
   }
 }
 
-class PupilPart extends MirroredEyePart {
-  protected createSideArtwork(side: -1 | 1): FabricObject[] {
-    return [
-      this.markAsSideArtwork(new Circle({
-        radius: 6,
-        fill: this.color,
-        originX: 'center',
-        originY: 'center',
-      }), side),
-    ];
+class FaceLinePart extends CenterAssetPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.context.faceCenterY;
+  }
+
+  protected resolveLayers(): AvatarImageLayer[] {
+    return [{ folder: 'face', file: `${formatOptionId(this.state.optionId)}_line.png`, tint: 'line' }];
   }
 }
 
-class EyeLightPart extends MirroredEyePart {
-  protected createSideArtwork(side: -1 | 1): FabricObject[] {
-    return [
-      this.markAsSideArtwork(new Circle({
-        radius: 4,
-        fill: this.color,
-        originX: 'center',
-        originY: 'center',
-      }), side),
-    ];
+class EarPart extends MirroredAssetPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.context.faceCenterY + 2;
+  }
+
+  protected resolveSideLayers(): AvatarImageLayer[] {
+    return createSkinAndLineLayers('ear', '01');
   }
 
   protected getSideBaseX(side: -1 | 1): number {
-    return side * EYE_DISTANCE - side * 5;
+    return side * 111;
+  }
+}
+
+class ScleraPart extends AvatarPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.getGroupBase('eyes').y;
+  }
+
+  protected createArtwork(): FabricObject[] {
+    return [
+      this.createScleraCircle(-1),
+      this.createScleraCircle(1),
+    ];
+  }
+
+  update(nextState: AvatarPartState): void {
+    super.update(nextState);
+    this.updateScleraCircles();
+  }
+
+  protected applyTransform(): void {
+    if (!this.object) {
+      return;
+    }
+
+    this.updateScleraCircles();
+    const transform = this.resolveWorldTransform({ x: 0, y: 0 }, 0, 1);
+    this.object.set(transform);
+    this.object.setCoords();
+  }
+
+  protected updateArtworkColor(): void {
+    if (!this.object) {
+      return;
+    }
+
+    this.object.getObjects().forEach(object => {
+      if (object.get('data') === 'sclera-circle') {
+        object.set('fill', this.color);
+      }
+    });
+  }
+
+  private createScleraCircle(side: -1 | 1): Circle {
+    return new Circle({
+      radius: 33,
+      fill: this.color,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+      objectCaching: false,
+      data: 'sclera-circle',
+      'data-side': side,
+    });
+  }
+
+  private updateScleraCircles(): void {
+    if (!this.object) {
+      return;
+    }
+
+    this.object.getObjects().forEach(object => {
+      const side = object.get('data-side') as -1 | 1 | undefined;
+
+      if (!side) {
+        return;
+      }
+
+      object.set({
+        left: side * EYE_DISTANCE + side * (this.state.offsetX ?? 0),
+        top: this.state.offsetY ?? 0,
+        angle: side * (this.state.rotate ?? 0),
+        scaleX: this.scale,
+        scaleY: this.scale,
+      });
+    });
+  }
+}
+
+class EyeBallPart extends MirroredAssetPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.getGroupBase('eyes').y;
+  }
+
+  protected resolveSideLayers(): AvatarImageLayer[] {
+    return createLineAndColorLayers('eyeball', formatOptionId(this.state.optionId));
+  }
+}
+
+class EyeLightPart extends MirroredAssetPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.getGroupBase('eyes').y;
+  }
+
+  protected resolveSideLayers(): AvatarImageLayer[] {
+    return [{ folder: 'eye_light', file: '01.png' }];
+  }
+
+  protected getSideBaseX(side: -1 | 1): number {
+    return side * (this.state.lightDistance ?? EYE_DISTANCE - 5);
   }
 
   protected getSideBaseY(): number {
-    return -6;
+    return -0;
+  }
+
+  protected getSideOffsetX(): number {
+    return this.state.offsetX ?? 0;
+  }
+
+  protected shouldMirrorRightSide(): boolean {
+    return false;
+  }
+
+  protected shouldMirrorSides(): boolean {
+    return false;
   }
 }
 
-class EyelidPart extends MirroredEyePart {
-  protected createSideArtwork(side: -1 | 1): FabricObject[] {
-    const isUpper = this.definition.key === 'eyes.upperEyelid';
+class EyebrowPart extends MirroredAssetPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
 
-    return [
-      this.markAsSideArtwork(new Path(
-        isUpper ? 'M -32 0 Q 0 -28 32 0 Q 0 -10 -32 0 Z' : 'M -30 0 Q 0 18 30 0 Q 0 8 -30 0 Z',
-        {
-          fill: this.color,
-          opacity: 0.9,
-          originX: 'center',
-          originY: 'center',
-        }
-      ), side),
-    ];
+  protected get baseY(): number {
+    return this.getGroupBase('eyes').y - 15;
+  }
+
+  protected resolveSideLayers(): AvatarImageLayer[] {
+    return [{ folder: 'eyebrow', file: `${formatOptionId(this.state.optionId)}.png`, tint: 'line' }];
   }
 
   protected getSideBaseY(): number {
-    return this.definition.key === 'eyes.upperEyelid' ? -11 : 13;
+    return -12;
   }
 }
 
-class NosePart extends AvatarPart {
+class EyeLidPart extends MirroredAssetPart {
   protected get baseX(): number {
     return this.context.centerX;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY + 24;
+    return this.getGroupBase('eyes').y - 14;
   }
 
-  protected createArtwork(): FabricObject[] {
-    return [
-      this.markAsArtwork(new Path('M 0 -24 C 14 4 12 34 -12 30 C 4 22 -4 10 0 -24 Z', {
-        fill: this.color,
-        opacity: 0.72,
-        originX: 'center',
-        originY: 'center',
-      })),
-    ];
+  protected resolveSideLayers(): AvatarImageLayer[] {
+    return [{ folder: 'eyelid', file: `${formatOptionId(this.state.optionId)}.png`, tint: 'line' }];
   }
 }
 
-class MouthPart extends AvatarPart {
+class UpperEyelidPart extends MirroredAssetPart {
   protected get baseX(): number {
     return this.context.centerX;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY + 86;
+    return this.getGroupBase('eyes').y - 9;
   }
 
-  protected createArtwork(): FabricObject[] {
-    return [
-      this.markAsArtwork(new Path('M -38 -4 Q 0 34 38 -4 Q 0 14 -38 -4 Z', {
-        fill: this.color,
-        stroke: '#66333a',
-        strokeWidth: 2,
-        originX: 'center',
-        originY: 'center',
-      })),
-    ];
+  protected resolveSideLayers(): AvatarImageLayer[] {
+    return createSkinAndLineLayers('upper_eyelid', formatOptionId(this.state.optionId), true);
+  }
+
+  protected getSideBaseY(): number {
+    return -7;
   }
 }
 
-class BackHairPart extends AvatarPart {
+class LowerEyelidPart extends MirroredAssetPart {
   protected get baseX(): number {
     return this.context.centerX;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 4;
+    return this.getGroupBase('eyes').y + 15;
   }
 
-  protected createArtwork(): FabricObject[] {
-    return [
-      this.markAsArtwork(new Path('M -132 -86 C -148 0 -122 148 -38 172 C -82 56 -54 -120 0 -142 C 54 -120 82 56 38 172 C 122 148 148 0 132 -86 C 118 -178 -118 -178 -132 -86 Z', {
-        fill: this.color,
-        originX: 'center',
-        originY: 'center',
-      })),
-    ];
+  protected resolveSideLayers(): AvatarImageLayer[] {
+    return createSkinAndLineLayers('lower_eyelid', formatOptionId(this.state.optionId), true);
+  }
+
+  protected getSideBaseY(): number {
+    return 8;
   }
 }
 
-class SideburnsPart extends AvatarPart {
+class NosePart extends CenterAssetPart {
   protected get baseX(): number {
     return this.context.centerX;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 10;
+    return this.context.faceCenterY + 35;
   }
 
-  protected createArtwork(): FabricObject[] {
-    return [
-      this.markAsArtwork(new Path('M -104 -84 C -142 -24 -134 80 -94 120 C -108 42 -86 -28 -62 -78 Z', {
-        fill: this.color,
-        originX: 'center',
-        originY: 'center',
-      })),
-      this.markAsArtwork(new Path('M 104 -84 C 142 -24 134 80 94 120 C 108 42 86 -28 62 -78 Z', {
-        fill: this.color,
-        originX: 'center',
-        originY: 'center',
-      })),
-    ];
+  protected resolveLayers(): AvatarImageLayer[] {
+    return createOptionalLineAndColorLayers('nose', formatOptionId(this.state.optionId), `${formatOptionId(this.state.optionId)}.png`);
   }
 }
 
-class TopHairPart extends AvatarPart {
+class MouthPart extends CenterAssetPart {
   protected get baseX(): number {
     return this.context.centerX;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 137;
+    return this.context.faceCenterY + 65;
   }
 
-  protected createArtwork(): FabricObject[] {
-    return [
-      this.markAsArtwork(new Path('M -92 36 C -86 -44 -26 -84 18 -74 C 6 -54 0 -36 0 -12 C 28 -52 72 -58 96 -22 C 50 -18 30 10 16 44 C -16 12 -52 16 -92 36 Z', {
-        fill: this.color,
-        originX: 'center',
-        originY: 'center',
-      })),
-    ];
+  protected resolveLayers(): AvatarImageLayer[] {
+    return [{ folder: 'mouth', file: `${formatOptionId(this.state.optionId)}_line.png`, tint: 'line' }];
   }
 }
 
-class BangsPart extends AvatarPart {
+class BackHairPart extends CenterAssetPart {
   protected get baseX(): number {
     return this.context.centerX;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 104;
+    return this.context.faceCenterY + 46;
   }
 
-  protected createArtwork(): FabricObject[] {
-    return [
-      this.markAsArtwork(new Path('M -112 -22 C -72 -72 66 -78 112 -20 C 82 -22 70 26 38 52 C 40 18 26 -4 4 -10 C -14 24 -44 42 -82 46 C -62 18 -76 -12 -112 -22 Z', {
-        fill: this.color,
-        originX: 'center',
-        originY: 'center',
-      })),
-    ];
+  protected resolveLayers(): AvatarImageLayer[] {
+    return createLineAndColorLayers('back_hair_bottom', formatOptionId(this.state.optionId));
   }
 }
 
-class HairLightPart extends AvatarPart {
+class TopHairPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.context.centerX - 40;
+    return this.context.centerX;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 140;
+    return this.context.faceCenterY - 130;
   }
 
-  protected createArtwork(): FabricObject[] {
-    return [
-      this.markAsArtwork(new Rect({
-        width: 84,
-        height: 10,
-        rx: 5,
-        ry: 5,
-        fill: this.color,
-        opacity: 0.55,
-        angle: -14,
-        originX: 'center',
-        originY: 'center',
-      })),
-    ];
+  protected resolveLayers(): AvatarImageLayer[] {
+    return createLineAndColorLayers('back_hair_top', formatOptionId(this.state.optionId));
+  }
+}
+
+class BangsPart extends CenterAssetPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.context.faceCenterY - 78;
+  }
+
+  protected resolveLayers(): AvatarImageLayer[] {
+    return createLineAndColorLayers('bangs', formatOptionId(getBangsAssetOptionId(this.state.optionId)));
+  }
+}
+
+class SideHairPart extends MirroredAssetPart {
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.context.faceCenterY - 18;
+  }
+
+  protected resolveSideLayers(): AvatarImageLayer[] {
+    return createLineAndColorLayers('side_hair', formatOptionId(this.state.optionId));
+  }
+
+  protected getSideBaseX(side: -1 | 1): number {
+    return side * 100;
+  }
+
+  protected getSideBaseY(): number {
+    return 30;
+  }
+
+  protected getMirroredSourceSide(): -1 | 1 {
+    return [1, 3, 5].includes(this.state.optionId) ? -1 : 1;
   }
 }
 
@@ -894,7 +978,13 @@ class AvatarPartFactory {
   create(definition: AvatarPartDefinition, context: AvatarPartContext, state: AvatarPartState): AvatarPart {
     switch (definition.key) {
       case 'face':
-        return new FacePart(definition, context, state);
+        return new FaceControlPart(definition, context, state);
+      case 'face.color':
+        return new FaceColorPart(definition, context, state);
+      case 'face.line':
+        return new FaceLinePart(definition, context, state);
+      case 'ear':
+        return new EarPart(definition, context, state);
       case 'eyes':
         return new EyeGroupPart(definition, context, state);
       case 'hair':
@@ -902,14 +992,17 @@ class AvatarPartFactory {
       case 'eyes.sclera':
         return new ScleraPart(definition, context, state);
       case 'eyes.color':
-        return new IrisPart(definition, context, state);
-      case 'eyes.pupil':
-        return new PupilPart(definition, context, state);
+        return new EyeBallPart(definition, context, state);
       case 'eyes.light':
         return new EyeLightPart(definition, context, state);
+      case 'eyes.eyebrow':
+        return new EyebrowPart(definition, context, state);
+      case 'eyes.eyelid':
+        return new EyeLidPart(definition, context, state);
       case 'eyes.upperEyelid':
+        return new UpperEyelidPart(definition, context, state);
       case 'eyes.lowerEyelid':
-        return new EyelidPart(definition, context, state);
+        return new LowerEyelidPart(definition, context, state);
       case 'nose':
         return new NosePart(definition, context, state);
       case 'mouth':
@@ -917,14 +1010,14 @@ class AvatarPartFactory {
       case 'hair.backHair':
         return new BackHairPart(definition, context, state);
       case 'hair.sideburns':
-        return new SideburnsPart(definition, context, state);
+        return new SideHairPart(definition, context, state);
       case 'hair.topHair':
         return new TopHairPart(definition, context, state);
       case 'hair.bangs':
         return new BangsPart(definition, context, state);
-      case 'hair.light':
-        return new HairLightPart(definition, context, state);
     }
+
+    throw new Error(`Unsupported avatar part: ${definition.key}`);
   }
 }
 
@@ -979,6 +1072,7 @@ export class AvatarCanvas {
   private readonly partFactory = new AvatarPartFactory();
   private readonly parts = new Map<AvatarPartKey, AvatarPart>();
   private readonly onChange?: (state: AvatarState) => void;
+  private readonly faceRenderKeys: readonly AvatarPartKey[] = ['face.color', 'face.line'];
 
   constructor(canvasElement: HTMLCanvasElement | string, options: AvatarCanvasOptions = {}) {
     const width = options.width ?? DEFAULT_CANVAS_WIDTH;
@@ -989,12 +1083,15 @@ export class AvatarCanvas {
       width,
       height,
       backgroundColor: '#f7f5ef',
+      imageSmoothingEnabled: false,
       selection: false,
       preserveObjectStacking: true,
     });
 
     this.canvas.wrapperEl.style.touchAction = 'none';
     this.canvas.lowerCanvasEl.style.touchAction = 'none';
+    this.canvas.lowerCanvasEl.style.imageRendering = 'pixelated';
+    this.canvas.upperCanvasEl.style.imageRendering = 'pixelated';
     this.buildAvatar(width, height);
     this.emitChange();
   }
@@ -1021,6 +1118,10 @@ export class AvatarCanvas {
     this.updatePart(key, { color });
   }
 
+  setLineColor(key: AvatarPartKey, lineColor: string): void {
+    this.updatePart(key, { lineColor });
+  }
+
   move(key: AvatarPartKey, deltaX: number, deltaY: number): void {
     const current = this.getPartState(key);
     this.updatePart(key, {
@@ -1040,6 +1141,19 @@ export class AvatarCanvas {
     this.updatePart(key, { scale: Number(nextScale.toFixed(2)) });
   }
 
+  flip(key: AvatarPartKey): void {
+    const current = this.getPartState(key);
+    this.updatePart(key, { flipX: current.flipX !== true });
+  }
+
+  setSideVisible(key: AvatarPartKey, side: 'left' | 'right', isVisible: boolean): void {
+    this.updatePart(key, side === 'left' ? { leftVisible: isVisible } : { rightVisible: isVisible });
+  }
+
+  setLightDistance(key: AvatarPartKey, lightDistance: number): void {
+    this.updatePart(key, { lightDistance: Math.max(0, Math.min(120, Math.round(lightDistance))) });
+  }
+
   destroy(): Promise<boolean> {
     return this.canvas.dispose();
   }
@@ -1051,13 +1165,17 @@ export class AvatarCanvas {
       centerX: width / 2,
       faceCenterY: height / 2 + 26,
       getGroupState: key => this.stateStore.getPartState(key),
+      getPartState: key => this.stateStore.getPartState(key),
     };
 
     AVATAR_PART_DEFINITIONS
       .slice()
       .sort((first, second) => first.zIndex - second.zIndex)
       .forEach(definition => {
-        const part = this.partFactory.create(definition, context, this.stateStore.getPartState(definition.key));
+        const state = this.isFaceRenderKey(definition.key)
+          ? this.stateStore.getPartState('face')
+          : this.stateStore.getPartState(definition.key);
+        const part = this.partFactory.create(definition, context, state);
         this.parts.set(definition.key, part);
         this.canvas.add(part.createObject());
       });
@@ -1074,6 +1192,13 @@ export class AvatarCanvas {
       this.refreshGroupChildren(key);
     }
 
+    if (key === 'face') {
+      this.refreshFaceRenderParts();
+      this.parts.get('ear')?.refreshArtwork();
+      this.parts.get('eyes.upperEyelid')?.refreshArtwork();
+      this.parts.get('eyes.lowerEyelid')?.refreshArtwork();
+    }
+
     this.canvas.requestRenderAll();
     this.emitChange();
   }
@@ -1088,9 +1213,92 @@ export class AvatarCanvas {
     return key === 'eyes' || key === 'hair';
   }
 
+  private isFaceRenderKey(key: AvatarPartKey): boolean {
+    return this.faceRenderKeys.includes(key);
+  }
+
+  private refreshFaceRenderParts(): void {
+    const faceState = this.stateStore.getPartState('face');
+
+    this.faceRenderKeys.forEach(key => this.parts.get(key)?.update(faceState));
+  }
+
   private emitChange(): void {
     this.onChange?.(this.getState());
   }
+}
+
+function createLineAndColorLayers(folder: string, optionId: string): AvatarImageLayer[] {
+  return [
+    { folder, file: `${optionId}_color.png`, tint: 'color' },
+    { folder, file: `${optionId}_line.png`, tint: 'line' },
+  ];
+}
+
+function createSkinAndLineLayers(
+  folder: string,
+  optionId: string,
+  shouldDropLightLinePixels = false,
+): AvatarImageLayer[] {
+  return [
+    { folder, file: `${optionId}_color.png`, tint: 'skin' },
+    { folder, file: `${optionId}_line.png`, tint: 'line', shouldDropLightPixels: shouldDropLightLinePixels },
+  ];
+}
+
+function createOptionalLineAndColorLayers(
+  folder: string,
+  optionId: string,
+  fallbackLineFile: string,
+): AvatarImageLayer[] {
+  const colorFile = `${optionId}_color.png`;
+  const lineFile = `${optionId}_line.png`;
+  const layers: AvatarImageLayer[] = [];
+
+  if (hasAvatarAsset(folder, colorFile)) {
+    layers.push({ folder, file: colorFile, tint: 'color' });
+  }
+
+  if (hasAvatarAsset(folder, lineFile)) {
+    layers.push({ folder, file: lineFile, tint: 'line' });
+  } else if (hasAvatarAsset(folder, fallbackLineFile)) {
+    layers.push({ folder, file: fallbackLineFile, tint: 'line' });
+  }
+
+  return layers;
+}
+
+function hasAvatarAsset(folder: string, file: string): boolean {
+  const assetPath = `../assets/avatar_system/${folder}/${file}`;
+  return avatarAssetUrls[assetPath] !== undefined;
+}
+
+function getAvatarAssetUrl(folder: string, file: string): string {
+  const normalizedFile = file.replace('__right', '');
+  const assetPath = `../assets/avatar_system/${folder}/${normalizedFile}`;
+  const url = avatarAssetUrls[assetPath];
+
+  if (!url) {
+    throw new Error(`Avatar asset not found: ${assetPath}`);
+  }
+
+  return url;
+}
+
+function formatOptionId(optionId: number): string {
+  return String(optionId).padStart(2, '0');
+}
+
+function getBangsAssetOptionId(optionId: number): number {
+  if (optionId === 1) {
+    return 2;
+  }
+
+  if (optionId === 2) {
+    return 1;
+  }
+
+  return optionId;
 }
 
 function rotatePoint(point: Point2D, degrees: number): Point2D {
@@ -1102,4 +1310,118 @@ function rotatePoint(point: Point2D, degrees: number): Point2D {
     x: point.x * cos - point.y * sin,
     y: point.x * sin + point.y * cos,
   };
+}
+
+async function tintImageByLuminance(
+  imageUrl: string,
+  color: string,
+  tint: 'color' | 'line' | 'skin',
+  shouldNormalizeToSourceBrightness = false,
+  shouldDropLightPixels = false,
+): Promise<string> {
+  const cacheKey = `${imageUrl}|${color}|${tint}|${shouldNormalizeToSourceBrightness}|${shouldDropLightPixels}`;
+  const cachedUrl = tintCache.get(cacheKey);
+
+  if (cachedUrl) {
+    return cachedUrl;
+  }
+
+  const sourceImage = await loadImageElement(imageUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = sourceImage.naturalWidth;
+  canvas.height = sourceImage.naturalHeight;
+
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('Unable to create avatar tint canvas context.');
+  }
+
+  context.imageSmoothingEnabled = false;
+  context.drawImage(sourceImage, 0, 0);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const targetColor = parseHexColor(color);
+  const maxLuminance = getMaxLuminance(imageData);
+  const shouldUseAlphaMask = tint === 'skin' || (tint === 'line' && maxLuminance <= BLACK_MASK_MAX_LUMINANCE);
+
+  for (let index = 0; index < imageData.data.length; index += 4) {
+    const alpha = imageData.data[index + 3];
+
+    if (alpha === 0) {
+      continue;
+    }
+
+    const red = imageData.data[index];
+    const green = imageData.data[index + 1];
+    const blue = imageData.data[index + 2];
+    const luminance = 0.299 * red + 0.587 * green + 0.114 * blue;
+
+    if (shouldDropLightPixels && luminance > LINE_LAYER_FILL_LUMINANCE_THRESHOLD) {
+      imageData.data[index + 3] = 0;
+      continue;
+    }
+
+    const baseLuminance = shouldNormalizeToSourceBrightness
+      ? Math.max(maxLuminance, 1)
+      : BASE_TINT_LUMINANCE;
+    const shade = shouldUseAlphaMask ? alpha / 255 : luminance / baseLuminance;
+
+    imageData.data[index] = clampColor(targetColor.red * shade);
+    imageData.data[index + 1] = clampColor(targetColor.green * shade);
+    imageData.data[index + 2] = clampColor(targetColor.blue * shade);
+  }
+
+  context.putImageData(imageData, 0, 0);
+
+  const tintedUrl = canvas.toDataURL('image/png');
+  tintCache.set(cacheKey, tintedUrl);
+  return tintedUrl;
+}
+
+function getMaxLuminance(imageData: ImageData): number {
+  let maxLuminance = 0;
+
+  for (let index = 0; index < imageData.data.length; index += 4) {
+    const alpha = imageData.data[index + 3];
+
+    if (alpha === 0) {
+      continue;
+    }
+
+    const red = imageData.data[index];
+    const green = imageData.data[index + 1];
+    const blue = imageData.data[index + 2];
+    const luminance = 0.299 * red + 0.587 * green + 0.114 * blue;
+    maxLuminance = Math.max(maxLuminance, luminance);
+  }
+
+  return maxLuminance;
+}
+
+function loadImageElement(imageUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Unable to load avatar image: ${imageUrl}`));
+    image.src = imageUrl;
+  });
+}
+
+function parseHexColor(color: string): { red: number; green: number; blue: number } {
+  const normalizedColor = color.replace('#', '');
+
+  if (!/^[0-9a-fA-F]{6}$/.test(normalizedColor)) {
+    return { red: 38, green: 38, blue: 38 };
+  }
+
+  return {
+    red: Number.parseInt(normalizedColor.slice(0, 2), 16),
+    green: Number.parseInt(normalizedColor.slice(2, 4), 16),
+    blue: Number.parseInt(normalizedColor.slice(4, 6), 16),
+  };
+}
+
+function clampColor(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
 }

@@ -11,10 +11,13 @@ import { saveService } from '~/services/save/saveService';
 import { settingsService } from '~/services/save/settingsService';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { DialogueViewScript } from '~/typing/dialogueView';
+import { AvatarEditorContainer } from './components/avatarEditor/AvatarEditorContainer';
 import { DialogueWindow } from './components/dialogue/DialogueWindow';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import styles from './App.module.scss';
 import { TownMapContainer } from './components/townMap/TownMapContainer';
+
+const AVATAR_EDITOR_PATH = '/figure_box/avatar_editor';
 
 function App() {
   const [isSaveReady, setIsSaveReady] = useState(false);
@@ -78,8 +81,13 @@ function App() {
     settingsService.setSaveDebugPanelOpen(isOpen);
     saveService.markDirty('settings');
   }, []);
+  const isAvatarEditorPage = getNormalizedPath() === AVATAR_EDITOR_PATH;
 
   useEffect(() => {
+    if (isAvatarEditorPage) {
+      return;
+    }
+
     let isMounted = true;
 
     saveService.initializeGame()
@@ -100,7 +108,17 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAvatarEditorPage]);
+
+  if (isAvatarEditorPage) {
+    return (
+      <I18nextProvider i18n={i18n}>
+        <div className={styles.avatarEditorPage}>
+          <AvatarEditorContainer />
+        </div>
+      </I18nextProvider>
+    );
+  }
 
   return (
     <I18nextProvider i18n={i18n}>
@@ -194,6 +212,10 @@ function App() {
       </div>
     </I18nextProvider>
   );
+}
+
+function getNormalizedPath(): string {
+  return window.location.pathname.replace(/\/$/, '');
 }
 
 export default App;

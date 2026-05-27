@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  AVATAR_PART_DEFINITIONS,
+  AVATAR_EDITOR_PART_DEFINITIONS,
   AvatarCanvas,
   AvatarPartDefinition,
   AvatarPartKey,
@@ -13,6 +13,7 @@ import styles from './avatarEditor.module.scss';
 const MOVE_STEP = 4;
 const ROTATE_STEP = 5;
 const SCALE_STEP = 0.05;
+const LIGHT_DISTANCE_STEP = 2;
 
 interface AvatarEditorContainerProps {
   initialState?: Partial<AvatarState>;
@@ -28,7 +29,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
 
   const selectedPart = useMemo(
-    () => AVATAR_PART_DEFINITIONS.find(part => part.key === selectedPartKey) ?? AVATAR_PART_DEFINITIONS[0],
+    () => AVATAR_EDITOR_PART_DEFINITIONS.find(part => part.key === selectedPartKey) ?? AVATAR_EDITOR_PART_DEFINITIONS[0],
     [selectedPartKey]
   );
   const selectedPartState = avatarState[selectedPart.key];
@@ -71,6 +72,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     avatarCanvasRef.current?.setColor(selectedPart.key, color);
   };
 
+  const changeLineColor = (lineColor: string) => {
+    avatarCanvasRef.current?.setLineColor(selectedPart.key, lineColor);
+  };
+
   const movePart = (deltaX: number, deltaY: number) => {
     avatarCanvasRef.current?.move(selectedPart.key, deltaX, deltaY);
   };
@@ -83,12 +88,27 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     avatarCanvasRef.current?.scale(selectedPart.key, delta);
   };
 
+  const flipPart = () => {
+    avatarCanvasRef.current?.flip(selectedPart.key);
+  };
+
+  const setSideVisible = (side: 'left' | 'right', isVisible: boolean) => {
+    avatarCanvasRef.current?.setSideVisible(selectedPart.key, side, isVisible);
+  };
+
+  const changeLightDistance = (delta: number) => {
+    avatarCanvasRef.current?.setLightDistance(
+      selectedPart.key,
+      (selectedPartState.lightDistance ?? 45) + delta
+    );
+  };
+
   return (
     <section className={styles.container} aria-label="紙娃娃臉部編輯器">
       <aside className={styles.partMenu} aria-label="選擇部位">
         <div className={styles.panelTitle}>部位</div>
         <div className={styles.partList} role="radiogroup" aria-label="Avatar parts">
-          {AVATAR_PART_DEFINITIONS.map(part => (
+          {AVATAR_EDITOR_PART_DEFINITIONS.map(part => (
             <PartButton
               key={part.key}
               part={part}
@@ -117,7 +137,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               aria-checked={option.id === selectedPartState.optionId}
             >
               <span>{option.label}</span>
-              <span className={styles.optionId}>0</span>
+              <span className={styles.optionId}>{option.id}</span>
             </button>
           ))}
         </div>
@@ -129,6 +149,17 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               type="color"
               value={selectedPartState.color ?? selectedPart.defaultColor ?? '#000000'}
               onChange={event => changeColor(event.target.value)}
+            />
+          </label>
+        )}
+
+        {selectedPart.editableProperties.includes('lineColor') && (
+          <label className={styles.colorField}>
+            <span>line</span>
+            <input
+              type="color"
+              value={selectedPartState.lineColor ?? selectedPart.defaultLineColor ?? '#262626'}
+              onChange={event => changeLineColor(event.target.value)}
             />
           </label>
         )}
@@ -183,6 +214,55 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               </button>
             </div>
             <div className={styles.valueRow}>{(selectedPartState.scale ?? 1).toFixed(2)}</div>
+          </div>
+        )}
+
+        {selectedPart.editableProperties.includes('flipX') && (
+          <div className={styles.controlGroup}>
+            <div className={styles.controlTitle}>flip</div>
+            <div className={styles.actionRow}>
+              <button type="button" onClick={flipPart} aria-label="左右翻轉">
+                左右翻轉
+              </button>
+            </div>
+            <div className={styles.valueRow}>{selectedPartState.flipX ? 'on' : 'off'}</div>
+          </div>
+        )}
+
+        {selectedPart.key === 'hair.sideburns' && (
+          <div className={styles.controlGroup}>
+            <div className={styles.controlTitle}>side</div>
+            <label className={styles.toggleField}>
+              <input
+                type="checkbox"
+                checked={selectedPartState.leftVisible !== false}
+                onChange={event => setSideVisible('left', event.target.checked)}
+              />
+              <span>左</span>
+            </label>
+            <label className={styles.toggleField}>
+              <input
+                type="checkbox"
+                checked={selectedPartState.rightVisible !== false}
+                onChange={event => setSideVisible('right', event.target.checked)}
+              />
+              <span>右</span>
+            </label>
+          </div>
+        )}
+
+        {selectedPart.key === 'eyes.light' && (
+          <div className={styles.controlGroup}>
+            <div className={styles.controlTitle}>distance</div>
+            <div className={styles.actionRow}>
+              <button type="button" onClick={() => changeLightDistance(-LIGHT_DISTANCE_STEP)} aria-label="縮短亮點距離">
+                縮短
+              </button>
+              <button type="button" onClick={() => changeLightDistance(LIGHT_DISTANCE_STEP)} aria-label="拉開亮點距離">
+                拉開
+              </button>
+            </div>
+            <div className={styles.valueRow}>{selectedPartState.lightDistance ?? 45}</div>
           </div>
         )}
       </aside>
