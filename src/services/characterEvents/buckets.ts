@@ -90,18 +90,20 @@ function canUseDefinition(
   definition: CharacterEventDefinition,
   params: CharacterEventBucketParams,
 ): boolean {
-  if (definition.requiresNearbyCharacter && !params.input.nearbyCharacterIds?.length) {
+  const scopedInput = createDefinitionScopedInput(definition, params.input);
+
+  if (definition.requiresNearbyCharacter && !scopedInput.nearbyCharacterIds?.length) {
     return false;
   }
 
-  if (definition.characterEvent.type === 'joinActivity' && !params.input.nearbyJoinableActivities?.length) {
+  if (definition.characterEvent.type === 'joinActivity' && !scopedInput.nearbyJoinableActivities?.length) {
     return false;
   }
 
   return matchesCharacterEventClauses(
     definition.conditions,
     definition.conditionMode,
-    createCharacterEventRuleContext(params.context, params.utilityScores, params.input),
+    createCharacterEventRuleContext(params.context, params.utilityScores, scopedInput),
   );
 }
 
@@ -140,7 +142,11 @@ function calculateDefinitionWeight(
   const modifiedWeight = applyCharacterEventWeightModifiers(
     rawWeight,
     definition.weightModifiers,
-    createCharacterEventRuleContext(params.context, params.utilityScores, params.input),
+    createCharacterEventRuleContext(
+      params.context,
+      params.utilityScores,
+      createDefinitionScopedInput(definition, params.input),
+    ),
   );
   const repeatMultiplier = calculateActivityRepeatMultiplier(definition, params);
   const weightedValue = modifiedWeight * repeatMultiplier;
@@ -154,17 +160,19 @@ function createEventFactoryInput(
   definition: CharacterEventDefinition,
   params: CharacterEventBucketParams,
 ): CharacterEventDecisionInput {
+  const scopedInput = createDefinitionScopedInput(definition, params.input);
+
   if (!requiresGroupInviteTarget(definition)) {
-    return params.input;
+    return scopedInput;
   }
 
   return {
-    ...params.input,
+    ...scopedInput,
     nearbyCharacterIds: getAvailableActivityTargetIds(
       params.context,
       definition,
-      params.input.nearbyCharacterIds ?? [],
-      params.input.timestamp ?? Date.now(),
+      scopedInput.nearbyCharacterIds ?? [],
+      scopedInput.timestamp ?? Date.now(),
     ),
   };
 }
@@ -180,7 +188,7 @@ function calculateActivityRepeatMultiplier(
   const availableTargetIds = getAvailableActivityTargetIds(
     params.context,
     definition,
-    params.input.nearbyCharacterIds ?? [],
+    createDefinitionScopedInput(definition, params.input).nearbyCharacterIds ?? [],
     params.input.timestamp ?? Date.now(),
   );
 
@@ -201,4 +209,38 @@ function requiresGroupInviteTarget(definition: CharacterEventDefinition): boolea
     definition.presentationVariants?.some(variant => (
       (variant.activity?.group.minParticipants ?? 1) > 1
     )) === true;
+}
+
+function createDefinitionScopedInput(
+  definition: CharacterEventDefinition,
+  input: CharacterEventDecisionInput,
+): CharacterEventDecisionInput {
+  const range = getDefinitionInviteNearbyRange(definition);
+
+  if (range === null || !input.nearbyCharacterDistances) {
+    return input;
+  }
+
+  const nearbyCharacterIds = (input.nearbyCharacterIds ?? [])
+    .filter(characterId => (input.nearbyCharacterDistances?.[characterId] ?? Number.POSITIVE_INFINITY) <= range);
+  const nearbyCharacterIdSet = new Set(nearbyCharacterIds);
+
+  return {
+    ...input,
+    nearbyCharacterIds,
+    nearbyRelationships: input.nearbyRelationships
+      ?.filter(relationship => nearbyCharacterIdSet.has(relationship.characterId)),
+  };
+}
+
+function getDefinitionInviteNearbyRange(definition: CharacterEventDefinition): number | null {
+  const ranges = definition.presentationVariants
+    ?.map(variant => variant.activity?.group.inviteNearbyRange)
+    .filter((range): range is number => range !== undefined) ?? [];
+
+  if (ranges.length === 0) {
+    return null;
+  }
+
+  return Math.max(...ranges);
 }

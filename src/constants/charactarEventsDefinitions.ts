@@ -97,6 +97,7 @@ export interface CharacterEventActivity {
   type: CharacterEventActivityType;
   startPhase?: CharacterEventActivityStartPhase;
   destination?: CharacterEventActivityDestination;
+  availability?: CharacterEventActivityAvailability;
   group: CharacterEventGroupActivity;
   joinable?: boolean;
   durationMs: number;
@@ -119,6 +120,16 @@ export interface CharacterEventGroupActivity {
   maxParticipants?: number;
 }
 
+export interface CharacterEventActivityAvailability {
+  timeOfDay?: readonly string[];
+  timeWindows?: readonly CharacterEventActivityTimeWindow[];
+}
+
+export interface CharacterEventActivityTimeWindow {
+  fromMinute: number;
+  toMinute: number;
+}
+
 export type CharacterEventJoinRequirement =
   | { type: 'none' }
   | { type: 'hasItem'; itemId: string };
@@ -129,6 +140,7 @@ export interface CharacterEventActivityEffects {
   relationshipFeelingTarget?: Feeling;
   moodValueDelta?: number;
   moodStageTarget?: Mood;
+  playNeedDelta?: number;
 }
 
 export interface CharacterEventCooldowns {

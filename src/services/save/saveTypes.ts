@@ -137,7 +137,10 @@ export interface OfflineRecapSaveRecord {
   eventId: string;
   characterId: string;
   characterName: string;
+  participantIds: readonly string[];
+  participantNames: readonly string[];
   timestamp: number;
+  displayIndex: number;
   summary: string;
   detail?: string;
   quote?: string;

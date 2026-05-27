@@ -327,7 +327,10 @@ export function normalizeOfflineRecapSaveRecords(rawRecords: readonly unknown[])
       eventId: rawRecord.eventId,
       characterId: rawRecord.characterId,
       characterName: rawRecord.characterName,
+      participantIds: readStringArrayWithFallback(rawRecord.participantIds, [rawRecord.characterId]),
+      participantNames: readStringArrayWithFallback(rawRecord.participantNames, [rawRecord.characterName]),
       timestamp: readFiniteNumber(rawRecord.timestamp, timestamp),
+      displayIndex: readFiniteNumber(rawRecord.displayIndex, readDisplayIndexFromOfflineRecapId(rawRecord.id)),
       summary: rawRecord.summary,
       ...(typeof rawRecord.detail === 'string' ? { detail: rawRecord.detail } : {}),
       ...(typeof rawRecord.quote === 'string' ? { quote: rawRecord.quote } : {}),
@@ -336,6 +339,12 @@ export function normalizeOfflineRecapSaveRecords(rawRecords: readonly unknown[])
       updatedAt: readFiniteNumber(rawRecord.updatedAt, timestamp),
     }];
   });
+}
+
+function readDisplayIndexFromOfflineRecapId(id: string): number {
+  const match = /-(\d+)$/.exec(id);
+
+  return match ? Number(match[1]) : 0;
 }
 
 function readCustomObjectSource(value: unknown): CustomObjectRecord['source'] {
@@ -806,6 +815,12 @@ function readStringArray(value: unknown): string[] {
   }
 
   return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function readStringArrayWithFallback(value: unknown, fallback: readonly string[]): string[] {
+  const strings = readStringArray(value);
+
+  return strings.length > 0 ? strings : [...fallback];
 }
 
 function readPosition(value: unknown): { x: number; y: number } | null {

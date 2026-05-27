@@ -204,7 +204,9 @@
             }
           },
           "effects": {
-            "relationshipIntimacyDelta": 1
+            "relationshipIntimacyDelta": 1,
+            "moodValueDelta": 10,
+            "playNeedDelta": -35
           },
           "joinRequirements": {
             "type": "hasItem",
@@ -248,7 +250,9 @@
             }
           },
           "effects": {
-            "relationshipIntimacyDelta": 1
+            "relationshipIntimacyDelta": 1,
+            "moodValueDelta": 10,
+            "playNeedDelta": -35
           },
           "joinRequirements": {
             "type": "hasItem",
@@ -349,7 +353,9 @@
             }
           },
           "effects": {
-            "relationshipIntimacyDelta": 1
+            "relationshipIntimacyDelta": 1,
+            "moodValueDelta": 10,
+            "playNeedDelta": -35
           },
           "joinRequirements": {
             "type": "none"
@@ -429,7 +435,8 @@
             }
           },
           "effects": {
-            "relationshipIntimacyDelta": 1
+            "relationshipIntimacyDelta": 1,
+            "moodValueDelta": 6
           },
           "joinRequirements": {
             "type": "none"
@@ -510,7 +517,9 @@
             }
           },
           "effects": {
-            "relationshipIntimacyDelta": 1
+            "relationshipIntimacyDelta": 1,
+            "moodValueDelta": 10,
+            "playNeedDelta": -35
           },
           "joinRequirements": {
             "type": "none"

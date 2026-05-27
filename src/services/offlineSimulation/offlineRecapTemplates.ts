@@ -72,6 +72,12 @@ export function getOfflineCandidateActivityType(
   return findPrimaryActivity(CHARACTER_EVENT_DEFINITIONS_BY_ID[candidate.id])?.type;
 }
 
+export function getOfflineCandidateRecapPriority(
+  candidate: Pick<CharacterEventCandidate, 'id'>,
+): number {
+  return CHARACTER_EVENT_DEFINITIONS_BY_ID[candidate.id]?.offlineRecap?.priority ?? 0;
+}
+
 function findPrimaryActivity(
   definition: CharacterEventDefinition | undefined,
 ): CharacterEventActivity | undefined {

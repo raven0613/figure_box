@@ -6,6 +6,52 @@
     "slotDurationMs": 900000,
     "maxSlots": 8
   },
+  "limits": {
+    "maxEventsPerCharacter": 3,
+    "maxCandidatesPerCharacter": 12
+  },
+  "perception": {
+    "nearbyCharacterFallbackRange": 2,
+    "itemVisibilityRadius": 10
+  },
+  "timeOfDay": {
+    "buckets": [
+      {
+        "id": "lateNight",
+        "startMinute": 0,
+        "endMinute": 300
+      },
+      {
+        "id": "morning",
+        "startMinute": 300,
+        "endMinute": 720
+      },
+      {
+        "id": "afternoon",
+        "startMinute": 720,
+        "endMinute": 1020
+      },
+      {
+        "id": "evening",
+        "startMinute": 1020,
+        "endMinute": 1260
+      },
+      {
+        "id": "night",
+        "startMinute": 1260,
+        "endMinute": 1440
+      }
+    ]
+  },
+  "resolutionEffects": {
+    "goEatSaturationDelta": 100,
+    "goRestMoodValueDelta": 10,
+    "goPlayMoodValueDelta": 18,
+    "goPlayPlayNeedDelta": -45,
+    "homeFoodSaturationDelta": 35,
+    "homePlayMoodValueDelta": 10,
+    "homePlayPlayNeedDelta": -35
+  },
   "events": {
     "default": {
       "enabled": true,
@@ -84,6 +130,23 @@
   },
   "recap": {
     "maxItems": 6,
-    "maxDetailedItems": 3
+    "maxDetailedItems": 3,
+    "preferredMultiplayerItems": 4,
+    "preferredSoloItems": 2,
+    "displayOrder": {
+      "mode": "timeBucketShuffle"
+    },
+    "displayScore": {
+      "base": 1,
+      "multiplayerBonus": 20,
+      "participantBonus": 3,
+      "activityType": {
+        "chat": 8,
+        "playWithItem": 4,
+        "playAtLocation": 5
+      },
+      "detailBonus": 2,
+      "quoteBonus": 2
+    }
   }
 }

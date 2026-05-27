@@ -1,9 +1,5 @@
 import { EventType } from '~/stateMachines/gameFlow/events';
-import {
-  PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
-  PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY,
-  SATURATION_GAIN_AFTER_EATING,
-} from '~/services/characterEvents/utility';
+import { OFFLINE_SIMULATION_POLICY } from '../offlineSimulationPolicy';
 import type { OfflineResolutionPreview } from '../types';
 import {
   createOfflineContainedPositionPatch,
@@ -16,10 +12,6 @@ import {
   createStatusPatch,
   type OfflineResolverContext,
 } from './offlineResolverUtils';
-
-const OFFLINE_REST_MOOD_VALUE_DELTA = 10;
-const OFFLINE_HOME_FOOD_SATURATION_DELTA = 35;
-const OFFLINE_HOME_PLAY_MOOD_VALUE_DELTA = 10;
 
 export function resolveOfflineActionPreview(
   context: OfflineResolverContext,
@@ -45,7 +37,7 @@ export function resolveOfflineActionPreview(
         statusPatch: createStatusPatch({
           saturation: createNumericPatch(
             context.character.status.saturation,
-            context.character.status.saturation + SATURATION_GAIN_AFTER_EATING,
+            context.character.status.saturation + OFFLINE_SIMULATION_POLICY.resolutionEffects.goEatSaturationDelta,
             100,
           ),
         }),
@@ -68,7 +60,7 @@ export function resolveOfflineActionPreview(
         statusPatch: createStatusPatch({
           moodValue: createNumericPatch(
             context.character.status.moodValue,
-            context.character.status.moodValue + OFFLINE_REST_MOOD_VALUE_DELTA,
+            context.character.status.moodValue + OFFLINE_SIMULATION_POLICY.resolutionEffects.goRestMoodValueDelta,
             100,
           ),
         }),
@@ -87,12 +79,12 @@ export function resolveOfflineActionPreview(
         statusPatch: createStatusPatch({
           moodValue: createNumericPatch(
             context.character.status.moodValue,
-            context.character.status.moodValue + 18,
+            context.character.status.moodValue + OFFLINE_SIMULATION_POLICY.resolutionEffects.goPlayMoodValueDelta,
             100,
           ),
           playNeed: createNumericPatch(
             context.character.status.playNeed,
-            context.character.status.playNeed - PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY,
+            context.character.status.playNeed + OFFLINE_SIMULATION_POLICY.resolutionEffects.goPlayPlayNeedDelta,
             0,
           ),
         }),
@@ -125,7 +117,7 @@ function resolveGoHomePreview(
       statusPatch: createStatusPatch({
         saturation: createNumericPatch(
           context.character.status.saturation,
-          context.character.status.saturation + OFFLINE_HOME_FOOD_SATURATION_DELTA,
+          context.character.status.saturation + OFFLINE_SIMULATION_POLICY.resolutionEffects.homeFoodSaturationDelta,
           100,
         ),
       }),
@@ -147,12 +139,12 @@ function resolveGoHomePreview(
       statusPatch: createStatusPatch({
         moodValue: createNumericPatch(
           context.character.status.moodValue,
-          context.character.status.moodValue + OFFLINE_HOME_PLAY_MOOD_VALUE_DELTA,
+          context.character.status.moodValue + OFFLINE_SIMULATION_POLICY.resolutionEffects.homePlayMoodValueDelta,
           100,
         ),
         playNeed: createNumericPatch(
           context.character.status.playNeed,
-          context.character.status.playNeed - PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
+          context.character.status.playNeed + OFFLINE_SIMULATION_POLICY.resolutionEffects.homePlayPlayNeedDelta,
           0,
         ),
       }),

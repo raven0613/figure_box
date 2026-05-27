@@ -5,6 +5,7 @@ import type {
 import {
   includesString,
   isRecord,
+  readOptionalNumber,
   readRequiredNumber,
   type CharacterEventDefinitionRecord,
 } from './schemaReaders';
@@ -93,9 +94,19 @@ function readTemplate(
     summary: readOptionalTemplateText(value, 'summary', label),
     detail: readOptionalTemplateText(value, 'detail', label),
     quote: readOptionalTemplateText(value, 'quote', label),
+    priority: readOptionalNumber(value, 'priority', 0),
+    sequenceKey: readOptionalTemplateText(value, 'sequenceKey', label),
+    sequenceOrder: readOptionalNumber(value, 'sequenceOrder', 0),
   };
 
-  if (!template.summary && !template.detail && !template.quote) {
+  if (
+    !template.summary &&
+    !template.detail &&
+    !template.quote &&
+    template.priority === undefined &&
+    !template.sequenceKey &&
+    template.sequenceOrder === undefined
+  ) {
     throw new Error(`Offline recap templates ${label} must include summary, detail, or quote.`);
   }
 

@@ -18,6 +18,7 @@ import type {
 
 export interface CharacterEventDecisionInput {
   nearbyCharacterIds?: string[];
+  nearbyCharacterDistances?: Record<string, number>;
   nearbyRelationships?: readonly CharacterEventNearbyRelationship[];
   nearbyJoinableActivities?: readonly JoinableActivity[];
   nearbyVisibleItems?: readonly CharacterEventNearbyVisibleItem[];

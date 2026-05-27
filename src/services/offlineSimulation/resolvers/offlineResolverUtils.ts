@@ -11,6 +11,8 @@ import {
 } from '~/services/characterEvents/rules';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import type { OfflineNumericPatchPreview, OfflineStatusPatchPreview } from '../types';
+import { OFFLINE_SIMULATION_POLICY } from '../offlineSimulationPolicy';
+import { isOfflineActivityAvailableAt } from '../offlineTimeOfDay';
 
 export interface OfflineResolverContext {
   candidate: CharacterEventCandidate;
@@ -38,6 +40,11 @@ export function resolveOfflineActivity(
   const variant = definition?.presentationVariants
     ?.filter(hasActivity)
     .filter(candidateVariant => matchesVariantConditions(candidateVariant, context))
+    .filter(candidateVariant => isOfflineActivityAvailableAt(
+      candidateVariant.activity,
+      context.input.timestamp ?? Date.now(),
+      OFFLINE_SIMULATION_POLICY,
+    ))
     .sort((left, right) => right.baseWeight - left.baseWeight)[0];
 
   if (!definition || !variant?.activity) {

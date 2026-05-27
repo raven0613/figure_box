@@ -1,9 +1,20 @@
 import { CHARACTER_SEEDS, Expression, getMoodForMoodValue } from '~/constants/character';
 import { TOWN_WORLD_SPACE_ID } from '~/constants/townMap';
-import { createEmptyActivityCooldowns } from '~/services/characterEvents/activityCooldowns';
-import type { OfflineFinalCharacterStatePreview } from '~/services/offlineSimulation/types';
+import {
+  createEmptyActivityCooldowns,
+  recordActivityCooldowns,
+} from '~/services/characterEvents/activityCooldowns';
+import type {
+  OfflineActivityCooldownRecordPreview,
+  OfflineFinalCharacterStatePreview,
+  OfflineRelationshipPatchPreview,
+} from '~/services/offlineSimulation/types';
 import type { CharacterSnapshot } from '~/services/townCharacterTypes';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
+import {
+  changeRelationshipIntimacy,
+  decreaseRelationshipIntimacyToFeelingMin,
+} from '~/stateMachines/gameFlow/relationships';
 import type {
   CharacterRuntimeSnapshot,
   CharacterRuntimeSaveRecord,
@@ -68,6 +79,15 @@ class CharacterRuntimeSaveService {
         nextPosition,
         preview,
       }),
+      activityCooldowns: applyOfflineActivityCooldownRecords(
+        currentSnapshot.activityCooldowns,
+        preview.activityCooldownRecords,
+      ),
+      relationships: applyOfflineRelationshipPatches(
+        currentSnapshot.relationships,
+        preview.characterId,
+        preview.relationshipPatches,
+      ),
     };
 
     this.snapshotsByCharacterId.set(preview.characterId, cloneCharacterRuntimeSnapshot(nextSnapshot));
@@ -107,6 +127,49 @@ class CharacterRuntimeSaveService {
         .sort(([leftId], [rightId]) => leftId.localeCompare(rightId)),
     );
   }
+}
+
+function applyOfflineActivityCooldownRecords(
+  activityCooldowns: CharacterRuntimeSnapshot['activityCooldowns'],
+  records: readonly OfflineActivityCooldownRecordPreview[],
+): CharacterRuntimeSnapshot['activityCooldowns'] {
+  return records.reduce(
+    (nextCooldowns, record) => recordActivityCooldowns(nextCooldowns, {
+      partnerCharIds: record.partnerCharacterIds,
+      role: record.role,
+      sourceEventId: record.sourceEventId,
+      timestamp: record.timestamp,
+    }),
+    activityCooldowns,
+  );
+}
+
+function applyOfflineRelationshipPatches(
+  relationships: CharacterRuntimeSnapshot['relationships'],
+  characterId: string,
+  patches: readonly OfflineRelationshipPatchPreview[],
+): CharacterRuntimeSnapshot['relationships'] {
+  return patches.reduce((nextRelationships, patch) => {
+    const changedRelationships = changeRelationshipIntimacy(
+      nextRelationships,
+      characterId,
+      patch.targetCharacterId,
+      patch.intimacyDelta,
+      patch.timestamp,
+    );
+
+    if (!patch.feelingTarget) {
+      return changedRelationships;
+    }
+
+    return decreaseRelationshipIntimacyToFeelingMin(
+      changedRelationships,
+      characterId,
+      patch.targetCharacterId,
+      patch.feelingTarget,
+      patch.timestamp,
+    );
+  }, relationships);
 }
 
 function createOfflinePresence(input: {

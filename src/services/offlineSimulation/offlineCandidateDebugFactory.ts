@@ -10,6 +10,7 @@ import {
 import { resolveOfflineEventPreview } from './offlineEventResolver';
 import {
   getOfflineCandidateActivityType,
+  getOfflineCandidateRecapPriority,
   resolveOfflineRecapTemplate,
 } from './offlineRecapTemplates';
 import type {
@@ -54,9 +55,9 @@ function createRecapPreview(
   const resolvedTemplate = resolveOfflineRecapTemplate(candidate);
   const variables = {
     ...createTemplateVariables(context, input, contexts),
-    ...(resolutionPreview.kind === 'solo'
-      ? resolutionPreview.variables
-      : resolutionPreview.variables ?? {}),
+    ...(resolutionPreview.kind === 'unsupported'
+      ? resolutionPreview.variables ?? {}
+      : resolutionPreview.variables),
   };
 
   return {
@@ -68,6 +69,9 @@ function createRecapPreview(
     quote: resolvedTemplate.template.quote
       ? formatTemplate(resolvedTemplate.template.quote, variables)
       : undefined,
+    priority: getOfflineCandidateRecapPriority(candidate),
+    sequenceKey: resolvedTemplate.template.sequenceKey,
+    sequenceOrder: resolvedTemplate.template.sequenceOrder,
   };
 }
 
@@ -83,6 +87,9 @@ function createTemplateVariables(
   return {
     characterName: context.name,
     initiatorName: context.name,
+    participantNames: context.name,
+    participantNameList: context.name,
+    participantCount: '1',
     targetName: targetContext?.name ?? '附近的人',
     itemName,
     locationName: '附近',

@@ -17,8 +17,6 @@ import type {
   OfflineSimulationDryRun,
 } from './types';
 
-const MAX_CANDIDATES_PER_CHARACTER = 12;
-
 export function createOfflineSimulationDryRun(now: number = Date.now()): OfflineSimulationDryRun {
   const sessionSnapshot = offlineSessionService.getSnapshot();
   const elapsedMs = sessionSnapshot.lastObservedAwayMs;
@@ -61,7 +59,7 @@ export function createOfflineSimulationDryRun(now: number = Date.now()): Offline
       const candidates = collectCharacterEventCandidates(context, utilityScores, input)
         .map(candidate => createOfflineCandidateDebug(candidate, context, input, contexts))
         .sort((left, right) => right.offlineWeight - left.offlineWeight)
-        .slice(0, MAX_CANDIDATES_PER_CHARACTER);
+        .slice(0, OFFLINE_SIMULATION_POLICY.limits.maxCandidatesPerCharacter);
 
       return {
         characterId: context.id,

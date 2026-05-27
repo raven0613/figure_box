@@ -173,7 +173,8 @@
   border-top: 1px solid rgba(24, 32, 39, 0.1);
 }
 
-.suppressedBlock strong {
+.suppressedBlock strong,
+.diagnosticHeader strong {
   font-size: 12px;
 }
 
@@ -190,6 +191,88 @@
   border: 1px solid #e1bd64;
   border-radius: 5px;
   font-size: 11px;
+}
+
+.diagnosticBlock {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(24, 32, 39, 0.1);
+}
+
+.diagnosticHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.diagnosticHeader span {
+  color: #385f34;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.diagnosticList {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.diagnosticItem {
+  display: grid;
+  gap: 5px;
+  padding: 7px;
+  background: #fbfaf6;
+  border: 1px solid #d5e0e6;
+  border-radius: 6px;
+}
+
+.diagnosticMeta,
+.diagnosticDetail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #68717a;
+  font-size: 11px;
+}
+
+.diagnosticTitle {
+  color: #182027;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.diagnosticDetail span {
+  overflow-wrap: anywhere;
+}
+
+.diagnosticStatus_selected,
+.diagnosticStatus_candidate,
+.diagnosticStatus_blocked {
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-weight: 700;
+}
+
+.diagnosticStatus_selected {
+  color: #1f5f32;
+  background: #e0f3df;
+  border: 1px solid #abd2a6;
+}
+
+.diagnosticStatus_candidate {
+  color: #254f70;
+  background: #e4f0f7;
+  border: 1px solid #b7d1e3;
+}
+
+.diagnosticStatus_blocked {
+  color: #6a3d1d;
+  background: #fff0c7;
+  border: 1px solid #e1bd64;
 }
 
 .emptyState {

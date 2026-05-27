@@ -27,7 +27,7 @@ export function createOfflineSimulationPlan(input: {
     input.policy.maxSlots,
     Math.max(1, Math.ceil(simulatedMs / input.policy.slotDurationMs)),
   );
-  const slotDurationMs = simulatedMs / slotCount;
+  const slotDurationMs = elapsedMs / slotCount;
   const startAt = input.lastActiveAt ?? input.now - elapsedMs;
   const slots = Array.from({ length: slotCount }).map<OfflineSimulationSlotPlan>((_, index) => ({
     index,

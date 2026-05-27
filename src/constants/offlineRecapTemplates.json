@@ -47,14 +47,14 @@
   },
   "activityType": {
     "chat": {
-      "summary": "{characterName} 和 {targetName} 聊了一會兒。",
-      "detail": "兩人短暫停下來說了些話。"
+      "summary": "{participantNameList} 聊了一會兒。",
+      "detail": "他們短暫停下來說了些話。"
     },
     "playWithItem": {
-      "summary": "{characterName} 拿著 {itemName} 玩了一會兒。"
+      "summary": "{participantNameList} 拿著 {itemName} 玩了一會兒。"
     },
     "playAtLocation": {
-      "summary": "{characterName} 在附近玩了一會兒。"
+      "summary": "{participantNameList} 在附近玩了一會兒。"
     }
   },
   "eventOverrides": {

@@ -14,7 +14,7 @@ class OfflineRecapSaveService {
 
   getRecords(): readonly OfflineRecapSaveRecord[] {
     return Array.from(this.recordsById.values())
-      .sort((left, right) => left.timestamp - right.timestamp)
+      .sort(compareOfflineRecapTimeline)
       .map(cloneOfflineRecapRecord);
   }
 
@@ -52,7 +52,21 @@ class OfflineRecapSaveService {
 }
 
 function cloneOfflineRecapRecord(record: OfflineRecapSaveRecord): OfflineRecapSaveRecord {
-  return { ...record };
+  return {
+    ...record,
+    participantIds: [...record.participantIds],
+    participantNames: [...record.participantNames],
+  };
+}
+
+function compareOfflineRecapTimeline(
+  left: OfflineRecapSaveRecord,
+  right: OfflineRecapSaveRecord,
+): number {
+  return left.createdAt - right.createdAt ||
+    left.displayIndex - right.displayIndex ||
+    left.timestamp - right.timestamp ||
+    left.id.localeCompare(right.id, undefined, { numeric: true });
 }
 
 export const offlineRecapSaveService = new OfflineRecapSaveService();

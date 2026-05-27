@@ -1,4 +1,5 @@
 import { Feeling, SocialStatus, type Position } from '~/constants/character';
+import { CHARACTER_EVENT_DEFINITIONS } from '~/constants/charactarEventsDefinitions';
 import { TOWN_WORLD_SPACE_ID } from '~/constants/townMap';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import {
@@ -11,9 +12,7 @@ import type {
 } from '~/services/characterEvents/types';
 import { itemService } from '~/services/items/itemService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
-
-const NEARBY_CHARACTER_RANGE = 2;
-const ITEM_VISIBILITY_RADIUS = 10;
+import { OFFLINE_SIMULATION_POLICY } from './offlineSimulationPolicy';
 
 export function createOfflineDecisionInput(
   context: CharacterContext,
@@ -21,10 +20,14 @@ export function createOfflineDecisionInput(
   timestamp: number,
   random?: () => number,
 ): CharacterEventDecisionInput {
-  const nearbyCharacterIds = getNearbyCharacterIds(context, contexts);
+  const nearbyCharacters = getNearbyCharacters(context, contexts);
+  const nearbyCharacterIds = nearbyCharacters.map(character => character.id);
 
   return {
     nearbyCharacterIds,
+    nearbyCharacterDistances: Object.fromEntries(
+      nearbyCharacters.map(character => [character.id, character.distance]),
+    ),
     nearbyRelationships: getNearbyRelationships(context, nearbyCharacterIds),
     nearbyVisibleItems: getNearbyVisibleItems(context),
     ownItemIds: itemService.getActorItems(context.id)
@@ -36,22 +39,32 @@ export function createOfflineDecisionInput(
   };
 }
 
-function getNearbyCharacterIds(
+function getNearbyCharacters(
   context: CharacterContext,
   contexts: readonly CharacterContext[],
-): string[] {
+): { id: string; distance: number }[] {
   if (context.presence.kind !== 'positioned') {
     return [];
   }
 
+  const maxNearbyRange = getMaxOfflineNearbyCharacterRange();
+
   return contexts
-    .filter(candidate => (
-      candidate.id !== context.id &&
-      candidate.presence.kind === 'positioned' &&
-      candidate.presence.spaceId === context.presence.spaceId &&
-      getDistance(context.position, candidate.position) <= NEARBY_CHARACTER_RANGE
-    ))
-    .map(candidate => candidate.id);
+    .flatMap(candidate => {
+      if (
+        candidate.id === context.id ||
+        candidate.presence.kind !== 'positioned' ||
+        candidate.presence.spaceId !== context.presence.spaceId
+      ) {
+        return [];
+      }
+
+      const distance = getDistance(context.position, candidate.position);
+
+      return distance <= maxNearbyRange
+        ? [{ id: candidate.id, distance }]
+        : [];
+    });
 }
 
 function getNearbyRelationships(
@@ -104,7 +117,7 @@ function getNearbyVisibleItems(context: CharacterContext): CharacterEventNearbyV
 
       const distance = getDistance(context.position, placedObject.worldPosition);
 
-      if (distance > ITEM_VISIBILITY_RADIUS) {
+      if (distance > OFFLINE_SIMULATION_POLICY.perception.itemVisibilityRadius) {
         return [];
       }
 
@@ -126,4 +139,16 @@ function getNearbyVisibleItems(context: CharacterContext): CharacterEventNearbyV
 
 function getDistance(left: Position, right: Position): number {
   return Math.hypot(left.x - right.x, left.y - right.y);
+}
+
+function getMaxOfflineNearbyCharacterRange(): number {
+  return CHARACTER_EVENT_DEFINITIONS.reduce(
+    (maxRange, definition) => Math.max(
+      maxRange,
+      ...((definition.presentationVariants ?? [])
+        .map(variant => variant.activity?.group.inviteNearbyRange)
+        .filter((range): range is number => range !== undefined)),
+    ),
+    OFFLINE_SIMULATION_POLICY.perception.nearbyCharacterFallbackRange,
+  );
 }

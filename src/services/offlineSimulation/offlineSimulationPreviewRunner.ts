@@ -14,9 +14,12 @@ import type {
   OfflineSimulationRunPreview,
 } from './types';
 
-const MAX_EVENTS_PER_CHARACTER = 3;
-
 const selector = new WeightedDecisionSelector();
+
+interface RecapSelectionQuotaState {
+  multiplayerCount: number;
+  soloCount: number;
+}
 
 export function createOfflineSimulationRunPreview(input: {
   plan: OfflineSimulationPlan;
@@ -41,25 +44,69 @@ export function createOfflineSimulationRunPreview(input: {
 
   const eventCountsByCharacterId = new Map<string, number>();
   const eventCountsByEventId = new Map<string, number>();
+  const quotaState: RecapSelectionQuotaState = {
+    multiplayerCount: 0,
+    soloCount: 0,
+  };
   const events: OfflineSimulationPreviewEvent[] = [];
   const suppressed: OfflineSimulationPreviewSuppressedEvent[] = [];
 
   input.plan.slots.forEach(slot => {
+    const occupiedCharacterIds = new Set<string>();
+
     input.contexts.forEach(context => {
-      if (events.length >= OFFLINE_SIMULATION_POLICY.recap.maxItems) {
+      if (
+        quotaState.multiplayerCount >= OFFLINE_SIMULATION_POLICY.recap.preferredMultiplayerItems ||
+        occupiedCharacterIds.has(context.id) ||
+        (eventCountsByCharacterId.get(context.id) ?? 0) >= OFFLINE_SIMULATION_POLICY.limits.maxEventsPerCharacter
+      ) {
+        return;
+      }
+
+      const random = createSeededRandom(`${seed}:${slot.index}:${context.id}`);
+      const selectableCandidates = createSelectableCandidates({
+        context,
+        contexts: input.contexts,
+        eventCountsByEventId,
+        random,
+        slotIndex: slot.index,
+        timestamp: slot.timestamp,
+        suppressed,
+        shouldRecordSuppression: false,
+      });
+      const selectedCandidate = selectBestMultiplayerCandidate(
+        selectableCandidates
+          .filter(isMultiplayerCandidate),
+      );
+
+      if (!selectedCandidate) {
+        return;
+      }
+
+      events.push(createPreviewEvent(slot.index, slot.timestamp, context, selectedCandidate));
+      updateRecapSelectionQuotaState(quotaState, selectedCandidate);
+      getResolutionParticipantIds(selectedCandidate, context.id).forEach(participantId => {
+        occupiedCharacterIds.add(participantId);
+        eventCountsByCharacterId.set(participantId, (eventCountsByCharacterId.get(participantId) ?? 0) + 1);
+      });
+      eventCountsByEventId.set(selectedCandidate.id, (eventCountsByEventId.get(selectedCandidate.id) ?? 0) + 1);
+    });
+
+    input.contexts.forEach(context => {
+      if (occupiedCharacterIds.has(context.id)) {
         suppressed.push({
           slotIndex: slot.index,
           timestamp: slot.timestamp,
           characterId: context.id,
           eventId: '',
-          reason: 'recapMaxItems',
+          reason: 'participantAlreadyReserved',
         });
         return;
       }
 
       const characterEventCount = eventCountsByCharacterId.get(context.id) ?? 0;
 
-      if (characterEventCount >= MAX_EVENTS_PER_CHARACTER) {
+      if (characterEventCount >= OFFLINE_SIMULATION_POLICY.limits.maxEventsPerCharacter) {
         suppressed.push({
           slotIndex: slot.index,
           timestamp: slot.timestamp,
@@ -71,31 +118,19 @@ export function createOfflineSimulationRunPreview(input: {
       }
 
       const random = createSeededRandom(`${seed}:${slot.index}:${context.id}`);
-      const inputSnapshot = createOfflineDecisionInput(context, input.contexts, slot.timestamp, random);
-      const utilityScores = calculateCharacterUtilityScores(context);
-      const candidates = collectCharacterEventCandidates(context, utilityScores, inputSnapshot)
-        .map(candidate => createOfflineCandidateDebug(candidate, context, inputSnapshot, input.contexts));
-      const selectableCandidates = candidates.filter(candidate => {
-        const suppressionReason = getSuppressionReason(candidate, eventCountsByEventId);
-
-        if (suppressionReason) {
-          suppressed.push({
-            slotIndex: slot.index,
-            timestamp: slot.timestamp,
-            characterId: context.id,
-            eventId: candidate.id,
-            reason: suppressionReason,
-          });
-          return false;
-        }
-
-        return true;
+      const selectableCandidates = createSelectableCandidates({
+        context,
+        contexts: input.contexts,
+        eventCountsByEventId,
+        random,
+        slotIndex: slot.index,
+        timestamp: slot.timestamp,
+        suppressed,
+        shouldRecordSuppression: true,
       });
-      const selectedCandidate = selector.select(
-        selectableCandidates.map(candidate => ({
-          item: candidate,
-          weight: candidate.offlineWeight,
-        })),
+      const selectedCandidate = selectCandidateForOfflineEvent(
+        selectableCandidates,
+        quotaState,
         random,
       );
 
@@ -111,7 +146,11 @@ export function createOfflineSimulationRunPreview(input: {
       }
 
       events.push(createPreviewEvent(slot.index, slot.timestamp, context, selectedCandidate));
-      eventCountsByCharacterId.set(context.id, characterEventCount + 1);
+      updateRecapSelectionQuotaState(quotaState, selectedCandidate);
+      getResolutionParticipantIds(selectedCandidate, context.id).forEach(participantId => {
+        occupiedCharacterIds.add(participantId);
+        eventCountsByCharacterId.set(participantId, (eventCountsByCharacterId.get(participantId) ?? 0) + 1);
+      });
       eventCountsByEventId.set(selectedCandidate.id, (eventCountsByEventId.get(selectedCandidate.id) ?? 0) + 1);
     });
   });
@@ -123,6 +162,147 @@ export function createOfflineSimulationRunPreview(input: {
   };
 }
 
+function createSelectableCandidates(input: {
+  context: CharacterContext;
+  contexts: readonly CharacterContext[];
+  eventCountsByEventId: ReadonlyMap<string, number>;
+  random: () => number;
+  slotIndex: number;
+  timestamp: number;
+  suppressed: OfflineSimulationPreviewSuppressedEvent[];
+  shouldRecordSuppression: boolean;
+}): OfflineCharacterCandidateDebug[] {
+  const inputSnapshot = createOfflineDecisionInput(input.context, input.contexts, input.timestamp, input.random);
+  const utilityScores = calculateCharacterUtilityScores(input.context);
+  const candidates = collectCharacterEventCandidates(input.context, utilityScores, inputSnapshot)
+    .map(candidate => createOfflineCandidateDebug(candidate, input.context, inputSnapshot, input.contexts));
+
+  return candidates.filter(candidate => {
+    const suppressionReason = getSuppressionReason(candidate, input.eventCountsByEventId);
+
+    if (suppressionReason) {
+      if (input.shouldRecordSuppression) {
+        input.suppressed.push({
+          slotIndex: input.slotIndex,
+          timestamp: input.timestamp,
+          characterId: input.context.id,
+          eventId: candidate.id,
+          reason: suppressionReason,
+        });
+      }
+
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function selectBestMultiplayerCandidate(
+  candidates: readonly OfflineCharacterCandidateDebug[],
+): OfflineCharacterCandidateDebug | null {
+  return [...candidates]
+    .sort(compareMultiplayerCandidates)[0] ?? null;
+}
+
+function compareMultiplayerCandidates(
+  left: OfflineCharacterCandidateDebug,
+  right: OfflineCharacterCandidateDebug,
+): number {
+  return getMultiplayerCandidateScore(right) - getMultiplayerCandidateScore(left) ||
+    right.offlineWeight - left.offlineWeight ||
+    left.id.localeCompare(right.id);
+}
+
+function getMultiplayerCandidateScore(candidate: OfflineCharacterCandidateDebug): number {
+  const participantCount = candidate.resolutionPreview.kind === 'group'
+    ? candidate.resolutionPreview.participantIds.length
+    : 1;
+  const activityScore = candidate.activityType
+    ? OFFLINE_SIMULATION_POLICY.recap.displayScore.activityType[candidate.activityType] ?? 0
+    : 0;
+
+  return OFFLINE_SIMULATION_POLICY.recap.displayScore.base +
+    OFFLINE_SIMULATION_POLICY.recap.displayScore.multiplayerBonus +
+    Math.max(0, participantCount - 1) * OFFLINE_SIMULATION_POLICY.recap.displayScore.participantBonus +
+    activityScore +
+    (candidate.recapPreview?.priority ?? 0);
+}
+
+function selectCandidateForOfflineEvent(
+  candidates: readonly OfflineCharacterCandidateDebug[],
+  quotaState: RecapSelectionQuotaState,
+  random: () => number,
+): OfflineCharacterCandidateDebug | null {
+  const preferredCandidates = getPreferredQuotaCandidates(candidates, quotaState);
+  const candidatePool = preferredCandidates.length > 0 ? preferredCandidates : candidates;
+
+  return selector.select(
+    candidatePool.map(candidate => ({
+      item: candidate,
+      weight: candidate.offlineWeight,
+    })),
+    random,
+  );
+}
+
+function getPreferredQuotaCandidates(
+  candidates: readonly OfflineCharacterCandidateDebug[],
+  quotaState: RecapSelectionQuotaState,
+): readonly OfflineCharacterCandidateDebug[] {
+  const recapCandidates = candidates.filter(candidate => candidate.recapPreview);
+
+  if (quotaState.multiplayerCount < OFFLINE_SIMULATION_POLICY.recap.preferredMultiplayerItems) {
+    const multiplayerCandidates = recapCandidates.filter(isMultiplayerCandidate);
+
+    if (multiplayerCandidates.length > 0) {
+      return multiplayerCandidates;
+    }
+  }
+
+  if (quotaState.soloCount < OFFLINE_SIMULATION_POLICY.recap.preferredSoloItems) {
+    const soloCandidates = recapCandidates.filter(candidate => !isMultiplayerCandidate(candidate));
+
+    if (soloCandidates.length > 0) {
+      return soloCandidates;
+    }
+  }
+
+  return [];
+}
+
+function updateRecapSelectionQuotaState(
+  quotaState: RecapSelectionQuotaState,
+  candidate: OfflineCharacterCandidateDebug,
+): void {
+  if (!candidate.recapPreview) {
+    return;
+  }
+
+  if (isMultiplayerCandidate(candidate)) {
+    quotaState.multiplayerCount += 1;
+    return;
+  }
+
+  quotaState.soloCount += 1;
+}
+
+function isMultiplayerCandidate(candidate: OfflineCharacterCandidateDebug): boolean {
+  return candidate.resolutionPreview.kind === 'group' &&
+    candidate.resolutionPreview.participantIds.length > 1;
+}
+
+function getResolutionParticipantIds(
+  candidate: OfflineCharacterCandidateDebug,
+  fallbackCharacterId: string,
+): readonly string[] {
+  if (candidate.resolutionPreview.kind === 'group') {
+    return candidate.resolutionPreview.participantIds;
+  }
+
+  return [fallbackCharacterId];
+}
+
 function getSuppressionReason(
   candidate: OfflineCharacterCandidateDebug,
   eventCountsByEventId: ReadonlyMap<string, number>,
@@ -132,6 +312,10 @@ function getSuppressionReason(
   }
 
   if (candidate.resolutionPreview.kind === 'unsupported') {
+    if (candidate.resolutionPreview.reason === 'activityUnavailableAtTimestamp') {
+      return 'activityUnavailableAtTimestamp';
+    }
+
     return 'unsupportedOfflineResolution';
   }
 
@@ -165,6 +349,7 @@ function createPreviewEvent(
     bucketId: candidate.bucketId,
     motivation: candidate.motivation,
     eventType: candidate.eventType,
+    ...(candidate.activityType ? { activityType: candidate.activityType } : {}),
     offlineWeight: candidate.offlineWeight,
     recapPreview: candidate.recapPreview,
     resolutionPreview: candidate.resolutionPreview,

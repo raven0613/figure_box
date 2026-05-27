@@ -3,6 +3,7 @@ import type {
   UtilityDrivenMotivation,
 } from '~/stateMachines/gameFlow/context';
 import type { CharacterEventActivityType } from '~/constants/charactarEventsDefinitions';
+import type { Feeling } from '~/constants/character';
 import type { Position } from '~/constants/character';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 
@@ -32,6 +33,26 @@ export interface OfflineRequestLevelPolicy {
 export interface OfflineSimulationPolicy {
   version: number;
   elapsedTime: OfflineElapsedTimePolicy;
+  limits: {
+    maxEventsPerCharacter: number;
+    maxCandidatesPerCharacter: number;
+  };
+  perception: {
+    nearbyCharacterFallbackRange: number;
+    itemVisibilityRadius: number;
+  };
+  timeOfDay: {
+    buckets: readonly OfflineTimeOfDayBucketPolicy[];
+  };
+  resolutionEffects: {
+    goEatSaturationDelta: number;
+    goRestMoodValueDelta: number;
+    goPlayMoodValueDelta: number;
+    goPlayPlayNeedDelta: number;
+    homeFoodSaturationDelta: number;
+    homePlayMoodValueDelta: number;
+    homePlayPlayNeedDelta: number;
+  };
   events: {
     default: Required<OfflineEventPolicyRule>;
     bucket: Partial<Record<CharacterEventBucketId, OfflineEventPolicyRule>>;
@@ -44,7 +65,28 @@ export interface OfflineSimulationPolicy {
   recap: {
     maxItems: number;
     maxDetailedItems: number;
+    preferredMultiplayerItems: number;
+    preferredSoloItems: number;
+    displayOrder: {
+      mode: OfflineRecapDisplayOrderMode;
+    };
+    displayScore: {
+      base: number;
+      multiplayerBonus: number;
+      participantBonus: number;
+      activityType: Partial<Record<CharacterEventActivityType, number>>;
+      detailBonus: number;
+      quoteBonus: number;
+    };
   };
+}
+
+export type OfflineRecapDisplayOrderMode = 'timestamp' | 'timeBucketShuffle';
+
+export interface OfflineTimeOfDayBucketPolicy {
+  id: string;
+  startMinute: number;
+  endMinute: number;
 }
 
 export interface OfflineSimulationSlotPlan {
@@ -65,6 +107,9 @@ export interface OfflineRecapTemplate {
   summary?: string;
   detail?: string;
   quote?: string;
+  priority?: number;
+  sequenceKey?: string;
+  sequenceOrder?: number;
 }
 
 export interface OfflineRecapTemplates {
@@ -86,6 +131,9 @@ export interface OfflineRecapPreview {
   summary: string;
   detail?: string;
   quote?: string;
+  priority: number;
+  sequenceKey?: string;
+  sequenceOrder?: number;
 }
 
 export interface OfflineNumericPatchPreview {
@@ -98,6 +146,21 @@ export interface OfflineStatusPatchPreview {
   saturation?: OfflineNumericPatchPreview;
   moodValue?: OfflineNumericPatchPreview;
   playNeed?: OfflineNumericPatchPreview;
+}
+
+export interface OfflineRelationshipPatchPreview {
+  targetCharacterId: string;
+  targetCharacterName: string;
+  intimacyDelta: number;
+  feelingTarget?: Feeling;
+  timestamp: number;
+}
+
+export interface OfflineActivityCooldownRecordPreview {
+  partnerCharacterIds: readonly string[];
+  role: 'initiator' | 'target';
+  sourceEventId: string;
+  timestamp: number;
 }
 
 export type OfflinePositionPatchMode =
@@ -118,6 +181,16 @@ export interface OfflinePositionPatchPreview {
   spaceId?: string;
 }
 
+export interface OfflineParticipantResolutionPreview {
+  characterId: string;
+  characterName: string;
+  statusPatch: OfflineStatusPatchPreview | null;
+  positionPatch: OfflinePositionPatchPreview | null;
+  currentMotivation: string;
+  relationshipPatches: readonly OfflineRelationshipPatchPreview[];
+  activityCooldownRecord: OfflineActivityCooldownRecordPreview | null;
+}
+
 export type OfflineResolutionPreview =
   | {
     kind: 'solo';
@@ -125,6 +198,14 @@ export type OfflineResolutionPreview =
     statusPatch: OfflineStatusPatchPreview | null;
     positionPatch: OfflinePositionPatchPreview | null;
     currentMotivation: string;
+    variables: Record<string, string>;
+    notes: readonly string[];
+  }
+  | {
+    kind: 'group';
+    resolverSource: OfflineResolverSource;
+    participantIds: readonly string[];
+    participants: readonly OfflineParticipantResolutionPreview[];
     variables: Record<string, string>;
     notes: readonly string[];
   }
@@ -164,6 +245,7 @@ export interface OfflineSimulationPreviewEvent {
   bucketId: CharacterEventBucketId;
   motivation: UtilityDrivenMotivation;
   eventType: string;
+  activityType?: CharacterEventActivityType;
   offlineWeight: number;
   recapPreview: OfflineRecapPreview | null;
   resolutionPreview: OfflineResolutionPreview;
@@ -198,6 +280,8 @@ export interface OfflineFinalCharacterStatePreview {
     to: string;
     kind: 'positioned' | 'contained';
   } | null;
+  relationshipPatches: readonly OfflineRelationshipPatchPreview[];
+  activityCooldownRecords: readonly OfflineActivityCooldownRecordPreview[];
   appliedEventIds: readonly string[];
   unsupportedEventIds: readonly string[];
 }
@@ -206,6 +290,8 @@ export interface OfflineRecapListItemPreview {
   eventId: string;
   characterId: string;
   characterName: string;
+  participantIds: readonly string[];
+  participantNames: readonly string[];
   timestamp: number;
   summary: string;
   detail?: string;

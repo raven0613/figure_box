@@ -3,7 +3,6 @@ import {
     clampMoodValue,
     Expression,
     getMoodForMoodValue,
-    getMoodMinValue,
 } from '~/constants/character';
 import {
     CharacterBodyActionState,
@@ -31,11 +30,11 @@ import {
     calculateCharacterUtilityScores,
     LOW_SATURATION_THRESHOLD,
     PLAY_NEED_GAIN_PER_TICK,
-    PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
     PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY,
     SATURATION_GAIN_AFTER_EATING,
     SATURATION_LOSS_PER_TICK,
 } from '~/services/characterEvents/utility';
+import { applyCompletedActivityStatusEffects } from '~/services/characterEvents/activityCompletionEffects';
 import {
     getRandomDestinationTarget,
     getRandomMapTarget,
@@ -1079,43 +1078,7 @@ function getCompletedActivityStatus(
     context: CharacterContext,
     activityEffects: CharacterEventActivity['effects'],
 ): CharacterContext['status'] {
-    const sourceEventId = context.currentActivity?.sourceEventId;
-    const motivation = sourceEventId
-        ? CHARACTER_EVENT_DEFINITIONS_BY_ID[sourceEventId]?.motivation
-        : undefined;
-
-    if (motivation === 'play') {
-        return applyCompletedActivityMoodEffects(
-            {
-                ...context.status,
-                playNeed: Math.max(
-                    0,
-                    context.status.playNeed - PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER,
-                ),
-            },
-            context.status.moodValue + 10,
-            activityEffects,
-        );
-    }
-
-    return applyCompletedActivityMoodEffects(
-        context.status,
-        context.status.moodValue + 6,
-        activityEffects,
-    );
-}
-
-function applyCompletedActivityMoodEffects(
-    status: CharacterContext['status'],
-    baseMoodValue: number,
-    activityEffects: CharacterEventActivity['effects'],
-): CharacterContext['status'] {
-    const deltaMoodValue = baseMoodValue + (activityEffects?.moodValueDelta ?? 0);
-    const moodValue = activityEffects?.moodStageTarget
-        ? getMoodMinValue(activityEffects.moodStageTarget)
-        : deltaMoodValue;
-
-    return updateCharacterMoodValue(status, moodValue);
+    return applyCompletedActivityStatusEffects(context.status, activityEffects);
 }
 
 function updateCharacterMoodValue(

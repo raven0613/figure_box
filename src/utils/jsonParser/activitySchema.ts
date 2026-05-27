@@ -7,6 +7,7 @@ import {
   readOptionalNonNegativeNumber,
   readOptionalNumber,
   readOptionalString,
+  readOptionalStringList,
   readRequiredNonNegativeNumber,
   readRequiredString,
   type CharacterEventDefinitionRecord,
@@ -17,6 +18,7 @@ const VALID_ACTIVITY_START_PHASES = ['active', 'traveling'] as const;
 const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
 const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
 const VALID_MOODS = Object.values(Mood) as Mood[];
+const TIME_TEXT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 // activity / joinRequirements parser
 export function readOptionalActivity(
@@ -38,6 +40,7 @@ export function readOptionalActivity(
     type: readActivityType(value, index),
     startPhase: readOptionalStartPhase(value, index),
     destination: readOptionalDestination(value, index),
+    availability: readOptionalActivityAvailability(value, index),
     group: readRequiredGroupActivity(value, index),
     joinable: readOptionalBoolean(value, 'joinable', index),
     durationMs: readRequiredNonNegativeNumber(value, 'durationMs', index),
@@ -47,6 +50,86 @@ export function readOptionalActivity(
     cooldowns: readRequiredCooldowns(value, index),
     effects: readOptionalActivityEffects(value, index),
   };
+}
+
+function readOptionalActivityAvailability(
+  activity: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['availability'] {
+  const value = activity.availability;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.availability.`);
+  }
+
+  const availability = {
+    timeOfDay: readOptionalStringList(value, 'timeOfDay', index),
+    timeWindows: readOptionalTimeWindows(value, index),
+  };
+
+  if (!availability.timeOfDay?.length && !availability.timeWindows?.length) {
+    throw new Error(`Character event definition at index ${index} has empty activity.availability.`);
+  }
+
+  return availability;
+}
+
+function readOptionalTimeWindows(
+  availability: CharacterEventDefinitionRecord,
+  index: number,
+): NonNullable<CharacterEventActivity['availability']>['timeWindows'] {
+  const value = availability.timeWindows;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value) || !value.every(isRecord)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.availability.timeWindows.`);
+  }
+
+  return value.map((window, windowIndex) => {
+    const fromMinute = readTimeTextAsMinute(
+      readRequiredString(window, 'from', index),
+      `activity.availability.timeWindows[${String(windowIndex)}].from`,
+      index,
+    );
+    const toMinute = readTimeTextAsMinute(
+      readRequiredString(window, 'to', index),
+      `activity.availability.timeWindows[${String(windowIndex)}].to`,
+      index,
+    );
+
+    if (fromMinute === toMinute) {
+      throw new Error(`Character event definition at index ${index} has empty activity.availability.timeWindows[${String(windowIndex)}].`);
+    }
+
+    return {
+      fromMinute,
+      toMinute,
+    };
+  });
+}
+
+function readTimeTextAsMinute(
+  value: string,
+  label: string,
+  index: number,
+): number {
+  const match = TIME_TEXT_PATTERN.exec(value);
+
+  if (!match) {
+    throw new Error(`Character event definition at index ${index} has invalid ${label}; expected HH:mm.`);
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  return hours * 60 + minutes;
 }
 
 function readOptionalActivityEffects(
@@ -68,6 +151,7 @@ function readOptionalActivityEffects(
     relationshipFeelingTarget: readOptionalFeeling(value, 'relationshipFeelingTarget', index),
     moodValueDelta: readOptionalNumber(value, 'moodValueDelta', index),
     moodStageTarget: readOptionalMood(value, 'moodStageTarget', index),
+    playNeedDelta: readOptionalNumber(value, 'playNeedDelta', index),
   };
 }
 

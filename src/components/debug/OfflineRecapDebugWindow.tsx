@@ -19,6 +19,17 @@ interface OfflineRecapDebugWindowProps {
 
 type SavedRecapViewMode = 'latest' | 'all';
 
+interface MultiplayerDiagnosticItem {
+  key: string;
+  status: 'selected' | 'candidate' | 'blocked';
+  characterName: string;
+  eventId: string;
+  activityType: string;
+  participantNames: readonly string[];
+  reason: string;
+  weightLabel: string;
+}
+
 export function OfflineRecapDebugWindow({ onClose }: OfflineRecapDebugWindowProps) {
   const [dryRun, setDryRun] = useState<OfflineSimulationDryRun | null>(null);
   const [savedRecaps, setSavedRecaps] = useState<readonly OfflineRecapSaveRecord[]>([]);
@@ -27,7 +38,7 @@ export function OfflineRecapDebugWindow({ onClose }: OfflineRecapDebugWindowProp
   const [isAutoSaving, setIsAutoSaving] = useState(false);
 
   const refreshSavedRecaps = useCallback(() => {
-    setSavedRecaps(offlineRecapSaveService.getRecords().slice().reverse());
+    setSavedRecaps(sortSavedRecapsForTimeline(offlineRecapSaveService.getRecords()));
   }, []);
   const regeneratePreview = useCallback(async () => {
     const nextDryRun = createOfflineSimulationDryRun();
@@ -88,15 +99,21 @@ export function OfflineRecapDebugWindow({ onClose }: OfflineRecapDebugWindowProp
     return Array.from(counts.entries())
       .sort((left, right) => right[1] - left[1]);
   }, [dryRun]);
+  const multiplayerDiagnostics = useMemo(
+    () => createMultiplayerDiagnostics(dryRun),
+    [dryRun],
+  );
   const latestSimulationSeed = useMemo(
     () => getLatestSimulationSeed(savedRecaps),
     [savedRecaps],
   );
-  const visibleSavedRecaps = useMemo(() => (
-    savedViewMode === 'latest' && latestSimulationSeed
+  const visibleSavedRecaps = useMemo(() => {
+    const records = savedViewMode === 'latest' && latestSimulationSeed
       ? savedRecaps.filter(record => record.simulationSeed === latestSimulationSeed)
-      : savedRecaps
-  ), [latestSimulationSeed, savedRecaps, savedViewMode]);
+      : savedRecaps;
+
+    return sortSavedRecapsForTimeline(records);
+  }, [latestSimulationSeed, savedRecaps, savedViewMode]);
 
   return (
     <DraggablePanel
@@ -162,6 +179,22 @@ export function OfflineRecapDebugWindow({ onClose }: OfflineRecapDebugWindowProp
             </div>
           </div>
         ) : null}
+
+        <div className={styles.diagnosticBlock}>
+          <div className={styles.diagnosticHeader}>
+            <strong>Multiplayer Candidates</strong>
+            <span>{multiplayerDiagnostics.length}</span>
+          </div>
+          {multiplayerDiagnostics.length > 0 ? (
+            <div className={styles.diagnosticList}>
+              {multiplayerDiagnostics.map(item => (
+                <MultiplayerDiagnosticItemView item={item} key={item.key} />
+              ))}
+            </div>
+          ) : (
+            <div className={styles.emptyState}>目前沒有多人候選進入 preview 診斷範圍。</div>
+          )}
+        </div>
       </section>
 
       <section className={styles.section} aria-label="Saved offline recaps">
@@ -209,6 +242,43 @@ export function OfflineRecapDebugWindow({ onClose }: OfflineRecapDebugWindowProp
   );
 }
 
+function MultiplayerDiagnosticItemView({ item }: { item: MultiplayerDiagnosticItem }) {
+  const statusLabel = {
+    selected: '成立',
+    candidate: '候選',
+    blocked: '未成立',
+  }[item.status];
+
+  return (
+    <article className={styles.diagnosticItem}>
+      <div className={styles.diagnosticMeta}>
+        <span className={getDiagnosticStatusClass(item.status)}>{statusLabel}</span>
+        <span>{item.characterName}</span>
+        <span>{item.activityType}</span>
+        <span>{item.weightLabel}</span>
+      </div>
+      <div className={styles.diagnosticTitle}>{item.eventId}</div>
+      <div className={styles.diagnosticDetail}>
+        <span>{item.participantNames.length > 0 ? item.participantNames.join('、') : '尚未形成參加者'}</span>
+        <span>{item.reason}</span>
+      </div>
+    </article>
+  );
+}
+
+function getDiagnosticStatusClass(status: MultiplayerDiagnosticItem['status']): string {
+  switch (status) {
+    case 'selected':
+      return styles.diagnosticStatus_selected;
+    case 'candidate':
+      return styles.diagnosticStatus_candidate;
+    case 'blocked':
+      return styles.diagnosticStatus_blocked;
+    default:
+      return styles.diagnosticStatus_blocked;
+  }
+}
+
 function PreviewRecapItem({
   event,
   index,
@@ -218,15 +288,18 @@ function PreviewRecapItem({
   index: number;
   recap: OfflineRecapListItemPreview;
 }) {
-  const resolverSource = event?.resolutionPreview.kind === 'solo'
-    ? event.resolutionPreview.resolverSource
-    : event?.resolutionPreview.reason ?? '-';
+  const resolverSource = event?.resolutionPreview.kind === 'unsupported'
+    ? event.resolutionPreview.reason
+    : event?.resolutionPreview.resolverSource ?? '-';
+  const participantLabel = recap.participantNames.length > 1
+    ? recap.participantNames.join('、')
+    : recap.characterName;
 
   return (
     <article className={styles.recapItem}>
       <div className={styles.recapMeta}>
         <span>#{index + 1}</span>
-        <span>{recap.characterName}</span>
+        <span>{participantLabel}</span>
         <span>{formatClock(recap.timestamp)}</span>
       </div>
       <p className={styles.summary}>{recap.summary}</p>
@@ -242,10 +315,14 @@ function PreviewRecapItem({
 }
 
 function SavedRecapItem({ record }: { record: OfflineRecapSaveRecord }) {
+  const participantLabel = record.participantNames.length > 1
+    ? record.participantNames.join('、')
+    : record.characterName;
+
   return (
     <article className={styles.recapItem}>
       <div className={styles.recapMeta}>
-        <span>{record.characterName}</span>
+        <span>{participantLabel}</span>
         <span>{formatClock(record.timestamp)}</span>
         <span>{record.isRead ? 'read' : 'unread'}</span>
       </div>
@@ -282,6 +359,133 @@ function getLatestSimulationSeed(
 
 function getSaveRecordSortTimestamp(record: OfflineRecapSaveRecord): number {
   return Math.max(record.createdAt, record.updatedAt);
+}
+
+function sortSavedRecapsForTimeline(
+  records: readonly OfflineRecapSaveRecord[],
+): OfflineRecapSaveRecord[] {
+  return [...records].sort(compareSavedRecapTimeline);
+}
+
+function compareSavedRecapTimeline(
+  left: OfflineRecapSaveRecord,
+  right: OfflineRecapSaveRecord,
+): number {
+  return left.createdAt - right.createdAt ||
+    left.displayIndex - right.displayIndex ||
+    left.timestamp - right.timestamp ||
+    left.id.localeCompare(right.id, undefined, { numeric: true });
+}
+
+function createMultiplayerDiagnostics(
+  dryRun: OfflineSimulationDryRun | null,
+): MultiplayerDiagnosticItem[] {
+  if (!dryRun) {
+    return [];
+  }
+
+  const selectedItems = dryRun.simulationPreview.events.flatMap((event, index) => {
+    if (
+      event.resolutionPreview.kind !== 'group' ||
+      event.resolutionPreview.participantIds.length <= 1
+    ) {
+      return [];
+    }
+
+    return [{
+      key: `selected:${event.eventId}:${event.characterId}:${event.timestamp}:${String(index)}`,
+      status: 'selected' as const,
+      characterName: event.characterName,
+      eventId: event.eventId,
+      activityType: event.activityType ?? event.eventType,
+      participantNames: event.resolutionPreview.participants.map(participant => participant.characterName),
+      reason: event.resolutionPreview.resolverSource,
+      weightLabel: `weight ${event.offlineWeight}`,
+    }];
+  });
+
+  const candidateItems = dryRun.characters.flatMap(character => (
+    character.candidates.flatMap((candidate, index) => {
+      const diagnostic = createCandidateMultiplayerDiagnostic({
+        candidate,
+        characterName: character.characterName,
+      });
+
+      if (!diagnostic) {
+        return [];
+      }
+
+      return [{
+        ...diagnostic,
+        key: `candidate:${character.characterId}:${candidate.id}:${String(index)}`,
+      }];
+    })
+  ));
+
+  return [...selectedItems, ...candidateItems]
+    .sort(compareMultiplayerDiagnostics)
+    .slice(0, 24);
+}
+
+function createCandidateMultiplayerDiagnostic(input: {
+  candidate: OfflineSimulationDryRun['characters'][number]['candidates'][number];
+  characterName: string;
+}): Omit<MultiplayerDiagnosticItem, 'key'> | null {
+  const resolution = input.candidate.resolutionPreview;
+
+  if (resolution.kind === 'group') {
+    const participantNames = resolution.participants.map(participant => participant.characterName);
+    const isMultiplayer = resolution.participantIds.length > 1;
+    const canBecomeMultiplayer = input.candidate.activityType !== undefined;
+
+    if (!isMultiplayer && !canBecomeMultiplayer) {
+      return null;
+    }
+
+    return {
+      status: isMultiplayer ? 'candidate' : 'blocked',
+      characterName: input.characterName,
+      eventId: input.candidate.id,
+      activityType: input.candidate.activityType ?? input.candidate.eventType,
+      participantNames,
+      reason: isMultiplayer
+        ? '多人候選成立，但沒有在本次加權抽選中成為 recap'
+        : '只形成單人結果，沒有邀到第二位參加者',
+      weightLabel: `offline ${input.candidate.offlineWeight} / online ${input.candidate.onlineWeight}`,
+    };
+  }
+
+  if (
+    resolution.kind === 'unsupported' &&
+    (resolution.reason === 'missingParticipantRoll' || input.candidate.activityType === 'chat')
+  ) {
+    return {
+      status: 'blocked',
+      characterName: input.characterName,
+      eventId: input.candidate.id,
+      activityType: input.candidate.activityType ?? input.candidate.eventType,
+      participantNames: [],
+      reason: resolution.reason,
+      weightLabel: `offline ${input.candidate.offlineWeight} / online ${input.candidate.onlineWeight}`,
+    };
+  }
+
+  return null;
+}
+
+function compareMultiplayerDiagnostics(
+  left: MultiplayerDiagnosticItem,
+  right: MultiplayerDiagnosticItem,
+): number {
+  const statusOrder = {
+    selected: 0,
+    candidate: 1,
+    blocked: 2,
+  };
+
+  return statusOrder[left.status] - statusOrder[right.status] ||
+    left.eventId.localeCompare(right.eventId) ||
+    left.characterName.localeCompare(right.characterName);
 }
 
 function formatDuration(value: number | null): string {
