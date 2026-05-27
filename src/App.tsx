@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
+import { OfflineRecapDebugWindow } from '~/components/debug/OfflineRecapDebugWindow';
 import { SaveDebugPanel } from '~/components/debug/SaveDebugPanel';
 import { Expression } from '~/constants/character';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
@@ -18,6 +19,7 @@ function App() {
   const [isSaveReady, setIsSaveReady] = useState(false);
   const [saveInitializationError, setSaveInitializationError] = useState<string | null>(null);
   const [isSaveDebugOpen, setIsSaveDebugOpen] = useState(false);
+  const [isOfflineRecapDebugOpen, setIsOfflineRecapDebugOpen] = useState(false);
   const [activeDialogueScript, setActiveDialogueScript] = useState<DialogueViewScript | null>(null);
   const [dialogueExpressionByCharacterId, setDialogueExpressionByCharacterId] = useState<Partial<Record<string, Expression>>>({});
   const [characterExpressionById, setCharacterExpressionById] = useState<Partial<Record<string, Expression>>>({});
@@ -130,6 +132,13 @@ function App() {
           >
             Save DB
           </button>
+          <button
+            className={styles.demoButton}
+            type="button"
+            onClick={() => setIsOfflineRecapDebugOpen(isOpen => !isOpen)}
+          >
+            Offline Recap
+          </button>
         </div>
         {saveInitializationError ? (
           <div className={styles.saveStatus}>{saveInitializationError}</div>
@@ -154,6 +163,9 @@ function App() {
         ) : null}
         {isSaveDebugOpen ? (
           <SaveDebugPanel onClose={() => setSaveDebugOpen(false)} />
+        ) : null}
+        {isOfflineRecapDebugOpen ? (
+          <OfflineRecapDebugWindow onClose={() => setIsOfflineRecapDebugOpen(false)} />
         ) : null}
         {activeDialogueScript ? (
           <DialogueWindow
