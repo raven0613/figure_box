@@ -12,6 +12,7 @@ import { settingsService } from '~/services/save/settingsService';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { DialogueViewScript } from '~/typing/dialogueView';
 import { DialogueWindow } from './components/dialogue/DialogueWindow';
+import { SettingsPanel } from './components/settings/SettingsPanel';
 import styles from './App.module.scss';
 import { TownMapContainer } from './components/townMap/TownMapContainer';
 
@@ -20,6 +21,7 @@ function App() {
   const [saveInitializationError, setSaveInitializationError] = useState<string | null>(null);
   const [isSaveDebugOpen, setIsSaveDebugOpen] = useState(false);
   const [isOfflineRecapDebugOpen, setIsOfflineRecapDebugOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeDialogueScript, setActiveDialogueScript] = useState<DialogueViewScript | null>(null);
   const [dialogueExpressionByCharacterId, setDialogueExpressionByCharacterId] = useState<Partial<Record<string, Expression>>>({});
   const [characterExpressionById, setCharacterExpressionById] = useState<Partial<Record<string, Expression>>>({});
@@ -140,6 +142,17 @@ function App() {
             Offline Recap
           </button>
         </div>
+        <button
+          className={styles.menuButton}
+          type="button"
+          title="設定"
+          aria-label="開啟設定"
+          onClick={() => setIsSettingsOpen(true)}
+        >
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+        </button>
         {saveInitializationError ? (
           <div className={styles.saveStatus}>{saveInitializationError}</div>
         ) : null}
@@ -166,6 +179,9 @@ function App() {
         ) : null}
         {isOfflineRecapDebugOpen ? (
           <OfflineRecapDebugWindow onClose={() => setIsOfflineRecapDebugOpen(false)} />
+        ) : null}
+        {isSettingsOpen ? (
+          <SettingsPanel onClose={() => setIsSettingsOpen(false)} />
         ) : null}
         {activeDialogueScript ? (
           <DialogueWindow

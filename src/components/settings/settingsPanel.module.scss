@@ -1,0 +1,53 @@
+.panel {
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 32px));
+}
+
+.content {
+  gap: 12px;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(36, 49, 58, 0.12);
+  border-radius: 8px;
+  background: #eef2f3;
+}
+
+.tabButton {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #3a4952;
+  font-size: 14px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.activeTabButton {
+  border-color: rgba(36, 49, 58, 0.14);
+  background: #ffffff;
+  color: #1f2b33;
+  box-shadow: 0 4px 10px rgba(36, 49, 58, 0.1);
+}
+
+.tabPanel {
+  min-height: 160px;
+  padding: 14px;
+  border: 1px solid rgba(36, 49, 58, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.emptyState {
+  margin: 0;
+  color: #687780;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+}
