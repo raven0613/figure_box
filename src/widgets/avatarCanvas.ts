@@ -3,6 +3,10 @@ import { Canvas, Circle, FabricImage, FabricObject, Group } from 'fabric';
 export type AvatarGroupKey = 'eyes' | 'hair';
 export type AvatarTransformProperty = 'offsetX' | 'offsetY' | 'rotate' | 'scale' | 'flipX';
 export type AvatarEditableProperty = AvatarTransformProperty | 'color' | 'lineColor';
+export type AccessoryCategory = 'sideHair' | 'ponytail' | 'accessory';
+export type AccessoryLayerSlot = 'behindBody' | 'onSkin' | 'frontBody' | 'frontFace' | 'frontBangs';
+export type AccessoryRenderMode = 'mirrored' | 'center';
+export type AccessoryPoseKey = 'portrait' | 'chibi';
 
 export type AvatarPartKey =
   | 'face'
@@ -18,7 +22,6 @@ export type AvatarPartKey =
   | 'eyes.lowerEyelid'
   | 'eyes.light'
   | 'hair.bangs'
-  | 'hair.sideburns'
   | 'hair.topHair'
   | 'hair.backHair'
   | 'mouth'
@@ -55,7 +58,29 @@ export interface AvatarPartState {
   lightDistance?: number;
 }
 
-export type AvatarState = Record<AvatarPartKey, AvatarPartState>;
+export interface AvatarAccessoryInstance extends AvatarPartState {
+  instanceId: string;
+  category: AccessoryCategory;
+  layerSlot: AccessoryLayerSlot;
+  order: number;
+  chibi: AvatarAccessoryPoseState;
+}
+
+export interface AvatarAccessoryPoseState {
+  layerSlot: AccessoryLayerSlot;
+  order: number;
+  offsetX: number;
+  offsetY: number;
+  rotate: number;
+  scale: number;
+  flipX: boolean;
+  leftVisible: boolean;
+  rightVisible: boolean;
+}
+
+export interface AvatarState extends Record<AvatarPartKey, AvatarPartState> {
+  accessories: AvatarAccessoryInstance[];
+}
 
 export interface AvatarCanvasOptions {
   width?: number;
@@ -85,16 +110,38 @@ interface AvatarImageLayer {
   shouldDropLightPixels?: boolean;
 }
 
+export interface AccessoryLayerSlotDefinition {
+  id: AccessoryLayerSlot;
+  label: string;
+  zIndex: number;
+}
+
+export interface AccessoryCategoryDefinition {
+  category: AccessoryCategory;
+  label: string;
+  assetFolder: string;
+  renderMode: AccessoryRenderMode;
+  defaultColor: string;
+  defaultLineColor: string;
+  defaultLayerSlot: AccessoryLayerSlot;
+  allowedLayerSlots: AccessoryLayerSlot[];
+  editableProperties: AvatarEditableProperty[];
+  options: AvatarPartOption[];
+}
+
 const DEFAULT_CANVAS_WIDTH = 520;
 const DEFAULT_CANVAS_HEIGHT = 560;
 const DEFAULT_SCALE = 1;
 const DEFAULT_LINE_COLOR = '#262626';
+const DEFAULT_HAIR_COLOR = '#302030';
 const BASE_TINT_LUMINANCE = 128;
 const BLACK_MASK_MAX_LUMINANCE = 8;
 const LINE_LAYER_FILL_LUMINANCE_THRESHOLD = 180;
 const AVATAR_PIXEL_SCALE = 3;
 const EYE_GROUP_OFFSET_Y = -10;
 const EYE_DISTANCE = 50;
+const ACCESSORY_ORDER_STEP = 0.01;
+const CHIBI_ACCESSORY_POSITION_SCALE = 0.35;
 const tintCache = new Map<string, string>();
 
 const avatarAssetUrls = import.meta.glob<string>('../assets/avatar_system/**/*.png', {
@@ -133,15 +180,44 @@ export const AVATAR_PART_DEFINITIONS: AvatarPartDefinition[] = [
   createDefinition('nose', 'nose', 13, '#b36f61', 5),
   createDefinition('mouth', 'mouth', 14, '#b34a55', 3),
   createDefinition('face.line', 'face line', 15, '#f2c7a7', 2, undefined, ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], true),
-  createDefinition('hair.sideburns', 'side hair', 16, '#302030', 5, 'hair'),
   createDefinition('hair.bangs', 'bangs', 17, '#302030', 4, 'hair'),
 ];
 
 export const AVATAR_EDITOR_PART_DEFINITIONS: AvatarPartDefinition[] = AVATAR_PART_DEFINITIONS
   .filter(definition => definition.isEditorHidden !== true);
 
+export const ACCESSORY_LAYER_SLOT_DEFINITIONS: AccessoryLayerSlotDefinition[] = [
+  { id: 'behindBody', label: '身體後', zIndex: -1 },
+  { id: 'onSkin', label: '身體上', zIndex: 2.25 },
+  { id: 'frontBody', label: '身體前', zIndex: 2.5 },
+  { id: 'frontFace', label: '臉前', zIndex: 15.5 },
+  { id: 'frontBangs', label: '瀏海前', zIndex: 18 },
+];
+
+export const ACCESSORY_CATEGORY_DEFINITIONS: AccessoryCategoryDefinition[] = [
+  createAccessoryCategoryDefinition('sideHair', '側髮', 'accessory/side_hair', 'mirrored', DEFAULT_HAIR_COLOR, 'frontFace', [
+    'behindBody',
+    'frontBody',
+    'frontFace',
+    'frontBangs',
+  ]),
+  createAccessoryCategoryDefinition('ponytail', '馬尾', 'accessory/ponytail', 'center', DEFAULT_HAIR_COLOR, 'behindBody', [
+    'behindBody',
+    'frontBody',
+    'frontFace',
+    'frontBangs',
+  ]),
+  createAccessoryCategoryDefinition('accessory', '配件', 'accessory/accessory', 'center', '#ffffff', 'frontFace', [
+    'behindBody',
+    'onSkin',
+    'frontBody',
+    'frontFace',
+    'frontBangs',
+  ]),
+];
+
 export function createDefaultAvatarState(): AvatarState {
-  return AVATAR_PART_DEFINITIONS.reduce((state, definition) => {
+  const partState = AVATAR_PART_DEFINITIONS.reduce((state, definition) => {
     state[definition.key] = {
       optionId: definition.options[0]?.id ?? 1,
       color: definition.defaultColor,
@@ -156,7 +232,12 @@ export function createDefaultAvatarState(): AvatarState {
       lightDistance: EYE_DISTANCE - 5,
     };
     return state;
-  }, {} as AvatarState);
+  }, {} as Record<AvatarPartKey, AvatarPartState>);
+
+  return {
+    ...partState,
+    accessories: [createDefaultAccessoryInstance('sideHair', 0)],
+  };
 }
 
 function createDefinition(
@@ -183,6 +264,150 @@ function createDefinition(
     })),
     parentKey,
   };
+}
+
+function createAccessoryCategoryDefinition(
+  category: AccessoryCategory,
+  label: string,
+  assetFolder: string,
+  renderMode: AccessoryRenderMode,
+  defaultColor: string,
+  defaultLayerSlot: AccessoryLayerSlot,
+  allowedLayerSlots: AccessoryLayerSlot[],
+): AccessoryCategoryDefinition {
+  return {
+    category,
+    label,
+    assetFolder,
+    renderMode,
+    defaultColor,
+    defaultLineColor: DEFAULT_LINE_COLOR,
+    defaultLayerSlot,
+    allowedLayerSlots,
+    editableProperties: ['color', 'lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'],
+    options: createAssetOptionDefinitions(assetFolder, label),
+  };
+}
+
+export function createDefaultAccessoryInstance(
+  category: AccessoryCategory,
+  order: number,
+  layerSlot?: AccessoryLayerSlot,
+): AvatarAccessoryInstance {
+  const definition = getAccessoryCategoryDefinition(category);
+
+  return {
+    instanceId: createAccessoryInstanceId(),
+    category,
+    optionId: definition.options[0]?.id ?? 1,
+    color: definition.defaultColor,
+    lineColor: definition.defaultLineColor,
+    offsetX: 0,
+    offsetY: 0,
+    rotate: 0,
+    scale: DEFAULT_SCALE,
+    flipX: false,
+    leftVisible: true,
+    rightVisible: true,
+    layerSlot: layerSlot ?? definition.defaultLayerSlot,
+    order,
+    chibi: createDefaultAccessoryPoseState(layerSlot ?? definition.defaultLayerSlot, order),
+  };
+}
+
+export function getAccessoryPoseState(
+  accessory: AvatarAccessoryInstance,
+  poseKey: AccessoryPoseKey,
+): AvatarAccessoryPoseState {
+  if (poseKey === 'chibi') {
+    return {
+      ...createDefaultAccessoryPoseState(accessory.layerSlot, accessory.order),
+      ...accessory.chibi,
+    };
+  }
+
+  return {
+    layerSlot: accessory.layerSlot,
+    order: accessory.order,
+    offsetX: accessory.offsetX ?? 0,
+    offsetY: accessory.offsetY ?? 0,
+    rotate: accessory.rotate ?? 0,
+    scale: accessory.scale ?? DEFAULT_SCALE,
+    flipX: accessory.flipX === true,
+    leftVisible: accessory.leftVisible !== false,
+    rightVisible: accessory.rightVisible !== false,
+  };
+}
+
+function createDefaultAccessoryPoseState(
+  layerSlot: AccessoryLayerSlot,
+  order: number,
+): AvatarAccessoryPoseState {
+  return {
+    layerSlot,
+    order,
+    offsetX: 0,
+    offsetY: 0,
+    rotate: 0,
+    scale: DEFAULT_SCALE,
+    flipX: false,
+    leftVisible: true,
+    rightVisible: true,
+  };
+}
+
+export function getAccessoryCategoryDefinition(category: AccessoryCategory): AccessoryCategoryDefinition {
+  const definition = ACCESSORY_CATEGORY_DEFINITIONS.find(item => item.category === category);
+
+  if (!definition) {
+    throw new Error(`Unsupported accessory category: ${category}`);
+  }
+
+  return definition;
+}
+
+export function getAccessoryLayerSlotDefinition(slot: AccessoryLayerSlot): AccessoryLayerSlotDefinition {
+  const definition = ACCESSORY_LAYER_SLOT_DEFINITIONS.find(item => item.id === slot);
+
+  if (!definition) {
+    throw new Error(`Unsupported accessory layer slot: ${slot}`);
+  }
+
+  return definition;
+}
+
+export function getAccessoryDisplayName(accessory: AvatarAccessoryInstance): string {
+  const category = getAccessoryCategoryDefinition(accessory.category);
+  return `${category.label} ${accessory.optionId}`;
+}
+
+function createAccessoryPartDefinition(accessory: AvatarAccessoryInstance): AvatarPartDefinition {
+  const category = getAccessoryCategoryDefinition(accessory.category);
+
+  return {
+    key: 'hair',
+    label: getAccessoryDisplayName(accessory),
+    zIndex: getAccessoryZIndex(accessory),
+    defaultColor: category.defaultColor,
+    defaultLineColor: category.defaultLineColor,
+    editableProperties: category.editableProperties,
+    options: category.options,
+    parentKey: accessory.category === 'sideHair' || accessory.category === 'ponytail'
+      ? 'hair'
+      : undefined,
+  };
+}
+
+function getAccessoryZIndex(accessory: AvatarAccessoryInstance): number {
+  return getAccessoryLayerSlotDefinition(accessory.layerSlot).zIndex + accessory.order * ACCESSORY_ORDER_STEP;
+}
+
+function createAccessoryInstanceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `accessory-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 abstract class AvatarPart {
@@ -944,11 +1169,52 @@ class BangsPart extends CenterAssetPart {
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
-    return createLineAndColorLayers('bangs', formatOptionId(getBangsAssetOptionId(this.state.optionId)));
+    return createLineAndColorLayers('bangs', formatOptionId(this.state.optionId));
   }
 }
 
-class SideHairPart extends MirroredAssetPart {
+abstract class BaseAccessoryPart extends ImageAvatarPart {
+  protected get accessoryState(): AvatarAccessoryInstance {
+    return this.state as AvatarAccessoryInstance;
+  }
+
+  protected get categoryDefinition(): AccessoryCategoryDefinition {
+    return getAccessoryCategoryDefinition(this.accessoryState.category);
+  }
+
+  protected get baseX(): number {
+    return this.context.centerX;
+  }
+
+  protected get baseY(): number {
+    return this.context.faceCenterY - 18;
+  }
+
+  protected resolveAccessoryLayers(): AvatarImageLayer[] {
+    return createOptionalLineAndColorLayers(
+      this.categoryDefinition.assetFolder,
+      formatOptionId(this.state.optionId),
+      `${formatOptionId(this.state.optionId)}.png`,
+    );
+  }
+}
+
+class CenterAccessoryPart extends BaseAccessoryPart {
+  protected resolveLayers(): AvatarImageLayer[] {
+    return this.resolveAccessoryLayers();
+  }
+
+  protected configureImage(image: FabricImage): void {
+    image.set({
+      left: 0,
+      top: 0,
+      scaleX: AVATAR_PIXEL_SCALE,
+      scaleY: AVATAR_PIXEL_SCALE,
+    });
+  }
+}
+
+class MirroredAccessoryPart extends MirroredAssetPart {
   protected get baseX(): number {
     return this.context.centerX;
   }
@@ -958,7 +1224,11 @@ class SideHairPart extends MirroredAssetPart {
   }
 
   protected resolveSideLayers(): AvatarImageLayer[] {
-    return createLineAndColorLayers('side_hair', formatOptionId(this.state.optionId));
+    return createOptionalLineAndColorLayers(
+      getAccessoryCategoryDefinition((this.state as AvatarAccessoryInstance).category).assetFolder,
+      formatOptionId(this.state.optionId),
+      `${formatOptionId(this.state.optionId)}.png`,
+    );
   }
 
   protected getSideBaseX(side: -1 | 1): number {
@@ -970,7 +1240,13 @@ class SideHairPart extends MirroredAssetPart {
   }
 
   protected getMirroredSourceSide(): -1 | 1 {
-    return [1, 3, 5].includes(this.state.optionId) ? -1 : 1;
+    const accessoryState = this.state as AvatarAccessoryInstance;
+
+    if (accessoryState.category === 'sideHair') {
+      return [1, 3, 5].includes(this.state.optionId) ? -1 : 1;
+    }
+
+    return 1;
   }
 }
 
@@ -1009,8 +1285,6 @@ class AvatarPartFactory {
         return new MouthPart(definition, context, state);
       case 'hair.backHair':
         return new BackHairPart(definition, context, state);
-      case 'hair.sideburns':
-        return new SideHairPart(definition, context, state);
       case 'hair.topHair':
         return new TopHairPart(definition, context, state);
       case 'hair.bangs':
@@ -1018,6 +1292,17 @@ class AvatarPartFactory {
     }
 
     throw new Error(`Unsupported avatar part: ${definition.key}`);
+  }
+
+  createAccessory(context: AvatarPartContext, accessory: AvatarAccessoryInstance): AvatarPart {
+    const definition = createAccessoryPartDefinition(accessory);
+    const categoryDefinition = getAccessoryCategoryDefinition(accessory.category);
+
+    if (categoryDefinition.renderMode === 'mirrored') {
+      return new MirroredAccessoryPart(definition, context, accessory);
+    }
+
+    return new CenterAccessoryPart(definition, context, accessory);
   }
 }
 
@@ -1036,6 +1321,15 @@ class AvatarStateStore {
     return { ...this.state[key] };
   }
 
+  getAccessories(): AvatarAccessoryInstance[] {
+    return this.state.accessories.map(accessory => ({ ...accessory }));
+  }
+
+  getAccessoryState(instanceId: string): AvatarAccessoryInstance | null {
+    const accessory = this.state.accessories.find(item => item.instanceId === instanceId);
+    return accessory ? { ...accessory } : null;
+  }
+
   updatePart(key: AvatarPartKey, patch: Partial<AvatarPartState>): AvatarPartState {
     const nextState = {
       ...this.state[key],
@@ -1046,6 +1340,141 @@ class AvatarStateStore {
       [key]: nextState,
     };
     return { ...nextState };
+  }
+
+  addAccessory(category: AccessoryCategory): AvatarAccessoryInstance | null {
+    const definition = getAccessoryCategoryDefinition(category);
+
+    if (definition.options.length === 0) {
+      return null;
+    }
+
+    const nextOrder = getNextAccessoryOrder(this.state.accessories, definition.defaultLayerSlot);
+    const accessory = createDefaultAccessoryInstance(category, nextOrder, definition.defaultLayerSlot);
+
+    this.state = {
+      ...this.state,
+      accessories: [...this.state.accessories, accessory],
+    };
+
+    return { ...accessory };
+  }
+
+  updateAccessory(instanceId: string, patch: Partial<AvatarAccessoryInstance>): AvatarAccessoryInstance | null {
+    const nextAccessories = this.state.accessories.map(accessory => {
+      if (accessory.instanceId !== instanceId) {
+        return accessory;
+      }
+
+      return {
+        ...accessory,
+        ...patch,
+      };
+    });
+    const nextAccessory = nextAccessories.find(accessory => accessory.instanceId === instanceId) ?? null;
+
+    this.state = {
+      ...this.state,
+      accessories: normalizeAccessoryOrders(nextAccessories),
+    };
+
+    return nextAccessory ? { ...nextAccessory } : null;
+  }
+
+  updateAccessoryPose(
+    instanceId: string,
+    poseKey: AccessoryPoseKey,
+    patch: Partial<AvatarAccessoryPoseState>,
+  ): AvatarAccessoryInstance | null {
+    if (poseKey === 'portrait') {
+      return this.updateAccessory(instanceId, patch);
+    }
+
+    const nextAccessories = this.state.accessories.map(accessory => {
+      if (accessory.instanceId !== instanceId) {
+        return accessory;
+      }
+
+      return {
+        ...accessory,
+        chibi: {
+          ...getAccessoryPoseState(accessory, 'chibi'),
+          ...patch,
+        },
+      };
+    });
+    const nextAccessory = nextAccessories.find(accessory => accessory.instanceId === instanceId) ?? null;
+
+    this.state = {
+      ...this.state,
+      accessories: nextAccessories,
+    };
+
+    return nextAccessory ? { ...nextAccessory } : null;
+  }
+
+  removeAccessory(instanceId: string): void {
+    this.state = {
+      ...this.state,
+      accessories: normalizeAccessoryOrders(
+        this.state.accessories.filter(accessory => accessory.instanceId !== instanceId)
+      ),
+    };
+  }
+
+  setAccessoryLayerSlot(
+    instanceId: string,
+    layerSlot: AccessoryLayerSlot,
+    poseKey: AccessoryPoseKey = 'portrait',
+  ): AvatarAccessoryInstance | null {
+    const current = this.state.accessories.find(accessory => accessory.instanceId === instanceId);
+
+    if (!current) {
+      return null;
+    }
+
+    if (poseKey === 'chibi') {
+      return this.updateAccessoryPose(instanceId, 'chibi', {
+        layerSlot,
+        order: current.chibi.order,
+      });
+    }
+
+    const nextOrder = getNextAccessoryOrder(
+      this.state.accessories.filter(accessory => accessory.instanceId !== instanceId),
+      layerSlot
+    );
+
+    return this.updateAccessory(instanceId, { layerSlot, order: nextOrder });
+  }
+
+  reorderAccessoryWithinSlot(sourceInstanceId: string, targetInstanceId: string): void {
+    const source = this.state.accessories.find(accessory => accessory.instanceId === sourceInstanceId);
+    const target = this.state.accessories.find(accessory => accessory.instanceId === targetInstanceId);
+
+    if (!source || !target || source.layerSlot !== target.layerSlot || source.instanceId === target.instanceId) {
+      return;
+    }
+
+    const sameSlot = this.state.accessories
+      .filter(accessory => accessory.layerSlot === source.layerSlot)
+      .sort((first, second) => first.order - second.order);
+    const withoutSource = sameSlot.filter(accessory => accessory.instanceId !== sourceInstanceId);
+    const targetIndex = withoutSource.findIndex(accessory => accessory.instanceId === targetInstanceId);
+    const nextSameSlot = [
+      ...withoutSource.slice(0, targetIndex),
+      source,
+      ...withoutSource.slice(targetIndex),
+    ].map((accessory, order) => ({
+      ...accessory,
+      order,
+    }));
+    const otherSlots = this.state.accessories.filter(accessory => accessory.layerSlot !== source.layerSlot);
+
+    this.state = {
+      ...this.state,
+      accessories: [...otherSlots, ...nextSameSlot],
+    };
   }
 
   private mergeInitialState(initialState?: Partial<AvatarState>): AvatarState {
@@ -1062,6 +1491,33 @@ class AvatarStateStore {
       };
     });
 
+    const initialAccessories = initialState.accessories;
+
+    if (Array.isArray(initialAccessories)) {
+      defaults.accessories = normalizeAccessoryOrders(initialAccessories.map(accessory => ({
+        ...createDefaultAccessoryInstance(accessory.category ?? 'sideHair', accessory.order ?? 0, accessory.layerSlot),
+        ...accessory,
+        chibi: {
+          ...createDefaultAccessoryPoseState(
+            accessory.chibi?.layerSlot ?? accessory.layerSlot,
+            accessory.chibi?.order ?? accessory.order ?? 0,
+          ),
+          ...accessory.chibi,
+        },
+      })));
+      return defaults;
+    }
+
+    const legacySideHair = (initialState as Partial<Record<'hair.sideburns', AvatarPartState>>)['hair.sideburns'];
+
+    if (legacySideHair) {
+      defaults.accessories = [{
+        ...createDefaultAccessoryInstance('sideHair', 0),
+        ...legacySideHair,
+        chibi: createDefaultAccessoryPoseState('frontFace', 0),
+      }];
+    }
+
     return defaults;
   }
 }
@@ -1071,12 +1527,17 @@ export class AvatarCanvas {
   private readonly stateStore: AvatarStateStore;
   private readonly partFactory = new AvatarPartFactory();
   private readonly parts = new Map<AvatarPartKey, AvatarPart>();
+  private readonly accessoryParts = new Map<string, AvatarPart>();
   private readonly onChange?: (state: AvatarState) => void;
   private readonly faceRenderKeys: readonly AvatarPartKey[] = ['face.color', 'face.line'];
+  private readonly width: number;
+  private readonly height: number;
 
   constructor(canvasElement: HTMLCanvasElement | string, options: AvatarCanvasOptions = {}) {
     const width = options.width ?? DEFAULT_CANVAS_WIDTH;
     const height = options.height ?? DEFAULT_CANVAS_HEIGHT;
+    this.width = width;
+    this.height = height;
     this.onChange = options.onChange;
     this.stateStore = new AvatarStateStore(options.initialState);
     this.canvas = new Canvas(canvasElement, {
@@ -1108,6 +1569,10 @@ export class AvatarCanvas {
 
   getPartState(key: AvatarPartKey): AvatarPartState {
     return this.stateStore.getPartState(key);
+  }
+
+  getAccessoryState(instanceId: string): AvatarAccessoryInstance | null {
+    return this.stateStore.getAccessoryState(instanceId);
   }
 
   setOption(key: AvatarPartKey, optionId: number): void {
@@ -1154,11 +1619,149 @@ export class AvatarCanvas {
     this.updatePart(key, { lightDistance: Math.max(0, Math.min(120, Math.round(lightDistance))) });
   }
 
+  addAccessory(category: AccessoryCategory): string | null {
+    const accessory = this.stateStore.addAccessory(category);
+
+    if (!accessory) {
+      return null;
+    }
+
+    this.rebuildAvatar();
+    this.emitChange();
+    return accessory.instanceId;
+  }
+
+  removeAccessory(instanceId: string): void {
+    this.stateStore.removeAccessory(instanceId);
+    this.rebuildAvatar();
+    this.emitChange();
+  }
+
+  setAccessoryOption(instanceId: string, optionId: number): void {
+    this.updateAccessory(instanceId, { optionId });
+  }
+
+  setAccessoryColor(instanceId: string, color: string): void {
+    this.updateAccessory(instanceId, { color });
+  }
+
+  setAccessoryLineColor(instanceId: string, lineColor: string): void {
+    this.updateAccessory(instanceId, { lineColor });
+  }
+
+  moveAccessory(
+    instanceId: string,
+    deltaX: number,
+    deltaY: number,
+    poseKey: AccessoryPoseKey = 'portrait',
+  ): void {
+    const current = this.getAccessoryState(instanceId);
+
+    if (!current) {
+      return;
+    }
+    const pose = getAccessoryPoseState(current, poseKey);
+
+    this.updateAccessoryPose(instanceId, poseKey, {
+      offsetX: pose.offsetX + deltaX,
+      offsetY: pose.offsetY + deltaY,
+    });
+  }
+
+  rotateAccessory(instanceId: string, delta: number, poseKey: AccessoryPoseKey = 'portrait'): void {
+    const current = this.getAccessoryState(instanceId);
+
+    if (!current) {
+      return;
+    }
+    const pose = getAccessoryPoseState(current, poseKey);
+
+    this.updateAccessoryPose(instanceId, poseKey, { rotate: pose.rotate + delta });
+  }
+
+  scaleAccessory(instanceId: string, delta: number, poseKey: AccessoryPoseKey = 'portrait'): void {
+    const current = this.getAccessoryState(instanceId);
+
+    if (!current) {
+      return;
+    }
+    const pose = getAccessoryPoseState(current, poseKey);
+
+    const nextScale = Math.max(0.2, Math.min(3, pose.scale + delta));
+    this.updateAccessoryPose(instanceId, poseKey, { scale: Number(nextScale.toFixed(2)) });
+  }
+
+  flipAccessory(instanceId: string, poseKey: AccessoryPoseKey = 'portrait'): void {
+    const current = this.getAccessoryState(instanceId);
+
+    if (!current) {
+      return;
+    }
+    const pose = getAccessoryPoseState(current, poseKey);
+
+    this.updateAccessoryPose(instanceId, poseKey, { flipX: pose.flipX !== true });
+  }
+
+  setAccessorySideVisible(
+    instanceId: string,
+    side: 'left' | 'right',
+    isVisible: boolean,
+    poseKey: AccessoryPoseKey = 'portrait',
+  ): void {
+    this.updateAccessoryPose(
+      instanceId,
+      poseKey,
+      side === 'left' ? { leftVisible: isVisible } : { rightVisible: isVisible }
+    );
+  }
+
+  setAccessoryLayerSlot(
+    instanceId: string,
+    layerSlot: AccessoryLayerSlot,
+    poseKey: AccessoryPoseKey = 'portrait',
+  ): void {
+    const accessory = this.stateStore.setAccessoryLayerSlot(instanceId, layerSlot, poseKey);
+
+    if (!accessory) {
+      return;
+    }
+
+    if (poseKey === 'portrait') {
+      this.rebuildAvatar();
+    }
+
+    this.emitChange();
+  }
+
+  estimateAccessoryChibiPoseFromPortrait(instanceId: string): void {
+    const accessory = this.getAccessoryState(instanceId);
+
+    if (!accessory) {
+      return;
+    }
+
+    const portraitPose = getAccessoryPoseState(accessory, 'portrait');
+    this.updateAccessoryPose(instanceId, 'chibi', {
+      ...portraitPose,
+      offsetX: Math.round(portraitPose.offsetX * CHIBI_ACCESSORY_POSITION_SCALE),
+      offsetY: Math.round(portraitPose.offsetY * CHIBI_ACCESSORY_POSITION_SCALE),
+    });
+  }
+
+  reorderAccessoryWithinSlot(sourceInstanceId: string, targetInstanceId: string): void {
+    this.stateStore.reorderAccessoryWithinSlot(sourceInstanceId, targetInstanceId);
+    this.rebuildAvatar();
+    this.emitChange();
+  }
+
   destroy(): Promise<boolean> {
     return this.canvas.dispose();
   }
 
   private buildAvatar(width: number, height: number): void {
+    this.parts.clear();
+    this.accessoryParts.clear();
+
     const context: AvatarPartContext = {
       width,
       height,
@@ -1168,17 +1771,31 @@ export class AvatarCanvas {
       getPartState: key => this.stateStore.getPartState(key),
     };
 
-    AVATAR_PART_DEFINITIONS
-      .slice()
+    const renderItems = [
+      ...AVATAR_PART_DEFINITIONS.map(definition => ({
+        zIndex: definition.zIndex,
+        render: () => {
+          const state = this.isFaceRenderKey(definition.key)
+            ? this.stateStore.getPartState('face')
+            : this.stateStore.getPartState(definition.key);
+          const part = this.partFactory.create(definition, context, state);
+          this.parts.set(definition.key, part);
+          this.canvas.add(part.createObject());
+        },
+      })),
+      ...this.stateStore.getAccessories().map(accessory => ({
+        zIndex: getAccessoryZIndex(accessory),
+        render: () => {
+          const part = this.partFactory.createAccessory(context, accessory);
+          this.accessoryParts.set(accessory.instanceId, part);
+          this.canvas.add(part.createObject());
+        },
+      })),
+    ];
+
+    renderItems
       .sort((first, second) => first.zIndex - second.zIndex)
-      .forEach(definition => {
-        const state = this.isFaceRenderKey(definition.key)
-          ? this.stateStore.getPartState('face')
-          : this.stateStore.getPartState(definition.key);
-        const part = this.partFactory.create(definition, context, state);
-        this.parts.set(definition.key, part);
-        this.canvas.add(part.createObject());
-      });
+      .forEach(item => item.render());
 
     this.canvas.requestRenderAll();
   }
@@ -1203,10 +1820,55 @@ export class AvatarCanvas {
     this.emitChange();
   }
 
+  private updateAccessory(instanceId: string, patch: Partial<AvatarAccessoryInstance>): void {
+    const nextState = this.stateStore.updateAccessory(instanceId, patch);
+
+    if (!nextState) {
+      return;
+    }
+
+    this.accessoryParts.get(instanceId)?.update(nextState);
+    this.canvas.requestRenderAll();
+    this.emitChange();
+  }
+
+  private updateAccessoryPose(
+    instanceId: string,
+    poseKey: AccessoryPoseKey,
+    patch: Partial<AvatarAccessoryPoseState>,
+  ): void {
+    if (poseKey === 'portrait') {
+      this.updateAccessory(instanceId, patch);
+      return;
+    }
+
+    const nextState = this.stateStore.updateAccessoryPose(instanceId, poseKey, patch);
+
+    if (!nextState) {
+      return;
+    }
+
+    this.emitChange();
+  }
+
+  private rebuildAvatar(): void {
+    const objects = this.canvas.getObjects();
+
+    if (objects.length > 0) {
+      this.canvas.remove(...objects);
+    }
+
+    this.buildAvatar(this.width, this.height);
+  }
+
   private refreshGroupChildren(groupKey: AvatarGroupKey): void {
     AVATAR_PART_DEFINITIONS
       .filter(definition => definition.parentKey === groupKey)
       .forEach(definition => this.parts.get(definition.key)?.refreshParentTransform());
+
+    if (groupKey === 'hair') {
+      this.accessoryParts.forEach(part => part.refreshParentTransform());
+    }
   }
 
   private isGroupKey(key: AvatarPartKey): key is AvatarGroupKey {
@@ -1273,6 +1935,28 @@ function hasAvatarAsset(folder: string, file: string): boolean {
   return avatarAssetUrls[assetPath] !== undefined;
 }
 
+function createAssetOptionDefinitions(folder: string, label: string): AvatarPartOption[] {
+  const optionIds = new Set<number>();
+  const assetPathPattern = new RegExp(`^\\.\\./assets/avatar_system/${folder}/(\\d+)(?:_(?:color|line))?\\.png$`);
+
+  Object.keys(avatarAssetUrls).forEach(assetPath => {
+    const match = assetPath.match(assetPathPattern);
+
+    if (!match) {
+      return;
+    }
+
+    optionIds.add(Number.parseInt(match[1], 10));
+  });
+
+  return [...optionIds]
+    .sort((first, second) => first - second)
+    .map(id => ({
+      id,
+      label: `${label} ${id}`,
+    }));
+}
+
 function getAvatarAssetUrl(folder: string, file: string): string {
   const normalizedFile = file.replace('__right', '');
   const assetPath = `../assets/avatar_system/${folder}/${normalizedFile}`;
@@ -1289,16 +1973,22 @@ function formatOptionId(optionId: number): string {
   return String(optionId).padStart(2, '0');
 }
 
-function getBangsAssetOptionId(optionId: number): number {
-  if (optionId === 1) {
-    return 2;
-  }
+function getNextAccessoryOrder(accessories: AvatarAccessoryInstance[], layerSlot: AccessoryLayerSlot): number {
+  const sameSlotOrders = accessories
+    .filter(accessory => accessory.layerSlot === layerSlot)
+    .map(accessory => accessory.order);
 
-  if (optionId === 2) {
-    return 1;
-  }
+  return sameSlotOrders.length === 0 ? 0 : Math.max(...sameSlotOrders) + 1;
+}
 
-  return optionId;
+function normalizeAccessoryOrders(accessories: AvatarAccessoryInstance[]): AvatarAccessoryInstance[] {
+  return ACCESSORY_LAYER_SLOT_DEFINITIONS.flatMap(slotDefinition => accessories
+    .filter(accessory => accessory.layerSlot === slotDefinition.id)
+    .sort((first, second) => first.order - second.order)
+    .map((accessory, order) => ({
+      ...accessory,
+      order,
+    })));
 }
 
 function rotatePoint(point: Point2D, degrees: number): Point2D {

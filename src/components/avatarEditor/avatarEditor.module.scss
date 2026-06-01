@@ -43,13 +43,15 @@
 }
 
 .partList {
-  max-height: 504px;
+  max-height: 252px;
   overflow: auto;
   padding-right: 2px;
 }
 
 .partButton,
 .activePartButton,
+.accessoryButton,
+.activeAccessoryButton,
 .optionButton,
 .activeOptionButton,
 .controlGroup button {
@@ -65,7 +67,9 @@
 }
 
 .partButton,
-.activePartButton {
+.activePartButton,
+.accessoryButton,
+.activeAccessoryButton {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -74,6 +78,7 @@
 }
 
 .activePartButton,
+.activeAccessoryButton,
 .activeOptionButton {
   color: #ffffff;
   background: #2563eb;
@@ -84,6 +89,63 @@
   flex: 0 0 auto;
   font-size: 11px;
   opacity: 0.8;
+}
+
+.accessoryToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.accessoryToolbar button {
+  min-height: 32px;
+  padding: 7px 9px;
+  color: #374151;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accessoryToolbar button:disabled {
+  color: #94a3b8;
+  background: #f8fafc;
+  cursor: not-allowed;
+}
+
+.accessoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 218px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.accessorySlot {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.accessorySlotTitle {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.emptySlot {
+  min-height: 26px;
+  padding: 6px 8px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 .canvasShell {
@@ -122,6 +184,33 @@
   font-weight: 800;
 }
 
+.segmentedControl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  background: #e5e7eb;
+  border-radius: 6px;
+}
+
+.segmentButton,
+.activeSegmentButton {
+  min-height: 30px;
+  color: #374151;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.activeSegmentButton {
+  color: #111827;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
 .colorField {
   display: flex;
   flex-direction: column;
@@ -129,6 +218,24 @@
   color: #374151;
   font-size: 13px;
   font-weight: 700;
+}
+
+.selectField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.selectField select {
+  width: 100%;
+  height: 36px;
+  color: #374151;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
 }
 
 .colorField input[type='color'] {
@@ -219,6 +326,10 @@
   .partList {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+  }
+
+  .accessoryList {
     max-height: none;
   }
 
