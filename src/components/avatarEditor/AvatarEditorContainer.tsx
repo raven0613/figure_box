@@ -18,6 +18,7 @@ import {
   getAccessoryLayerSlotDefinition,
   getAccessoryPoseState,
 } from '~/widgets/avatarCanvas';
+import { MiniAvatarCanvas } from '~/widgets/miniAvatarCanvas';
 import styles from './avatarEditor.module.scss';
 
 const MOVE_STEP = 1;
@@ -46,7 +47,9 @@ type SelectedTarget =
 
 export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEditorContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
+  const miniCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const avatarCanvasRef = useRef<AvatarCanvas | null>(null);
+  const miniAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const holdMoveRef = useRef<HoldMoveState>({
     timeoutId: null,
     intervalId: null,
@@ -113,24 +116,33 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   }, [avatarState.accessories, selectedTarget]);
 
   useEffect(() => {
-    if (!canvasHostRef.current) {
+    if (!canvasHostRef.current || !miniCanvasHostRef.current) {
       return;
     }
 
     const canvasHost = canvasHostRef.current;
+    const miniCanvasHost = miniCanvasHostRef.current;
     const avatarCanvas = AvatarCanvas.mount(canvasHost, {
       initialState: initialStateRef.current,
       onChange: state => {
         setAvatarState(state);
+        miniAvatarCanvasRef.current?.setState(state);
         onAvatarChangeRef.current?.(state);
       },
     });
+    const miniAvatarCanvas = MiniAvatarCanvas.mount(miniCanvasHost, {
+      initialState: avatarCanvas.getState(),
+    });
     avatarCanvasRef.current = avatarCanvas;
+    miniAvatarCanvasRef.current = miniAvatarCanvas;
 
     return () => {
       avatarCanvasRef.current = null;
+      miniAvatarCanvasRef.current = null;
       void avatarCanvas.destroy();
+      void miniAvatarCanvas.destroy();
       canvasHost.replaceChildren();
+      miniCanvasHost.replaceChildren();
     };
   }, []);
 
@@ -170,6 +182,12 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
     if (selectedPart) {
       avatarCanvasRef.current?.setLineColor(selectedPart.key, lineColor);
+    }
+  };
+
+  const changeSecondaryColor = (secondaryColor: string) => {
+    if (selectedTarget.type === 'part' && selectedPart) {
+      avatarCanvasRef.current?.setSecondaryColor(selectedPart.key, secondaryColor);
     }
   };
 
@@ -370,8 +388,13 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
         </div>
       </aside>
 
-      <div className={styles.canvasShell}>
-        <div className={styles.canvasHost} ref={canvasHostRef} />
+      <div className={styles.stageShell}>
+        <div className={styles.canvasShell}>
+          <div className={styles.canvasHost} ref={canvasHostRef} />
+        </div>
+        <div className={styles.miniPreviewShell} aria-label="Mini front idle preview">
+          <div className={styles.miniCanvasHost} ref={miniCanvasHostRef} />
+        </div>
       </div>
 
       <aside className={styles.optionMenu} aria-label="選擇選項與調整">
@@ -418,11 +441,22 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
         {selectedEditableProperties.includes('color') && (
           <label className={styles.colorField}>
-            <span>color</span>
+            <span>{selectedPart?.key === 'eyes.color' ? 'left color' : 'color'}</span>
             <input
               type="color"
               value={selectedAppearanceState.color ?? selectedAccessoryDefinition?.defaultColor ?? selectedPart?.defaultColor ?? '#000000'}
               onChange={event => changeColor(event.target.value)}
+            />
+          </label>
+        )}
+
+        {selectedPart?.key === 'eyes.color' && (
+          <label className={styles.colorField}>
+            <span>right color</span>
+            <input
+              type="color"
+              value={selectedPartState.secondaryColor ?? selectedPartState.color ?? selectedPart.defaultColor ?? '#000000'}
+              onChange={event => changeSecondaryColor(event.target.value)}
             />
           </label>
         )}

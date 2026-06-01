@@ -2,7 +2,7 @@
   position: relative;
   z-index: 24;
   display: grid;
-  grid-template-columns: 188px 520px 244px;
+  grid-template-columns: 188px 704px 244px;
   gap: 12px;
   align-items: start;
   width: min-content;
@@ -148,7 +148,15 @@
   font-size: 12px;
 }
 
-.canvasShell {
+.stageShell {
+  display: grid;
+  grid-template-columns: 520px 172px;
+  gap: 12px;
+  align-items: start;
+}
+
+.canvasShell,
+.miniPreviewShell {
   width: 520px;
   height: 560px;
   overflow: hidden;
@@ -157,7 +165,13 @@
   border-radius: 8px;
 }
 
-.canvasHost {
+.miniPreviewShell {
+  width: 172px;
+  height: 172px;
+}
+
+.canvasHost,
+.miniCanvasHost {
   position: relative;
   width: 520px;
   height: 560px;
@@ -166,6 +180,11 @@
     position: relative !important;
     inset: auto !important;
   }
+}
+
+.miniCanvasHost {
+  width: 172px;
+  height: 172px;
 }
 
 .optionButton,
@@ -333,9 +352,19 @@
     max-height: none;
   }
 
+  .stageShell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .canvasShell,
   .canvasHost {
     width: min(520px, calc(100vw - 48px));
     height: min(560px, calc((100vw - 48px) * 1.0769));
+  }
+
+  .miniPreviewShell,
+  .miniCanvasHost {
+    width: 172px;
+    height: 172px;
   }
 }

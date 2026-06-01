@@ -1,0 +1,18 @@
+export const AVATAR_RIG_COLORS = {
+  canvasBackground: '#f7f5ef',
+  line: '#262626',
+  skin: '#f3ddd8',
+  hair: '#7c716b',
+  hairLight: '#9a7a74',
+  sclera: '#ffffff',
+  eyeBall: '#558bd6',
+  eyeLight: '#ffffff',
+  lowerEyelidColor: 'transparent',
+  lowerEyelidLine: '#845a55',
+  upperEyelid: '#544644',
+  eyelid: '#e3aa98',
+  eyebrow: '#47403d',
+  nose: '#b36161',
+  mouth: '#936266',
+  accessory: '#ffffff',
+} as const;

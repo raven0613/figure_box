@@ -1,5 +1,7 @@
 import { Canvas, Circle, FabricImage, FabricObject, Group } from 'fabric';
 
+import { AVATAR_RIG_COLORS } from '../constants/avatarRig';
+
 export type AvatarGroupKey = 'eyes' | 'hair';
 export type AvatarTransformProperty = 'offsetX' | 'offsetY' | 'rotate' | 'scale' | 'flipX';
 export type AvatarEditableProperty = AvatarTransformProperty | 'color' | 'lineColor';
@@ -47,6 +49,7 @@ export interface AvatarPartDefinition {
 export interface AvatarPartState {
   optionId: number;
   color?: string;
+  secondaryColor?: string;
   lineColor?: string;
   offsetX?: number;
   offsetY?: number;
@@ -107,6 +110,7 @@ interface AvatarImageLayer {
   folder: string;
   file: string;
   tint?: 'color' | 'line' | 'skin';
+  tintColor?: string;
   shouldDropLightPixels?: boolean;
 }
 
@@ -132,8 +136,7 @@ export interface AccessoryCategoryDefinition {
 const DEFAULT_CANVAS_WIDTH = 520;
 const DEFAULT_CANVAS_HEIGHT = 560;
 const DEFAULT_SCALE = 1;
-const DEFAULT_LINE_COLOR = '#262626';
-const DEFAULT_HAIR_COLOR = '#302030';
+const DEFAULT_LINE_COLOR = AVATAR_RIG_COLORS.line;
 const BASE_TINT_LUMINANCE = 128;
 const BLACK_MASK_MAX_LUMINANCE = 8;
 const LINE_LAYER_FILL_LUMINANCE_THRESHOLD = 180;
@@ -141,7 +144,8 @@ const AVATAR_PIXEL_SCALE = 3;
 const EYE_GROUP_OFFSET_Y = -10;
 const EYE_DISTANCE = 50;
 const ACCESSORY_ORDER_STEP = 0.01;
-const CHIBI_ACCESSORY_POSITION_SCALE = 0.35;
+const CHIBI_ACCESSORY_POSITION_SCALE = 0.5;
+const CHIBI_SIDE_HAIR_POSITION_SCALE = 0.5;
 const tintCache = new Map<string, string>();
 
 const avatarAssetUrls = import.meta.glob<string>('../assets/avatar_system/**/*.png', {
@@ -151,11 +155,11 @@ const avatarAssetUrls = import.meta.glob<string>('../assets/avatar_system/**/*.p
 }) as Record<string, string>;
 
 export const AVATAR_PART_DEFINITIONS: AvatarPartDefinition[] = [
-  createDefinition('hair.backHair', 'back hair bottom', 0, '#302030', 5, 'hair'),
-  createDefinition('hair.topHair', 'back hair top', 1, '#302030', 6, 'hair'),
-  createDefinition('face.color', 'face color', 2, '#f2c7a7', 2, undefined, ['color', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], true),
-  createDefinition('ear', 'ear', 3, '#f2c7a7', 1, undefined, ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
-  createDefinition('face', 'face', 4, '#f2c7a7', 2),
+  createDefinition('hair.backHair', 'back hair bottom', 0, AVATAR_RIG_COLORS.hair, 5, 'hair'),
+  createDefinition('hair.topHair', 'back hair top', 1, AVATAR_RIG_COLORS.hair, 6, 'hair'),
+  createDefinition('face.color', 'face color', 2, AVATAR_RIG_COLORS.skin, 2, undefined, ['color', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], true),
+  createDefinition('ear', 'ear', 3, AVATAR_RIG_COLORS.skin, 1, undefined, ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
+  createDefinition('face', 'face', 4, AVATAR_RIG_COLORS.skin, 2),
   {
     key: 'hair',
     label: 'hair',
@@ -170,17 +174,17 @@ export const AVATAR_PART_DEFINITIONS: AvatarPartDefinition[] = [
     editableProperties: ['offsetX', 'offsetY', 'rotate', 'scale', 'flipX'],
     options: [{ id: 1, label: 'eyes group 1' }],
   },
-  createDefinition('eyes.sclera', 'sclera', 6.5, '#ffffff', 1, 'eyes', ['color', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
-  createDefinition('eyes.color', 'eye ball', 7, '#5a86b8', 6, 'eyes'),
-  createDefinition('eyes.light', 'eye light', 8, '#ffffff', 1, 'eyes'),
-  createDefinition('eyes.lowerEyelid', 'lower eyelid', 9, '#ad7663', 3, 'eyes', ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
-  createDefinition('eyes.upperEyelid', 'upper eyelid', 10, '#6f3f3a', 5, 'eyes', ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
-  createDefinition('eyes.eyelid', 'eyelid', 11, '#6f3f3a', 5, 'eyes'),
-  createDefinition('eyes.eyebrow', 'eyebrow', 12, '#302030', 6, 'eyes'),
-  createDefinition('nose', 'nose', 13, '#b36f61', 5),
-  createDefinition('mouth', 'mouth', 14, '#b34a55', 3),
-  createDefinition('face.line', 'face line', 15, '#f2c7a7', 2, undefined, ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], true),
-  createDefinition('hair.bangs', 'bangs', 17, '#302030', 4, 'hair'),
+  createDefinition('eyes.sclera', 'sclera', 6.5, AVATAR_RIG_COLORS.sclera, 1, 'eyes', ['color', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX']),
+  createDefinition('eyes.color', 'eye ball', 7, AVATAR_RIG_COLORS.eyeBall, 6, 'eyes'),
+  createDefinition('eyes.light', 'eye light', 8, AVATAR_RIG_COLORS.eyeLight, 1, 'eyes'),
+  createDefinition('eyes.lowerEyelid', 'lower eyelid', 9, AVATAR_RIG_COLORS.lowerEyelidColor, 3, 'eyes', ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], false, AVATAR_RIG_COLORS.lowerEyelidLine),
+  createDefinition('eyes.upperEyelid', 'upper eyelid', 10, AVATAR_RIG_COLORS.upperEyelid, 5, 'eyes', ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], false, AVATAR_RIG_COLORS.upperEyelid),
+  createDefinition('eyes.eyelid', 'eyelid', 11, AVATAR_RIG_COLORS.eyelid, 5, 'eyes', undefined, false, AVATAR_RIG_COLORS.eyelid),
+  createDefinition('eyes.eyebrow', 'eyebrow', 12, AVATAR_RIG_COLORS.eyebrow, 6, 'eyes', undefined, false, AVATAR_RIG_COLORS.eyebrow),
+  createDefinition('nose', 'nose', 13, AVATAR_RIG_COLORS.nose, 5),
+  createDefinition('mouth', 'mouth', 14, AVATAR_RIG_COLORS.mouth, 3, undefined, undefined, false, AVATAR_RIG_COLORS.mouth),
+  createDefinition('face.line', 'face line', 15, AVATAR_RIG_COLORS.skin, 2, undefined, ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], true),
+  createDefinition('hair.bangs', 'bangs', 17, AVATAR_RIG_COLORS.hair, 4, 'hair'),
 ];
 
 export const AVATAR_EDITOR_PART_DEFINITIONS: AvatarPartDefinition[] = AVATAR_PART_DEFINITIONS
@@ -195,19 +199,19 @@ export const ACCESSORY_LAYER_SLOT_DEFINITIONS: AccessoryLayerSlotDefinition[] = 
 ];
 
 export const ACCESSORY_CATEGORY_DEFINITIONS: AccessoryCategoryDefinition[] = [
-  createAccessoryCategoryDefinition('sideHair', '側髮', 'accessory/side_hair', 'mirrored', DEFAULT_HAIR_COLOR, 'frontFace', [
+  createAccessoryCategoryDefinition('sideHair', '側髮', 'accessory/side_hair', 'mirrored', AVATAR_RIG_COLORS.hair, 'frontFace', [
     'behindBody',
     'frontBody',
     'frontFace',
     'frontBangs',
   ]),
-  createAccessoryCategoryDefinition('ponytail', '馬尾', 'accessory/ponytail', 'center', DEFAULT_HAIR_COLOR, 'behindBody', [
+  createAccessoryCategoryDefinition('ponytail', '馬尾', 'accessory/ponytail', 'center', AVATAR_RIG_COLORS.hair, 'behindBody', [
     'behindBody',
     'frontBody',
     'frontFace',
     'frontBangs',
   ]),
-  createAccessoryCategoryDefinition('accessory', '配件', 'accessory/accessory', 'center', '#ffffff', 'frontFace', [
+  createAccessoryCategoryDefinition('accessory', '配件', 'accessory/accessory', 'center', AVATAR_RIG_COLORS.accessory, 'frontFace', [
     'behindBody',
     'onSkin',
     'frontBody',
@@ -221,6 +225,7 @@ export function createDefaultAvatarState(): AvatarState {
     state[definition.key] = {
       optionId: definition.options[0]?.id ?? 1,
       color: definition.defaultColor,
+      secondaryColor: definition.key === 'eyes.color' ? definition.defaultColor : undefined,
       lineColor: definition.defaultLineColor ?? DEFAULT_LINE_COLOR,
       offsetX: 0,
       offsetY: 0,
@@ -249,13 +254,14 @@ function createDefinition(
   parentKey?: AvatarGroupKey,
   editableProperties: AvatarEditableProperty[] = ['color', 'lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'],
   isEditorHidden = false,
+  defaultLineColor = DEFAULT_LINE_COLOR,
 ): AvatarPartDefinition {
   return {
     key,
     label,
     zIndex,
     defaultColor,
-    defaultLineColor: DEFAULT_LINE_COLOR,
+    defaultLineColor,
     editableProperties,
     isEditorHidden,
     options: Array.from({ length: optionCount }, (_, index) => ({
@@ -461,7 +467,7 @@ abstract class AvatarPart {
   protected abstract createArtwork(): FabricObject[];
 
   protected get color(): string {
-    return this.state.color ?? this.definition.defaultColor ?? '#333333';
+    return this.state.color ?? this.definition.defaultColor ?? AVATAR_RIG_COLORS.line;
   }
 
   protected get lineColor(): string {
@@ -469,7 +475,7 @@ abstract class AvatarPart {
   }
 
   protected getFaceColor(): string {
-    return this.context.getPartState('face').color ?? '#f2c7a7';
+    return this.context.getPartState('face').color ?? AVATAR_RIG_COLORS.skin;
   }
 
   protected get scale(): number {
@@ -627,6 +633,7 @@ abstract class ImageAvatarPart extends AvatarPart {
   update(nextState: AvatarPartState): void {
     const previousOptionId = this.state.optionId;
     const previousColor = this.state.color;
+    const previousSecondaryColor = this.state.secondaryColor;
     const previousLineColor = this.state.lineColor;
     this.state = { ...this.state, ...nextState };
     this.applyTransform();
@@ -634,6 +641,7 @@ abstract class ImageAvatarPart extends AvatarPart {
     if (
       previousOptionId !== this.state.optionId ||
       previousColor !== this.state.color ||
+      previousSecondaryColor !== this.state.secondaryColor ||
       previousLineColor !== this.state.lineColor
     ) {
       void this.reloadImages();
@@ -666,7 +674,7 @@ abstract class ImageAvatarPart extends AvatarPart {
         const imageUrl = layer.tint
           ? await tintImageByLuminance(
             assetUrl,
-            this.getTintColor(layer.tint),
+            layer.tintColor ?? this.getTintColor(layer.tint),
             layer.tint,
             layer.folder === 'face' && layer.tint === 'color',
             layer.shouldDropLightPixels === true,
@@ -996,8 +1004,16 @@ class EyeBallPart extends MirroredAssetPart {
     return this.getGroupBase('eyes').y;
   }
 
-  protected resolveSideLayers(): AvatarImageLayer[] {
-    return createLineAndColorLayers('eyeball', formatOptionId(this.state.optionId));
+  protected resolveSideLayers(side: -1 | 1): AvatarImageLayer[] {
+    return createLineAndColorLayers('eyeball', formatOptionId(this.state.optionId))
+      .map(layer => layer.tint === 'color'
+        ? {
+          ...layer,
+          tintColor: side === -1
+            ? this.color
+            : this.state.secondaryColor ?? this.color,
+        }
+        : layer);
   }
 }
 
@@ -1543,7 +1559,7 @@ export class AvatarCanvas {
     this.canvas = new Canvas(canvasElement, {
       width,
       height,
-      backgroundColor: '#f7f5ef',
+      backgroundColor: AVATAR_RIG_COLORS.canvasBackground,
       imageSmoothingEnabled: false,
       selection: false,
       preserveObjectStacking: true,
@@ -1581,6 +1597,10 @@ export class AvatarCanvas {
 
   setColor(key: AvatarPartKey, color: string): void {
     this.updatePart(key, { color });
+  }
+
+  setSecondaryColor(key: AvatarPartKey, secondaryColor: string): void {
+    this.updatePart(key, { secondaryColor });
   }
 
   setLineColor(key: AvatarPartKey, lineColor: string): void {
@@ -1741,10 +1761,11 @@ export class AvatarCanvas {
     }
 
     const portraitPose = getAccessoryPoseState(accessory, 'portrait');
+    const positionScale = getChibiAccessoryPositionScale(accessory.category);
     this.updateAccessoryPose(instanceId, 'chibi', {
       ...portraitPose,
-      offsetX: Math.round(portraitPose.offsetX * CHIBI_ACCESSORY_POSITION_SCALE),
-      offsetY: Math.round(portraitPose.offsetY * CHIBI_ACCESSORY_POSITION_SCALE),
+      offsetX: Math.round(portraitPose.offsetX * positionScale),
+      offsetY: Math.round(portraitPose.offsetY * positionScale),
     });
   }
 
@@ -1800,26 +1821,6 @@ export class AvatarCanvas {
     this.canvas.requestRenderAll();
   }
 
-  private updatePart(key: AvatarPartKey, patch: Partial<AvatarPartState>): void {
-    const nextState = this.stateStore.updatePart(key, patch);
-    const part = this.parts.get(key);
-    part?.update(nextState);
-
-    if (this.isGroupKey(key)) {
-      this.refreshGroupChildren(key);
-    }
-
-    if (key === 'face') {
-      this.refreshFaceRenderParts();
-      this.parts.get('ear')?.refreshArtwork();
-      this.parts.get('eyes.upperEyelid')?.refreshArtwork();
-      this.parts.get('eyes.lowerEyelid')?.refreshArtwork();
-    }
-
-    this.canvas.requestRenderAll();
-    this.emitChange();
-  }
-
   private updateAccessory(instanceId: string, patch: Partial<AvatarAccessoryInstance>): void {
     const nextState = this.stateStore.updateAccessory(instanceId, patch);
 
@@ -1859,6 +1860,26 @@ export class AvatarCanvas {
     }
 
     this.buildAvatar(this.width, this.height);
+  }
+
+  private updatePart(key: AvatarPartKey, patch: Partial<AvatarPartState>): void {
+    const nextState = this.stateStore.updatePart(key, patch);
+    const part = this.parts.get(key);
+    part?.update(nextState);
+
+    if (this.isGroupKey(key)) {
+      this.refreshGroupChildren(key);
+    }
+
+    if (key === 'face') {
+      this.refreshFaceRenderParts();
+      this.parts.get('ear')?.refreshArtwork();
+      this.parts.get('eyes.upperEyelid')?.refreshArtwork();
+      this.parts.get('eyes.lowerEyelid')?.refreshArtwork();
+    }
+
+    this.canvas.requestRenderAll();
+    this.emitChange();
   }
 
   private refreshGroupChildren(groupKey: AvatarGroupKey): void {
@@ -1946,7 +1967,7 @@ function createAssetOptionDefinitions(folder: string, label: string): AvatarPart
       return;
     }
 
-    optionIds.add(Number.parseInt(match[1], 10));
+    optionIds.add(Number(match[1]));
   });
 
   return [...optionIds]
@@ -1955,22 +1976,6 @@ function createAssetOptionDefinitions(folder: string, label: string): AvatarPart
       id,
       label: `${label} ${id}`,
     }));
-}
-
-function getAvatarAssetUrl(folder: string, file: string): string {
-  const normalizedFile = file.replace('__right', '');
-  const assetPath = `../assets/avatar_system/${folder}/${normalizedFile}`;
-  const url = avatarAssetUrls[assetPath];
-
-  if (!url) {
-    throw new Error(`Avatar asset not found: ${assetPath}`);
-  }
-
-  return url;
-}
-
-function formatOptionId(optionId: number): string {
-  return String(optionId).padStart(2, '0');
 }
 
 function getNextAccessoryOrder(accessories: AvatarAccessoryInstance[], layerSlot: AccessoryLayerSlot): number {
@@ -1989,6 +1994,28 @@ function normalizeAccessoryOrders(accessories: AvatarAccessoryInstance[]): Avata
       ...accessory,
       order,
     })));
+}
+
+function getChibiAccessoryPositionScale(category: AccessoryCategory): number {
+  return category === 'sideHair'
+    ? CHIBI_SIDE_HAIR_POSITION_SCALE
+    : CHIBI_ACCESSORY_POSITION_SCALE;
+}
+
+function getAvatarAssetUrl(folder: string, file: string): string {
+  const normalizedFile = file.replace('__right', '');
+  const assetPath = `../assets/avatar_system/${folder}/${normalizedFile}`;
+  const url = avatarAssetUrls[assetPath];
+
+  if (!url) {
+    throw new Error(`Avatar asset not found: ${assetPath}`);
+  }
+
+  return url;
+}
+
+function formatOptionId(optionId: number): string {
+  return String(optionId).padStart(2, '0');
 }
 
 function rotatePoint(point: Point2D, degrees: number): Point2D {
