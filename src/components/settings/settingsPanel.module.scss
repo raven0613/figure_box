@@ -1,6 +1,6 @@
 .panel {
-  width: min(420px, calc(100vw - 32px));
-  max-height: min(520px, calc(100vh - 32px));
+  width: min(460px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 32px));
 }
 
 .content {
@@ -50,4 +50,228 @@
   font-size: 14px;
   line-height: 1.5;
   text-align: left;
+}
+
+.romanceRulesPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.ruleLayer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(36, 49, 58, 0.12);
+  border-left-width: 5px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.ruleLayer > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ruleLayer h3 {
+  margin: 2px 0 0;
+  color: #1f2b33;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.layerRank {
+  color: #687780;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.layerBadge {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #263238;
+  background: rgba(36, 49, 58, 0.08);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.orientationLayer {
+  border-left-color: #263238;
+  background: #f4f6f6;
+}
+
+.globalLayer {
+  border-left-color: #8a99a3;
+  background: #f8fafb;
+}
+
+.allowLayer {
+  border-left-color: #2f8f66;
+  background: #f3fbf7;
+}
+
+.denyLayer {
+  border-left-color: #c64f45;
+  background: #fff7f5;
+}
+
+.onlyAllowLayer {
+  border-left-color: #6b5fc7;
+  background: #f7f6ff;
+}
+
+.ruleComposer {
+  display: grid;
+  grid-template-columns: minmax(84px, 0.9fr) minmax(120px, 1fr) minmax(120px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid rgba(36, 49, 58, 0.12);
+  border-radius: 8px;
+  background: #f9faf7;
+}
+
+.ruleComposer label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  color: #4c5d66;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.ruleComposer select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(36, 49, 58, 0.16);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2b33;
+  font: inherit;
+  font-size: 13px;
+}
+
+.addRuleButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(36, 49, 58, 0.16);
+  border-radius: 6px;
+  background: #263238;
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.segmentedControl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 184px;
+  padding: 3px;
+  border: 1px solid rgba(36, 49, 58, 0.12);
+  border-radius: 8px;
+  background: #e9eef0;
+}
+
+.segmentButton {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #4c5d66;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.activeSegmentButton {
+  border-color: rgba(36, 49, 58, 0.12);
+  background: #ffffff;
+  color: #1f2b33;
+  box-shadow: 0 3px 8px rgba(36, 49, 58, 0.12);
+}
+
+.ruleEmptyText {
+  margin: 8px 0 0;
+  color: #687780;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ruleList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ruleItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(36, 49, 58, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #263238;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.ruleItem span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deleteRuleButton {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(198, 79, 69, 0.24);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #a63c35;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.prioritySummary {
+  padding: 9px 10px;
+  border: 1px solid rgba(36, 49, 58, 0.1);
+  border-radius: 8px;
+  background: #f7f3ea;
+  color: #3a4952;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (max-width: 520px) {
+  .ruleLayer {
+    flex-direction: column;
+  }
+
+  .ruleComposer {
+    grid-template-columns: 1fr;
+  }
+
+  .segmentedControl {
+    width: 100%;
+  }
+
+  .ruleItem {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
