@@ -31,9 +31,18 @@ import {
   MINI_AVATAR_ANIMATION_DEFINITIONS,
   MINI_WAVE_BLINK_ANIMATION,
 } from '~/widgets/miniAvatar/miniAvatarAnimationDefinitions';
+import {
+  listAvatarAppearanceTemplates,
+  deleteAvatarAppearanceTemplate,
+  loadAvatarAppearanceDraft,
+  saveAvatarAppearanceDraft,
+  saveAvatarAppearanceTemplate,
+} from '~/services/save/avatarAppearanceSaveService';
+import type { AvatarAppearanceTemplateRecord } from '~/services/save/avatarAppearanceSaveService';
 import styles from './avatarEditor.module.scss';
 
 const MOVE_STEP = 1;
+const AVATAR_DRAFT_AUTOSAVE_DELAY_MS = 900;
 const HOLD_MOVE_DELAY_MS = 300;
 const HOLD_MOVE_INTERVAL_MS = 90;
 const HOLD_ACCELERATION_TICKS = 8;
@@ -61,6 +70,8 @@ type SelectedTarget =
   | { type: 'part'; key: AvatarPartKey }
   | { type: 'accessory'; instanceId: string };
 
+type DraftSaveStatus = 'idle' | 'pending' | 'saved' | 'error';
+
 export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEditorContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const miniCanvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -69,13 +80,18 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const miniAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const miniAnimationCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const spriteSheetBakeVersionRef = useRef(0);
+  const draftAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestAvatarStateRef = useRef<AvatarState | null>(null);
   const holdMoveRef = useRef<HoldMoveState>({
     timeoutId: null,
     intervalId: null,
     tickCount: 0,
   });
   const onAvatarChangeRef = useRef(onAvatarChange);
-  const initialStateRef = useRef(initialState);
+  const [initialEditorState] = useState<Partial<AvatarState> | undefined>(() => (
+    initialState ?? loadAvatarAppearanceDraft()?.avatarState ?? undefined
+  ));
+  const initialStateRef = useRef(initialEditorState);
   const [selectedTarget, setSelectedTarget] = useState<SelectedTarget>({ type: 'part', key: 'face' });
   const [selectedAccessoryPoseKey, setSelectedAccessoryPoseKey] = useState<AccessoryPoseKey>('portrait');
   const [selectedUpperEyelidPoseKey, setSelectedUpperEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
@@ -83,6 +99,12 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [selectedEyelidPoseKey, setSelectedEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
   const [draggingAccessoryId, setDraggingAccessoryId] = useState<string | null>(null);
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
+  const [avatarTemplates, setAvatarTemplates] = useState<AvatarAppearanceTemplateRecord[]>(() => (
+    listAvatarAppearanceTemplates()
+  ));
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [templateName, setTemplateName] = useState('');
+  const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>('idle');
   const [spriteSheet, setSpriteSheet] = useState<MiniSpriteSheet | null>(null);
   const [spriteSheetFrameIndex, setSpriteSheetFrameIndex] = useState(0);
   const [selectedMiniAnimationId, setSelectedMiniAnimationId] = useState(MINI_WAVE_BLINK_ANIMATION.id);
@@ -201,10 +223,6 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     onAvatarChangeRef.current = onAvatarChange;
   }, [onAvatarChange]);
 
-  useEffect(() => {
-    initialStateRef.current = initialState;
-  }, [initialState]);
-
   const refreshSpriteSheetPreview = useCallback(() => {
     const miniAvatarCanvas = miniAvatarCanvasRef.current;
 
@@ -232,6 +250,34 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       });
   }, []);
 
+  const scheduleDraftAutosave = useCallback((state: AvatarState) => {
+    latestAvatarStateRef.current = state;
+
+    if (draftAutosaveTimeoutRef.current) {
+      clearTimeout(draftAutosaveTimeoutRef.current);
+    }
+
+    setDraftSaveStatus('pending');
+    draftAutosaveTimeoutRef.current = setTimeout(() => {
+      draftAutosaveTimeoutRef.current = null;
+
+      try {
+        saveAvatarAppearanceDraft(state);
+        setDraftSaveStatus('saved');
+      } catch {
+        setDraftSaveStatus('error');
+      }
+    }, AVATAR_DRAFT_AUTOSAVE_DELAY_MS);
+  }, []);
+
+  const handleAvatarCanvasChange = useCallback((state: AvatarState) => {
+    setAvatarState(state);
+    miniAvatarCanvasRef.current?.setState(state);
+    miniAnimationCanvasRef.current?.setState(state);
+    onAvatarChangeRef.current?.(state);
+    scheduleDraftAutosave(state);
+  }, [scheduleDraftAutosave]);
+
   useEffect(() => {
     if (
       selectedTarget.type === 'accessory' &&
@@ -252,12 +298,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     const miniAnimationCanvasHost = miniAnimationCanvasHostRef.current;
     const avatarCanvas = AvatarCanvas.mount(canvasHost, {
       initialState: initialStateRef.current,
-      onChange: state => {
-        setAvatarState(state);
-        miniAvatarCanvasRef.current?.setState(state);
-        miniAnimationCanvasRef.current?.setState(state);
-        onAvatarChangeRef.current?.(state);
-      },
+      onChange: handleAvatarCanvasChange,
     });
     const miniAvatarCanvas = MiniAvatarCanvas.mount(miniCanvasHost, {
       initialState: avatarCanvas.getState(),
@@ -283,7 +324,24 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       miniCanvasHost.replaceChildren();
       miniAnimationCanvasHost.replaceChildren();
     };
-  }, [refreshSpriteSheetPreview]);
+  }, [handleAvatarCanvasChange, refreshSpriteSheetPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (!draftAutosaveTimeoutRef.current || !latestAvatarStateRef.current) {
+        return;
+      }
+
+      clearTimeout(draftAutosaveTimeoutRef.current);
+      draftAutosaveTimeoutRef.current = null;
+
+      try {
+        saveAvatarAppearanceDraft(latestAvatarStateRef.current);
+      } catch (error) {
+        console.error('Failed to flush avatar draft on unmount:', error);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     refreshSpriteSheetPreview();
@@ -511,6 +569,39 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     setDraggingAccessoryId(null);
   };
 
+  const saveCurrentTemplate = (templateId?: string) => {
+    const currentState = avatarCanvasRef.current?.getState() ?? avatarState;
+
+    try {
+      const templateRecord = saveAvatarAppearanceTemplate(templateName, currentState, templateId);
+
+      setActiveTemplateId(templateRecord.id);
+      setTemplateName(templateRecord.name);
+      setAvatarTemplates(listAvatarAppearanceTemplates());
+    } catch (error) {
+      console.error('Failed to save avatar template:', error);
+      setDraftSaveStatus('error');
+    }
+  };
+
+  const loadTemplate = (template: AvatarAppearanceTemplateRecord) => {
+    avatarCanvasRef.current?.setState(template.avatarState);
+    setActiveTemplateId(template.id);
+    setTemplateName(template.name);
+    setSelectedTarget({ type: 'part', key: 'face' });
+    setSelectedAccessoryPoseKey('portrait');
+  };
+
+  const deleteTemplate = (templateId: string) => {
+    deleteAvatarAppearanceTemplate(templateId);
+    setAvatarTemplates(listAvatarAppearanceTemplates());
+
+    if (activeTemplateId === templateId) {
+      setActiveTemplateId(null);
+      setTemplateName('');
+    }
+  };
+
   return (
     <section className={styles.container} aria-label="紙娃娃臉部編輯器">
       <aside className={styles.partMenu} aria-label="選擇部位">
@@ -562,6 +653,55 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               ))}
             </div>
           ))}
+        </div>
+
+        <div className={styles.templatePanel} aria-label="外觀模板">
+          <div className={styles.panelTitle}>模板</div>
+          <input
+            className={styles.templateNameInput}
+            type="text"
+            value={templateName}
+            onChange={event => setTemplateName(event.target.value)}
+            placeholder="模板名稱"
+          />
+          <button
+            className={styles.templateSaveButton}
+            type="button"
+            onClick={() => saveCurrentTemplate(activeTemplateId ?? undefined)}
+          >
+            儲存模板
+          </button>
+          <button
+            className={styles.templateSaveButton}
+            type="button"
+            onClick={() => saveCurrentTemplate()}
+          >
+            另存新模板
+          </button>
+          <div className={styles.saveStatusLine}>{getDraftSaveStatusLabel(draftSaveStatus)}</div>
+          <div className={styles.templateList}>
+            {avatarTemplates.length === 0 ? (
+              <div className={styles.emptySlot}>尚無模板</div>
+            ) : avatarTemplates.map(template => (
+              <div className={styles.templateItem} key={template.id}>
+                <button
+                  className={styles.templateLoadButton}
+                  type="button"
+                  onClick={() => loadTemplate(template)}
+                >
+                  {template.name}
+                </button>
+                <button
+                  className={styles.templateDeleteButton}
+                  type="button"
+                  onClick={() => deleteTemplate(template.id)}
+                  aria-label={`刪除${template.name}`}
+                >
+                  刪除
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </aside>
 
@@ -1060,4 +1200,20 @@ function getSelectedLightDistance(partKey: AvatarPartKey, state: AvatarPartState
       ? MINI_DEFAULT_EYE_LIGHT_DISTANCE
       : DEFAULT_PORTRAIT_EYE_LIGHT_DISTANCE
   );
+}
+
+function getDraftSaveStatusLabel(status: DraftSaveStatus): string {
+  if (status === 'pending') {
+    return '草稿待儲存';
+  }
+
+  if (status === 'saved') {
+    return '草稿已儲存';
+  }
+
+  if (status === 'error') {
+    return '草稿儲存失敗';
+  }
+
+  return '草稿未變更';
 }

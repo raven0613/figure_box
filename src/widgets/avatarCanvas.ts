@@ -1451,6 +1451,10 @@ class AvatarStateStore {
     return structuredClone(this.state);
   }
 
+  replaceState(nextState?: Partial<AvatarState>): void {
+    this.state = this.mergeInitialState(nextState);
+  }
+
   getPartState(key: AvatarPartKey): AvatarPartState {
     return { ...this.state[key] };
   }
@@ -1726,6 +1730,12 @@ export class AvatarCanvas {
 
   getState(): AvatarState {
     return this.stateStore.getSnapshot();
+  }
+
+  setState(state: Partial<AvatarState>): void {
+    this.stateStore.replaceState(state);
+    this.rebuildAvatar();
+    this.emitChange();
   }
 
   getPartState(key: AvatarPartKey): AvatarPartState {
