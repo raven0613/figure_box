@@ -155,6 +155,13 @@
   align-items: start;
 }
 
+.previewColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 172px;
+}
+
 .canvasShell,
 .miniPreviewShell {
   width: 520px;
@@ -168,6 +175,54 @@
 .miniPreviewShell {
   width: 172px;
   height: 172px;
+}
+
+.spriteSheetShell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 172px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+}
+
+.spriteSheetViewport {
+  width: 100%;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(45deg, #d4d4d8 25%, transparent 25%),
+    linear-gradient(-45deg, #d4d4d8 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d4d4d8 75%),
+    linear-gradient(-45deg, transparent 75%, #d4d4d8 75%);
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+  border: 1px solid #cbd5e1;
+}
+
+.spriteSheetViewport img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.spriteSheetMeta {
+  min-height: 18px;
+  padding: 0 8px 8px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
 }
 
 .canvasHost,

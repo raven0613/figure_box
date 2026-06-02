@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ACCESSORY_CATEGORY_DEFINITIONS,
@@ -23,6 +23,7 @@ import {
   MINI_UPPER_EYELID_OFFSET_Y_LIMITS,
 } from '~/widgets/avatarCanvas';
 import { MiniAvatarCanvas, MINI_DEFAULT_EYE_LIGHT_DISTANCE } from '~/widgets/miniAvatarCanvas';
+import type { MiniSpriteSheet } from '~/widgets/miniAvatarCanvas';
 import styles from './avatarEditor.module.scss';
 
 const MOVE_STEP = 1;
@@ -58,6 +59,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const miniCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const avatarCanvasRef = useRef<AvatarCanvas | null>(null);
   const miniAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
+  const spriteSheetBakeVersionRef = useRef(0);
   const holdMoveRef = useRef<HoldMoveState>({
     timeoutId: null,
     intervalId: null,
@@ -72,6 +74,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [selectedEyelidPoseKey, setSelectedEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
   const [draggingAccessoryId, setDraggingAccessoryId] = useState<string | null>(null);
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
+  const [spriteSheet, setSpriteSheet] = useState<MiniSpriteSheet | null>(null);
 
   const selectedPart = useMemo(
     () => selectedTarget.type === 'part'
@@ -169,6 +172,33 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     initialStateRef.current = initialState;
   }, [initialState]);
 
+  const refreshSpriteSheetPreview = useCallback(() => {
+    const miniAvatarCanvas = miniAvatarCanvasRef.current;
+
+    if (!miniAvatarCanvas) {
+      return;
+    }
+
+    const bakeVersion = spriteSheetBakeVersionRef.current + 1;
+    spriteSheetBakeVersionRef.current = bakeVersion;
+
+    void miniAvatarCanvas.exportFrontIdleSpriteSheet()
+      .then(nextSpriteSheet => {
+        if (bakeVersion !== spriteSheetBakeVersionRef.current) {
+          return;
+        }
+
+        setSpriteSheet(nextSpriteSheet);
+      })
+      .catch(error => {
+        console.error('Failed to bake mini sprite sheet:', error);
+
+        if (bakeVersion === spriteSheetBakeVersionRef.current) {
+          setSpriteSheet(null);
+        }
+      });
+  }, []);
+
   useEffect(() => {
     if (
       selectedTarget.type === 'accessory' &&
@@ -199,8 +229,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     });
     avatarCanvasRef.current = avatarCanvas;
     miniAvatarCanvasRef.current = miniAvatarCanvas;
+    refreshSpriteSheetPreview();
 
     return () => {
+      spriteSheetBakeVersionRef.current += 1;
       avatarCanvasRef.current = null;
       miniAvatarCanvasRef.current = null;
       void avatarCanvas.destroy();
@@ -208,7 +240,11 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       canvasHost.replaceChildren();
       miniCanvasHost.replaceChildren();
     };
-  }, []);
+  }, [refreshSpriteSheetPreview]);
+
+  useEffect(() => {
+    refreshSpriteSheetPreview();
+  }, [avatarState, refreshSpriteSheetPreview]);
 
   useEffect(() => {
     return () => {
@@ -466,8 +502,27 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
         <div className={styles.canvasShell}>
           <div className={styles.canvasHost} ref={canvasHostRef} />
         </div>
-        <div className={styles.miniPreviewShell} aria-label="Mini front idle preview">
-          <div className={styles.miniCanvasHost} ref={miniCanvasHostRef} />
+        <div className={styles.previewColumn}>
+          <div className={styles.miniPreviewShell} aria-label="Mini front idle preview">
+            <div className={styles.miniCanvasHost} ref={miniCanvasHostRef} />
+          </div>
+          <div className={styles.spriteSheetShell} aria-label="Mini sprite sheet output">
+            <div className={styles.spriteSheetViewport}>
+              {spriteSheet && (
+                <img
+                  alt="Mini front idle sprite sheet"
+                  src={spriteSheet.dataUrl}
+                  width={spriteSheet.frameWidth}
+                  height={spriteSheet.frameHeight}
+                />
+              )}
+            </div>
+            <div className={styles.spriteSheetMeta}>
+              {spriteSheet
+                ? `${spriteSheet.frameWidth}x${spriteSheet.frameHeight} / ${spriteSheet.frameCount} frame`
+                : 'baking'}
+            </div>
+          </div>
         </div>
       </div>
 
