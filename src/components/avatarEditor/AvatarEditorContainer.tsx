@@ -27,7 +27,10 @@ import type { MiniSpriteSheet } from '~/widgets/miniAvatarCanvas';
 import {
   getMiniAnimationFrameDurationMs,
 } from '~/widgets/miniAvatar/miniAvatarAnimation';
-import { MINI_WAVE_BLINK_ANIMATION } from '~/widgets/miniAvatar/miniAvatarAnimationDefinitions';
+import {
+  MINI_AVATAR_ANIMATION_DEFINITIONS,
+  MINI_WAVE_BLINK_ANIMATION,
+} from '~/widgets/miniAvatar/miniAvatarAnimationDefinitions';
 import styles from './avatarEditor.module.scss';
 
 const MOVE_STEP = 1;
@@ -82,6 +85,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
   const [spriteSheet, setSpriteSheet] = useState<MiniSpriteSheet | null>(null);
   const [spriteSheetFrameIndex, setSpriteSheetFrameIndex] = useState(0);
+  const [selectedMiniAnimationId, setSelectedMiniAnimationId] = useState(MINI_WAVE_BLINK_ANIMATION.id);
 
   const selectedPart = useMemo(
     () => selectedTarget.type === 'part'
@@ -169,6 +173,11 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
         .sort((first, second) => first.order - second.order),
     })),
     [avatarState.accessories]
+  );
+  const selectedMiniAnimation = useMemo(
+    () => MINI_AVATAR_ANIMATION_DEFINITIONS.find(animation => animation.id === selectedMiniAnimationId)
+      ?? MINI_WAVE_BLINK_ANIMATION,
+    [selectedMiniAnimationId]
   );
   const spriteSheetAnimationStyle = useMemo(() => {
     if (!spriteSheet) {
@@ -281,6 +290,12 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   }, [avatarState, refreshSpriteSheetPreview]);
 
   useEffect(() => {
+    miniAvatarCanvasRef.current?.setAnimation(selectedMiniAnimation);
+    miniAnimationCanvasRef.current?.setAnimation(selectedMiniAnimation);
+    refreshSpriteSheetPreview();
+  }, [refreshSpriteSheetPreview, selectedMiniAnimation]);
+
+  useEffect(() => {
     setSpriteSheetFrameIndex(0);
 
     if (!spriteSheet || spriteSheet.frameCount <= 1) {
@@ -291,12 +306,12 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       setSpriteSheetFrameIndex(currentFrameIndex => (
         (currentFrameIndex + 1) % spriteSheet.frameCount
       ));
-    }, getMiniAnimationFrameDurationMs(MINI_WAVE_BLINK_ANIMATION));
+    }, getMiniAnimationFrameDurationMs(selectedMiniAnimation));
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [spriteSheet]);
+  }, [selectedMiniAnimation, spriteSheet]);
 
   useEffect(() => {
     return () => {
@@ -555,6 +570,20 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           <div className={styles.canvasHost} ref={canvasHostRef} />
         </div>
         <div className={styles.previewColumn}>
+          <div className={styles.animationSelector} role="tablist" aria-label="Mini animation">
+            {MINI_AVATAR_ANIMATION_DEFINITIONS.map(animation => (
+              <button
+                type="button"
+                key={animation.id}
+                className={animation.id === selectedMiniAnimation.id ? styles.activeAnimationButton : styles.animationButton}
+                onClick={() => setSelectedMiniAnimationId(animation.id)}
+                role="tab"
+                aria-selected={animation.id === selectedMiniAnimation.id}
+              >
+                {animation.label}
+              </button>
+            ))}
+          </div>
           <div className={styles.miniPreviewShell} aria-label="Mini avatar preview">
             <div className={styles.miniCanvasHost} ref={miniCanvasHostRef} />
           </div>

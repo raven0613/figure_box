@@ -33,7 +33,7 @@ interface MiniAvatarCanvasOptions {
 
 export class MiniAvatarCanvas {
   private readonly canvas: Canvas;
-  private readonly animation: MiniAnimation;
+  private animation: MiniAnimation;
   private readonly isAnimationEnabled: boolean;
   private state: AvatarState;
   private renderVersion = 0;
@@ -80,6 +80,18 @@ export class MiniAvatarCanvas {
     if (!this.isAnimationEnabled) {
       void this.render();
     }
+  }
+
+  setAnimation(animation: MiniAnimation): void {
+    this.animation = animation;
+    this.animationStartedAt = typeof performance === 'undefined' ? 0 : performance.now();
+    this.lastRenderedAnimationFrame = -1;
+
+    if (!this.isAnimationEnabled) {
+      return;
+    }
+
+    void this.render(sampleMiniAnimation(this.animation, 0));
   }
 
   exportFrontIdleSpriteSheet(): Promise<MiniSpriteSheet> {

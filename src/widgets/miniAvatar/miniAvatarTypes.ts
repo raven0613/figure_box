@@ -75,6 +75,7 @@ export interface MiniPose {
 
 export interface MiniAnimation {
   id: string;
+  label: string;
   version: number;
   direction: 'front';
   durationMs: number;
@@ -85,7 +86,11 @@ export interface MiniAnimation {
 }
 
 export interface MiniAnimationClip {
-  sample: (elapsedMs: number, animation: MiniAnimation) => MiniPose;
+  id: string;
+  durationMs?: number;
+  intervalMs?: number;
+  startOffsetMs?: number;
+  sample: (elapsedMs: number, animation: MiniAnimation, clip: MiniAnimationClip) => MiniPose;
 }
 
 export type MiniOptionOffsetMap = Record<number, MiniPoint | undefined>;
