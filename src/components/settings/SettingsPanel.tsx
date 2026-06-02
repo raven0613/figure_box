@@ -1,21 +1,23 @@
 import { useRef, useState } from 'react';
 import { DraggablePanel } from '~/components/common/DraggablePanel';
 import { CHARACTER_SEEDS } from '~/constants/character';
+import {
+  evaluateRomanceRuleAccess,
+  getRomanceProfile,
+  type CharacterGender,
+  type CharacterRomanceProfile,
+  type GlobalRomanceDefault,
+  type RomanceRule,
+  type RomanceRuleAccessResult,
+  type RomanceRuleEndpoint,
+  type RomanceRuleType,
+  type RomanticOrientation,
+} from '~/services/romanceRules/romanceRuleService';
 import styles from './settingsPanel.module.scss';
 
 type SettingsTab = 'general' | 'romanceRules';
-type GlobalRomanceDefault = 'allow' | 'deny';
-type RomanceRuleType = 'allow' | 'deny' | 'onlyAllow';
-type RomanceRuleEndpoint = { type: 'all' } | { type: 'character'; characterId: string };
 
-interface RomanceRule {
-  id: string;
-  type: RomanceRuleType;
-  source: RomanceRuleEndpoint;
-  target: RomanceRuleEndpoint;
-}
-
-interface SettingsPanelProps {
+interface SettingsPanelProps extends RomanceRulesPanelProps {
   onClose: () => void;
 }
 
@@ -41,15 +43,41 @@ const ROMANCE_RULE_TYPES: readonly {
   { value: 'onlyAllow', label: '只允許' },
 ];
 
+const CHARACTER_GENDER_OPTIONS: readonly {
+  value: CharacterGender;
+  label: string;
+}[] = [
+  { value: 'male', label: '男性' },
+  { value: 'female', label: '女性' },
+  { value: 'nonBinary', label: '非二元' },
+];
+
+const ROMANTIC_ORIENTATION_OPTIONS: readonly {
+  value: RomanticOrientation;
+  label: string;
+}[] = [
+  { value: 'any', label: '任何性別' },
+  { value: 'male', label: '男性' },
+  { value: 'female', label: '女性' },
+  { value: 'nonBinary', label: '非二元' },
+  { value: 'none', label: '不產生戀愛情感' },
+];
+
 const CHARACTER_OPTIONS = CHARACTER_SEEDS.map(character => ({
   id: character.id,
   name: character.name,
 }));
 
-export function SettingsPanel({ onClose }: SettingsPanelProps) {
+export function SettingsPanel({
+  globalRomanceDefault,
+  romanceProfilesByCharacterId,
+  romanceRules,
+  onClose,
+  onGlobalRomanceDefaultChange,
+  onRomanceProfilesChange,
+  onRomanceRulesChange,
+}: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
-  const [globalRomanceDefault, setGlobalRomanceDefault] = useState<GlobalRomanceDefault>('allow');
-  const [romanceRules, setRomanceRules] = useState<RomanceRule[]>([]);
   const [initialPosition] = useState(() => getInitialPanelPosition());
 
   return (
@@ -82,9 +110,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         ) : (
           <RomanceRulesPanel
             globalRomanceDefault={globalRomanceDefault}
+            romanceProfilesByCharacterId={romanceProfilesByCharacterId}
             romanceRules={romanceRules}
-            onGlobalRomanceDefaultChange={setGlobalRomanceDefault}
-            onRomanceRulesChange={setRomanceRules}
+            onGlobalRomanceDefaultChange={onGlobalRomanceDefaultChange}
+            onRomanceProfilesChange={onRomanceProfilesChange}
+            onRomanceRulesChange={onRomanceRulesChange}
           />
         )}
       </section>
@@ -94,24 +124,41 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
 interface RomanceRulesPanelProps {
   globalRomanceDefault: GlobalRomanceDefault;
+  romanceProfilesByCharacterId: Record<string, CharacterRomanceProfile>;
   romanceRules: RomanceRule[];
   onGlobalRomanceDefaultChange: (globalDefault: GlobalRomanceDefault) => void;
+  onRomanceProfilesChange: (profilesByCharacterId: Record<string, CharacterRomanceProfile>) => void;
   onRomanceRulesChange: (rules: RomanceRule[]) => void;
 }
 
 function RomanceRulesPanel({
   globalRomanceDefault,
+  romanceProfilesByCharacterId,
   romanceRules,
   onGlobalRomanceDefaultChange,
+  onRomanceProfilesChange,
   onRomanceRulesChange,
 }: RomanceRulesPanelProps) {
   const nextRuleIdRef = useRef(1);
   const [draftRuleType, setDraftRuleType] = useState<RomanceRuleType>('allow');
   const [draftSourceValue, setDraftSourceValue] = useState(ALL_ENDPOINT_VALUE);
   const [draftTargetValue, setDraftTargetValue] = useState<string>(CHARACTER_OPTIONS[0]?.id ?? ALL_ENDPOINT_VALUE);
+  const [selectedProfileCharacterId, setSelectedProfileCharacterId] = useState<string>(CHARACTER_OPTIONS[0]?.id ?? '');
+  const [previewSourceId, setPreviewSourceId] = useState<string>(CHARACTER_OPTIONS[0]?.id ?? '');
+  const [previewTargetId, setPreviewTargetId] = useState<string>(CHARACTER_OPTIONS[1]?.id ?? CHARACTER_OPTIONS[0]?.id ?? '');
   const allowRules = romanceRules.filter(rule => rule.type === 'allow');
   const denyRules = romanceRules.filter(rule => rule.type === 'deny');
   const onlyAllowRules = romanceRules.filter(rule => rule.type === 'onlyAllow');
+  const selectedRomanceProfile = getRomanceProfile(romanceProfilesByCharacterId, selectedProfileCharacterId);
+  const previewResult = evaluateRomanceRuleAccess({
+    sourceId: previewSourceId,
+    targetId: previewTargetId,
+    config: {
+      globalDefault: globalRomanceDefault,
+      profilesByCharacterId: romanceProfilesByCharacterId,
+      rules: romanceRules,
+    },
+  });
 
   const addRomanceRule = () => {
     const nextRule: RomanceRule = {
@@ -129,12 +176,64 @@ function RomanceRulesPanel({
     onRomanceRulesChange(romanceRules.filter(rule => rule.id !== ruleId));
   };
 
+  const updateSelectedRomanceProfile = (partialProfile: Partial<CharacterRomanceProfile>) => {
+    if (!selectedProfileCharacterId) {
+      return;
+    }
+
+    onRomanceProfilesChange({
+      ...romanceProfilesByCharacterId,
+      [selectedProfileCharacterId]: {
+        ...selectedRomanceProfile,
+        ...partialProfile,
+      },
+    });
+  };
+
   return (
     <div className={styles.romanceRulesPanel}>
       <div className={`${styles.ruleLayer} ${styles.orientationLayer}`}>
         <div>
           <span className={styles.layerRank}>第 0 層</span>
           <h3>性向</h3>
+          <p className={styles.ruleEmptyText}>性向是硬性前置條件，任何規則都不能突破。</p>
+          <div className={styles.orientationEditor}>
+            <label>
+              角色
+              <select
+                value={selectedProfileCharacterId}
+                onChange={event => setSelectedProfileCharacterId(event.target.value)}
+              >
+                <CharacterOptions />
+              </select>
+            </label>
+            <label>
+              性別
+              <select
+                value={selectedRomanceProfile.gender}
+                onChange={event => updateSelectedRomanceProfile({ gender: event.target.value as CharacterGender })}
+              >
+                {CHARACTER_GENDER_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              性向
+              <select
+                value={selectedRomanceProfile.orientation}
+                onChange={event => updateSelectedRomanceProfile({ orientation: event.target.value as RomanticOrientation })}
+              >
+                {ROMANTIC_ORIENTATION_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
         <span className={styles.layerBadge}>不可覆蓋</span>
       </div>
@@ -233,8 +332,77 @@ function RomanceRulesPanel({
         onDeleteRule={deleteRomanceRule}
       />
 
+      <RomanceRulePreview
+        sourceId={previewSourceId}
+        targetId={previewTargetId}
+        result={previewResult}
+        globalRomanceDefault={globalRomanceDefault}
+        onSourceChange={setPreviewSourceId}
+        onTargetChange={setPreviewTargetId}
+      />
+
       <div className={styles.prioritySummary}>
         性向 &gt; 只允許 &gt; 禁止 &gt; 允許 &gt; 全域預設
+      </div>
+    </div>
+  );
+}
+
+interface RomanceRulePreviewProps {
+  sourceId: string;
+  targetId: string;
+  result: RomanceRuleAccessResult;
+  globalRomanceDefault: GlobalRomanceDefault;
+  onSourceChange: (characterId: string) => void;
+  onTargetChange: (characterId: string) => void;
+}
+
+function RomanceRulePreview({
+  sourceId,
+  targetId,
+  result,
+  globalRomanceDefault,
+  onSourceChange,
+  onTargetChange,
+}: RomanceRulePreviewProps) {
+  return (
+    <div className={styles.rulePreview}>
+      <div className={styles.rulePreviewHeader}>
+        <div>
+          <span className={styles.layerRank}>預覽</span>
+          <h3>檢查戀愛方向</h3>
+        </div>
+        <span className={styles.layerBadge}>規則預覽</span>
+      </div>
+
+      <div className={styles.previewControls}>
+        <label>
+          誰
+          <select
+            value={sourceId}
+            onChange={event => onSourceChange(event.target.value)}
+          >
+            <CharacterOptions />
+          </select>
+        </label>
+        <label>
+          會不會愛上誰
+          <select
+            value={targetId}
+            onChange={event => onTargetChange(event.target.value)}
+          >
+            <CharacterOptions />
+          </select>
+        </label>
+      </div>
+
+      <div className={`${styles.previewResult} ${result.isAllowed ? styles.allowedPreviewResult : styles.deniedPreviewResult}`}>
+        <strong>{result.isAllowed ? '結果：允許' : '結果：禁止'}</strong>
+        <span>{formatPreviewReason(result, sourceId, targetId, globalRomanceDefault)}</span>
+        {result.matchedRule ? (
+          <span>命中規則：{formatRomanceRule(result.matchedRule)}</span>
+        ) : null}
+        <small>預覽會先檢查性向；性向不符合時，任何規則都不會開放戀愛情感。</small>
       </div>
     </div>
   );
@@ -244,6 +412,14 @@ function EndpointOptions() {
   return (
     <>
       <option value={ALL_ENDPOINT_VALUE}>所有角色</option>
+      <CharacterOptions />
+    </>
+  );
+}
+
+function CharacterOptions() {
+  return (
+    <>
       {CHARACTER_OPTIONS.map(character => (
         <option key={character.id} value={character.id}>
           {character.name}
@@ -308,6 +484,34 @@ function parseEndpointValue(value: string): RomanceRuleEndpoint {
     : { type: 'character', characterId: value };
 }
 
+function formatPreviewReason(
+  result: RomanceRuleAccessResult,
+  sourceId: string,
+  targetId: string,
+  globalRomanceDefault: GlobalRomanceDefault,
+): string {
+  switch (result.reason) {
+    case 'missingCharacter':
+      return '沒有可檢查的角色。';
+    case 'orientationMismatch':
+      return `${formatCharacterName(targetId)} 不符合 ${formatCharacterName(sourceId)} 的性向。`;
+    case 'onlyAllowMatched':
+      return `${formatCharacterName(sourceId)} 的只允許規則包含 ${formatCharacterName(targetId)}。`;
+    case 'onlyAllowBlocked':
+      return `${formatCharacterName(sourceId)} 有只允許規則，未包含 ${formatCharacterName(targetId)}。`;
+    case 'denyMatched':
+      return '禁止規則覆蓋允許規則與全域預設。';
+    case 'allowMatched':
+      return '允許規則覆蓋全域預設。';
+    case 'globalDefault':
+      return globalRomanceDefault === 'allow'
+        ? '沒有命中更高層規則，使用全域預設允許。'
+        : '沒有命中更高層規則，使用全域預設禁止。';
+    default:
+      return '';
+  }
+}
+
 function formatRomanceRule(rule: RomanceRule): string {
   switch (rule.type) {
     case 'allow':
@@ -342,7 +546,11 @@ function formatEndpointName(endpoint: RomanceRuleEndpoint): string {
     return '所有角色';
   }
 
-  return CHARACTER_OPTIONS.find(character => character.id === endpoint.characterId)?.name ?? '未知角色';
+  return formatCharacterName(endpoint.characterId);
+}
+
+function formatCharacterName(characterId: string): string {
+  return CHARACTER_OPTIONS.find(character => character.id === characterId)?.name ?? '未知角色';
 }
 
 function getInitialPanelPosition() {

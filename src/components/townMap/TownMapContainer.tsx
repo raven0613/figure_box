@@ -71,6 +71,7 @@ const GIFT_DROP_CHARACTER_RADIUS = 1;
 interface TownMapContainerProps {
   expressionByCharacterId?: Partial<Record<string, Expression>>;
   mapDialoguePresentation?: EventDialoguePresentation | null;
+  romanceRuleRevision?: number;
   onCharacterExpressionsChange?: (expressionByCharacterId: Partial<Record<string, Expression>>) => void;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
 }
@@ -121,6 +122,7 @@ interface PickupChainState {
 export function TownMapContainer({
   expressionByCharacterId = {},
   mapDialoguePresentation = null,
+  romanceRuleRevision = 0,
   onCharacterExpressionsChange,
   onDialogueRequest,
 }: TownMapContainerProps) {
@@ -153,6 +155,7 @@ export function TownMapContainer({
   const [mapZoom, setMapZoom] = useState(1);
   const placementDraftRef = useRef<ItemInstance | null>(null);
   const pickupChainRef = useRef<PickupChainState | null>(null);
+  const lastAppliedRomanceRuleRevisionRef = useRef(romanceRuleRevision);
   const requestListItems = useMemo(
     () => getRequestListItems({
       requests: characterRequests,
@@ -360,6 +363,15 @@ export function TownMapContainer({
   }, [pickupChain]);
 
   useEffect(() => {
+    if (lastAppliedRomanceRuleRevisionRef.current === romanceRuleRevision) {
+      return;
+    }
+
+    lastAppliedRomanceRuleRevisionRef.current = romanceRuleRevision;
+    characterControllerRef.current?.normalizeRomanceFeelings();
+  }, [romanceRuleRevision]);
+
+  useEffect(() => {
     if (!canvasHostRef.current) {
       return;
     }
@@ -528,6 +540,7 @@ export function TownMapContainer({
 
     characterControllerRef.current = characterController;
     characterController.start();
+    characterController.normalizeRomanceFeelings();
     widget.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
 
     return () => {

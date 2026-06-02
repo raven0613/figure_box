@@ -7,6 +7,10 @@ import {
   RelationshipRecord,
   SocialStatus,
 } from '~/constants/character';
+import {
+  canApplyRomanticFeeling,
+  isRomanticFeeling,
+} from '~/services/romanceRules/romanceRuleService';
 
 export interface RelationshipStore {
   mutualRelationships: MutualRelationship[];
@@ -73,7 +77,7 @@ export function changeRelationshipIntimacy(
     relationships,
     charId,
     targetCharId,
-    relationship => updateDirectedRelationshipIntimacy(relationship, delta),
+    relationship => updateDirectedRelationshipIntimacy(relationship, charId, targetCharId, delta),
     timestamp,
   );
 }
@@ -102,9 +106,32 @@ export function decreaseRelationshipIntimacyToFeelingMin(
     relationships,
     charId,
     targetCharId,
-    relationship => decreaseDirectedRelationshipIntimacyToFeelingMin(relationship, feeling),
+    relationship => decreaseDirectedRelationshipIntimacyToFeelingMin(relationship, charId, targetCharId, feeling),
     timestamp,
   );
+}
+
+export function normalizeRomanticRelationshipFeelings(
+  relationships: DirectedRelationship[],
+): DirectedRelationship[] {
+  let didChange = false;
+  const normalizedRelationships = relationships.map(relationship => {
+    if (
+      !isRomanticFeeling(relationship.feeling) ||
+      canApplyRomanticFeeling(relationship.charId, relationship.targetCharId)
+    ) {
+      return relationship;
+    }
+
+    didChange = true;
+
+    return {
+      ...relationship,
+      feeling: Feeling.Fond,
+    };
+  });
+
+  return didChange ? normalizedRelationships : relationships;
 }
 
 function rememberImpression(
@@ -363,6 +390,8 @@ function isSameRelationshipPair(
 
 function updateDirectedRelationshipIntimacy(
   relationship: DirectedRelationship,
+  charId: string,
+  targetCharId: string,
   delta: number,
 ): DirectedRelationship {
   const intimacy = clampIntimacy(relationship.intimacy + delta);
@@ -370,12 +399,14 @@ function updateDirectedRelationshipIntimacy(
   return {
     ...relationship,
     intimacy,
-    feeling: getFeelingForIntimacy(intimacy),
+    feeling: getAllowedFeelingForIntimacy(charId, targetCharId, intimacy),
   };
 }
 
 function decreaseDirectedRelationshipIntimacyToFeelingMin(
   relationship: DirectedRelationship,
+  charId: string,
+  targetCharId: string,
   feeling: Feeling,
 ): DirectedRelationship {
   const intimacy = Math.min(relationship.intimacy, getFeelingMinIntimacy(feeling));
@@ -383,12 +414,26 @@ function decreaseDirectedRelationshipIntimacyToFeelingMin(
   return {
     ...relationship,
     intimacy,
-    feeling: getFeelingForIntimacy(intimacy),
+    feeling: getAllowedFeelingForIntimacy(charId, targetCharId, intimacy),
   };
 }
 
 function clampIntimacy(intimacy: number): number {
   return Math.max(MIN_INTIMACY, Math.min(MAX_INTIMACY, intimacy));
+}
+
+function getAllowedFeelingForIntimacy(
+  charId: string,
+  targetCharId: string,
+  intimacy: number,
+): Feeling {
+  const feeling = getFeelingForIntimacy(intimacy);
+
+  if (!isRomanticFeeling(feeling) || canApplyRomanticFeeling(charId, targetCharId)) {
+    return feeling;
+  }
+
+  return Feeling.Fond;
 }
 
 function getRelationshipStageForIntimacy<TStage extends string>(

@@ -23,6 +23,7 @@ import {
 import {
     changeRelationshipIntimacy,
     decreaseRelationshipIntimacyToFeelingMin,
+    normalizeRomanticRelationshipFeelings,
     rememberPassBy,
 } from '../relationships';
 import { decideCharacterEvent } from '~/services/characterEvents/decision';
@@ -111,6 +112,9 @@ export const characterMachine = createMachine(
             [EventType.PassBy]: {
                 guard: 'canReceiveLogicCommand',
                 actions: 'rememberPassBy',
+            },
+            [EventType.NormalizeRomanceFeelings]: {
+                actions: 'normalizeRomanceFeelings',
             },
             [EventType.GoEat]: {
                 guard: 'shouldChangeToFindFood',
@@ -778,6 +782,9 @@ export const characterMachine = createMachine(
                         ? applyRequestEffectsToStatus(context.status, event.requestEffects)
                         : context.status
                 ),
+            }),
+            normalizeRomanceFeelings: assign({
+                relationships: ({ context }) => normalizeRomanticRelationshipFeelings(context.relationships),
             }),
             applyOfflineRuntime: assign({
                 status: ({ context, event }) => (

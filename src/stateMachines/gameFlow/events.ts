@@ -67,6 +67,7 @@ export type CharacterEvent =
     type: EventType.ApplyRequestEffects;
     requestEffects: readonly CharacterRequestSatisfiedEffect[];
   }
+  | { type: EventType.NormalizeRomanceFeelings }
   | { type: EventType.SetControlState; controlState: CharacterControlState; reason: CharacterControlReason }
   | { type: EventType.GoIdle }
   | { type: EventType.PickUp }
@@ -111,6 +112,7 @@ export enum EventType {
   EndJoinedActivity = "endJoinedActivity",
   RecordActivityCooldown = "recordActivityCooldown",
   ApplyRequestEffects = "applyRequestEffects",
+  NormalizeRomanceFeelings = "normalizeRomanceFeelings",
   SetControlState = "setControlState",
   GoIdle = "goIdle",
   PickUp = "pickUp",

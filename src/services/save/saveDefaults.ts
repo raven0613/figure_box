@@ -1,4 +1,5 @@
 import { createRelationshipStore } from '~/stateMachines/gameFlow/relationships';
+import { createDefaultRomanceRuleConfig } from '~/services/romanceRules/romanceRuleService';
 import type { ItemStoreSnapshot } from '~/services/items/itemStore';
 import {
   SAVE_SCHEMA_VERSION,
@@ -55,6 +56,7 @@ export function createDefaultSettingsRecord(timestamp = Date.now()): SettingsRec
     id: 'current',
     language: 'zh',
     isSaveDebugPanelOpen: false,
+    romanceRules: createDefaultRomanceRuleConfig(),
     updatedAt: timestamp,
   };
 }

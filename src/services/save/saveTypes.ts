@@ -1,4 +1,5 @@
 import type { ItemStoreSnapshot } from '~/services/items/itemStore';
+import type { RomanceRuleConfig } from '~/services/romanceRules/romanceRuleService';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import type { RelationshipStore } from '~/stateMachines/gameFlow/relationships';
 import type { ShopStockItem } from '~/typing/item';
@@ -43,6 +44,7 @@ export interface SettingsRecord {
   id: 'current';
   language: string;
   isSaveDebugPanelOpen: boolean;
+  romanceRules: RomanceRuleConfig;
   updatedAt: number;
 }
 

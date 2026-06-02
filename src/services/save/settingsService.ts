@@ -1,15 +1,19 @@
 import { createDefaultSettingsRecord } from './saveDefaults';
+import {
+  cloneRomanceRuleConfig,
+  type RomanceRuleConfig,
+} from '~/services/romanceRules/romanceRuleService';
 import type { SettingsRecord } from './saveTypes';
 
 class SettingsService {
   private settings: SettingsRecord = createDefaultSettingsRecord();
 
   load(settings: SettingsRecord): void {
-    this.settings = { ...settings };
+    this.settings = cloneSettingsRecord(settings);
   }
 
   getSnapshot(): SettingsRecord {
-    return { ...this.settings };
+    return cloneSettingsRecord(this.settings);
   }
 
   setSaveDebugPanelOpen(isSaveDebugPanelOpen: boolean): SettingsRecord {
@@ -21,6 +25,23 @@ class SettingsService {
 
     return this.getSnapshot();
   }
+
+  setRomanceRuleConfig(romanceRules: RomanceRuleConfig): SettingsRecord {
+    this.settings = {
+      ...this.settings,
+      romanceRules: cloneRomanceRuleConfig(romanceRules),
+      updatedAt: Date.now(),
+    };
+
+    return this.getSnapshot();
+  }
 }
 
 export const settingsService = new SettingsService();
+
+function cloneSettingsRecord(settings: SettingsRecord): SettingsRecord {
+  return {
+    ...settings,
+    romanceRules: cloneRomanceRuleConfig(settings.romanceRules),
+  };
+}

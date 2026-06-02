@@ -2,11 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { OfflineRecapDebugWindow } from '~/components/debug/OfflineRecapDebugWindow';
 import { SaveDebugPanel } from '~/components/debug/SaveDebugPanel';
-import { Expression } from '~/constants/character';
+import { CHARACTER_SEEDS, Expression } from '~/constants/character';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
 import { MAP_DIALOGUE_BOUNCE_DEMO, MAP_DIALOGUE_FADE_DEMO } from '~/constants/mapDialogueDemo';
 import i18n from '~/i18n';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
+import {
+  createDefaultRomanceProfiles,
+  setRomanceRuleConfig,
+  type RomanceRuleConfig,
+  type CharacterRomanceProfile,
+  type GlobalRomanceDefault,
+  type RomanceRule,
+} from '~/services/romanceRules/romanceRuleService';
 import { saveService } from '~/services/save/saveService';
 import { settingsService } from '~/services/save/settingsService';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
@@ -25,6 +33,12 @@ function App() {
   const [isSaveDebugOpen, setIsSaveDebugOpen] = useState(false);
   const [isOfflineRecapDebugOpen, setIsOfflineRecapDebugOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [globalRomanceDefault, setGlobalRomanceDefault] = useState<GlobalRomanceDefault>('allow');
+  const [romanceRules, setRomanceRules] = useState<RomanceRule[]>([]);
+  const [romanceProfilesByCharacterId, setRomanceProfilesByCharacterId] = useState<Record<string, CharacterRomanceProfile>>(
+    () => createDefaultRomanceProfiles(CHARACTER_SEEDS.map(character => character.id)),
+  );
+  const [romanceRuleRevision, setRomanceRuleRevision] = useState(0);
   const [activeDialogueScript, setActiveDialogueScript] = useState<DialogueViewScript | null>(null);
   const [dialogueExpressionByCharacterId, setDialogueExpressionByCharacterId] = useState<Partial<Record<string, Expression>>>({});
   const [characterExpressionById, setCharacterExpressionById] = useState<Partial<Record<string, Expression>>>({});
@@ -81,7 +95,51 @@ function App() {
     settingsService.setSaveDebugPanelOpen(isOpen);
     saveService.markDirty('settings');
   }, []);
+  const commitRomanceRuleConfig = useCallback((config: RomanceRuleConfig) => {
+    setRomanceRuleConfig(config);
+    settingsService.setRomanceRuleConfig(config);
+    saveService.markDirty('settings');
+    setRomanceRuleRevision(revision => revision + 1);
+  }, []);
+  const updateGlobalRomanceDefault = useCallback((globalDefault: GlobalRomanceDefault) => {
+    const nextConfig = {
+      globalDefault,
+      profilesByCharacterId: romanceProfilesByCharacterId,
+      rules: romanceRules,
+    };
+
+    setGlobalRomanceDefault(globalDefault);
+    commitRomanceRuleConfig(nextConfig);
+  }, [commitRomanceRuleConfig, romanceProfilesByCharacterId, romanceRules]);
+  const updateRomanceRules = useCallback((rules: RomanceRule[]) => {
+    const nextConfig = {
+      globalDefault: globalRomanceDefault,
+      profilesByCharacterId: romanceProfilesByCharacterId,
+      rules,
+    };
+
+    setRomanceRules(rules);
+    commitRomanceRuleConfig(nextConfig);
+  }, [commitRomanceRuleConfig, globalRomanceDefault, romanceProfilesByCharacterId]);
+  const updateRomanceProfiles = useCallback((profilesByCharacterId: Record<string, CharacterRomanceProfile>) => {
+    const nextConfig = {
+      globalDefault: globalRomanceDefault,
+      profilesByCharacterId,
+      rules: romanceRules,
+    };
+
+    setRomanceProfilesByCharacterId(profilesByCharacterId);
+    commitRomanceRuleConfig(nextConfig);
+  }, [commitRomanceRuleConfig, globalRomanceDefault, romanceRules]);
   const isAvatarEditorPage = getNormalizedPath() === AVATAR_EDITOR_PATH;
+
+  useEffect(() => {
+    setRomanceRuleConfig({
+      globalDefault: globalRomanceDefault,
+      profilesByCharacterId: romanceProfilesByCharacterId,
+      rules: romanceRules,
+    });
+  }, [globalRomanceDefault, romanceProfilesByCharacterId, romanceRules]);
 
   useEffect(() => {
     if (isAvatarEditorPage) {
@@ -93,7 +151,13 @@ function App() {
     saveService.initializeGame()
       .then(() => {
         if (isMounted) {
-          setIsSaveDebugOpen(settingsService.getSnapshot().isSaveDebugPanelOpen);
+          const settings = settingsService.getSnapshot();
+
+          setIsSaveDebugOpen(settings.isSaveDebugPanelOpen);
+          setGlobalRomanceDefault(settings.romanceRules.globalDefault);
+          setRomanceProfilesByCharacterId(settings.romanceRules.profilesByCharacterId);
+          setRomanceRules([...settings.romanceRules.rules]);
+          setRomanceRuleConfig(settings.romanceRules);
           setIsSaveReady(true);
         }
       })
@@ -188,6 +252,7 @@ function App() {
           <TownMapContainer
             expressionByCharacterId={dialogueExpressionByCharacterId}
             mapDialoguePresentation={mapDialoguePresentation}
+            romanceRuleRevision={romanceRuleRevision}
             onCharacterExpressionsChange={handleCharacterExpressionsChange}
             onDialogueRequest={handleDialogueRequest}
           />
@@ -199,7 +264,15 @@ function App() {
           <OfflineRecapDebugWindow onClose={() => setIsOfflineRecapDebugOpen(false)} />
         ) : null}
         {isSettingsOpen ? (
-          <SettingsPanel onClose={() => setIsSettingsOpen(false)} />
+          <SettingsPanel
+            globalRomanceDefault={globalRomanceDefault}
+            romanceProfilesByCharacterId={romanceProfilesByCharacterId}
+            romanceRules={romanceRules}
+            onClose={() => setIsSettingsOpen(false)}
+            onGlobalRomanceDefaultChange={updateGlobalRomanceDefault}
+            onRomanceProfilesChange={updateRomanceProfiles}
+            onRomanceRulesChange={updateRomanceRules}
+          />
         ) : null}
         {activeDialogueScript ? (
           <DialogueWindow

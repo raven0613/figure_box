@@ -435,6 +435,12 @@ export class TownCharacterController {
     });
   }
 
+  normalizeRomanceFeelings(): void {
+    CHARACTER_SEEDS.forEach(character => {
+      this.sendToCharacter(character.id, { type: EventType.NormalizeRomanceFeelings });
+    });
+  }
+
   chooseGodDropCandidate(candidateId: string): void {
     this.godDropCoordinator.chooseCandidate(candidateId);
   }

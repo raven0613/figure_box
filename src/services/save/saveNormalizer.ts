@@ -6,6 +6,17 @@ import {
   SocialStatus,
 } from '~/constants/character';
 import {
+  createDefaultRomanceRuleConfig,
+  type CharacterGender,
+  type CharacterRomanceProfile,
+  type GlobalRomanceDefault,
+  type RomanceRule,
+  type RomanceRuleConfig,
+  type RomanceRuleEndpoint,
+  type RomanceRuleType,
+  type RomanticOrientation,
+} from '~/services/romanceRules/romanceRuleService';
+import {
   createRelationshipStore,
   normalizeRelationshipPair,
 } from '~/stateMachines/gameFlow/relationships';
@@ -47,6 +58,10 @@ const SOCIAL_STATUSES = new Set<string>(Object.values(SocialStatus));
 const MOODS = new Set<string>(Object.values(Mood));
 const EXPRESSIONS = new Set<string>(Object.values(Expression));
 const FEELINGS = new Set<string>(Object.values(Feeling));
+const GLOBAL_ROMANCE_DEFAULTS = new Set<GlobalRomanceDefault>(['allow', 'deny']);
+const ROMANCE_RULE_TYPES = new Set<RomanceRuleType>(['allow', 'deny', 'onlyAllow']);
+const CHARACTER_GENDERS = new Set<CharacterGender>(['male', 'female', 'nonBinary']);
+const ROMANTIC_ORIENTATIONS = new Set<RomanticOrientation>(['none', 'any', 'male', 'female', 'nonBinary']);
 
 const ITEM_STATES = new Set<ItemState>([
   'stored',
@@ -132,6 +147,7 @@ export function normalizeSettingsRecord(rawRecord: unknown): SettingsRecord {
     isSaveDebugPanelOpen: typeof rawRecord.isSaveDebugPanelOpen === 'boolean'
       ? rawRecord.isSaveDebugPanelOpen
       : false,
+    romanceRules: readRomanceRuleConfig(rawRecord.romanceRules),
     updatedAt: readFiniteNumber(rawRecord.updatedAt, timestamp),
   };
 }
@@ -846,6 +862,126 @@ function readBooleanRecord(value: unknown): Record<string, boolean> {
   return Object.fromEntries(
     Object.entries(value).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'),
   );
+}
+
+function readRomanceRuleConfig(value: unknown): RomanceRuleConfig {
+  const defaultConfig = createDefaultRomanceRuleConfig();
+
+  if (!isRecord(value)) {
+    return defaultConfig;
+  }
+
+  return {
+    globalDefault: readGlobalRomanceDefault(value.globalDefault, defaultConfig.globalDefault),
+    profilesByCharacterId: readRomanceProfiles(value.profilesByCharacterId),
+    rules: readRomanceRules(value.rules),
+  };
+}
+
+function readGlobalRomanceDefault(
+  value: unknown,
+  fallback: GlobalRomanceDefault,
+): GlobalRomanceDefault {
+  return typeof value === 'string' && GLOBAL_ROMANCE_DEFAULTS.has(value as GlobalRomanceDefault)
+    ? value as GlobalRomanceDefault
+    : fallback;
+}
+
+function readRomanceProfiles(value: unknown): Record<string, CharacterRomanceProfile> {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return Object.entries(value).reduce<Record<string, CharacterRomanceProfile>>(
+    (profilesByCharacterId, [characterId, rawProfile]) => {
+      const profile = readRomanceProfile(rawProfile);
+
+      if (!profile) {
+        return profilesByCharacterId;
+      }
+
+      return {
+        ...profilesByCharacterId,
+        [characterId]: profile,
+      };
+    },
+    {},
+  );
+}
+
+function readRomanceProfile(value: unknown): CharacterRomanceProfile | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.gender !== 'string' ||
+    !CHARACTER_GENDERS.has(value.gender as CharacterGender) ||
+    typeof value.orientation !== 'string' ||
+    !ROMANTIC_ORIENTATIONS.has(value.orientation as RomanticOrientation)
+  ) {
+    return null;
+  }
+
+  return {
+    gender: value.gender as CharacterGender,
+    orientation: value.orientation as RomanticOrientation,
+  };
+}
+
+function readRomanceRules(value: unknown): RomanceRule[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap(rawRule => {
+    const rule = readRomanceRule(rawRule);
+
+    return rule ? [rule] : [];
+  });
+}
+
+function readRomanceRule(value: unknown): RomanceRule | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.type !== 'string') {
+    return null;
+  }
+
+  if (!ROMANCE_RULE_TYPES.has(value.type as RomanceRuleType)) {
+    return null;
+  }
+
+  const source = readRomanceRuleEndpoint(value.source);
+  const target = readRomanceRuleEndpoint(value.target);
+
+  if (!source || !target) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    type: value.type as RomanceRuleType,
+    source,
+    target,
+  };
+}
+
+function readRomanceRuleEndpoint(value: unknown): RomanceRuleEndpoint | null {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return null;
+  }
+
+  if (value.type === 'all') {
+    return { type: 'all' };
+  }
+
+  if (value.type === 'character' && typeof value.characterId === 'string') {
+    return {
+      type: 'character',
+      characterId: value.characterId,
+    };
+  }
+
+  return null;
 }
 
 function readFiniteNumber(value: unknown, fallback: number): number {

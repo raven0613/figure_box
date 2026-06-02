@@ -125,6 +125,36 @@
   background: #f7f6ff;
 }
 
+.orientationEditor {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.orientationEditor label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  color: #4c5d66;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.orientationEditor select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(36, 49, 58, 0.16);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2b33;
+  font: inherit;
+  font-size: 13px;
+}
+
 .ruleComposer {
   display: grid;
   grid-template-columns: minmax(84px, 0.9fr) minmax(120px, 1fr) minmax(120px, 1fr) auto;
@@ -247,6 +277,91 @@
   line-height: 1;
 }
 
+.rulePreview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(36, 49, 58, 0.12);
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.rulePreviewHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rulePreviewHeader h3 {
+  margin: 2px 0 0;
+  color: #1f2b33;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.previewControls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.previewControls label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  color: #4c5d66;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.previewControls select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(36, 49, 58, 0.16);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2b33;
+  font: inherit;
+  font-size: 13px;
+}
+
+.previewResult {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(36, 49, 58, 0.1);
+  border-left-width: 5px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.previewResult strong {
+  color: #1f2b33;
+}
+
+.previewResult small {
+  color: #687780;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.allowedPreviewResult {
+  border-left-color: #2f8f66;
+  background: #f3fbf7;
+}
+
+.deniedPreviewResult {
+  border-left-color: #c64f45;
+  background: #fff7f5;
+}
+
 .prioritySummary {
   padding: 9px 10px;
   border: 1px solid rgba(36, 49, 58, 0.1);
@@ -266,6 +381,10 @@
     grid-template-columns: 1fr;
   }
 
+  .orientationEditor {
+    grid-template-columns: 1fr;
+  }
+
   .segmentedControl {
     width: 100%;
   }
@@ -273,5 +392,9 @@
   .ruleItem {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .previewControls {
+    grid-template-columns: 1fr;
   }
 }
