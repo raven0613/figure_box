@@ -34,19 +34,32 @@ import type {
   MiniBodyRigLayout,
   MiniFrontIdleRigLayout,
   MiniLayer,
+  MiniLocalLayer,
   MiniOptionOffsetMap,
   MiniPoint,
+  MiniPose,
+  MiniRigNode,
+  MiniTransform,
 } from './miniAvatarTypes';
+import { flattenMiniRigNode } from './miniAvatarTransform';
+import { getMiniAvatarAnchorOffset } from './miniAvatarAnchors';
 
-export async function createMiniFrontIdleLayers(state: AvatarState): Promise<MiniLayer[]> {
-  return new MiniFrontIdleLayerRenderer(state).createLayers();
+interface MiniMirroredSocketPoints {
+  left: MiniPoint;
+  right: MiniPoint;
+}
+
+export async function createMiniFrontIdleLayers(state: AvatarState, pose: MiniPose = {}): Promise<MiniLayer[]> {
+  return new MiniFrontIdleLayerRenderer(state, pose).createLayers();
 }
 
 class MiniFrontIdleLayerRenderer {
   private readonly state: AvatarState;
+  private readonly pose: MiniPose;
 
-  constructor(state: AvatarState) {
+  constructor(state: AvatarState, pose: MiniPose) {
     this.state = state;
+    this.pose = pose;
   }
 
   async createLayers(): Promise<MiniLayer[]> {
@@ -72,6 +85,8 @@ class MiniFrontIdleLayerRenderer {
     const bodyOffset = getMiniScaledOffset(bodyRig.body);
     const legOffset = getMiniScaledOffset(bodyRig.legOffset);
     const armIdleOffset = getMiniScaledOffset(bodyRig.armIdleOffset);
+    const armIdleAnchorOffset = getMiniAvatarAnchorOffset('arm_idle', '01', bodyTypeId);
+    const armIdleSocketPoints = getMiniArmIdleSocketPoints(bodyRig, armIdleOffset, armIdleAnchorOffset);
     const earOffset = getMiniScaledOffset(rig.ear);
     const mouthOffset = getMiniScaledOffset(rig.mouth);
     const backHairBottomOffset = getMiniScaledOffset(addMiniPoints(
@@ -120,32 +135,30 @@ class MiniFrontIdleLayerRenderer {
     const topBodyZIndex = getMiniClothingBodyZIndex(this.getPartLayerOrder('mini.clothingTop'));
     const bottomZIndex = getMiniClothingBodyZIndex(this.getPartLayerOrder('mini.clothingBottom'));
     const eyeLightY = eyeBallY + requestedEyeLightOffset.y + (eyeLightState.offsetY ?? 0) * MINI_PIXEL_SCALE;
-
-    return [
-      ...this.createAccessoryLayers(accessoryBases),
-      ...this.createMirroredColorAndLineLayers('leg', '01', skinColor, skinLineColor, bodyRig.legDistance, bodyCenter.y + legOffset.y, 0),
-      ...this.createMirroredColorAndLineLayers('arm_idle', '01', skinColor, skinLineColor, bodyRig.armIdleDistance + armIdleOffset.x, bodyCenter.y + armIdleOffset.y, 1),
-      ...this.createColorAndLineLayers('body', bodyOptionId, skinColor, skinLineColor, bodyCenter.x + bodyOffset.x, bodyCenter.y + bodyOffset.y, 2),
+    const isSmileBlinkFrame = this.pose.eyeExpression === 'smileBlink';
+    const topArmLayers = isTopVisible
+      ? this.createNamedColorAndLineLocalLayers(
+        `clothing/tops/${topId}`,
+        'front_arm_color.png',
+        'front_arm_line.png',
+        topColor,
+        topLineColor,
+        1.2,
+        topArmOffset.x,
+        topArmOffset.y,
+      )
+      : [];
+    const clothingLayers = [
       ...(isTopVisible
         ? [
-          ...this.createMirroredNamedColorAndLineLayers(
-            `clothing/tops/${topId}`,
-            'front_arm_color.png',
-            'front_arm_line.png',
-            topColor,
-            topLineColor,
-            bodyRig.armIdleDistance + armIdleOffset.x + topArmOffset.x,
-            bodyCenter.y + armIdleOffset.y + topArmOffset.y,
-            1.2,
-          ),
           ...this.createNamedColorAndLineLayers(
             `clothing/tops/${topId}`,
             `front_body_${bodyOptionId}_color.png`,
             `front_body_${bodyOptionId}_line.png`,
             topColor,
             topLineColor,
-            bodyCenter.x + bodyOffset.x + topBodyOffset.x,
-            bodyCenter.y + bodyOffset.y + topBodyOffset.y,
+            bodyOffset.x + topBodyOffset.x,
+            bodyOffset.y + topBodyOffset.y,
             topBodyZIndex,
           ),
         ]
@@ -157,27 +170,108 @@ class MiniFrontIdleLayerRenderer {
           'front_line.png',
           bottomColor,
           bottomLineColor,
-          bodyCenter.x + bottomAnchorOffset.x + bottomOffset.x,
-          bodyCenter.y + bottomAnchorOffset.y + bottomOffset.y,
+          bottomAnchorOffset.x + bottomOffset.x,
+          bottomAnchorOffset.y + bottomOffset.y,
           bottomZIndex,
         )
         : []),
-      ...this.createColorAndLineLayers('back_hair_bottom', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineColor('hair.backHair'), headCenter.x + backHairBottomOffset.x, headCenter.y + backHairBottomOffset.y, 10),
-      ...this.createColorAndLineLayers('face', '01', skinColor, skinLineColor, headCenter.x, headCenter.y, 13),
-      ...this.createColorAndLineLayers('back_hair_top', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineColor('hair.topHair'), headCenter.x + backHairTopOffset.x, headCenter.y + backHairTopOffset.y, 13.5),
-      ...this.createMirroredColorAndLineLayers('ear', '01', skinColor, skinLineColor, rig.earDistance + earOffset.x, headCenter.y + earOffset.y, 13.8),
-      ...this.createMirroredColorOnlyLayers('sclera', '01', scleraColor, scleraColor, rig.eyes.eyeDistance + scleraOffset.x, headCenter.y + scleraOffset.y, 13.9),
-      ...this.createMirroredColorAndLineLayers('lower_eyelid', '01', rig.colors.lowerEyelidColor, this.getPartLineColor('eyes.lowerEyelid'), rig.eyes.eyeDistance + lowerEyelidOffset.x, headCenter.y + lowerEyelidOffset.y, 14),
-      ...this.createMirroredColorOnlyLayers('eye_ball', '01', leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + eyeBallOffset.x, eyeBallY, 15),
-      ...this.createMirroredLineOnlyLayers('eye_light', '01', rig.colors.eyeLight, eyeLightDistance, eyeLightY, 16, 0, eyeLightOffsetX),
-      ...this.createMirroredColorAndLineLayers('upper_eyelid', '01', skinColor, this.getPartLineColor('eyes.upperEyelid'), rig.eyes.eyeDistance + upperLidOffset.x, upperLidY, 17, upperLidAngle),
-      ...this.createMirroredSingleFileLayers('upper_eyelid', '01_deco.png', leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + upperLidOffset.x, upperLidY, 17.2, upperLidAngle),
-      ...this.createMirroredLineOnlyLayers('eyelid', '01', this.getPartLineColor('mini.eyelid'), rig.eyes.eyeDistance + upperLidOffset.x, upperLidY, 18),
-      ...this.createMirroredLineOnlyLayers('eyebrow', '01', this.getPartLineColor('eyes.eyebrow'), rig.eyes.eyeDistance + eyebrowOffset.x, headCenter.y + eyebrowOffset.y, 19),
-      ...this.createLineOnlyLayers('mouth', '01', this.getPartLineColor('mouth'), headCenter.x + mouthOffset.x, headCenter.y + mouthOffset.y, 20),
-      ...this.createColorAndLineLayers('bangs', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineColor('hair.bangs'), headCenter.x + bangsOffset.x, headCenter.y + bangsOffset.y, 30),
-      ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, headCenter.x + hairLightOffset.x, headCenter.y + hairLightOffset.y, 31),
     ];
+    const bodyNode: MiniRigNode = {
+      transform: createMiniNodeTransform(bodyCenter, this.getPoseNodeTransform('body')),
+      layers: [
+        ...this.createColorAndLineLayers('body', bodyOptionId, skinColor, skinLineColor, bodyOffset.x, bodyOffset.y, 2),
+      ],
+      children: [
+        ...this.createMirroredColorAndLineNodes(
+          'leg',
+          '01',
+          skinColor,
+          skinLineColor,
+          createMirroredMiniSocketPoints(bodyRig.legDistance, legOffset.y),
+          0,
+          this.getPoseNodeTransform('leftLeg'),
+          this.getPoseNodeTransform('rightLeg'),
+        ),
+        ...this.createMirroredColorAndLineNodes(
+          'arm_idle',
+          '01',
+          skinColor,
+          skinLineColor,
+          armIdleSocketPoints,
+          1,
+          this.getPoseNodeTransform('leftArm'),
+          this.getPoseNodeTransform('rightArm'),
+          topArmLayers,
+          armIdleAnchorOffset,
+        ),
+        { layers: clothingLayers },
+      ],
+    };
+    const headNode: MiniRigNode = {
+      transform: createMiniNodeTransform(headCenter, this.getPoseNodeTransform('head')),
+      layers: [
+        ...this.createColorAndLineLayers('back_hair_bottom', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineColor('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 10),
+        ...this.createColorAndLineLayers('face', '01', skinColor, skinLineColor, 0, 0, 13),
+        ...this.createColorAndLineLayers('back_hair_top', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineColor('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5),
+        ...this.createMirroredColorAndLineLayers('ear', '01', skinColor, skinLineColor, rig.earDistance + earOffset.x, earOffset.y, 13.8),
+        ...this.createLineOnlyLayers('mouth', '01', this.getPartLineColor('mouth'), mouthOffset.x, mouthOffset.y, 20),
+        ...this.createColorAndLineLayers('bangs', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineColor('hair.bangs'), bangsOffset.x, bangsOffset.y, 30),
+        ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
+      ],
+      children: [
+        {
+          transform: this.getPoseNodeTransform('eyes'),
+          layers: isSmileBlinkFrame
+            ? []
+            : [
+              ...this.createMirroredColorOnlyLayers('sclera', '01', scleraColor, scleraColor, rig.eyes.eyeDistance + scleraOffset.x, scleraOffset.y, 13.9),
+              ...this.createMirroredColorAndLineLayers('lower_eyelid', '01', rig.colors.lowerEyelidColor, this.getPartLineColor('eyes.lowerEyelid'), rig.eyes.eyeDistance + lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
+              ...this.createMirroredColorOnlyLayers('eye_ball', '01', leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + eyeBallOffset.x, eyeBallOffset.y, 15),
+            ],
+          children: [
+            ...(isSmileBlinkFrame
+              ? []
+              : [{
+                transform: createMiniNodeTransform(
+                  { x: 0, y: eyeLightY - headCenter.y },
+                  this.getPoseNodeTransform('eyeLight'),
+                ),
+                layers: this.createMirroredLineOnlyLayers('eye_light', '01', rig.colors.eyeLight, eyeLightDistance, 0, 16, 0, eyeLightOffsetX),
+              }]),
+            {
+              transform: createMiniNodeTransform(
+                { x: 0, y: upperLidY - headCenter.y },
+                {
+                  ...this.getPoseNodeTransform('upperEyelid'),
+                  angle: upperLidAngle + (this.getPoseNodeTransform('upperEyelid').angle ?? 0),
+                },
+              ),
+              layers: this.createUpperEyelidLayers(skinColor, leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + upperLidOffset.x),
+            },
+            {
+              transform: createMiniNodeTransform(
+                { x: 0, y: upperLidY - headCenter.y },
+                this.getPoseNodeTransform('eyelid'),
+              ),
+              layers: this.createEyelidLayers(rig.eyes.eyeDistance + upperLidOffset.x),
+            },
+            {
+              transform: this.getPoseNodeTransform('eyebrow'),
+              layers: this.createMirroredLineOnlyLayers('eyebrow', '01', this.getPartLineColor('eyes.eyebrow'), rig.eyes.eyeDistance + eyebrowOffset.x, eyebrowOffset.y, 19),
+            },
+          ],
+        },
+      ],
+    };
+    const rootNode: MiniRigNode = {
+      children: [
+        ...this.createAccessoryNodes(accessoryBases),
+        bodyNode,
+        headNode,
+      ],
+    };
+
+    return flattenMiniRigNode(rootNode);
   }
 
   private createColorAndLineLayers(
@@ -211,6 +305,23 @@ class MiniFrontIdleLayerRenderer {
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
 
+  private createNamedColorAndLineLocalLayers(
+    folder: string,
+    colorFile: string,
+    lineFile: string,
+    color: string | undefined,
+    lineColor: string | undefined,
+    zIndex: number,
+    x = 0,
+    y = 0,
+    flipX = false,
+  ): MiniLocalLayer[] {
+    return [
+      { folder, file: colorFile, color, x, y, zIndex, flipX },
+      { folder, file: lineFile, color: lineColor, x, y, zIndex: zIndex + MINI_CLOTHING_LINE_Z_OFFSET, flipX },
+    ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
+  }
+
   private createLineOnlyLayers(
     folder: string,
     optionId: string,
@@ -241,19 +352,51 @@ class MiniFrontIdleLayerRenderer {
     ];
   }
 
-  private createMirroredNamedColorAndLineLayers(
+  private createMirroredColorAndLineNodes(
     folder: string,
-    colorFile: string,
-    lineFile: string,
-    color: string | undefined,
-    lineColor: string | undefined,
-    distance: number,
-    y: number,
+    optionId: string,
+    color: string,
+    lineColor: string,
+    socketPoints: MiniMirroredSocketPoints,
     zIndex: number,
-  ): MiniLayer[] {
+    leftTransform: MiniTransform = {},
+    rightTransform: MiniTransform = {},
+    extraLayers: MiniLocalLayer[] = [],
+    anchorOffset?: MiniPoint,
+  ): MiniRigNode[] {
+    const rightAnchorOffset = anchorOffset ?? getMiniAvatarAnchorOffset(folder, optionId);
+    const leftAnchorOffset = mirrorMiniPointX(rightAnchorOffset);
+
     return [
-      ...createMirroredMiniLayers(folder, colorFile, color, color, distance, y, zIndex),
-      ...createMirroredMiniLayers(folder, lineFile, lineColor, lineColor, distance, y, zIndex + MINI_CLOTHING_LINE_Z_OFFSET),
+      {
+        transform: createMiniNodeTransform(socketPoints.left, leftTransform),
+        layers: [
+          ...this.createColorAndLineLocalLayers(folder, optionId, color, lineColor, zIndex, true, leftAnchorOffset),
+          ...cloneMiniLocalLayers(extraLayers, true, leftAnchorOffset),
+        ],
+      },
+      {
+        transform: createMiniNodeTransform(socketPoints.right, rightTransform),
+        layers: [
+          ...this.createColorAndLineLocalLayers(folder, optionId, color, lineColor, zIndex, false, rightAnchorOffset),
+          ...cloneMiniLocalLayers(extraLayers, false, rightAnchorOffset),
+        ],
+      },
+    ];
+  }
+
+  private createColorAndLineLocalLayers(
+    folder: string,
+    optionId: string,
+    color: string,
+    lineColor: string,
+    zIndex: number,
+    flipX = false,
+    anchorOffset: MiniPoint = { x: 0, y: 0 },
+  ): MiniLocalLayer[] {
+    return [
+      { folder, file: `${optionId}_color.png`, color, x: anchorOffset.x, y: anchorOffset.y, zIndex, flipX },
+      { folder, file: `${optionId}_line.png`, color: lineColor, x: anchorOffset.x, y: anchorOffset.y, zIndex: zIndex + 0.1, flipX },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
 
@@ -312,7 +455,33 @@ class MiniFrontIdleLayerRenderer {
     return createMirroredMiniLayers(folder, file, leftColor, rightColor ?? leftColor, distance, y, zIndex, angle);
   }
 
-  private createAccessoryLayers(bases: Record<AccessoryRenderMode, MiniPoint>): MiniLayer[] {
+  private createUpperEyelidLayers(
+    skinColor: string,
+    leftEyeColor: string,
+    rightEyeColor: string,
+    distance: number,
+  ): MiniLayer[] {
+    const lineColor = this.getPartLineColor('eyes.upperEyelid');
+
+    if (this.pose.eyeExpression === 'smileBlink') {
+      return this.createMirroredLineOnlyLayers('express/smile/upper_eyelid', '01', lineColor, distance, 0, 17);
+    }
+
+    return [
+      ...this.createMirroredColorAndLineLayers('upper_eyelid', '01', skinColor, lineColor, distance, 0, 17),
+      ...this.createMirroredSingleFileLayers('upper_eyelid', '01_deco.png', leftEyeColor, rightEyeColor, distance, 0, 17.2),
+    ];
+  }
+
+  private createEyelidLayers(distance: number): MiniLayer[] {
+    const folder = this.pose.eyeExpression === 'smileBlink'
+      ? 'express/smile/eyelid'
+      : 'eyelid';
+
+    return this.createMirroredLineOnlyLayers(folder, '01', this.getPartLineColor('mini.eyelid'), distance, 0, 18);
+  }
+
+  private createAccessoryNodes(bases: Record<AccessoryRenderMode, MiniPoint>): MiniRigNode[] {
     return this.state.accessories.flatMap(accessory => {
       const definition = getAccessoryCategoryDefinition(accessory.category);
       const pose = getAccessoryPoseState(accessory, 'chibi');
@@ -323,47 +492,51 @@ class MiniFrontIdleLayerRenderer {
 
       if (definition.renderMode === 'mirrored') {
         return [
-          ...this.createAccessorySideLayers(accessory, folder, optionId, -1, base, zIndex),
-          ...this.createAccessorySideLayers(accessory, folder, optionId, 1, base, zIndex),
-        ];
+          this.createAccessorySideNode(accessory, folder, optionId, -1, base, zIndex),
+          this.createAccessorySideNode(accessory, folder, optionId, 1, base, zIndex),
+        ].filter((node): node is MiniRigNode => node !== null);
       }
 
       return [
-        ...this.createAccessoryImageLayers(folder, optionId, accessory.color ?? definition.defaultColor, accessory.lineColor ?? definition.defaultLineColor, {
-          x: base.x + pose.offsetX * MINI_PIXEL_SCALE,
-          y: base.y + pose.offsetY * MINI_PIXEL_SCALE,
-          zIndex,
-          angle: pose.rotate,
-          scale: pose.scale,
-          flipX: pose.flipX,
-        }),
+        {
+          transform: {
+            x: base.x + pose.offsetX * MINI_PIXEL_SCALE,
+            y: base.y + pose.offsetY * MINI_PIXEL_SCALE,
+            angle: pose.rotate,
+            scale: pose.scale,
+            flipX: pose.flipX,
+          },
+          layers: this.createAccessoryImageLayers(folder, optionId, accessory.color ?? definition.defaultColor, accessory.lineColor ?? definition.defaultLineColor, zIndex),
+        },
       ];
     });
   }
 
-  private createAccessorySideLayers(
+  private createAccessorySideNode(
     accessory: AvatarAccessoryInstance,
     folder: string,
     optionId: string,
     side: -1 | 1,
     base: MiniPoint,
     zIndex: number,
-  ): MiniLayer[] {
+  ): MiniRigNode | null {
     const definition = getAccessoryCategoryDefinition(accessory.category);
     const pose = getAccessoryPoseState(accessory, 'chibi');
 
     if ((side === -1 && pose.leftVisible === false) || (side === 1 && pose.rightVisible === false)) {
-      return [];
+      return null;
     }
 
-    return this.createAccessoryImageLayers(folder, optionId, accessory.color ?? definition.defaultColor, accessory.lineColor ?? definition.defaultLineColor, {
-      x: base.x + side * (MINI_FRONT_IDLE_RIG_LAYOUT.accessories.mirroredDistance + pose.offsetX * MINI_PIXEL_SCALE),
-      y: base.y + pose.offsetY * MINI_PIXEL_SCALE,
-      zIndex,
-      angle: side * pose.rotate,
-      scale: pose.scale,
-      flipX: getMiniMirroredAccessoryFlipX(side, pose.flipX),
-    });
+    return {
+      transform: {
+        x: base.x + side * (MINI_FRONT_IDLE_RIG_LAYOUT.accessories.mirroredDistance + pose.offsetX * MINI_PIXEL_SCALE),
+        y: base.y + pose.offsetY * MINI_PIXEL_SCALE,
+        angle: side * pose.rotate,
+        scale: pose.scale,
+        flipX: getMiniMirroredAccessoryFlipX(side, pose.flipX),
+      },
+      layers: this.createAccessoryImageLayers(folder, optionId, accessory.color ?? definition.defaultColor, accessory.lineColor ?? definition.defaultLineColor, zIndex),
+    };
   }
 
   private createAccessoryImageLayers(
@@ -371,11 +544,11 @@ class MiniFrontIdleLayerRenderer {
     optionId: string,
     color: string,
     lineColor: string,
-    transform: Pick<MiniLayer, 'x' | 'y' | 'zIndex' | 'angle' | 'scale' | 'flipX'>,
-  ): MiniLayer[] {
+    zIndex: number,
+  ): MiniLocalLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, ...transform },
-      { folder, file: `${optionId}_line.png`, color: lineColor, ...transform, zIndex: transform.zIndex + 0.1 },
+      { folder, file: `${optionId}_color.png`, color, zIndex },
+      { folder, file: `${optionId}_line.png`, color: lineColor, zIndex: zIndex + 0.1 },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
 
@@ -420,6 +593,10 @@ class MiniFrontIdleLayerRenderer {
 
     return getFirstAvailableMiniOptionId(folder) ?? '01';
   }
+
+  private getPoseNodeTransform(nodeKey: keyof NonNullable<MiniPose['nodes']>): MiniTransform {
+    return this.pose.nodes?.[nodeKey] ?? {};
+  }
 }
 
 function createMirroredMiniLayers(
@@ -438,7 +615,7 @@ function createMirroredMiniLayers(
       folder,
       file,
       color: leftColor,
-      x: MINI_CENTER_X + centerOffsetX - distance,
+      x: centerOffsetX - distance,
       y,
       zIndex,
       angle: -angle,
@@ -448,12 +625,66 @@ function createMirroredMiniLayers(
       folder,
       file,
       color: rightColor,
-      x: MINI_CENTER_X + centerOffsetX + distance,
+      x: centerOffsetX + distance,
       y,
       zIndex,
       angle,
     },
   ];
+}
+
+function createMiniNodeTransform(basePoint: MiniPoint, transform: MiniTransform = {}): MiniTransform {
+  return {
+    ...transform,
+    x: basePoint.x + (transform.x ?? 0),
+    y: basePoint.y + (transform.y ?? 0),
+  };
+}
+
+function getMiniArmIdleSocketPoints(
+  bodyRig: MiniBodyRigLayout,
+  armIdleOffset: MiniPoint,
+  armIdleAnchorOffset: MiniPoint,
+): MiniMirroredSocketPoints {
+  const socketOffset = bodyRig.armIdleSocketOffset
+    ? getMiniScaledOffset(bodyRig.armIdleSocketOffset)
+    : { x: 0, y: armIdleOffset.y - armIdleAnchorOffset.y };
+  const socketDistance = (
+    bodyRig.armIdleSocketDistance ?? bodyRig.armIdleDistance + armIdleOffset.x - armIdleAnchorOffset.x
+  ) + socketOffset.x;
+  const fallbackSocketPoints = createMirroredMiniSocketPoints(socketDistance, socketOffset.y);
+
+  return {
+    left: bodyRig.armIdleLeftSocket ?? fallbackSocketPoints.left,
+    right: bodyRig.armIdleRightSocket ?? fallbackSocketPoints.right,
+  };
+}
+
+function createMirroredMiniSocketPoints(distance: number, y: number): MiniMirroredSocketPoints {
+  return {
+    left: { x: -distance, y },
+    right: { x: distance, y },
+  };
+}
+
+function cloneMiniLocalLayers(
+  layers: MiniLocalLayer[],
+  flipX = false,
+  anchorOffset: MiniPoint = { x: 0, y: 0 },
+): MiniLocalLayer[] {
+  return layers.map(layer => ({
+    ...layer,
+    x: anchorOffset.x + (flipX ? -(layer.x ?? 0) : (layer.x ?? 0)),
+    y: anchorOffset.y + (layer.y ?? 0),
+    flipX: flipX ? layer.flipX !== true : layer.flipX,
+  }));
+}
+
+function mirrorMiniPointX(point: MiniPoint): MiniPoint {
+  return {
+    x: -point.x,
+    y: point.y,
+  };
 }
 
 function addMiniPoints(firstPoint: MiniPoint, secondPoint: MiniPoint): MiniPoint {

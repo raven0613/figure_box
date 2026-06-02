@@ -4,6 +4,8 @@ export interface MiniSpriteSheet {
   dataUrl: string;
   frameWidth: number;
   frameHeight: number;
+  sheetWidth: number;
+  sheetHeight: number;
   columns: number;
   rows: number;
   frameCount: number;
@@ -21,9 +23,64 @@ export interface MiniLayer {
   flipX?: boolean;
 }
 
+export type MiniLocalLayer = Omit<MiniLayer, 'x' | 'y'> & {
+  x?: number;
+  y?: number;
+};
+
 export interface MiniPoint {
   x: number;
   y: number;
+}
+
+export interface MiniAnchorOffset {
+  x: number;
+  y: number;
+}
+
+export interface MiniTransform {
+  x?: number;
+  y?: number;
+  angle?: number;
+  scale?: number;
+  flipX?: boolean;
+  zIndexOffset?: number;
+}
+
+export interface MiniRigNode {
+  transform?: MiniTransform;
+  layers?: MiniLocalLayer[];
+  children?: MiniRigNode[];
+}
+
+export type MiniPoseNodeKey =
+  | 'body'
+  | 'head'
+  | 'eyes'
+  | 'leftArm'
+  | 'rightArm'
+  | 'leftLeg'
+  | 'rightLeg'
+  | 'upperEyelid'
+  | 'eyelid'
+  | 'eyeLight'
+  | 'eyebrow';
+
+export type MiniEyeExpression = 'default' | 'smileBlink';
+
+export interface MiniPose {
+  nodes?: Partial<Record<MiniPoseNodeKey, MiniTransform>>;
+  eyeExpression?: MiniEyeExpression;
+}
+
+export interface MiniAnimation {
+  durationMs: number;
+  fps: number;
+  clips: MiniAnimationClip[];
+}
+
+export interface MiniAnimationClip {
+  sample: (elapsedMs: number, animation: MiniAnimation) => MiniPose;
 }
 
 export type MiniOptionOffsetMap = Record<number, MiniPoint | undefined>;
@@ -33,6 +90,10 @@ export interface MiniBodyRigLayout {
   bottomAnchor: MiniPoint;
   armIdleDistance: number;
   armIdleOffset: MiniPoint;
+  armIdleSocketDistance?: number;
+  armIdleSocketOffset?: MiniPoint;
+  armIdleLeftSocket?: MiniPoint;
+  armIdleRightSocket?: MiniPoint;
   legDistance: number;
   legOffset: MiniPoint;
 }

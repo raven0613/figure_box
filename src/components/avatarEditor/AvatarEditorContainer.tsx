@@ -24,6 +24,10 @@ import {
 } from '~/widgets/avatarCanvas';
 import { MiniAvatarCanvas, MINI_DEFAULT_EYE_LIGHT_DISTANCE } from '~/widgets/miniAvatarCanvas';
 import type { MiniSpriteSheet } from '~/widgets/miniAvatarCanvas';
+import {
+  getMiniAnimationFrameDurationMs,
+  MINI_WAVE_BLINK_ANIMATION,
+} from '~/widgets/miniAvatar/miniAvatarAnimation';
 import styles from './avatarEditor.module.scss';
 
 const MOVE_STEP = 1;
@@ -57,8 +61,10 @@ type SelectedTarget =
 export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEditorContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const miniCanvasHostRef = useRef<HTMLDivElement | null>(null);
+  const miniAnimationCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const avatarCanvasRef = useRef<AvatarCanvas | null>(null);
   const miniAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
+  const miniAnimationCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const spriteSheetBakeVersionRef = useRef(0);
   const holdMoveRef = useRef<HoldMoveState>({
     timeoutId: null,
@@ -75,6 +81,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [draggingAccessoryId, setDraggingAccessoryId] = useState<string | null>(null);
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
   const [spriteSheet, setSpriteSheet] = useState<MiniSpriteSheet | null>(null);
+  const [spriteSheetFrameIndex, setSpriteSheetFrameIndex] = useState(0);
 
   const selectedPart = useMemo(
     () => selectedTarget.type === 'part'
@@ -163,6 +170,23 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     })),
     [avatarState.accessories]
   );
+  const spriteSheetAnimationStyle = useMemo(() => {
+    if (!spriteSheet) {
+      return undefined;
+    }
+
+    const frameIndex = spriteSheetFrameIndex % spriteSheet.frameCount;
+    const column = frameIndex % spriteSheet.columns;
+    const row = Math.floor(frameIndex / spriteSheet.columns);
+
+    return {
+      width: spriteSheet.frameWidth,
+      height: spriteSheet.frameHeight,
+      backgroundImage: `url(${spriteSheet.dataUrl})`,
+      backgroundPosition: `-${column * spriteSheet.frameWidth}px -${row * spriteSheet.frameHeight}px`,
+      backgroundSize: `${spriteSheet.sheetWidth}px ${spriteSheet.sheetHeight}px`,
+    };
+  }, [spriteSheet, spriteSheetFrameIndex]);
 
   useEffect(() => {
     onAvatarChangeRef.current = onAvatarChange;
@@ -182,7 +206,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     const bakeVersion = spriteSheetBakeVersionRef.current + 1;
     spriteSheetBakeVersionRef.current = bakeVersion;
 
-    void miniAvatarCanvas.exportFrontIdleSpriteSheet()
+    void miniAvatarCanvas.exportAnimationSpriteSheet()
       .then(nextSpriteSheet => {
         if (bakeVersion !== spriteSheetBakeVersionRef.current) {
           return;
@@ -210,41 +234,69 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   }, [avatarState.accessories, selectedTarget]);
 
   useEffect(() => {
-    if (!canvasHostRef.current || !miniCanvasHostRef.current) {
+    if (!canvasHostRef.current || !miniCanvasHostRef.current || !miniAnimationCanvasHostRef.current) {
       return;
     }
 
     const canvasHost = canvasHostRef.current;
     const miniCanvasHost = miniCanvasHostRef.current;
+    const miniAnimationCanvasHost = miniAnimationCanvasHostRef.current;
     const avatarCanvas = AvatarCanvas.mount(canvasHost, {
       initialState: initialStateRef.current,
       onChange: state => {
         setAvatarState(state);
         miniAvatarCanvasRef.current?.setState(state);
+        miniAnimationCanvasRef.current?.setState(state);
         onAvatarChangeRef.current?.(state);
       },
     });
     const miniAvatarCanvas = MiniAvatarCanvas.mount(miniCanvasHost, {
       initialState: avatarCanvas.getState(),
     });
+    const miniAnimationCanvas = MiniAvatarCanvas.mount(miniAnimationCanvasHost, {
+      initialState: avatarCanvas.getState(),
+      isAnimationEnabled: true,
+    });
     avatarCanvasRef.current = avatarCanvas;
     miniAvatarCanvasRef.current = miniAvatarCanvas;
+    miniAnimationCanvasRef.current = miniAnimationCanvas;
     refreshSpriteSheetPreview();
 
     return () => {
       spriteSheetBakeVersionRef.current += 1;
       avatarCanvasRef.current = null;
       miniAvatarCanvasRef.current = null;
+      miniAnimationCanvasRef.current = null;
       void avatarCanvas.destroy();
       void miniAvatarCanvas.destroy();
+      void miniAnimationCanvas.destroy();
       canvasHost.replaceChildren();
       miniCanvasHost.replaceChildren();
+      miniAnimationCanvasHost.replaceChildren();
     };
   }, [refreshSpriteSheetPreview]);
 
   useEffect(() => {
     refreshSpriteSheetPreview();
   }, [avatarState, refreshSpriteSheetPreview]);
+
+  useEffect(() => {
+    setSpriteSheetFrameIndex(0);
+
+    if (!spriteSheet || spriteSheet.frameCount <= 1) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setSpriteSheetFrameIndex(currentFrameIndex => (
+        (currentFrameIndex + 1) % spriteSheet.frameCount
+      ));
+    }, getMiniAnimationFrameDurationMs(MINI_WAVE_BLINK_ANIMATION));
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [spriteSheet]);
 
   useEffect(() => {
     return () => {
@@ -503,23 +555,41 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           <div className={styles.canvasHost} ref={canvasHostRef} />
         </div>
         <div className={styles.previewColumn}>
-          <div className={styles.miniPreviewShell} aria-label="Mini front idle preview">
+          <div className={styles.miniPreviewShell} aria-label="Mini avatar preview">
             <div className={styles.miniCanvasHost} ref={miniCanvasHostRef} />
+          </div>
+          <div className={styles.miniPreviewShell} aria-label="Mini live animation preview">
+            <div className={styles.miniCanvasHost} ref={miniAnimationCanvasHostRef} />
           </div>
           <div className={styles.spriteSheetShell} aria-label="Mini sprite sheet output">
             <div className={styles.spriteSheetViewport}>
               {spriteSheet && (
                 <img
-                  alt="Mini front idle sprite sheet"
+                  alt="Mini animation sprite sheet"
                   src={spriteSheet.dataUrl}
-                  width={spriteSheet.frameWidth}
-                  height={spriteSheet.frameHeight}
+                  width={spriteSheet.sheetWidth}
+                  height={spriteSheet.sheetHeight}
                 />
               )}
             </div>
             <div className={styles.spriteSheetMeta}>
               {spriteSheet
-                ? `${spriteSheet.frameWidth}x${spriteSheet.frameHeight} / ${spriteSheet.frameCount} frame`
+                ? `${spriteSheet.sheetWidth}x${spriteSheet.sheetHeight} / ${spriteSheet.frameWidth}x${spriteSheet.frameHeight} / ${spriteSheet.frameCount} frames`
+                : 'baking'}
+            </div>
+          </div>
+          <div className={styles.spriteSheetAnimationShell} aria-label="Mini sprite sheet animation preview">
+            <div className={styles.spriteSheetAnimationViewport}>
+              {spriteSheetAnimationStyle && (
+                <div
+                  className={styles.spriteSheetAnimationFrame}
+                  style={spriteSheetAnimationStyle}
+                />
+              )}
+            </div>
+            <div className={styles.spriteSheetMeta}>
+              {spriteSheet
+                ? `${spriteSheetFrameIndex % spriteSheet.frameCount + 1} / ${spriteSheet.frameCount}`
                 : 'baking'}
             </div>
           </div>
