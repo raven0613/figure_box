@@ -9,16 +9,20 @@ import {
   AVATAR_EDITOR_PART_DEFINITIONS,
   AvatarCanvas,
   AvatarAccessoryInstance,
+  AvatarEditableProperty,
   AvatarPartDefinition,
   AvatarPartKey,
+  AvatarPartState,
   AvatarState,
   createDefaultAvatarState,
   getAccessoryCategoryDefinition,
   getAccessoryDisplayName,
   getAccessoryLayerSlotDefinition,
   getAccessoryPoseState,
+  isAvatarPartOptionColorEditable,
+  MINI_UPPER_EYELID_OFFSET_Y_LIMITS,
 } from '~/widgets/avatarCanvas';
-import { MiniAvatarCanvas } from '~/widgets/miniAvatarCanvas';
+import { MiniAvatarCanvas, MINI_DEFAULT_EYE_LIGHT_DISTANCE } from '~/widgets/miniAvatarCanvas';
 import styles from './avatarEditor.module.scss';
 
 const MOVE_STEP = 1;
@@ -29,6 +33,10 @@ const MAX_HOLD_MOVE_MULTIPLIER = 16;
 const ROTATE_STEP = 5;
 const SCALE_STEP = 0.05;
 const LIGHT_DISTANCE_STEP = 2;
+const UPPER_EYELID_CHIBI_EDITABLE_PROPERTIES: AvatarEditableProperty[] = ['lineColor', 'offsetY', 'rotate'];
+const EYE_LIGHT_CHIBI_EDITABLE_PROPERTIES: AvatarEditableProperty[] = ['offsetX', 'offsetY'];
+const EYELID_CHIBI_EDITABLE_PROPERTIES: AvatarEditableProperty[] = ['lineColor'];
+const DEFAULT_PORTRAIT_EYE_LIGHT_DISTANCE = 45;
 
 interface HoldMoveState {
   timeoutId: ReturnType<typeof setTimeout> | null;
@@ -59,6 +67,9 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const initialStateRef = useRef(initialState);
   const [selectedTarget, setSelectedTarget] = useState<SelectedTarget>({ type: 'part', key: 'face' });
   const [selectedAccessoryPoseKey, setSelectedAccessoryPoseKey] = useState<AccessoryPoseKey>('portrait');
+  const [selectedUpperEyelidPoseKey, setSelectedUpperEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
+  const [selectedEyeLightPoseKey, setSelectedEyeLightPoseKey] = useState<AccessoryPoseKey>('portrait');
+  const [selectedEyelidPoseKey, setSelectedEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
   const [draggingAccessoryId, setDraggingAccessoryId] = useState<string | null>(null);
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
 
@@ -78,15 +89,68 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     ? getAccessoryCategoryDefinition(selectedAccessory.category)
     : null;
   const selectedOptions = selectedAccessoryDefinition?.options ?? selectedPart?.options ?? [];
-  const selectedEditableProperties = selectedAccessoryDefinition?.editableProperties ?? selectedPart?.editableProperties ?? [];
+  const baseEditableProperties = selectedAccessoryDefinition?.editableProperties ?? selectedPart?.editableProperties ?? [];
+  const isUpperEyelidPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.upperEyelid';
+  const isEyeLightPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.light';
+  const isEyelidPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.eyelid';
+  const isUpperEyelidChibiMode = isUpperEyelidPart && selectedUpperEyelidPoseKey === 'chibi';
+  const isEyeLightChibiMode = isEyeLightPart && selectedEyeLightPoseKey === 'chibi';
+  const isEyelidChibiMode = isEyelidPart && selectedEyelidPoseKey === 'chibi';
+  const selectedEditableProperties = isUpperEyelidChibiMode
+    ? UPPER_EYELID_CHIBI_EDITABLE_PROPERTIES
+    : isEyeLightChibiMode
+      ? EYE_LIGHT_CHIBI_EDITABLE_PROPERTIES
+      : isEyelidChibiMode
+        ? EYELID_CHIBI_EDITABLE_PROPERTIES
+      : baseEditableProperties;
+  const canMoveX = selectedEditableProperties.includes('offsetX');
+  const canMoveY = selectedEditableProperties.includes('offsetY');
   const selectedLabel = selectedAccessory ? getAccessoryDisplayName(selectedAccessory) : selectedPart?.label ?? '';
   const selectedAccessoryPose = selectedAccessory
     ? getAccessoryPoseState(selectedAccessory, selectedAccessoryPoseKey)
     : null;
   const selectedPartState = selectedPart ? avatarState[selectedPart.key] : avatarState.face;
+  const selectedPartControlKey = isUpperEyelidChibiMode
+    ? 'mini.upperEyelid'
+    : isEyeLightChibiMode
+      ? 'mini.eyeLight'
+      : isEyelidChibiMode
+        ? 'mini.eyelid'
+      : selectedPart?.key;
+  const selectedPartControlState = isUpperEyelidChibiMode
+    ? avatarState['mini.upperEyelid']
+    : isEyeLightChibiMode
+      ? avatarState['mini.eyeLight']
+      : isEyelidChibiMode
+        ? avatarState['mini.eyelid']
+      : selectedPartState;
   const selectedAppearanceState = selectedAccessory ?? selectedPartState;
-  const selectedState = selectedAccessoryPose ?? selectedPartState;
+  const selectedState = selectedAccessoryPose ?? selectedPartControlState;
+  const selectedLineColorState = isEyelidChibiMode ? avatarState['mini.eyelid'] : selectedAppearanceState;
+  const selectedLineColorPartKey = isEyelidChibiMode ? 'mini.eyelid' : selectedPart?.key;
+  const isMiniUpperEyelidControl = selectedPartControlKey === 'mini.upperEyelid';
+  const isMoveUpDisabled = !canMoveY || (
+    isMiniUpperEyelidControl &&
+    (selectedState.offsetY ?? 0) <= MINI_UPPER_EYELID_OFFSET_Y_LIMITS.min
+  );
+  const isMoveDownDisabled = !canMoveY || (
+    isMiniUpperEyelidControl &&
+    (selectedState.offsetY ?? 0) >= MINI_UPPER_EYELID_OFFSET_Y_LIMITS.max
+  );
+  const selectedLightDistance = selectedPartControlKey
+    ? getSelectedLightDistance(selectedPartControlKey, selectedState)
+    : DEFAULT_PORTRAIT_EYE_LIGHT_DISTANCE;
+  const selectedPoseKey = selectedAccessory
+    ? selectedAccessoryPoseKey
+    : isEyeLightPart
+      ? selectedEyeLightPoseKey
+      : isEyelidPart
+        ? selectedEyelidPoseKey
+      : selectedUpperEyelidPoseKey;
   const selectedOptionId = selectedAppearanceState.optionId;
+  const isSelectedOptionColorEditable = selectedTarget.type === 'accessory' || (
+    selectedPart ? isAvatarPartOptionColorEditable(selectedPart.key, selectedOptionId) : true
+  );
   const accessoriesBySlot = useMemo(
     () => ACCESSORY_LAYER_SLOT_DEFINITIONS.map(slotDefinition => ({
       slot: slotDefinition,
@@ -180,8 +244,8 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       return;
     }
 
-    if (selectedPart) {
-      avatarCanvasRef.current?.setLineColor(selectedPart.key, lineColor);
+    if (selectedLineColorPartKey) {
+      avatarCanvasRef.current?.setLineColor(selectedLineColorPartKey, lineColor);
     }
   };
 
@@ -191,14 +255,26 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     }
   };
 
+  const setPartVisible = (isVisible: boolean) => {
+    if (selectedTarget.type === 'part' && selectedPart) {
+      avatarCanvasRef.current?.setVisible(selectedPart.key, isVisible);
+    }
+  };
+
+  const setClothingLayerOrder = (layerOrder: number) => {
+    if (selectedTarget.type === 'part' && selectedPart) {
+      avatarCanvasRef.current?.setClothingLayerOrder(selectedPart.key, layerOrder);
+    }
+  };
+
   const movePart = (deltaX: number, deltaY: number) => {
     if (selectedTarget.type === 'accessory') {
       avatarCanvasRef.current?.moveAccessory(selectedTarget.instanceId, deltaX, deltaY, selectedAccessoryPoseKey);
       return;
     }
 
-    if (selectedPart) {
-      avatarCanvasRef.current?.move(selectedPart.key, deltaX, deltaY);
+    if (selectedPartControlKey) {
+      avatarCanvasRef.current?.move(selectedPartControlKey, deltaX, deltaY);
     }
   };
 
@@ -237,8 +313,8 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       return;
     }
 
-    if (selectedPart) {
-      avatarCanvasRef.current?.rotate(selectedPart.key, delta);
+    if (selectedPartControlKey) {
+      avatarCanvasRef.current?.rotate(selectedPartControlKey, delta);
     }
   };
 
@@ -248,8 +324,8 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       return;
     }
 
-    if (selectedPart) {
-      avatarCanvasRef.current?.scale(selectedPart.key, delta);
+    if (selectedPartControlKey) {
+      avatarCanvasRef.current?.scale(selectedPartControlKey, delta);
     }
   };
 
@@ -259,8 +335,8 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       return;
     }
 
-    if (selectedPart) {
-      avatarCanvasRef.current?.flip(selectedPart.key);
+    if (selectedPartControlKey) {
+      avatarCanvasRef.current?.flip(selectedPartControlKey);
     }
   };
 
@@ -269,20 +345,19 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       avatarCanvasRef.current?.setAccessorySideVisible(
         selectedTarget.instanceId,
         side,
-        isVisible,
-        selectedAccessoryPoseKey
+        isVisible
       );
     }
   };
 
   const changeLightDistance = (delta: number) => {
-    if (!selectedPart) {
+    if (!selectedPartControlKey) {
       return;
     }
 
     avatarCanvasRef.current?.setLightDistance(
-      selectedPart.key,
-      (selectedPartState.lightDistance ?? 45) + delta
+      selectedPartControlKey,
+      selectedLightDistance + delta
     );
   };
 
@@ -312,8 +387,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
     avatarCanvasRef.current?.setAccessoryLayerSlot(
       selectedAccessory.instanceId,
-      layerSlot,
-      selectedAccessoryPoseKey
+      layerSlot
     );
   };
 
@@ -416,30 +490,64 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           ))}
         </div>
 
-        {selectedAccessory && (
-          <div className={styles.segmentedControl} role="tablist" aria-label="配件位置模式">
+        {(selectedAccessory || isUpperEyelidPart || isEyeLightPart || isEyelidPart) && (
+          <div className={styles.segmentedControl} role="tablist" aria-label={`${selectedLabel}位置模式`}>
             <button
-              className={selectedAccessoryPoseKey === 'portrait' ? styles.activeSegmentButton : styles.segmentButton}
+              className={selectedPoseKey === 'portrait' ? styles.activeSegmentButton : styles.segmentButton}
               type="button"
-              onClick={() => setSelectedAccessoryPoseKey('portrait')}
+              onClick={() => {
+                if (selectedAccessory) {
+                  setSelectedAccessoryPoseKey('portrait');
+                  return;
+                }
+
+                if (isEyeLightPart) {
+                  setSelectedEyeLightPoseKey('portrait');
+                  return;
+                }
+
+                if (isEyelidPart) {
+                  setSelectedEyelidPoseKey('portrait');
+                  return;
+                }
+
+                setSelectedUpperEyelidPoseKey('portrait');
+              }}
               role="tab"
-              aria-selected={selectedAccessoryPoseKey === 'portrait'}
+              aria-selected={selectedPoseKey === 'portrait'}
             >
               胸像
             </button>
             <button
-              className={selectedAccessoryPoseKey === 'chibi' ? styles.activeSegmentButton : styles.segmentButton}
+              className={selectedPoseKey === 'chibi' ? styles.activeSegmentButton : styles.segmentButton}
               type="button"
-              onClick={() => setSelectedAccessoryPoseKey('chibi')}
+              onClick={() => {
+                if (selectedAccessory) {
+                  setSelectedAccessoryPoseKey('chibi');
+                  return;
+                }
+
+                if (isEyeLightPart) {
+                  setSelectedEyeLightPoseKey('chibi');
+                  return;
+                }
+
+                if (isEyelidPart) {
+                  setSelectedEyelidPoseKey('chibi');
+                  return;
+                }
+
+                setSelectedUpperEyelidPoseKey('chibi');
+              }}
               role="tab"
-              aria-selected={selectedAccessoryPoseKey === 'chibi'}
+              aria-selected={selectedPoseKey === 'chibi'}
             >
               Q版
             </button>
           </div>
         )}
 
-        {selectedEditableProperties.includes('color') && (
+        {selectedEditableProperties.includes('color') && isSelectedOptionColorEditable && (
           <label className={styles.colorField}>
             <span>{selectedPart?.key === 'eyes.color' ? 'left color' : 'color'}</span>
             <input
@@ -466,10 +574,36 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
             <span>line</span>
             <input
               type="color"
-              value={selectedAppearanceState.lineColor ?? selectedAccessoryDefinition?.defaultLineColor ?? selectedPart?.defaultLineColor ?? '#262626'}
+              value={selectedLineColorState.lineColor ?? selectedAccessoryDefinition?.defaultLineColor ?? selectedPart?.defaultLineColor ?? '#262626'}
               onChange={event => changeLineColor(event.target.value)}
             />
           </label>
+        )}
+
+        {selectedEditableProperties.includes('visibility') && (
+          <label className={styles.toggleField}>
+            <input
+              type="checkbox"
+              checked={selectedPartState.isVisible !== false}
+              onChange={event => setPartVisible(event.target.checked)}
+            />
+            <span>顯示</span>
+          </label>
+        )}
+
+        {selectedEditableProperties.includes('layerOrder') && (
+          <div className={styles.controlGroup}>
+            <div className={styles.controlTitle}>layer</div>
+            <div className={styles.actionRow}>
+              <button type="button" onClick={() => setClothingLayerOrder(0)}>
+                移到後
+              </button>
+              <button type="button" onClick={() => setClothingLayerOrder(1)}>
+                移到前
+              </button>
+            </div>
+            <div className={styles.valueRow}>{selectedPartState.layerOrder === 1 ? '前' : '後'}</div>
+          </div>
         )}
 
         {selectedAccessory && (
@@ -499,6 +633,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               <NudgeButton
                 label="上"
                 ariaLabel="向上移動"
+                disabled={isMoveUpDisabled}
                 deltaX={0}
                 deltaY={-MOVE_STEP}
                 onMove={movePart}
@@ -508,6 +643,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               <NudgeButton
                 label="左"
                 ariaLabel="向左移動"
+                disabled={!canMoveX}
                 deltaX={-MOVE_STEP}
                 deltaY={0}
                 onMove={movePart}
@@ -517,6 +653,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               <NudgeButton
                 label="右"
                 ariaLabel="向右移動"
+                disabled={!canMoveX}
                 deltaX={MOVE_STEP}
                 deltaY={0}
                 onMove={movePart}
@@ -526,6 +663,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               <NudgeButton
                 label="下"
                 ariaLabel="向下移動"
+                disabled={isMoveDownDisabled}
                 deltaX={0}
                 deltaY={MOVE_STEP}
                 onMove={movePart}
@@ -614,7 +752,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
                 拉開
               </button>
             </div>
-            <div className={styles.valueRow}>{selectedPartState.lightDistance ?? 45}</div>
+            <div className={styles.valueRow}>{selectedLightDistance}</div>
           </div>
         )}
 
@@ -702,6 +840,7 @@ function AccessoryButton({
 function NudgeButton({
   label,
   ariaLabel,
+  disabled = false,
   deltaX,
   deltaY,
   onMove,
@@ -710,6 +849,7 @@ function NudgeButton({
 }: {
   label: string;
   ariaLabel: string;
+  disabled?: boolean;
   deltaX: number;
   deltaY: number;
   onMove: (deltaX: number, deltaY: number) => void;
@@ -720,7 +860,12 @@ function NudgeButton({
     <button
       type="button"
       aria-label={ariaLabel}
+      disabled={disabled}
       onClick={event => {
+        if (disabled) {
+          return;
+        }
+
         if (event.detail === 0) {
           onMove(deltaX, deltaY);
         }
@@ -728,6 +873,10 @@ function NudgeButton({
       onContextMenu={event => event.preventDefault()}
       onPointerCancel={onHoldStop}
       onPointerDown={event => {
+        if (disabled) {
+          return;
+        }
+
         event.currentTarget.setPointerCapture(event.pointerId);
         onHoldStart(deltaX, deltaY);
       }}
@@ -749,4 +898,12 @@ function hasPositionControls(editableProperties: readonly string[]): boolean {
 function getHoldMoveMultiplier(tickCount: number): number {
   const multiplier = 2 ** Math.floor(tickCount / HOLD_ACCELERATION_TICKS);
   return Math.min(MAX_HOLD_MOVE_MULTIPLIER, multiplier);
+}
+
+function getSelectedLightDistance(partKey: AvatarPartKey, state: AvatarPartState): number {
+  return state.lightDistance ?? (
+    partKey === 'mini.eyeLight'
+      ? MINI_DEFAULT_EYE_LIGHT_DISTANCE
+      : DEFAULT_PORTRAIT_EYE_LIGHT_DISTANCE
+  );
 }

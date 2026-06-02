@@ -14,5 +14,7 @@ export const AVATAR_RIG_COLORS = {
   eyebrow: '#47403d',
   nose: '#b36161',
   mouth: '#936266',
+  clothingTop: '#3368e2',
+  clothingBottom: '#ffffff',
   accessory: '#ffffff',
 } as const;

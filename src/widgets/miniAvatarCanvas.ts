@@ -6,6 +6,7 @@ import {
   getAccessoryCategoryDefinition,
   getAccessoryLayerSlotDefinition,
   getAccessoryPoseState,
+  isAvatarPartOptionColorEditable,
 } from './avatarCanvas';
 import type {
   AccessoryLayerSlot,
@@ -38,8 +39,11 @@ interface MiniPoint {
   y: number;
 }
 
+type MiniOptionOffsetMap = Record<number, MiniPoint | undefined>;
+
 interface MiniBodyRigLayout {
   body: MiniPoint;
+  bottomAnchor: MiniPoint;
   armIdleDistance: number;
   armIdleOffset: MiniPoint;
   legDistance: number;
@@ -61,6 +65,15 @@ interface MiniHairRigLayout {
   backHairTop: MiniPoint;
   bangs: MiniPoint;
   hairLight: MiniPoint;
+  backHairBottomByOption: MiniOptionOffsetMap;
+  backHairTopByOption: MiniOptionOffsetMap;
+  bangsByOption: MiniOptionOffsetMap;
+}
+
+interface MiniClothingRigLayout {
+  topBody: MiniPoint;
+  topArm: MiniPoint;
+  bottom: MiniPoint;
 }
 
 interface MiniAccessoryRigLayout {
@@ -73,6 +86,7 @@ type MiniColorRigLayout = typeof AVATAR_RIG_COLORS;
 
 interface MiniFrontIdleRigLayout {
   bodyTypeId: number;
+  baselineBodyTypeId: number;
   headCenter: MiniPoint;
   bodyCenter: MiniPoint;
   earDistance: number;
@@ -81,6 +95,7 @@ interface MiniFrontIdleRigLayout {
   bodyByType: Record<number, MiniBodyRigLayout>;
   eyes: MiniEyeRigLayout;
   hair: MiniHairRigLayout;
+  clothing: MiniClothingRigLayout;
   accessories: MiniAccessoryRigLayout;
   colors: MiniColorRigLayout;
 }
@@ -90,8 +105,10 @@ const MINI_CANVAS_HEIGHT = 172;
 const MINI_PIXEL_SCALE = 2;
 const MINI_CENTER_X = MINI_CANVAS_WIDTH / 2;
 const MINI_BASE_TINT_LUMINANCE = 128;
-const MINI_EYE_LIGHT_UPPER_LID_GAP = MINI_PIXEL_SCALE;
 const MINI_ACCESSORY_ORDER_STEP = 0.01;
+const MINI_CLOTHING_BODY_Z_INDEX = 2.3;
+const MINI_CLOTHING_LAYER_Z_STEP = 0.05;
+const MINI_CLOTHING_LINE_Z_OFFSET = 0.01;
 const MINI_ACCESSORY_SLOT_Z_INDEX: Record<AccessoryLayerSlot, number> = {
   behindBody: -1,
   onSkin: 2.25,
@@ -103,6 +120,7 @@ const MINI_ACCESSORY_SLOT_Z_INDEX: Record<AccessoryLayerSlot, number> = {
 // 2x
 const MINI_FRONT_IDLE_RIG_LAYOUT: MiniFrontIdleRigLayout = {
   bodyTypeId: 1,
+  baselineBodyTypeId: 1,
   headCenter: { x: 0, y: 58 },
   bodyCenter: { x: 0, y: 108 },
   earDistance: 39,
@@ -110,39 +128,44 @@ const MINI_FRONT_IDLE_RIG_LAYOUT: MiniFrontIdleRigLayout = {
   mouth: { x: 0, y: 9 },
   bodyByType: {
     1: {
-      body: { x: 0, y: 0 },
-      armIdleDistance: 9,
-      armIdleOffset: { x: 0, y: -4 },
-      legDistance: 7,
-      legOffset: { x: 0, y: 6.5 },
+      body: { x: 0, y: -8 },
+      bottomAnchor: { x: 0, y: -2.5 },
+      armIdleDistance: 4,
+      armIdleOffset: { x: 0, y: -12 },
+      legDistance: 5,
+      legOffset: { x: 0, y: -2.5 },
     },
     2: {
-      body: { x: 0, y: 0 },
-      armIdleDistance: 9,
-      armIdleOffset: { x: 0, y: -1 },
-      legDistance: 6,
-      legOffset: { x: 0, y: 7.5 },
+      body: { x: 0, y: -7.5 },
+      bottomAnchor: { x: 0, y: -0.5 },
+      armIdleDistance: 4,
+      armIdleOffset: { x: 1, y: -10 },
+      legDistance: 5,
+      legOffset: { x: 0, y: 0.5 },
     },
     3: {
-      body: { x: 0, y: 0 },
-      armIdleDistance: 17,
-      armIdleOffset: { x: 0, y: 0 },
-      legDistance: 6,
-      legOffset: { x: 0, y: 8.5 },
+      body: { x: 0, y: -7 },
+      bottomAnchor: { x: 0, y: 0.5 },
+      armIdleDistance: 4,
+      armIdleOffset: { x: 1, y: -10 },
+      legDistance: 5,
+      legOffset: { x: 0, y: 3 },
     },
     4: {
-      body: { x: 0, y: 0 },
-      armIdleDistance: 17,
-      armIdleOffset: { x: 0, y: 1 },
-      legDistance: 6,
-      legOffset: { x: 0, y: 9.5 },
+      body: { x: 0, y: -6.5 },
+      bottomAnchor: { x: 0, y: 1.5 },
+      armIdleDistance: 4,
+      armIdleOffset: { x: 2, y: -8 },
+      legDistance: 5,
+      legOffset: { x: 0, y: 4.5 },
     },
     5: {
-      body: { x: 0, y: 0 },
-      armIdleDistance: 17,
-      armIdleOffset: { x: 0, y: 2 },
-      legDistance: 6,
-      legOffset: { x: 0, y: 10.5 },
+      body: { x: 0, y: -6 },
+      bottomAnchor: { x: 0, y: 2.5 },
+      armIdleDistance: 4,
+      armIdleOffset: { x: 2, y: -8 },
+      legDistance: 5,
+      legOffset: { x: 0, y: 6.5 },
     },
   },
   eyes: {
@@ -150,7 +173,7 @@ const MINI_FRONT_IDLE_RIG_LAYOUT: MiniFrontIdleRigLayout = {
     sclera: { x: 0, y: 5 },
     lowerEyelid: { x: 0, y: 5 },
     eyeBall: { x: -1, y: 4.5 },
-    eyeLight: { x: -0.5, y: -1.5 },
+    eyeLight: { x: -0.5, y: -1 },
     upperEyeLid: { x: 0, y: 1.5 },
     eyebrow: { x: -0.5, y: 1 },
   },
@@ -159,6 +182,26 @@ const MINI_FRONT_IDLE_RIG_LAYOUT: MiniFrontIdleRigLayout = {
     backHairBottom: { x: 0, y: 8.5 },
     bangs: { x: 0, y: -3.5 }, // -3.5
     hairLight: { x: 0, y: -10 },
+    backHairBottomByOption: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 0 },
+      3: { x: 0, y: 0 },
+    },
+    backHairTopByOption: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: -1 },
+      3: { x: 0.5, y: -2 },
+    },
+    bangsByOption: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: -1.5 },
+      3: { x: 0, y: -1 },
+    },
+  },
+  clothing: {
+    topBody: { x: 0, y: 0 },
+    topArm: { x: 0, y: 0 },
+    bottom: { x: 0, y: 0 },
   },
   accessories: {
     center: { x: 0, y: 0 },
@@ -167,6 +210,11 @@ const MINI_FRONT_IDLE_RIG_LAYOUT: MiniFrontIdleRigLayout = {
   },
   colors: AVATAR_RIG_COLORS,
 };
+
+export const MINI_DEFAULT_EYE_LIGHT_DISTANCE =
+  MINI_FRONT_IDLE_RIG_LAYOUT.eyes.eyeDistance
+  + MINI_FRONT_IDLE_RIG_LAYOUT.eyes.eyeBall.x * MINI_PIXEL_SCALE
+  + MINI_FRONT_IDLE_RIG_LAYOUT.eyes.eyeLight.x * MINI_PIXEL_SCALE;
 
 const miniTintCache = new Map<string, string>();
 const miniContentBoundsCache = new Map<string, Promise<MiniImageContentBounds>>();
@@ -261,46 +309,75 @@ export class MiniAvatarCanvas {
 
   private async createLayers(): Promise<MiniLayer[]> {
     const rig = MINI_FRONT_IDLE_RIG_LAYOUT;
-    const bodyTypeId = rig.bodyTypeId;
-    const bodyOptionId = formatMiniOptionId(bodyTypeId);
+    const bodyOptionId = this.resolveOptionId('body', this.getPartOptionId('mini.bodyType') || rig.bodyTypeId);
+    const bodyTypeId = Number(bodyOptionId);
     const skinColor = this.getPartColor('face', rig.colors.skin);
     const skinLineColor = this.getPartLineColor('face');
+    const topId = resolveMiniDirectoryOptionId('clothing/tops', this.getPartOptionId('mini.clothingTop'));
+    const bottomId = resolveMiniDirectoryOptionId('clothing/bottoms', this.getPartOptionId('mini.clothingBottom'));
     const backHairBottomId = this.resolveOptionId('back_hair_bottom', this.getPartOptionId('hair.backHair'));
     const backHairTopId = this.resolveOptionId('back_hair_top', this.getPartOptionId('hair.topHair'));
     const bangsId = this.resolveOptionId('bangs', this.getPartOptionId('hair.bangs'));
     const bodyRig = rig.bodyByType[bodyTypeId] ?? rig.bodyByType[1];
-    const headCenter = getMiniCanvasPoint(rig.headCenter);
-    const bodyCenter = getMiniCanvasPoint(rig.bodyCenter);
+    const defaultHeadCenter = getMiniCanvasPoint(rig.headCenter);
+    const bodyCenter = await getMiniBodyCenter(rig, bodyRig);
+    const defaultBodyCenter = getMiniCanvasPoint(rig.bodyCenter);
+    const bodyBaselineShiftY = bodyCenter.y - defaultBodyCenter.y;
+    const headCenter = {
+      ...defaultHeadCenter,
+      y: defaultHeadCenter.y + bodyBaselineShiftY,
+    };
     const bodyOffset = getMiniScaledOffset(bodyRig.body);
     const legOffset = getMiniScaledOffset(bodyRig.legOffset);
     const armIdleOffset = getMiniScaledOffset(bodyRig.armIdleOffset);
     const earOffset = getMiniScaledOffset(rig.ear);
     const mouthOffset = getMiniScaledOffset(rig.mouth);
-    const backHairBottomOffset = getMiniScaledOffset(rig.hair.backHairBottom);
-    const backHairTopOffset = getMiniScaledOffset(rig.hair.backHairTop);
-    const bangsOffset = getMiniScaledOffset(rig.hair.bangs);
+    const backHairBottomOffset = getMiniScaledOffset(addMiniPoints(
+      rig.hair.backHairBottom,
+      getMiniOptionOffset(rig.hair.backHairBottomByOption, backHairBottomId),
+    ));
+    const backHairTopOffset = getMiniScaledOffset(addMiniPoints(
+      rig.hair.backHairTop,
+      getMiniOptionOffset(rig.hair.backHairTopByOption, backHairTopId),
+    ));
+    const bangsOffset = getMiniScaledOffset(addMiniPoints(
+      rig.hair.bangs,
+      getMiniOptionOffset(rig.hair.bangsByOption, bangsId),
+    ));
     const hairLightOffset = getMiniScaledOffset(rig.hair.hairLight);
+    const topBodyOffset = getMiniScaledOffset(rig.clothing.topBody);
+    const topArmOffset = getMiniScaledOffset(rig.clothing.topArm);
+    const bottomAnchorOffset = getMiniScaledOffset(bodyRig.bottomAnchor);
+    const bottomOffset = getMiniScaledOffset(rig.clothing.bottom);
     const scleraOffset = getMiniScaledOffset(rig.eyes.sclera);
     const lowerEyelidOffset = getMiniScaledOffset(rig.eyes.lowerEyelid);
     const eyeBallOffset = getMiniScaledOffset(rig.eyes.eyeBall);
     const requestedEyeLightOffset = getMiniScaledOffset(rig.eyes.eyeLight);
+    const eyeLightState = this.state['mini.eyeLight'];
     const upperLidOffset = getMiniScaledOffset(rig.eyes.upperEyeLid);
+    const upperLidPoseOffsetY = (this.state['mini.upperEyelid'].offsetY ?? 0) * MINI_PIXEL_SCALE;
+    const upperLidAngle = this.state['mini.upperEyelid'].rotate ?? 0;
     const eyebrowOffset = getMiniScaledOffset(rig.eyes.eyebrow);
     const accessoryBases: Record<AccessoryRenderMode, MiniPoint> = {
       center: addMiniPoints(headCenter, getMiniScaledOffset(rig.accessories.center)),
       mirrored: addMiniPoints(headCenter, getMiniScaledOffset(rig.accessories.mirrored)),
     };
-    const upperLidY = headCenter.y + upperLidOffset.y;
+    const upperLidY = headCenter.y + upperLidOffset.y + upperLidPoseOffsetY;
     const eyeBallY = headCenter.y + eyeBallOffset.y;
+    const eyeLightDistance = eyeLightState.lightDistance ?? MINI_DEFAULT_EYE_LIGHT_DISTANCE;
+    const eyeLightOffsetX = (eyeLightState.offsetX ?? 0) * MINI_PIXEL_SCALE;
     const scleraColor = this.getPartColor('eyes.sclera', rig.colors.sclera);
     const leftEyeColor = this.getPartColor('eyes.color', rig.colors.eyeBall);
     const rightEyeColor = this.getPartSecondaryColor('eyes.color', leftEyeColor);
-    const eyeLightY = await getConstrainedMiniEyeLightY({
-      requestedY: eyeBallY + requestedEyeLightOffset.y,
-      upperLidY,
-      upperLidFiles: ['01_color.png', '01_line.png', '01_deco.png'],
-      eyeLightFile: '01_line.png',
-    });
+    const topColor = this.getEditablePartColor('mini.clothingTop', rig.colors.clothingTop);
+    const topLineColor = this.getPartLineColor('mini.clothingTop');
+    const bottomColor = this.getEditablePartColor('mini.clothingBottom', rig.colors.clothingBottom);
+    const bottomLineColor = this.getPartLineColor('mini.clothingBottom');
+    const isTopVisible = this.isPartVisible('mini.clothingTop') && topId !== null;
+    const isBottomVisible = this.isPartVisible('mini.clothingBottom') && bottomId !== null;
+    const topBodyZIndex = getMiniClothingBodyZIndex(this.getPartLayerOrder('mini.clothingTop'));
+    const bottomZIndex = getMiniClothingBodyZIndex(this.getPartLayerOrder('mini.clothingBottom'));
+    const eyeLightY = eyeBallY + requestedEyeLightOffset.y + (eyeLightState.offsetY ?? 0) * MINI_PIXEL_SCALE;
 
     return [
       ...this.createAccessoryLayers(accessoryBases),
@@ -323,6 +400,42 @@ export class MiniAvatarCanvas {
         1,
       ),
       ...this.createColorAndLineLayers('body', bodyOptionId, skinColor, skinLineColor, bodyCenter.x + bodyOffset.x, bodyCenter.y + bodyOffset.y, 2),
+      ...(isTopVisible
+        ? [
+          ...this.createMirroredNamedColorAndLineLayers(
+            `clothing/tops/${topId}`,
+            'front_arm_color.png',
+            'front_arm_line.png',
+            topColor,
+            topLineColor,
+            bodyRig.armIdleDistance + armIdleOffset.x + topArmOffset.x,
+            bodyCenter.y + armIdleOffset.y + topArmOffset.y,
+            1.2,
+          ),
+          ...this.createNamedColorAndLineLayers(
+            `clothing/tops/${topId}`,
+            `front_body_${bodyOptionId}_color.png`,
+            `front_body_${bodyOptionId}_line.png`,
+            topColor,
+            topLineColor,
+            bodyCenter.x + bodyOffset.x + topBodyOffset.x,
+            bodyCenter.y + bodyOffset.y + topBodyOffset.y,
+            topBodyZIndex,
+          ),
+        ]
+        : []),
+      ...(isBottomVisible
+        ? this.createNamedColorAndLineLayers(
+          `clothing/bottoms/${bottomId}`,
+          'front_color.png',
+          'front_line.png',
+          bottomColor,
+          bottomLineColor,
+          bodyCenter.x + bottomAnchorOffset.x + bottomOffset.x,
+          bodyCenter.y + bottomAnchorOffset.y + bottomOffset.y,
+          bottomZIndex,
+        )
+        : []),
       ...this.createColorAndLineLayers(
         'back_hair_bottom',
         backHairBottomId,
@@ -374,9 +487,11 @@ export class MiniAvatarCanvas {
         'eye_light',
         '01',
         rig.colors.eyeLight,
-        rig.eyes.eyeDistance + eyeBallOffset.x + requestedEyeLightOffset.x,
+        eyeLightDistance,
         eyeLightY,
         16,
+        0,
+        eyeLightOffsetX,
       ),
       ...this.createMirroredColorAndLineLayers(
         'upper_eyelid',
@@ -384,8 +499,9 @@ export class MiniAvatarCanvas {
         skinColor,
         this.getPartLineColor('eyes.upperEyelid'),
         rig.eyes.eyeDistance + upperLidOffset.x,
-        headCenter.y + upperLidOffset.y,
+        upperLidY,
         17,
+        upperLidAngle,
       ),
       ...this.createMirroredSingleFileLayers(
         'upper_eyelid',
@@ -393,15 +509,16 @@ export class MiniAvatarCanvas {
         leftEyeColor,
         rightEyeColor,
         rig.eyes.eyeDistance + upperLidOffset.x,
-        headCenter.y + upperLidOffset.y,
+        upperLidY,
         17.2,
+        upperLidAngle,
       ),
       ...this.createMirroredLineOnlyLayers(
         'eyelid',
         '01',
-        this.getPartLineColor('eyes.eyelid'),
+        this.getPartLineColor('mini.eyelid'),
         rig.eyes.eyeDistance + upperLidOffset.x,
-        headCenter.y + upperLidOffset.y,
+        upperLidY,
         18,
       ),
       ...this.createMirroredLineOnlyLayers(
@@ -441,6 +558,22 @@ export class MiniAvatarCanvas {
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
 
+  private createNamedColorAndLineLayers(
+    folder: string,
+    colorFile: string,
+    lineFile: string,
+    color: string | undefined,
+    lineColor: string | undefined,
+    x: number,
+    y: number,
+    zIndex: number,
+  ): MiniLayer[] {
+    return [
+      { folder, file: colorFile, color, x, y, zIndex },
+      { folder, file: lineFile, color: lineColor, x, y, zIndex: zIndex + MINI_CLOTHING_LINE_Z_OFFSET },
+    ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
+  }
+
   private createLineOnlyLayers(
     folder: string,
     optionId: string,
@@ -463,11 +596,28 @@ export class MiniAvatarCanvas {
     distance: number,
     y: number,
     zIndex: number,
+    angle = 0,
   ): MiniLayer[] {
     return [
-      ...this.createMirroredColorOnlyLayers(folder, optionId, color, color, distance, y, zIndex),
-      ...this.createMirroredLineOnlyLayers(folder, optionId, lineColor, distance, y, zIndex + 0.1),
+      ...this.createMirroredColorOnlyLayers(folder, optionId, color, color, distance, y, zIndex, angle),
+      ...this.createMirroredLineOnlyLayers(folder, optionId, lineColor, distance, y, zIndex + 0.1, angle),
     ];
+  }
+
+  private createMirroredNamedColorAndLineLayers(
+    folder: string,
+    colorFile: string,
+    lineFile: string,
+    color: string | undefined,
+    lineColor: string | undefined,
+    distance: number,
+    y: number,
+    zIndex: number,
+  ): MiniLayer[] {
+    return [
+      ...createMirroredMiniLayers(folder, colorFile, color, color, distance, y, zIndex),
+      ...createMirroredMiniLayers(folder, lineFile, lineColor, lineColor, distance, y, zIndex + MINI_CLOTHING_LINE_Z_OFFSET),
+    ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
 
   private createMirroredColorOnlyLayers(
@@ -478,6 +628,7 @@ export class MiniAvatarCanvas {
     distance: number,
     y: number,
     zIndex: number,
+    angle = 0,
   ): MiniLayer[] {
     const file = `${optionId}_color.png`;
 
@@ -485,7 +636,7 @@ export class MiniAvatarCanvas {
       return [];
     }
 
-    return createMirroredMiniLayers(folder, file, leftColor, rightColor ?? leftColor, distance, y, zIndex);
+    return createMirroredMiniLayers(folder, file, leftColor, rightColor ?? leftColor, distance, y, zIndex, angle);
   }
 
   private createMirroredLineOnlyLayers(
@@ -495,6 +646,8 @@ export class MiniAvatarCanvas {
     distance: number,
     y: number,
     zIndex: number,
+    angle = 0,
+    centerOffsetX = 0,
   ): MiniLayer[] {
     const file = `${optionId}_line.png`;
 
@@ -502,7 +655,7 @@ export class MiniAvatarCanvas {
       return [];
     }
 
-    return createMirroredMiniLayers(folder, file, color, color, distance, y, zIndex);
+    return createMirroredMiniLayers(folder, file, color, color, distance, y, zIndex, angle, centerOffsetX);
   }
 
   private createMirroredSingleFileLayers(
@@ -513,12 +666,13 @@ export class MiniAvatarCanvas {
     distance: number,
     y: number,
     zIndex: number,
+    angle = 0,
   ): MiniLayer[] {
     if (!hasMiniAvatarAsset(folder, file)) {
       return [];
     }
 
-    return createMirroredMiniLayers(folder, file, leftColor, rightColor ?? leftColor, distance, y, zIndex);
+    return createMirroredMiniLayers(folder, file, leftColor, rightColor ?? leftColor, distance, y, zIndex, angle);
   }
 
   private createAccessoryLayers(bases: Record<AccessoryRenderMode, MiniPoint>): MiniLayer[] {
@@ -604,6 +758,22 @@ export class MiniAvatarCanvas {
     return this.state[key].lineColor ?? MINI_FRONT_IDLE_RIG_LAYOUT.colors.line;
   }
 
+  private getEditablePartColor(key: AvatarPartKey, fallbackColor: string): string | undefined {
+    return this.isPartColorEditable(key) ? this.getPartColor(key, fallbackColor) : undefined;
+  }
+
+  private isPartColorEditable(key: AvatarPartKey): boolean {
+    return isAvatarPartOptionColorEditable(key, this.getPartOptionId(key));
+  }
+
+  private isPartVisible(key: AvatarPartKey): boolean {
+    return this.state[key].isVisible !== false;
+  }
+
+  private getPartLayerOrder(key: AvatarPartKey): number {
+    return this.state[key].layerOrder ?? (key === 'mini.clothingTop' ? 1 : 0);
+  }
+
   private resolveOptionId(folder: string, requestedOptionId: number): string {
     const requestedId = formatMiniOptionId(requestedOptionId);
 
@@ -622,39 +792,36 @@ interface MiniImageContentBounds {
   bottom: number;
 }
 
-interface MiniEyeLightConstraintOptions {
-  requestedY: number;
-  upperLidY: number;
-  upperLidFiles: string[];
-  eyeLightFile: string;
-}
-
 function createMirroredMiniLayers(
   folder: string,
   file: string,
-  leftColor: string,
-  rightColor: string,
+  leftColor: string | undefined,
+  rightColor: string | undefined,
   distance: number,
   y: number,
   zIndex: number,
+  angle = 0,
+  centerOffsetX = 0,
 ): MiniLayer[] {
   return [
     {
       folder,
       file,
       color: leftColor,
-      x: MINI_CENTER_X - distance,
+      x: MINI_CENTER_X + centerOffsetX - distance,
       y,
       zIndex,
+      angle: -angle,
       flipX: true,
     },
     {
       folder,
       file,
       color: rightColor,
-      x: MINI_CENTER_X + distance,
+      x: MINI_CENTER_X + centerOffsetX + distance,
       y,
       zIndex,
+      angle,
     },
   ];
 }
@@ -664,6 +831,35 @@ function addMiniPoints(firstPoint: MiniPoint, secondPoint: MiniPoint): MiniPoint
     x: firstPoint.x + secondPoint.x,
     y: firstPoint.y + secondPoint.y,
   };
+}
+
+async function getMiniBodyCenter(
+  rig: MiniFrontIdleRigLayout,
+  selectedBodyRig: MiniBodyRigLayout,
+): Promise<MiniPoint> {
+  const defaultBodyCenter = getMiniCanvasPoint(rig.bodyCenter);
+  const baselineBodyRig = rig.bodyByType[rig.baselineBodyTypeId] ?? rig.bodyByType[rig.bodyTypeId] ?? rig.bodyByType[1];
+  const legFootOffset = await getMiniLegFootOffset();
+  const feetBaselineY = defaultBodyCenter.y + getMiniScaledOffset(baselineBodyRig.legOffset).y + legFootOffset;
+  const selectedLegOffset = getMiniScaledOffset(selectedBodyRig.legOffset);
+
+  return {
+    ...defaultBodyCenter,
+    y: feetBaselineY - selectedLegOffset.y - legFootOffset,
+  };
+}
+
+async function getMiniLegFootOffset(): Promise<number> {
+  const legBounds = await getCombinedMiniContentBounds('leg', ['01_color.png', '01_line.png']);
+  return getMiniBoundsBottomOffset(legBounds);
+}
+
+function getMiniOptionOffset(offsets: MiniOptionOffsetMap, optionId: string): MiniPoint {
+  return offsets[Number(optionId)] ?? { x: 0, y: 0 };
+}
+
+function getMiniClothingBodyZIndex(layerOrder: number): number {
+  return MINI_CLOTHING_BODY_Z_INDEX + layerOrder * MINI_CLOTHING_LAYER_Z_STEP;
 }
 
 function getMiniAccessoryZIndex(layerSlot: AccessoryLayerSlot, order: number): number {
@@ -709,19 +905,6 @@ function getMiniAvatarAssetUrl(folder: string, file: string): string {
   return url;
 }
 
-async function getConstrainedMiniEyeLightY(options: MiniEyeLightConstraintOptions): Promise<number> {
-  const [upperLidBounds, eyeLightBounds] = await Promise.all([
-    getCombinedMiniContentBounds('upper_eyelid', options.upperLidFiles),
-    getMiniImageContentBounds('eye_light', options.eyeLightFile),
-  ]);
-
-  const upperLidBottom = options.upperLidY + getMiniBoundsBottomOffset(upperLidBounds);
-  const eyeLightTopOffset = getMiniBoundsTopOffset(eyeLightBounds);
-  const minimumEyeLightY = upperLidBottom + MINI_EYE_LIGHT_UPPER_LID_GAP - eyeLightTopOffset;
-
-  return Math.max(options.requestedY, minimumEyeLightY);
-}
-
 async function getCombinedMiniContentBounds(folder: string, files: string[]): Promise<MiniImageContentBounds> {
   const bounds = await Promise.all(
     files
@@ -739,10 +922,6 @@ async function getCombinedMiniContentBounds(folder: string, files: string[]): Pr
     top: Math.min(combinedBounds.top, currentBounds.top),
     bottom: Math.max(combinedBounds.bottom, currentBounds.bottom),
   }));
-}
-
-function getMiniBoundsTopOffset(bounds: MiniImageContentBounds): number {
-  return (bounds.top - bounds.height / 2) * MINI_PIXEL_SCALE;
 }
 
 function getMiniBoundsBottomOffset(bounds: MiniImageContentBounds): number {
@@ -802,6 +981,32 @@ function readMiniImageContentBounds(image: HTMLImageElement): MiniImageContentBo
 function getFirstAvailableMiniOptionId(folder: string): string | null {
   const optionIds = Object.keys(miniAvatarAssetUrls)
     .map(assetPath => assetPath.match(new RegExp(`^\\.\\./assets/avatar_system/mini/${folder}/(\\d+)(?:_(?:color|line))?\\.png$`)))
+    .filter((match): match is RegExpMatchArray => match !== null)
+    .map(match => match[1])
+    .sort();
+
+  return optionIds[0] ?? null;
+}
+
+function resolveMiniDirectoryOptionId(folder: string, requestedOptionId: number): string | null {
+  const requestedId = formatMiniOptionId(requestedOptionId);
+
+  if (hasMiniDirectoryOption(folder, requestedId)) {
+    return requestedId;
+  }
+
+  return getFirstAvailableMiniDirectoryOptionId(folder);
+}
+
+function hasMiniDirectoryOption(folder: string, optionId: string): boolean {
+  return Object.keys(miniAvatarAssetUrls).some(assetPath => (
+    assetPath.startsWith(`../assets/avatar_system/mini/${folder}/${optionId}/`)
+  ));
+}
+
+function getFirstAvailableMiniDirectoryOptionId(folder: string): string | null {
+  const optionIds = Object.keys(miniAvatarAssetUrls)
+    .map(assetPath => assetPath.match(new RegExp(`^\\.\\./assets/avatar_system/mini/${folder}/(\\d+)/`)))
     .filter((match): match is RegExpMatchArray => match !== null)
     .map(match => match[1])
     .sort();

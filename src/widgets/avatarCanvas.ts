@@ -4,7 +4,7 @@ import { AVATAR_RIG_COLORS } from '../constants/avatarRig';
 
 export type AvatarGroupKey = 'eyes' | 'hair';
 export type AvatarTransformProperty = 'offsetX' | 'offsetY' | 'rotate' | 'scale' | 'flipX';
-export type AvatarEditableProperty = AvatarTransformProperty | 'color' | 'lineColor';
+export type AvatarEditableProperty = AvatarTransformProperty | 'color' | 'lineColor' | 'visibility' | 'layerOrder';
 export type AccessoryCategory = 'sideHair' | 'ponytail' | 'accessory';
 export type AccessoryLayerSlot = 'behindBody' | 'onSkin' | 'frontBody' | 'frontFace' | 'frontBangs';
 export type AccessoryRenderMode = 'mirrored' | 'center';
@@ -26,12 +26,19 @@ export type AvatarPartKey =
   | 'hair.bangs'
   | 'hair.topHair'
   | 'hair.backHair'
+  | 'mini.bodyType'
+  | 'mini.clothingTop'
+  | 'mini.clothingBottom'
+  | 'mini.upperEyelid'
+  | 'mini.eyeLight'
+  | 'mini.eyelid'
   | 'mouth'
   | 'nose';
 
 export interface AvatarPartOption {
   id: number;
   label: string;
+  isColorEditable?: boolean;
 }
 
 export interface AvatarPartDefinition {
@@ -44,6 +51,7 @@ export interface AvatarPartDefinition {
   options: AvatarPartOption[];
   parentKey?: AvatarGroupKey;
   isEditorHidden?: boolean;
+  renderInPortrait?: boolean;
 }
 
 export interface AvatarPartState {
@@ -58,6 +66,8 @@ export interface AvatarPartState {
   flipX?: boolean;
   leftVisible?: boolean;
   rightVisible?: boolean;
+  isVisible?: boolean;
+  layerOrder?: number;
   lightDistance?: number;
 }
 
@@ -143,9 +153,17 @@ const LINE_LAYER_FILL_LUMINANCE_THRESHOLD = 180;
 const AVATAR_PIXEL_SCALE = 3;
 const EYE_GROUP_OFFSET_Y = -10;
 const EYE_DISTANCE = 50;
+export const MINI_UPPER_EYELID_OFFSET_Y_LIMITS = {
+  min: -1,
+  max: 3,
+} as const;
 const ACCESSORY_ORDER_STEP = 0.01;
 const CHIBI_ACCESSORY_POSITION_SCALE = 0.5;
 const CHIBI_SIDE_HAIR_POSITION_SCALE = 0.5;
+const NON_TINTABLE_MINI_CLOTHING_OPTIONS = {
+  tops: new Set([1, 2]),
+  bottoms: new Set(),
+};
 const tintCache = new Map<string, string>();
 
 const avatarAssetUrls = import.meta.glob<string>('../assets/avatar_system/**/*.png', {
@@ -185,6 +203,55 @@ export const AVATAR_PART_DEFINITIONS: AvatarPartDefinition[] = [
   createDefinition('mouth', 'mouth', 14, AVATAR_RIG_COLORS.mouth, 3, undefined, undefined, false, AVATAR_RIG_COLORS.mouth),
   createDefinition('face.line', 'face line', 15, AVATAR_RIG_COLORS.skin, 2, undefined, ['lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'], true),
   createDefinition('hair.bangs', 'bangs', 17, AVATAR_RIG_COLORS.hair, 4, 'hair'),
+  createMiniOnlyDefinition(
+    'mini.bodyType',
+    'mini body type',
+    AVATAR_RIG_COLORS.skin,
+    createNumberedOptionDefinitions(5, 'mini body type'),
+    [],
+  ),
+  createMiniOnlyDefinition(
+    'mini.clothingBottom',
+    'bottom',
+    AVATAR_RIG_COLORS.clothingBottom,
+    createMiniDirectoryOptionDefinitions('clothing/bottoms', 'bottom', NON_TINTABLE_MINI_CLOTHING_OPTIONS.bottoms),
+    ['visibility', 'color', 'lineColor', 'layerOrder'],
+  ),
+  createMiniOnlyDefinition(
+    'mini.clothingTop',
+    'top',
+    AVATAR_RIG_COLORS.clothingTop,
+    createMiniDirectoryOptionDefinitions('clothing/tops', 'top', NON_TINTABLE_MINI_CLOTHING_OPTIONS.tops),
+    ['visibility', 'color', 'lineColor', 'layerOrder'],
+  ),
+  createMiniOnlyDefinition(
+    'mini.upperEyelid',
+    'mini upper eyelid',
+    AVATAR_RIG_COLORS.upperEyelid,
+    [{ id: 1, label: 'mini upper eyelid 1' }],
+    ['offsetY', 'rotate'],
+    AVATAR_RIG_COLORS.upperEyelid,
+    true,
+  ),
+  createMiniOnlyDefinition(
+    'mini.eyeLight',
+    'mini eye light',
+    AVATAR_RIG_COLORS.eyeLight,
+    [{ id: 1, label: 'mini eye light 1' }],
+    ['offsetX', 'offsetY'],
+    AVATAR_RIG_COLORS.eyeLight,
+    true,
+  ),
+  createMiniOnlyDefinition(
+    'mini.eyelid',
+    'mini eyelid',
+    AVATAR_RIG_COLORS.eyelid,
+    [{ id: 1, label: 'mini eyelid 1' }],
+    ['lineColor'],
+    AVATAR_RIG_COLORS.eyelid,
+    true,
+  ),
+
 ];
 
 export const AVATAR_EDITOR_PART_DEFINITIONS: AvatarPartDefinition[] = AVATAR_PART_DEFINITIONS
@@ -234,7 +301,9 @@ export function createDefaultAvatarState(): AvatarState {
       flipX: false,
       leftVisible: true,
       rightVisible: true,
-      lightDistance: EYE_DISTANCE - 5,
+      isVisible: true,
+      layerOrder: getDefaultPartLayerOrder(definition.key),
+      lightDistance: definition.key === 'mini.eyeLight' ? undefined : EYE_DISTANCE - 5,
     };
     return state;
   }, {} as Record<AvatarPartKey, AvatarPartState>);
@@ -270,6 +339,35 @@ function createDefinition(
     })),
     parentKey,
   };
+}
+
+function createMiniOnlyDefinition(
+  key: AvatarPartKey,
+  label: string,
+  defaultColor: string,
+  options: AvatarPartOption[],
+  editableProperties: AvatarEditableProperty[],
+  defaultLineColor = DEFAULT_LINE_COLOR,
+  isEditorHidden = false,
+): AvatarPartDefinition {
+  return {
+    key,
+    label,
+    zIndex: 100,
+    defaultColor,
+    defaultLineColor,
+    editableProperties,
+    isEditorHidden,
+    options,
+    renderInPortrait: false,
+  };
+}
+
+function createNumberedOptionDefinitions(optionCount: number, label: string): AvatarPartOption[] {
+  return Array.from({ length: optionCount }, (_, index) => ({
+    id: index + 1,
+    label: `${label} ${index + 1}`,
+  }));
 }
 
 function createAccessoryCategoryDefinition(
@@ -329,6 +427,11 @@ export function getAccessoryPoseState(
     return {
       ...createDefaultAccessoryPoseState(accessory.layerSlot, accessory.order),
       ...accessory.chibi,
+      layerSlot: accessory.layerSlot,
+      order: accessory.order,
+      flipX: accessory.flipX === true,
+      leftVisible: accessory.leftVisible !== false,
+      rightVisible: accessory.rightVisible !== false,
     };
   }
 
@@ -385,6 +488,21 @@ export function getAccessoryLayerSlotDefinition(slot: AccessoryLayerSlot): Acces
 export function getAccessoryDisplayName(accessory: AvatarAccessoryInstance): string {
   const category = getAccessoryCategoryDefinition(accessory.category);
   return `${category.label} ${accessory.optionId}`;
+}
+
+export function isAvatarPartOptionColorEditable(key: AvatarPartKey, optionId: number): boolean {
+  const definition = AVATAR_PART_DEFINITIONS.find(item => item.key === key);
+  const option = definition?.options.find(item => item.id === optionId);
+
+  return option?.isColorEditable !== false;
+}
+
+function getDefaultPartLayerOrder(key: AvatarPartKey): number {
+  if (key === 'mini.clothingTop') {
+    return 1;
+  }
+
+  return 0;
 }
 
 function createAccessoryPartDefinition(accessory: AvatarAccessoryInstance): AvatarPartDefinition {
@@ -1441,7 +1559,6 @@ class AvatarStateStore {
   setAccessoryLayerSlot(
     instanceId: string,
     layerSlot: AccessoryLayerSlot,
-    poseKey: AccessoryPoseKey = 'portrait',
   ): AvatarAccessoryInstance | null {
     const current = this.state.accessories.find(accessory => accessory.instanceId === instanceId);
 
@@ -1449,19 +1566,47 @@ class AvatarStateStore {
       return null;
     }
 
-    if (poseKey === 'chibi') {
-      return this.updateAccessoryPose(instanceId, 'chibi', {
-        layerSlot,
-        order: current.chibi.order,
-      });
-    }
-
     const nextOrder = getNextAccessoryOrder(
       this.state.accessories.filter(accessory => accessory.instanceId !== instanceId),
       layerSlot
     );
 
-    return this.updateAccessory(instanceId, { layerSlot, order: nextOrder });
+    const nextAccessories = this.state.accessories.map(accessory => {
+      if (accessory.instanceId !== instanceId) {
+        return accessory;
+      }
+
+      return {
+        ...accessory,
+        layerSlot,
+        order: nextOrder,
+        chibi: {
+          ...getAccessoryPoseState(accessory, 'chibi'),
+          layerSlot,
+          order: nextOrder,
+        },
+      };
+    });
+    const normalizedAccessories = normalizeAccessoryOrders(nextAccessories).map(accessory => (
+      accessory.instanceId === instanceId
+        ? {
+          ...accessory,
+          chibi: {
+            ...accessory.chibi,
+            layerSlot: accessory.layerSlot,
+            order: accessory.order,
+          },
+        }
+        : accessory
+    ));
+    const nextAccessory = normalizedAccessories.find(accessory => accessory.instanceId === instanceId) ?? null;
+
+    this.state = {
+      ...this.state,
+      accessories: normalizedAccessories,
+    };
+
+    return nextAccessory ? { ...nextAccessory } : null;
   }
 
   reorderAccessoryWithinSlot(sourceInstanceId: string, targetInstanceId: string): void {
@@ -1607,11 +1752,29 @@ export class AvatarCanvas {
     this.updatePart(key, { lineColor });
   }
 
+  setVisible(key: AvatarPartKey, isVisible: boolean): void {
+    this.updatePart(key, { isVisible });
+  }
+
+  setClothingLayerOrder(key: AvatarPartKey, layerOrder: number): void {
+    if (key !== 'mini.clothingTop' && key !== 'mini.clothingBottom') {
+      return;
+    }
+
+    const counterpartKey: AvatarPartKey = key === 'mini.clothingTop'
+      ? 'mini.clothingBottom'
+      : 'mini.clothingTop';
+
+    this.stateStore.updatePart(key, { layerOrder });
+    this.stateStore.updatePart(counterpartKey, { layerOrder: layerOrder === 1 ? 0 : 1 });
+    this.emitChange();
+  }
+
   move(key: AvatarPartKey, deltaX: number, deltaY: number): void {
     const current = this.getPartState(key);
     this.updatePart(key, {
       offsetX: (current.offsetX ?? 0) + deltaX,
-      offsetY: (current.offsetY ?? 0) + deltaY,
+      offsetY: getNextPartOffsetY(key, current.offsetY ?? 0, deltaY),
     });
   }
 
@@ -1718,37 +1881,52 @@ export class AvatarCanvas {
       return;
     }
     const pose = getAccessoryPoseState(current, poseKey);
+    const nextFlipX = pose.flipX !== true;
 
-    this.updateAccessoryPose(instanceId, poseKey, { flipX: pose.flipX !== true });
+    this.updateAccessory(instanceId, {
+      flipX: nextFlipX,
+      chibi: {
+        ...getAccessoryPoseState(current, 'chibi'),
+        flipX: nextFlipX,
+      },
+    });
   }
 
   setAccessorySideVisible(
     instanceId: string,
     side: 'left' | 'right',
     isVisible: boolean,
-    poseKey: AccessoryPoseKey = 'portrait',
   ): void {
-    this.updateAccessoryPose(
-      instanceId,
-      poseKey,
-      side === 'left' ? { leftVisible: isVisible } : { rightVisible: isVisible }
-    );
+    const current = this.getAccessoryState(instanceId);
+
+    if (!current) {
+      return;
+    }
+
+    const visibilityPatch = side === 'left'
+      ? { leftVisible: isVisible }
+      : { rightVisible: isVisible };
+
+    this.updateAccessory(instanceId, {
+      ...visibilityPatch,
+      chibi: {
+        ...getAccessoryPoseState(current, 'chibi'),
+        ...visibilityPatch,
+      },
+    });
   }
 
   setAccessoryLayerSlot(
     instanceId: string,
     layerSlot: AccessoryLayerSlot,
-    poseKey: AccessoryPoseKey = 'portrait',
   ): void {
-    const accessory = this.stateStore.setAccessoryLayerSlot(instanceId, layerSlot, poseKey);
+    const accessory = this.stateStore.setAccessoryLayerSlot(instanceId, layerSlot);
 
     if (!accessory) {
       return;
     }
 
-    if (poseKey === 'portrait') {
-      this.rebuildAvatar();
-    }
+    this.rebuildAvatar();
 
     this.emitChange();
   }
@@ -1793,7 +1971,7 @@ export class AvatarCanvas {
     };
 
     const renderItems = [
-      ...AVATAR_PART_DEFINITIONS.map(definition => ({
+      ...AVATAR_PART_DEFINITIONS.filter(definition => definition.renderInPortrait !== false).map(definition => ({
         zIndex: definition.zIndex,
         render: () => {
           const state = this.isFaceRenderKey(definition.key)
@@ -1978,6 +2156,33 @@ function createAssetOptionDefinitions(folder: string, label: string): AvatarPart
     }));
 }
 
+function createMiniDirectoryOptionDefinitions(
+  folder: string,
+  label: string,
+  nonTintableOptionIds = new Set<number>(),
+): AvatarPartOption[] {
+  const optionIds = new Set<number>();
+  const assetPathPattern = new RegExp(`^\\.\\./assets/avatar_system/mini/${folder}/(\\d+)/`);
+
+  Object.keys(avatarAssetUrls).forEach(assetPath => {
+    const match = assetPath.match(assetPathPattern);
+
+    if (!match) {
+      return;
+    }
+
+    optionIds.add(Number(match[1]));
+  });
+
+  return [...optionIds]
+    .sort((first, second) => first - second)
+    .map(id => ({
+      id,
+      label: `${label} ${id}`,
+      isColorEditable: !nonTintableOptionIds.has(id),
+    }));
+}
+
 function getNextAccessoryOrder(accessories: AvatarAccessoryInstance[], layerSlot: AccessoryLayerSlot): number {
   const sameSlotOrders = accessories
     .filter(accessory => accessory.layerSlot === layerSlot)
@@ -2141,4 +2346,17 @@ function parseHexColor(color: string): { red: number; green: number; blue: numbe
 
 function clampColor(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function getNextPartOffsetY(key: AvatarPartKey, currentOffsetY: number, deltaY: number): number {
+  const nextOffsetY = currentOffsetY + deltaY;
+
+  if (key !== 'mini.upperEyelid') {
+    return nextOffsetY;
+  }
+
+  return Math.max(
+    MINI_UPPER_EYELID_OFFSET_Y_LIMITS.min,
+    Math.min(MINI_UPPER_EYELID_OFFSET_Y_LIMITS.max, nextOffsetY),
+  );
 }
