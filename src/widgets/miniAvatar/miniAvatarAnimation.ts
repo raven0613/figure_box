@@ -6,6 +6,8 @@ import type {
   MiniTransform,
 } from './miniAvatarTypes';
 
+// 取樣/clip 工具，之後新增動畫時會是「definition 檔新增一筆資料 + clip 工具組合」
+
 const WAVE_BODY_BOB_Y = 0.8;
 const WAVE_HEAD_BOB_Y = 0.5;
 const WAVE_RIGHT_ARM_BASE_ANGLE = -60;
@@ -17,15 +19,6 @@ const BLINK_CLOSE_MS = 110;
 const BLINK_HOLD_MS = 90;
 const BLINK_OPEN_MS = 130;
 const BLINK_UPPER_EYELID_OFFSET_Y = 7;
-
-export const MINI_WAVE_BLINK_ANIMATION: MiniAnimation = {
-  durationMs: 1200,
-  fps: 12,
-  clips: [
-    createMiniWaveClip(),
-    createMiniBlinkClip(),
-  ],
-};
 
 export function sampleMiniAnimation(animation: MiniAnimation, elapsedMs: number): MiniPose {
   return animation.clips.reduce<MiniPose>(
@@ -42,7 +35,7 @@ export function getMiniAnimationFrameDurationMs(animation: MiniAnimation): numbe
   return animation.durationMs / getMiniAnimationFrameCount(animation);
 }
 
-function createMiniWaveClip(): MiniAnimationClip {
+export function createMiniWaveClip(): MiniAnimationClip {
   return {
     sample: (elapsedMs, animation) => {
       const progress = getLoopProgress(elapsedMs, animation.durationMs);
@@ -67,7 +60,7 @@ function createMiniWaveClip(): MiniAnimationClip {
   };
 }
 
-function createMiniBlinkClip(): MiniAnimationClip {
+export function createMiniBlinkClip(): MiniAnimationClip {
   return {
     sample: (elapsedMs, animation) => {
       const blinkAmount = getBlinkAmount(elapsedMs, animation.durationMs);

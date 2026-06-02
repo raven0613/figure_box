@@ -74,8 +74,13 @@ export interface MiniPose {
 }
 
 export interface MiniAnimation {
+  id: string;
+  version: number;
+  direction: 'front';
   durationMs: number;
   fps: number;
+  columns: number;
+  isLooping: boolean;
   clips: MiniAnimationClip[];
 }
 

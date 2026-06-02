@@ -26,8 +26,8 @@ import { MiniAvatarCanvas, MINI_DEFAULT_EYE_LIGHT_DISTANCE } from '~/widgets/min
 import type { MiniSpriteSheet } from '~/widgets/miniAvatarCanvas';
 import {
   getMiniAnimationFrameDurationMs,
-  MINI_WAVE_BLINK_ANIMATION,
 } from '~/widgets/miniAvatar/miniAvatarAnimation';
+import { MINI_WAVE_BLINK_ANIMATION } from '~/widgets/miniAvatar/miniAvatarAnimationDefinitions';
 import styles from './avatarEditor.module.scss';
 
 const MOVE_STEP = 1;

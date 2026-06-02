@@ -3,9 +3,9 @@ import { Canvas } from 'fabric';
 import { createDefaultAvatarState } from './avatarCanvas';
 import type { AvatarState } from './avatarCanvas';
 import {
-  MINI_WAVE_BLINK_ANIMATION,
   sampleMiniAnimation,
 } from './miniAvatar/miniAvatarAnimation';
+import { MINI_WAVE_BLINK_ANIMATION } from './miniAvatar/miniAvatarAnimationDefinitions';
 import { createMiniLayerImage } from './miniAvatar/miniAvatarAssets';
 import { createMiniFrontIdleLayers } from './miniAvatar/miniAvatarLayerRenderer';
 import {
@@ -15,9 +15,9 @@ import {
   MINI_FRONT_IDLE_RIG_LAYOUT,
 } from './miniAvatar/miniAvatarRig';
 import {
-  bakeMiniAnimationSpriteSheet,
   bakeMiniFrontIdleSpriteSheet,
 } from './miniAvatar/miniSpriteBaker';
+import { bakeCachedMiniAnimationSpriteSheet } from './miniAvatar/miniSpriteBakeCache';
 import type { MiniAnimation, MiniPose, MiniSpriteSheet } from './miniAvatar/miniAvatarTypes';
 
 export { MINI_DEFAULT_EYE_LIGHT_DISTANCE };
@@ -87,7 +87,7 @@ export class MiniAvatarCanvas {
   }
 
   exportAnimationSpriteSheet(): Promise<MiniSpriteSheet> {
-    return bakeMiniAnimationSpriteSheet(this.state, this.animation);
+    return bakeCachedMiniAnimationSpriteSheet(this.state, this.animation);
   }
 
   destroy(): Promise<boolean> {

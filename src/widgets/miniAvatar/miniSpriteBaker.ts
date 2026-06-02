@@ -4,9 +4,9 @@ import type { AvatarState } from '../avatarCanvas';
 import {
   getMiniAnimationFrameCount,
   getMiniAnimationFrameDurationMs,
-  MINI_WAVE_BLINK_ANIMATION,
   sampleMiniAnimation,
 } from './miniAvatarAnimation';
+import { MINI_WAVE_BLINK_ANIMATION } from './miniAvatarAnimationDefinitions';
 import { createMiniLayerImage } from './miniAvatarAssets';
 import { createMiniFrontIdleLayers } from './miniAvatarLayerRenderer';
 import {
@@ -36,7 +36,7 @@ export async function bakeMiniAnimationSpriteSheet(
   animation: MiniAnimation = MINI_WAVE_BLINK_ANIMATION,
 ): Promise<MiniSpriteSheet> {
   const frameCount = getMiniAnimationFrameCount(animation);
-  const columns = Math.min(4, frameCount);
+  const columns = Math.min(animation.columns, frameCount);
   const rows = Math.ceil(frameCount / columns);
   const sheetWidth = columns * MINI_CANVAS_WIDTH;
   const sheetHeight = rows * MINI_CANVAS_HEIGHT;
