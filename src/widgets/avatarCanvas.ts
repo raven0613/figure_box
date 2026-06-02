@@ -162,7 +162,7 @@ const CHIBI_ACCESSORY_POSITION_SCALE = 0.5;
 const CHIBI_SIDE_HAIR_POSITION_SCALE = 0.5;
 const NON_TINTABLE_MINI_CLOTHING_OPTIONS = {
   tops: new Set([1, 2]),
-  bottoms: new Set(),
+  bottoms: new Set<number>(),
 };
 const tintCache = new Map<string, string>();
 
@@ -323,7 +323,7 @@ function createDefinition(
   parentKey?: AvatarGroupKey,
   editableProperties: AvatarEditableProperty[] = ['color', 'lineColor', 'offsetX', 'offsetY', 'rotate', 'scale', 'flipX'],
   isEditorHidden = false,
-  defaultLineColor = DEFAULT_LINE_COLOR,
+  defaultLineColor: string = DEFAULT_LINE_COLOR,
 ): AvatarPartDefinition {
   return {
     key,
@@ -347,7 +347,7 @@ function createMiniOnlyDefinition(
   defaultColor: string,
   options: AvatarPartOption[],
   editableProperties: AvatarEditableProperty[],
-  defaultLineColor = DEFAULT_LINE_COLOR,
+  defaultLineColor: string = DEFAULT_LINE_COLOR,
   isEditorHidden = false,
 ): AvatarPartDefinition {
   return {

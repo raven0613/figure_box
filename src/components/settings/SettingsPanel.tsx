@@ -108,7 +108,7 @@ function RomanceRulesPanel({
   const nextRuleIdRef = useRef(1);
   const [draftRuleType, setDraftRuleType] = useState<RomanceRuleType>('allow');
   const [draftSourceValue, setDraftSourceValue] = useState(ALL_ENDPOINT_VALUE);
-  const [draftTargetValue, setDraftTargetValue] = useState(CHARACTER_OPTIONS[0]?.id ?? ALL_ENDPOINT_VALUE);
+  const [draftTargetValue, setDraftTargetValue] = useState<string>(CHARACTER_OPTIONS[0]?.id ?? ALL_ENDPOINT_VALUE);
   const allowRules = romanceRules.filter(rule => rule.type === 'allow');
   const denyRules = romanceRules.filter(rule => rule.type === 'deny');
   const onlyAllowRules = romanceRules.filter(rule => rule.type === 'onlyAllow');

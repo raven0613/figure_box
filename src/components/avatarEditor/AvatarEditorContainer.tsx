@@ -174,7 +174,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     (selectedState.offsetY ?? 0) >= MINI_UPPER_EYELID_OFFSET_Y_LIMITS.max
   );
   const selectedLightDistance = selectedPartControlKey
-    ? getSelectedLightDistance(selectedPartControlKey, selectedState)
+    ? getSelectedLightDistance(selectedPartControlKey, selectedState as AvatarPartState)
     : DEFAULT_PORTRAIT_EYE_LIGHT_DISTANCE;
   const selectedPoseKey = selectedAccessory
     ? selectedAccessoryPoseKey
