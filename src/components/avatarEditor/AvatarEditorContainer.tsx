@@ -75,9 +75,11 @@ type DraftSaveStatus = 'idle' | 'pending' | 'saved' | 'error';
 export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEditorContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const miniCanvasHostRef = useRef<HTMLDivElement | null>(null);
+  const miniSideCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const miniAnimationCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const avatarCanvasRef = useRef<AvatarCanvas | null>(null);
   const miniAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
+  const miniSideAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const miniAnimationCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const spriteSheetBakeVersionRef = useRef(0);
   const draftAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,7 +94,8 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     initialState ?? loadAvatarAppearanceDraft()?.avatarState ?? undefined
   ));
   const initialStateRef = useRef(initialEditorState);
-  const [selectedTarget, setSelectedTarget] = useState<SelectedTarget>({ type: 'part', key: 'face' });
+  // 預設選項
+  const [selectedTarget, setSelectedTarget] = useState<SelectedTarget>({ type: 'part', key: 'mini.bodyType' });
   const [selectedAccessoryPoseKey, setSelectedAccessoryPoseKey] = useState<AccessoryPoseKey>('portrait');
   const [selectedUpperEyelidPoseKey, setSelectedUpperEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
   const [selectedEyeLightPoseKey, setSelectedEyeLightPoseKey] = useState<AccessoryPoseKey>('portrait');
@@ -129,6 +132,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const isUpperEyelidPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.upperEyelid';
   const isEyeLightPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.light';
   const isEyelidPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.eyelid';
+  const isMiniClothingBottomPart = selectedTarget.type === 'part' && selectedPart?.key === 'mini.clothingBottom';
   const isUpperEyelidChibiMode = isUpperEyelidPart && selectedUpperEyelidPoseKey === 'chibi';
   const isEyeLightChibiMode = isEyeLightPart && selectedEyeLightPoseKey === 'chibi';
   const isEyelidChibiMode = isEyelidPart && selectedEyelidPoseKey === 'chibi';
@@ -138,7 +142,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       ? EYE_LIGHT_CHIBI_EDITABLE_PROPERTIES
       : isEyelidChibiMode
         ? EYELID_CHIBI_EDITABLE_PROPERTIES
-      : baseEditableProperties;
+        : baseEditableProperties;
   const canMoveX = selectedEditableProperties.includes('offsetX');
   const canMoveY = selectedEditableProperties.includes('offsetY');
   const selectedLabel = selectedAccessory ? getAccessoryDisplayName(selectedAccessory) : selectedPart?.label ?? '';
@@ -152,14 +156,14 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       ? 'mini.eyeLight'
       : isEyelidChibiMode
         ? 'mini.eyelid'
-      : selectedPart?.key;
+        : selectedPart?.key;
   const selectedPartControlState = isUpperEyelidChibiMode
     ? avatarState['mini.upperEyelid']
     : isEyeLightChibiMode
       ? avatarState['mini.eyeLight']
       : isEyelidChibiMode
         ? avatarState['mini.eyelid']
-      : selectedPartState;
+        : selectedPartState;
   const selectedAppearanceState = selectedAccessory ?? selectedPartState;
   const selectedState = selectedAccessoryPose ?? selectedPartControlState;
   const selectedLineColorState = isEyelidChibiMode ? avatarState['mini.eyelid'] : selectedAppearanceState;
@@ -182,7 +186,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       ? selectedEyeLightPoseKey
       : isEyelidPart
         ? selectedEyelidPoseKey
-      : selectedUpperEyelidPoseKey;
+        : selectedUpperEyelidPoseKey;
   const selectedOptionId = selectedAppearanceState.optionId;
   const isSelectedOptionColorEditable = selectedTarget.type === 'accessory' || (
     selectedPart ? isAvatarPartOptionColorEditable(selectedPart.key, selectedOptionId) : true
@@ -273,6 +277,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const handleAvatarCanvasChange = useCallback((state: AvatarState) => {
     setAvatarState(state);
     miniAvatarCanvasRef.current?.setState(state);
+    miniSideAvatarCanvasRef.current?.setState(state);
     miniAnimationCanvasRef.current?.setState(state);
     onAvatarChangeRef.current?.(state);
     scheduleDraftAutosave(state);
@@ -289,12 +294,13 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   }, [avatarState.accessories, selectedTarget]);
 
   useEffect(() => {
-    if (!canvasHostRef.current || !miniCanvasHostRef.current || !miniAnimationCanvasHostRef.current) {
+    if (!canvasHostRef.current || !miniCanvasHostRef.current || !miniSideCanvasHostRef.current || !miniAnimationCanvasHostRef.current) {
       return;
     }
 
     const canvasHost = canvasHostRef.current;
     const miniCanvasHost = miniCanvasHostRef.current;
+    const miniSideCanvasHost = miniSideCanvasHostRef.current;
     const miniAnimationCanvasHost = miniAnimationCanvasHostRef.current;
     const avatarCanvas = AvatarCanvas.mount(canvasHost, {
       initialState: initialStateRef.current,
@@ -303,12 +309,17 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     const miniAvatarCanvas = MiniAvatarCanvas.mount(miniCanvasHost, {
       initialState: avatarCanvas.getState(),
     });
+    const miniSideAvatarCanvas = MiniAvatarCanvas.mount(miniSideCanvasHost, {
+      initialState: avatarCanvas.getState(),
+      direction: 'side',
+    });
     const miniAnimationCanvas = MiniAvatarCanvas.mount(miniAnimationCanvasHost, {
       initialState: avatarCanvas.getState(),
       isAnimationEnabled: true,
     });
     avatarCanvasRef.current = avatarCanvas;
     miniAvatarCanvasRef.current = miniAvatarCanvas;
+    miniSideAvatarCanvasRef.current = miniSideAvatarCanvas;
     miniAnimationCanvasRef.current = miniAnimationCanvas;
     refreshSpriteSheetPreview();
 
@@ -316,12 +327,15 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       spriteSheetBakeVersionRef.current += 1;
       avatarCanvasRef.current = null;
       miniAvatarCanvasRef.current = null;
+      miniSideAvatarCanvasRef.current = null;
       miniAnimationCanvasRef.current = null;
       void avatarCanvas.destroy();
       void miniAvatarCanvas.destroy();
+      void miniSideAvatarCanvas.destroy();
       void miniAnimationCanvas.destroy();
       canvasHost.replaceChildren();
       miniCanvasHost.replaceChildren();
+      miniSideCanvasHost.replaceChildren();
       miniAnimationCanvasHost.replaceChildren();
     };
   }, [handleAvatarCanvasChange, refreshSpriteSheetPreview]);
@@ -724,8 +738,13 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               </button>
             ))}
           </div>
-          <div className={styles.miniPreviewShell} aria-label="Mini avatar preview">
-            <div className={styles.miniCanvasHost} ref={miniCanvasHostRef} />
+          <div className={styles.miniPreviewPair}>
+            <div className={styles.miniPreviewShell} aria-label="Mini avatar preview">
+              <div className={styles.miniCanvasHost} ref={miniCanvasHostRef} />
+            </div>
+            <div className={styles.miniPreviewShell} aria-label="Mini side avatar preview">
+              <div className={styles.miniCanvasHost} ref={miniSideCanvasHostRef} />
+            </div>
           </div>
           <div className={styles.miniPreviewShell} aria-label="Mini live animation preview">
             <div className={styles.miniCanvasHost} ref={miniAnimationCanvasHostRef} />
@@ -858,6 +877,17 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
             <input
               type="color"
               value={selectedPartState.secondaryColor ?? selectedPartState.color ?? selectedPart.defaultColor ?? '#000000'}
+              onChange={event => changeSecondaryColor(event.target.value)}
+            />
+          </label>
+        )}
+
+        {isMiniClothingBottomPart && (
+          <label className={styles.colorField}>
+            <span>side deco</span>
+            <input
+              type="color"
+              value={selectedPartState.secondaryColor ?? '#808080'}
               onChange={event => changeSecondaryColor(event.target.value)}
             />
           </label>

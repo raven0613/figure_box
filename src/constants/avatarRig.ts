@@ -16,5 +16,6 @@ export const AVATAR_RIG_COLORS = {
   mouth: '#936266',
   clothingTop: '#3368e2',
   clothingBottom: '#ffffff',
+  clothingBottomSideDeco: '#808080',
   accessory: '#ffffff',
 } as const;

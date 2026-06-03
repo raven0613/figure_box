@@ -7,7 +7,7 @@ import {
 } from './miniAvatar/miniAvatarAnimation';
 import { MINI_WAVE_BLINK_ANIMATION } from './miniAvatar/miniAvatarAnimationDefinitions';
 import { createMiniLayerImage } from './miniAvatar/miniAvatarAssets';
-import { createMiniFrontIdleLayers } from './miniAvatar/miniAvatarLayerRenderer';
+import { createMiniFrontIdleLayers, createMiniSideIdleLayers } from './miniAvatar/miniAvatarLayerRenderer';
 import {
   MINI_CANVAS_HEIGHT,
   MINI_CANVAS_WIDTH,
@@ -18,7 +18,7 @@ import {
   bakeMiniFrontIdleSpriteSheet,
 } from './miniAvatar/miniSpriteBaker';
 import { bakeCachedMiniAnimationSpriteSheet } from './miniAvatar/miniSpriteBakeCache';
-import type { MiniAnimation, MiniPose, MiniSpriteSheet } from './miniAvatar/miniAvatarTypes';
+import type { MiniAnimation, MiniAvatarDirection, MiniPose, MiniSpriteSheet } from './miniAvatar/miniAvatarTypes';
 
 export { MINI_DEFAULT_EYE_LIGHT_DISTANCE };
 export type { MiniSpriteSheet };
@@ -29,12 +29,14 @@ interface MiniAvatarCanvasOptions {
   initialState?: AvatarState;
   animation?: MiniAnimation;
   isAnimationEnabled?: boolean;
+  direction?: MiniAvatarDirection;
 }
 
 export class MiniAvatarCanvas {
   private readonly canvas: Canvas;
   private animation: MiniAnimation;
   private readonly isAnimationEnabled: boolean;
+  private direction: MiniAvatarDirection;
   private state: AvatarState;
   private renderVersion = 0;
   private animationStartedAt = 0;
@@ -46,6 +48,7 @@ export class MiniAvatarCanvas {
     const height = options.height ?? MINI_CANVAS_HEIGHT;
     this.animation = options.animation ?? MINI_WAVE_BLINK_ANIMATION;
     this.isAnimationEnabled = options.isAnimationEnabled === true;
+    this.direction = options.direction ?? (this.isAnimationEnabled ? this.animation.direction : 'front');
     this.state = options.initialState ?? createDefaultAvatarState();
     this.canvas = new Canvas(canvasElement, {
       width,
@@ -84,6 +87,7 @@ export class MiniAvatarCanvas {
 
   setAnimation(animation: MiniAnimation): void {
     this.animation = animation;
+    this.direction = this.isAnimationEnabled ? animation.direction : this.direction;
     this.animationStartedAt = typeof performance === 'undefined' ? 0 : performance.now();
     this.lastRenderedAnimationFrame = -1;
 
@@ -144,8 +148,11 @@ export class MiniAvatarCanvas {
     this.renderVersion = currentRenderVersion;
     this.canvas.remove(...this.canvas.getObjects());
 
+    const layers = this.direction === 'side'
+      ? await createMiniSideIdleLayers(this.state, pose)
+      : await createMiniFrontIdleLayers(this.state, pose);
     const images = await Promise.all(
-      (await createMiniFrontIdleLayers(this.state, pose))
+      layers
         .sort((first, second) => first.zIndex - second.zIndex)
         .map(layer => createMiniLayerImage(layer)),
     );

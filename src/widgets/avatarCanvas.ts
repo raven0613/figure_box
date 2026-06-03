@@ -292,7 +292,7 @@ export function createDefaultAvatarState(): AvatarState {
     state[definition.key] = {
       optionId: definition.options[0]?.id ?? 1,
       color: definition.defaultColor,
-      secondaryColor: definition.key === 'eyes.color' ? definition.defaultColor : undefined,
+      secondaryColor: getDefaultSecondaryColor(definition.key, definition.defaultColor),
       lineColor: definition.defaultLineColor ?? DEFAULT_LINE_COLOR,
       offsetX: 0,
       offsetY: 0,
@@ -312,6 +312,18 @@ export function createDefaultAvatarState(): AvatarState {
     ...partState,
     accessories: [createDefaultAccessoryInstance('sideHair', 0)],
   };
+}
+
+function getDefaultSecondaryColor(key: AvatarPartKey, defaultColor?: string): string | undefined {
+  if (key === 'eyes.color') {
+    return defaultColor;
+  }
+
+  if (key === 'mini.clothingBottom') {
+    return AVATAR_RIG_COLORS.clothingBottomSideDeco;
+  }
+
+  return undefined;
 }
 
 function createDefinition(

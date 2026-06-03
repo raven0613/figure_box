@@ -15,9 +15,14 @@ const WAVE_RIGHT_ARM_SWING_ANGLE = 36;
 const WAVE_RIGHT_ARM_OFFSET_X = 5;
 const WAVE_RIGHT_ARM_OFFSET_Y = 0;
 const WALK_BODY_BOB_Y = 1;
+const WALK_CLIP_DURATION_MS = 700;
 const WALK_LEG_LIFT_Y = 3;
 const WALK_LEG_SPREAD_X = 0; // 負數看起來像往左下走，正數看起來像往右下走
 const WALK_ARM_SWING_ANGLE = 5;
+const WALK_SIDE_LEG_LIFT_Y = 4;
+const WALK_SIDE_LEG_SWING_X = 5;
+const WALK_SIDE_LEG_SWING_ANGLE = -18;
+const WALK_SIDE_ARM_SWING_ANGLE = 7;
 const DEFAULT_BLINK_START_MS = 430;
 const BLINK_CLOSE_MS = 110;
 const BLINK_HOLD_MS = 90;
@@ -68,19 +73,19 @@ export function createMiniWaveClip(): MiniAnimationClip {
 export function createMiniWalkFrontClip(): MiniAnimationClip {
   return {
     id: 'walk_front',
-    durationMs: 700,
+    durationMs: WALK_CLIP_DURATION_MS,
     sample: (elapsedMs, animation, clip) => {
       const progress = getClipLoopProgress(elapsedMs, animation, clip);
       const stridePhase = Math.sin(progress * Math.PI * 2);
-      const stepPhase = Math.cos(progress * Math.PI * 4);
-      const wholeBodyBobY = snapMiniMotionValue((1 - Math.abs(stepPhase)) * -WALK_BODY_BOB_Y);
+      const wholeBodyBobY = getWalkBodyBobY(progress);
       const leftLegLiftY = snapMiniMotionValue(Math.max(0, stridePhase) * -WALK_LEG_LIFT_Y);
       const rightLegLiftY = snapMiniMotionValue(Math.max(0, -stridePhase) * -WALK_LEG_LIFT_Y);
 
       return {
         nodes: {
-          body: { y: wholeBodyBobY },
+          bodyGroup: { y: wholeBodyBobY },
           head: { y: wholeBodyBobY },
+          legsGroup: { y: wholeBodyBobY },
           leftLeg: {
             x: snapMiniMotionValue(-stridePhase * WALK_LEG_SPREAD_X),
             y: leftLegLiftY,
@@ -94,6 +99,33 @@ export function createMiniWalkFrontClip(): MiniAnimationClip {
           },
           rightArm: {
             angle: -stridePhase * WALK_ARM_SWING_ANGLE,
+          },
+        },
+      };
+    },
+  };
+}
+
+export function createMiniWalkSideClip(): MiniAnimationClip {
+  return {
+    id: 'walk_side',
+    durationMs: WALK_CLIP_DURATION_MS,
+    sample: (elapsedMs, animation, clip) => {
+      const progress = getClipLoopProgress(elapsedMs, animation, clip);
+      const stridePhase = Math.sin(progress * Math.PI * 2);
+      const wholeBodyBobY = getWalkBodyBobY(progress);
+      const frontLegTransform = getSideWalkLegTransform(progress, 0);
+      const rearLegTransform = getSideWalkLegTransform(progress, Math.PI);
+
+      return {
+        nodes: {
+          bodyGroup: { y: wholeBodyBobY },
+          head: { y: wholeBodyBobY },
+          legsGroup: { y: wholeBodyBobY },
+          leftLeg: frontLegTransform,
+          rightLeg: rearLegTransform,
+          leftArm: {
+            angle: -stridePhase * WALK_SIDE_ARM_SWING_ANGLE,
           },
         },
       };
@@ -222,6 +254,26 @@ function easeInOutSine(progress: number): number {
   return -(Math.cos(Math.PI * progress) - 1) / 2;
 }
 
+function getWalkBodyBobY(progress: number): number {
+  return snapMiniPixelMotionValue(Math.sin(progress * Math.PI * 2) * WALK_BODY_BOB_Y);
+}
+
+function getSideWalkLegTransform(progress: number, phaseOffset: number): MiniTransform {
+  const phase = progress * Math.PI * 2 + phaseOffset;
+  const leftwardAmount = Math.sin(phase);
+  const liftAmount = Math.max(0, Math.cos(phase));
+
+  return {
+    x: snapMiniMotionValue(-leftwardAmount * WALK_SIDE_LEG_SWING_X),
+    y: snapMiniMotionValue(-liftAmount * WALK_SIDE_LEG_LIFT_Y),
+    angle: snapMiniMotionValue(-leftwardAmount * WALK_SIDE_LEG_SWING_ANGLE),
+  };
+}
+
 function snapMiniMotionValue(value: number): number {
   return Math.round(value * 2) / 2;
+}
+
+function snapMiniPixelMotionValue(value: number): number {
+  return Math.round(value);
 }

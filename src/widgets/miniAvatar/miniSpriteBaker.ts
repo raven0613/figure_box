@@ -8,12 +8,18 @@ import {
 } from './miniAvatarAnimation';
 import { MINI_WAVE_BLINK_ANIMATION } from './miniAvatarAnimationDefinitions';
 import { createMiniLayerImage } from './miniAvatarAssets';
-import { createMiniFrontIdleLayers } from './miniAvatarLayerRenderer';
+import { createMiniFrontIdleLayers, createMiniSideIdleLayers } from './miniAvatarLayerRenderer';
 import {
   MINI_CANVAS_HEIGHT,
   MINI_CANVAS_WIDTH,
 } from './miniAvatarRig';
-import type { MiniAnimation, MiniLayer, MiniSpriteSheet } from './miniAvatarTypes';
+import type {
+  MiniAnimation,
+  MiniAvatarDirection,
+  MiniLayer,
+  MiniPose,
+  MiniSpriteSheet,
+} from './miniAvatarTypes';
 
 export async function bakeMiniFrontIdleSpriteSheet(state: AvatarState): Promise<MiniSpriteSheet> {
   const layers = await createMiniFrontIdleLayers(state);
@@ -44,7 +50,7 @@ export async function bakeMiniAnimationSpriteSheet(
   const frameLayers = await Promise.all(
     Array.from({ length: frameCount }, async (_, frameIndex) => {
       const pose = sampleMiniAnimation(animation, frameIndex * frameDurationMs);
-      const layers = await createMiniFrontIdleLayers(state, pose);
+      const layers = await createMiniDirectionalIdleLayers(state, animation.direction, pose);
       const column = frameIndex % columns;
       const row = Math.floor(frameIndex / columns);
 
@@ -67,6 +73,18 @@ export async function bakeMiniAnimationSpriteSheet(
     rows,
     frameCount,
   };
+}
+
+function createMiniDirectionalIdleLayers(
+  state: AvatarState,
+  direction: MiniAvatarDirection,
+  pose: MiniPose,
+): Promise<MiniLayer[]> {
+  if (direction === 'side') {
+    return createMiniSideIdleLayers(state, pose);
+  }
+
+  return createMiniFrontIdleLayers(state, pose);
 }
 
 async function renderMiniLayersToDataUrl(

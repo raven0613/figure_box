@@ -24,6 +24,36 @@ export const MINI_AVATAR_ANCHOR_OFFSETS: MiniAnchorOffsetMap = {
       5: { x: 2, y: 3 },
     },
   },
+  'arm_idle/side/01': {
+    default: { x: 0, y: 0 },
+    byBodyType: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 0 },
+      3: { x: 1, y: 1 },
+      4: { x: 2, y: 3 },
+      5: { x: 2, y: 3 },
+    },
+  },
+  'leg/01': {
+    default: { x: 0, y: 0 },
+    byBodyType: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 1 },
+      3: { x: 0, y: 2 },
+      4: { x: 0, y: 3 },
+      5: { x: 0, y: 4 },
+    },
+  },
+  'leg/side/01': {
+    default: { x: 0, y: 0 },
+    byBodyType: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 0 },
+      3: { x: 0, y: 0 },
+      4: { x: 0, y: 0 },
+      5: { x: 0, y: 3 },
+    },
+  },
 };
 
 export function getMiniAvatarAnchorOffset(folder: string, optionId: string, bodyTypeId?: number): MiniPoint {

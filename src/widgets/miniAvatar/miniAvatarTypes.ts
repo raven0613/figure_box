@@ -11,6 +11,8 @@ export interface MiniSpriteSheet {
   frameCount: number;
 }
 
+export type MiniAvatarDirection = 'front' | 'side';
+
 export interface MiniLayer {
   folder: string;
   file: string;
@@ -55,8 +57,10 @@ export interface MiniRigNode {
 
 export type MiniPoseNodeKey =
   | 'body'
+  | 'bodyGroup'
   | 'head'
   | 'eyes'
+  | 'legsGroup'
   | 'leftArm'
   | 'rightArm'
   | 'leftLeg'
@@ -77,7 +81,7 @@ export interface MiniAnimation {
   id: string;
   label: string;
   version: number;
-  direction: 'front';
+  direction: MiniAvatarDirection;
   durationMs: number;
   fps: number;
   columns: number;
@@ -106,6 +110,7 @@ export interface MiniBodyRigLayout {
   armIdleRightSocket?: MiniPoint;
   legDistance: number;
   legOffset: MiniPoint;
+  rearLegOffset?: MiniPoint;
 }
 
 export interface MiniEyeRigLayout {
@@ -115,6 +120,7 @@ export interface MiniEyeRigLayout {
   eyeBall: MiniPoint;
   eyeLight: MiniPoint;
   upperEyeLid: MiniPoint;
+  eyelid?: MiniPoint;
   eyebrow: MiniPoint;
 }
 
@@ -142,11 +148,12 @@ export interface MiniAccessoryRigLayout {
 
 export type MiniColorRigLayout = typeof AVATAR_RIG_COLORS;
 
-export interface MiniFrontIdleRigLayout {
+export interface MiniIdleRigLayout {
   bodyTypeId: number;
   baselineBodyTypeId: number;
   headCenter: MiniPoint;
   bodyCenter: MiniPoint;
+  face: MiniPoint;
   earDistance: number;
   ear: MiniPoint;
   mouth: MiniPoint;
@@ -157,6 +164,8 @@ export interface MiniFrontIdleRigLayout {
   accessories: MiniAccessoryRigLayout;
   colors: MiniColorRigLayout;
 }
+
+export type MiniFrontIdleRigLayout = MiniIdleRigLayout;
 
 export interface MiniImageContentBounds {
   width: number;
