@@ -9,7 +9,7 @@ import type { MiniAnimation } from './miniAvatarTypes';
 export const MINI_WAVE_BLINK_ANIMATION: MiniAnimation = {
   id: 'wave_blink',
   label: '揮手眨眼',
-  version: 1,
+  version: 2,
   direction: 'front',
   durationMs: 1200,
   fps: 12,

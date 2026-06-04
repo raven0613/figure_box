@@ -7,7 +7,7 @@ import {
   sampleMiniAnimation,
 } from './miniAvatarAnimation';
 import { MINI_WAVE_BLINK_ANIMATION } from './miniAvatarAnimationDefinitions';
-import { createMiniLayerImage } from './miniAvatarAssets';
+import { createMiniLayerImages } from './miniAvatarAssets';
 import { createMiniFrontIdleLayers, createMiniSideIdleLayers } from './miniAvatarLayerRenderer';
 import {
   MINI_CANVAS_HEIGHT,
@@ -98,10 +98,8 @@ async function renderMiniLayersToDataUrl(
     imageSmoothingEnabled: false,
     renderOnAddRemove: false,
   });
-  const images = await Promise.all(
-    layers
-      .sort((first, second) => first.zIndex - second.zIndex)
-      .map(layer => createMiniLayerImage(layer)),
+  const images = await createMiniLayerImages(
+    [...layers].sort((first, second) => first.zIndex - second.zIndex),
   );
 
   exportCanvas.add(...images);

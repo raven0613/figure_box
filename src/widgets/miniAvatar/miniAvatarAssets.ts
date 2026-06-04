@@ -14,9 +14,17 @@ interface MiniImagePixelBounds {
   bottom: number;
 }
 
+interface MiniCompositeImageLayer {
+  image: HTMLImageElement;
+  layer: MiniLayer;
+}
+
 const MINI_GRADIENT_EDGE_COLOR_STOP = 0.05;
+const MINI_TRANSFORM_EPSILON = 0.0001;
+const MINI_TRANSFORM_SUPERSAMPLE = 2;
 const miniTintCache = new Map<string, string>();
 const miniContentBoundsCache = new Map<string, Promise<MiniImageContentBounds>>();
+const miniCompositeLayerCache = new Map<string, Promise<string>>();
 
 const miniAvatarAssetUrls = import.meta.glob<string>('../../assets/avatar_system/mini/**/*.png', {
   eager: true,
@@ -25,6 +33,10 @@ const miniAvatarAssetUrls = import.meta.glob<string>('../../assets/avatar_system
 }) as Record<string, string>;
 
 export async function createMiniLayerImage(layer: MiniLayer): Promise<FabricImage> {
+  if (isMiniCompositeLayer(layer)) {
+    return createMiniCompositeLayerImage(layer.compositeLayers, layer);
+  }
+
   const assetUrl = getMiniAvatarAssetUrl(layer.folder, layer.file);
   const imageUrl = layer.color
     ? await tintMiniImageByLuminance(assetUrl, layer.color)
@@ -45,6 +57,16 @@ export async function createMiniLayerImage(layer: MiniLayer): Promise<FabricImag
     imageSmoothing: false,
   });
   return image;
+}
+
+export async function createMiniLayerImages(sortedLayers: MiniLayer[]): Promise<FabricImage[]> {
+  const layerGroups = groupPrecomposableMiniLayers(sortedLayers);
+
+  return Promise.all(layerGroups.map(layerGroup => (
+    shouldPrecomposeMiniLayer(layerGroup[0])
+      ? createMiniCompositeLayerImage(createLocalCompositeLayers(layerGroup[0], layerGroup), layerGroup[0])
+      : createMiniLayerImage(layerGroup[0])
+  )));
 }
 
 export function hasMiniAvatarAsset(folder: string, file: string): boolean {
@@ -114,6 +136,276 @@ export function getMiniBoundsBottomOffset(bounds: MiniImageContentBounds): numbe
 
 function getMiniAvatarAssetPath(folder: string, file: string): string {
   return `../../assets/avatar_system/mini/${folder}/${file}`;
+}
+
+function groupPrecomposableMiniLayers(layers: MiniLayer[]): MiniLayer[][] {
+  const layerGroups: MiniLayer[][] = [];
+  let currentGroup: MiniLayer[] = [];
+  let currentTransformKey: string | null = null;
+
+  for (const layer of layers) {
+    const transformKey = shouldPrecomposeMiniLayer(layer)
+      ? getMiniLayerTransformKey(layer)
+      : null;
+
+    if (transformKey === null || transformKey !== currentTransformKey) {
+      flushMiniLayerGroup(layerGroups, currentGroup);
+      currentGroup = [layer];
+      currentTransformKey = transformKey;
+      continue;
+    }
+
+    currentGroup = [...currentGroup, layer];
+  }
+
+  flushMiniLayerGroup(layerGroups, currentGroup);
+  return layerGroups;
+}
+
+function flushMiniLayerGroup(layerGroups: MiniLayer[][], layerGroup: MiniLayer[]): void {
+  if (layerGroup.length === 0) {
+    return;
+  }
+
+  layerGroups.push(layerGroup);
+}
+
+function shouldPrecomposeMiniLayer(layer: MiniLayer): boolean {
+  return !isMiniCompositeLayer(layer)
+    && (Math.abs(layer.angle ?? 0) > MINI_TRANSFORM_EPSILON
+      || Math.abs((layer.scale ?? 1) - 1) > MINI_TRANSFORM_EPSILON);
+}
+
+function getMiniLayerTransformKey(layer: MiniLayer): string {
+  return [
+    roundMiniTransformValue(layer.angle ?? 0),
+    roundMiniTransformValue(layer.scale ?? 1),
+    layer.flipX === true ? '1' : '0',
+  ].join('|');
+}
+
+function roundMiniTransformValue(value: number): string {
+  return value.toFixed(4);
+}
+
+async function createMiniCompositeLayerImage(layers: MiniLayer[], transformLayer: MiniLayer): Promise<FabricImage> {
+  const imageUrl = await getMiniCompositeLayerUrl(layers);
+  const image = await FabricImage.fromURL(imageUrl);
+
+  image.set({
+    left: transformLayer.x,
+    top: transformLayer.y,
+    angle: transformLayer.angle ?? 0,
+    flipX: transformLayer.flipX === true,
+    scaleX: MINI_PIXEL_SCALE * (transformLayer.scale ?? 1) / MINI_TRANSFORM_SUPERSAMPLE,
+    scaleY: MINI_PIXEL_SCALE * (transformLayer.scale ?? 1) / MINI_TRANSFORM_SUPERSAMPLE,
+    originX: 'center',
+    originY: 'center',
+    selectable: false,
+    evented: false,
+    objectCaching: false,
+    imageSmoothing: true,
+  });
+
+  return image;
+}
+
+function getMiniCompositeLayerUrl(layers: MiniLayer[]): Promise<string> {
+  const cacheKey = getMiniCompositeLayerCacheKey(layers);
+  const cachedCompositeUrl = miniCompositeLayerCache.get(cacheKey);
+
+  if (cachedCompositeUrl) {
+    return cachedCompositeUrl;
+  }
+
+  const compositeUrlPromise = renderMiniCompositeLayerUrl(layers);
+  miniCompositeLayerCache.set(cacheKey, compositeUrlPromise);
+  return compositeUrlPromise;
+}
+
+function getMiniCompositeLayerCacheKey(layers: MiniLayer[]): string {
+  return [
+    `supersample:${MINI_TRANSFORM_SUPERSAMPLE}`,
+    ...layers.map(layer => [
+      layer.folder,
+      layer.file,
+      roundMiniTransformValue(layer.x),
+      roundMiniTransformValue(layer.y),
+      roundMiniTransformValue(layer.angle ?? 0),
+      roundMiniTransformValue(layer.scale ?? 1),
+      layer.flipX === true ? '1' : '0',
+      roundMiniTransformValue(layer.zIndex),
+      serializeMiniTintSource(layer.color),
+    ].join(':')),
+  ].join('|');
+}
+
+function serializeMiniTintSource(color: AvatarTintSource | undefined): string {
+  return color === undefined
+    ? ''
+    : JSON.stringify(color);
+}
+
+async function renderMiniCompositeLayerUrl(layers: MiniLayer[]): Promise<string> {
+  const imageLayers = await Promise.all(layers
+    .filter(layer => !isMiniCompositeLayer(layer))
+    .sort((first, second) => first.zIndex - second.zIndex)
+    .map(async layer => ({
+      image: await loadMiniLayerImageElement(layer),
+      layer,
+    })));
+  const bounds = getMiniCompositeSourceBounds(imageLayers);
+  const width = Math.max(Math.ceil(bounds.width), 1);
+  const height = Math.max(Math.ceil(bounds.height), 1);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('Unable to create mini avatar composite canvas context.');
+  }
+
+  context.imageSmoothingEnabled = false;
+
+  imageLayers.forEach(({ image, layer }) => {
+    const scaledWidth = image.naturalWidth * MINI_TRANSFORM_SUPERSAMPLE * (layer.scale ?? 1);
+    const scaledHeight = image.naturalHeight * MINI_TRANSFORM_SUPERSAMPLE * (layer.scale ?? 1);
+    const sourceOffset = getMiniCompositeSourceOffset(layer);
+
+    context.save();
+    context.translate(width / 2 + sourceOffset.x, height / 2 + sourceOffset.y);
+    context.rotate((layer.angle ?? 0) * Math.PI / 180);
+    context.scale(layer.flipX === true ? -1 : 1, 1);
+    context.drawImage(
+      image,
+      -scaledWidth / 2,
+      -scaledHeight / 2,
+      scaledWidth,
+      scaledHeight,
+    );
+    context.restore();
+  });
+
+  return canvas.toDataURL('image/png');
+}
+
+async function loadMiniLayerImageElement(layer: MiniLayer): Promise<HTMLImageElement> {
+  const assetUrl = getMiniAvatarAssetUrl(layer.folder, layer.file);
+  const imageUrl = layer.color
+    ? await tintMiniImageByLuminance(assetUrl, layer.color)
+    : assetUrl;
+
+  return loadMiniImageElement(imageUrl);
+}
+
+function createLocalCompositeLayers(originLayer: MiniLayer, layers: MiniLayer[]): MiniLayer[] {
+  return layers.map(layer => {
+    const worldOffset = {
+      x: layer.x - originLayer.x,
+      y: layer.y - originLayer.y,
+    };
+    const unrotatedOffset = rotateMiniPoint(worldOffset, -(originLayer.angle ?? 0));
+    const unflippedOffset = {
+      x: originLayer.flipX === true ? -unrotatedOffset.x : unrotatedOffset.x,
+      y: unrotatedOffset.y,
+    };
+    const originScale = originLayer.scale ?? 1;
+
+    return {
+      ...layer,
+      x: unflippedOffset.x / originScale,
+      y: unflippedOffset.y / originScale,
+      angle: (layer.angle ?? 0) - (originLayer.angle ?? 0),
+      scale: (layer.scale ?? 1) / originScale,
+      flipX: originLayer.flipX === true ? layer.flipX !== true : layer.flipX,
+    };
+  });
+}
+
+function getMiniCompositeSourceOffset(layer: MiniLayer): { x: number; y: number } {
+  return {
+    x: layer.x * MINI_TRANSFORM_SUPERSAMPLE / MINI_PIXEL_SCALE,
+    y: layer.y * MINI_TRANSFORM_SUPERSAMPLE / MINI_PIXEL_SCALE,
+  };
+}
+
+function getMiniCompositeSourceBounds(imageLayers: MiniCompositeImageLayer[]): { width: number; height: number } {
+  const bounds = imageLayers.reduce(
+    (currentBounds, { image, layer }) => {
+      const layerBounds = getMiniCompositeImageLayerBounds(image, layer);
+
+      return {
+        left: Math.min(currentBounds.left, layerBounds.left),
+        right: Math.max(currentBounds.right, layerBounds.right),
+        top: Math.min(currentBounds.top, layerBounds.top),
+        bottom: Math.max(currentBounds.bottom, layerBounds.bottom),
+      };
+    },
+    {
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+    },
+  );
+
+  const halfWidth = Math.max(Math.abs(bounds.left), Math.abs(bounds.right));
+  const halfHeight = Math.max(Math.abs(bounds.top), Math.abs(bounds.bottom));
+
+  return {
+    width: Math.ceil(halfWidth * 2),
+    height: Math.ceil(halfHeight * 2),
+  };
+}
+
+function getMiniCompositeImageLayerBounds(image: HTMLImageElement, layer: MiniLayer): MiniImagePixelBounds {
+  const sourceOffset = getMiniCompositeSourceOffset(layer);
+  const scaledWidth = image.naturalWidth * MINI_TRANSFORM_SUPERSAMPLE * (layer.scale ?? 1);
+  const scaledHeight = image.naturalHeight * MINI_TRANSFORM_SUPERSAMPLE * (layer.scale ?? 1);
+  const halfWidth = scaledWidth / 2;
+  const halfHeight = scaledHeight / 2;
+  const corners = [
+    { x: -halfWidth, y: -halfHeight },
+    { x: halfWidth, y: -halfHeight },
+    { x: halfWidth, y: halfHeight },
+    { x: -halfWidth, y: halfHeight },
+  ].map(point => rotateMiniPoint(point, layer.angle ?? 0));
+
+  return corners.reduce<MiniImagePixelBounds>(
+    (bounds, point) => ({
+      left: Math.min(bounds.left, sourceOffset.x + point.x),
+      right: Math.max(bounds.right, sourceOffset.x + point.x),
+      top: Math.min(bounds.top, sourceOffset.y + point.y),
+      bottom: Math.max(bounds.bottom, sourceOffset.y + point.y),
+    }),
+    {
+      left: sourceOffset.x,
+      right: sourceOffset.x,
+      top: sourceOffset.y,
+      bottom: sourceOffset.y,
+    },
+  );
+}
+
+function isMiniCompositeLayer(layer: MiniLayer): layer is MiniLayer & { compositeLayers: MiniLayer[] } {
+  return layer.compositeLayers !== undefined;
+}
+
+function rotateMiniPoint(point: { x: number; y: number }, angle: number): { x: number; y: number } {
+  if (angle === 0) {
+    return point;
+  }
+
+  const radians = angle * Math.PI / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+
+  return {
+    x: point.x * cos - point.y * sin,
+    y: point.x * sin + point.y * cos,
+  };
 }
 
 function getMiniImageContentBounds(folder: string, file: string): Promise<MiniImageContentBounds> {

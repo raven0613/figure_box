@@ -29,10 +29,49 @@ export function flattenMiniRigNode(node: MiniRigNode): MiniLayer[] {
 
 function flattenNode(node: MiniRigNode, parentTransform: ResolvedMiniTransform): MiniLayer[] {
   const transform = composeMiniTransform(parentTransform, node.transform);
+
+  if (node.precompose === true) {
+    return createPrecomposedMiniLayer(node, transform);
+  }
+
   const layers = (node.layers ?? []).map(layer => transformMiniLayer(layer, transform));
   const childLayers = (node.children ?? []).flatMap(child => flattenNode(child, transform));
 
   return [...layers, ...childLayers];
+}
+
+function createPrecomposedMiniLayer(node: MiniRigNode, transform: ResolvedMiniTransform): MiniLayer[] {
+  const compositeLayers = flattenNodeContent(node);
+
+  if (compositeLayers.length === 0) {
+    return [];
+  }
+
+  return [{
+    folder: '__mini_composite__',
+    file: 'node.png',
+    compositeLayers,
+    x: transform.x,
+    y: transform.y,
+    zIndex: (node.precomposeZIndex ?? getLowestMiniLayerZIndex(compositeLayers)) + transform.zIndexOffset,
+    angle: transform.angle,
+    scale: transform.scale,
+    flipX: transform.flipX,
+  }];
+}
+
+function flattenNodeContent(node: MiniRigNode): MiniLayer[] {
+  const layers = (node.layers ?? []).map(layer => transformMiniLayer(layer, IDENTITY_TRANSFORM));
+  const childLayers = (node.children ?? []).flatMap(child => flattenNode(child, IDENTITY_TRANSFORM));
+
+  return [...layers, ...childLayers];
+}
+
+function getLowestMiniLayerZIndex(layers: MiniLayer[]): number {
+  return layers.reduce(
+    (lowestZIndex, layer) => Math.min(lowestZIndex, layer.zIndex),
+    layers[0]?.zIndex ?? 0,
+  );
 }
 
 function composeMiniTransform(

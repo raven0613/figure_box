@@ -228,6 +228,8 @@ class MiniFrontIdleLayerRenderer {
     };
     const headNode: MiniRigNode = {
       transform: createMiniNodeTransform(headCenter, this.getPoseNodeTransform('head')),
+      precompose: true,
+      precomposeZIndex: 10,
       layers: [
         ...this.createColorAndLineLayers('back_hair_bottom', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineColor('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 10),
         ...this.createColorAndLineLayers('face', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
@@ -592,10 +594,6 @@ class MiniFrontIdleLayerRenderer {
     return this.state[key].colorGradient ?? this.state[key].color ?? fallbackColor;
   }
 
-  private getPartSecondaryColor(key: AvatarPartKey, fallbackColor: string): string {
-    return this.state[key].secondaryColor ?? fallbackColor;
-  }
-
   private getPartSecondaryTintSource(key: AvatarPartKey, fallbackColor: AvatarTintSource): AvatarTintSource {
     return this.state[key].secondaryColorGradient ?? this.state[key].secondaryColor ?? fallbackColor;
   }
@@ -802,6 +800,8 @@ class MiniSideIdleLayerRenderer {
     };
     const headNode: MiniRigNode = {
       transform: createMiniNodeTransform(headCenter, this.getPoseNodeTransform('head')),
+      precompose: true,
+      precomposeZIndex: 10,
       layers: [
         ...this.createColorAndLineLayers('face/side', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
         ...this.createColorAndLineLayers('back_hair_bottom/side', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineColor('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 13.2),

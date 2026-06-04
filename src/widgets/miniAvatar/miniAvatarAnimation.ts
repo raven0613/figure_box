@@ -8,7 +8,9 @@ import type {
 
 // 取樣/clip 工具，之後新增動畫時會是「definition 檔新增一筆資料 + clip 工具組合」
 
-const WAVE_BODY_BOB_Y = 0.8;
+const WAVE_BODY_BOB_Y = 0;
+const WAVE_HEAD_TILT_X = -2;
+const WAVE_HEAD_TILT_ANGLE = -5;
 const WAVE_RIGHT_ARM_BASE_ANGLE = -60;
 const WAVE_RIGHT_ARM_SWING_ANGLE = 36;
 const WAVE_RIGHT_ARM_OFFSET_X = 5;
@@ -55,7 +57,11 @@ export function createMiniWaveClip(): MiniAnimationClip {
       return {
         nodes: {
           bodyGroup: { y: wholeBodyBobY },
-          head: { y: wholeBodyBobY },
+          head: {
+            y: wholeBodyBobY,
+            x: WAVE_HEAD_TILT_X,
+            angle: WAVE_HEAD_TILT_ANGLE,
+          },
           legsGroup: { y: wholeBodyBobY },
           rightArm: {
             x: WAVE_RIGHT_ARM_OFFSET_X,

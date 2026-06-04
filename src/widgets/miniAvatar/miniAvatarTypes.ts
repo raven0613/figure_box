@@ -17,6 +17,7 @@ export type MiniAvatarDirection = 'front' | 'side';
 export interface MiniLayer {
   folder: string;
   file: string;
+  compositeLayers?: MiniLayer[];
   color?: AvatarTintSource;
   x: number;
   y: number;
@@ -54,6 +55,8 @@ export interface MiniRigNode {
   transform?: MiniTransform;
   layers?: MiniLocalLayer[];
   children?: MiniRigNode[];
+  precompose?: boolean;
+  precomposeZIndex?: number;
 }
 
 export type MiniPoseNodeKey =
