@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { Modal } from '~/components/common/Modal';
 import {
   ACCESSORY_CATEGORY_DEFINITIONS,
   ACCESSORY_LAYER_SLOT_DEFINITIONS,
@@ -71,6 +72,10 @@ type SelectedTarget =
   | { type: 'accessory'; instanceId: string };
 
 type DraftSaveStatus = 'idle' | 'pending' | 'saved' | 'error';
+type TemplateAction =
+  | { type: 'load'; template: AvatarAppearanceTemplateRecord }
+  | { type: 'overwrite'; template: AvatarAppearanceTemplateRecord }
+  | { type: 'delete'; template: AvatarAppearanceTemplateRecord };
 
 export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEditorContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -105,8 +110,8 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [avatarTemplates, setAvatarTemplates] = useState<AvatarAppearanceTemplateRecord[]>(() => (
     listAvatarAppearanceTemplates()
   ));
-  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState('');
+  const [pendingTemplateAction, setPendingTemplateAction] = useState<TemplateAction | null>(null);
   const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>('idle');
   const [spriteSheet, setSpriteSheet] = useState<MiniSpriteSheet | null>(null);
   const [spriteSheetFrameIndex, setSpriteSheetFrameIndex] = useState(0);
@@ -638,13 +643,12 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     setDraggingAccessoryId(null);
   };
 
-  const saveCurrentTemplate = (templateId?: string) => {
+  const saveCurrentTemplate = (templateId?: string, fallbackName?: string) => {
     const currentState = avatarCanvasRef.current?.getState() ?? avatarState;
 
     try {
-      const templateRecord = saveAvatarAppearanceTemplate(templateName, currentState, templateId);
+      const templateRecord = saveAvatarAppearanceTemplate(fallbackName ?? templateName, currentState, templateId);
 
-      setActiveTemplateId(templateRecord.id);
       setTemplateName(templateRecord.name);
       setAvatarTemplates(listAvatarAppearanceTemplates());
     } catch (error) {
@@ -655,20 +659,38 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
   const loadTemplate = (template: AvatarAppearanceTemplateRecord) => {
     avatarCanvasRef.current?.setState(template.avatarState);
-    setActiveTemplateId(template.id);
     setTemplateName(template.name);
     setSelectedTarget({ type: 'part', key: 'face' });
     setSelectedAccessoryPoseKey('portrait');
   };
 
+  const overwriteTemplate = (template: AvatarAppearanceTemplateRecord) => {
+    saveCurrentTemplate(template.id, template.name);
+  };
+
   const deleteTemplate = (templateId: string) => {
     deleteAvatarAppearanceTemplate(templateId);
     setAvatarTemplates(listAvatarAppearanceTemplates());
+  };
 
-    if (activeTemplateId === templateId) {
-      setActiveTemplateId(null);
-      setTemplateName('');
+  const confirmTemplateAction = () => {
+    if (!pendingTemplateAction) {
+      return;
     }
+
+    if (pendingTemplateAction.type === 'load') {
+      loadTemplate(pendingTemplateAction.template);
+    }
+
+    if (pendingTemplateAction.type === 'overwrite') {
+      overwriteTemplate(pendingTemplateAction.template);
+    }
+
+    if (pendingTemplateAction.type === 'delete') {
+      deleteTemplate(pendingTemplateAction.template.id);
+    }
+
+    setPendingTemplateAction(null);
   };
 
   return (
@@ -736,13 +758,6 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           <button
             className={styles.templateSaveButton}
             type="button"
-            onClick={() => saveCurrentTemplate(activeTemplateId ?? undefined)}
-          >
-            儲存模板
-          </button>
-          <button
-            className={styles.templateSaveButton}
-            type="button"
             onClick={() => saveCurrentTemplate()}
           >
             另存新模板
@@ -756,14 +771,22 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
                 <button
                   className={styles.templateLoadButton}
                   type="button"
-                  onClick={() => loadTemplate(template)}
+                  onClick={() => setPendingTemplateAction({ type: 'load', template })}
                 >
                   {template.name}
                 </button>
                 <button
+                  className={styles.templateOverwriteButton}
+                  type="button"
+                  onClick={() => setPendingTemplateAction({ type: 'overwrite', template })}
+                  aria-label={`覆蓋${template.name}`}
+                >
+                  覆蓋
+                </button>
+                <button
                   className={styles.templateDeleteButton}
                   type="button"
-                  onClick={() => deleteTemplate(template.id)}
+                  onClick={() => setPendingTemplateAction({ type: 'delete', template })}
                   aria-label={`刪除${template.name}`}
                 >
                   刪除
@@ -1150,8 +1173,60 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           </div>
         )}
       </aside>
+
+      {pendingTemplateAction && (
+        <Modal
+          options={{
+            title: getTemplateActionTitle(pendingTemplateAction),
+            content: getTemplateActionMessage(pendingTemplateAction),
+            hasConfirmCancelButtons: true,
+            closeOnBackdropClick: true,
+            confirmLabel: getTemplateActionConfirmLabel(pendingTemplateAction),
+            cancelLabel: '取消',
+            onConfirm: confirmTemplateAction,
+            onCancel: () => setPendingTemplateAction(null),
+          }}
+          onClose={() => setPendingTemplateAction(null)}
+        />
+      )}
     </section>
   );
+}
+
+function getTemplateActionTitle(action: TemplateAction): string {
+  if (action.type === 'load') {
+    return '套用模板';
+  }
+
+  if (action.type === 'overwrite') {
+    return '覆蓋模板';
+  }
+
+  return '刪除模板';
+}
+
+function getTemplateActionMessage(action: TemplateAction): string {
+  if (action.type === 'load') {
+    return `要用「${action.template.name}」覆蓋目前正在編輯的外觀嗎？`;
+  }
+
+  if (action.type === 'overwrite') {
+    return `要用目前正在編輯的外觀覆蓋「${action.template.name}」嗎？`;
+  }
+
+  return `要刪除「${action.template.name}」嗎？`;
+}
+
+function getTemplateActionConfirmLabel(action: TemplateAction): string {
+  if (action.type === 'load') {
+    return '套用';
+  }
+
+  if (action.type === 'overwrite') {
+    return '覆蓋';
+  }
+
+  return '刪除';
 }
 
 function PartButton({

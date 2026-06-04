@@ -56,6 +56,7 @@
 .activeOptionButton,
 .templateSaveButton,
 .templateLoadButton,
+.templateOverwriteButton,
 .templateDeleteButton,
 .controlGroup button {
   min-height: 34px;
@@ -199,7 +200,7 @@
 
 .templateItem {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 52px;
+  grid-template-columns: minmax(0, 1fr) 52px 52px;
   gap: 5px;
 }
 
@@ -210,11 +211,19 @@
   white-space: nowrap;
 }
 
+.templateOverwriteButton,
 .templateDeleteButton {
   padding-right: 6px;
   padding-left: 6px;
-  color: #b91c1c;
   font-size: 12px;
+}
+
+.templateOverwriteButton {
+  color: #1d4ed8;
+}
+
+.templateDeleteButton {
+  color: #b91c1c;
 }
 
 .stageShell {

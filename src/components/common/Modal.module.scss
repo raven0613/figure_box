@@ -1,0 +1,83 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  color: #1f2937;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.28);
+}
+
+.header {
+  padding: 16px 18px 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.content {
+  min-height: 0;
+  padding: 16px 18px;
+  overflow-y: auto;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.content p {
+  margin: 0;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 18px 18px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.singleAction {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.confirmButton,
+.cancelButton {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.confirmButton {
+  color: #ffffff;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.cancelButton {
+  color: #374151;
+  background: #ffffff;
+}
