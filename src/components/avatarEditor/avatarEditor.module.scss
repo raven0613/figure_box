@@ -55,6 +55,7 @@
 .optionButton,
 .activeOptionButton,
 .templateSaveButton,
+.resetAvatarButton,
 .templateLoadButton,
 .templateOverwriteButton,
 .templateDeleteButton,
@@ -178,6 +179,12 @@
 
 .templateSaveButton {
   width: 100%;
+  font-weight: 800;
+}
+
+.resetAvatarButton {
+  width: 100%;
+  color: #b91c1c;
   font-weight: 800;
 }
 

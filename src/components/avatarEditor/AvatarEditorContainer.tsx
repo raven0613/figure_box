@@ -75,7 +75,8 @@ type DraftSaveStatus = 'idle' | 'pending' | 'saved' | 'error';
 type TemplateAction =
   | { type: 'load'; template: AvatarAppearanceTemplateRecord }
   | { type: 'overwrite'; template: AvatarAppearanceTemplateRecord }
-  | { type: 'delete'; template: AvatarAppearanceTemplateRecord };
+  | { type: 'delete'; template: AvatarAppearanceTemplateRecord }
+  | { type: 'reset' };
 
 export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEditorContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -673,6 +674,18 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     setAvatarTemplates(listAvatarAppearanceTemplates());
   };
 
+  const resetAvatarToDefault = () => {
+    const defaultState = createDefaultAvatarState();
+
+    avatarCanvasRef.current?.setState(defaultState);
+    setTemplateName('');
+    setSelectedTarget({ type: 'part', key: 'mini.bodyType' });
+    setSelectedAccessoryPoseKey('portrait');
+    setSelectedUpperEyelidPoseKey('portrait');
+    setSelectedEyeLightPoseKey('portrait');
+    setSelectedEyelidPoseKey('portrait');
+  };
+
   const confirmTemplateAction = () => {
     if (!pendingTemplateAction) {
       return;
@@ -688,6 +701,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
     if (pendingTemplateAction.type === 'delete') {
       deleteTemplate(pendingTemplateAction.template.id);
+    }
+
+    if (pendingTemplateAction.type === 'reset') {
+      resetAvatarToDefault();
     }
 
     setPendingTemplateAction(null);
@@ -761,6 +778,13 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
             onClick={() => saveCurrentTemplate()}
           >
             另存新模板
+          </button>
+          <button
+            className={styles.resetAvatarButton}
+            type="button"
+            onClick={() => setPendingTemplateAction({ type: 'reset' })}
+          >
+            重置為預設值
           </button>
           <div className={styles.saveStatusLine}>{getDraftSaveStatusLabel(draftSaveStatus)}</div>
           <div className={styles.templateList}>
@@ -1194,6 +1218,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 }
 
 function getTemplateActionTitle(action: TemplateAction): string {
+  if (action.type === 'reset') {
+    return '重置外觀';
+  }
+
   if (action.type === 'load') {
     return '套用模板';
   }
@@ -1206,6 +1234,10 @@ function getTemplateActionTitle(action: TemplateAction): string {
 }
 
 function getTemplateActionMessage(action: TemplateAction): string {
+  if (action.type === 'reset') {
+    return '要把目前正在編輯的外觀全部重置為預設值嗎？';
+  }
+
   if (action.type === 'load') {
     return `要用「${action.template.name}」覆蓋目前正在編輯的外觀嗎？`;
   }
@@ -1218,6 +1250,10 @@ function getTemplateActionMessage(action: TemplateAction): string {
 }
 
 function getTemplateActionConfirmLabel(action: TemplateAction): string {
+  if (action.type === 'reset') {
+    return '重置';
+  }
+
   if (action.type === 'load') {
     return '套用';
   }
