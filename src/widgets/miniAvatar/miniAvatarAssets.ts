@@ -4,8 +4,17 @@ import {
   MINI_BASE_TINT_LUMINANCE,
   MINI_PIXEL_SCALE,
 } from './miniAvatarRig';
+import type { AvatarColorGradient, AvatarTintSource } from '../avatarCanvas';
 import type { MiniImageContentBounds, MiniLayer } from './miniAvatarTypes';
 
+interface MiniImagePixelBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+const MINI_GRADIENT_EDGE_COLOR_STOP = 0.05;
 const miniTintCache = new Map<string, string>();
 const miniContentBoundsCache = new Map<string, Promise<MiniImageContentBounds>>();
 
@@ -173,8 +182,8 @@ function getFirstAvailableMiniDirectoryOptionId(folder: string): string | null {
   return optionIds[0] ?? null;
 }
 
-async function tintMiniImageByLuminance(imageUrl: string, color: string): Promise<string> {
-  const cacheKey = `${imageUrl}|${color}`;
+async function tintMiniImageByLuminance(imageUrl: string, tintSource: AvatarTintSource): Promise<string> {
+  const cacheKey = `${imageUrl}|${getMiniTintCacheKey(tintSource)}`;
   const cachedUrl = miniTintCache.get(cacheKey);
 
   if (cachedUrl) {
@@ -195,8 +204,8 @@ async function tintMiniImageByLuminance(imageUrl: string, color: string): Promis
   context.drawImage(sourceImage, 0, 0);
 
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const targetColor = parseMiniHexColor(color);
-  const shouldMakeTransparent = color === 'transparent';
+  const shouldMakeTransparent = tintSource === 'transparent';
+  const contentBounds = getMiniImagePixelBounds(imageData);
 
   for (let index = 0; index < imageData.data.length; index += 4) {
     const alpha = imageData.data[index + 3];
@@ -215,6 +224,10 @@ async function tintMiniImageByLuminance(imageUrl: string, color: string): Promis
     const blue = imageData.data[index + 2];
     const luminance = 0.299 * red + 0.587 * green + 0.114 * blue;
     const shade = luminance / MINI_BASE_TINT_LUMINANCE;
+    const pixelIndex = index / 4;
+    const x = pixelIndex % canvas.width;
+    const y = Math.floor(pixelIndex / canvas.width);
+    const targetColor = getMiniTintPixelColor(tintSource, x, y, contentBounds);
 
     imageData.data[index] = clampMiniColor(targetColor.red * shade);
     imageData.data[index + 1] = clampMiniColor(targetColor.green * shade);
@@ -226,6 +239,155 @@ async function tintMiniImageByLuminance(imageUrl: string, color: string): Promis
   const tintedUrl = canvas.toDataURL('image/png');
   miniTintCache.set(cacheKey, tintedUrl);
   return tintedUrl;
+}
+
+function getMiniTintPixelColor(
+  tintSource: AvatarTintSource,
+  x: number,
+  y: number,
+  bounds: MiniImagePixelBounds,
+): { red: number; green: number; blue: number } {
+  if (typeof tintSource === 'string') {
+    return parseMiniHexColor(tintSource);
+  }
+
+  const fromColor = parseMiniHexColor(tintSource.fromColor);
+  const toColor = parseMiniHexColor(tintSource.toColor);
+  const progress = tintSource.type === 'radial'
+    ? getMiniRadialGradientProgress(tintSource, x, y, bounds)
+    : getMiniLinearGradientProgress(tintSource, x, y, bounds);
+
+  return mixMiniColors(fromColor, toColor, progress);
+}
+
+function getMiniLinearGradientProgress(
+  gradient: AvatarColorGradient,
+  x: number,
+  y: number,
+  bounds: MiniImagePixelBounds,
+): number {
+  const radians = gradient.angle * Math.PI / 180;
+  const directionX = Math.sin(radians);
+  const directionY = Math.cos(radians);
+  const projection = x * directionX + y * directionY;
+  const projectionBounds = getMiniLinearProjectionBounds(bounds, directionX, directionY);
+  const rawProgress = (projection - projectionBounds.min) / Math.max(projectionBounds.max - projectionBounds.min, 1);
+  const positionShift = 0.5 - gradient.position / 100;
+
+  return applyMiniGradientEdgeColorStops(clampMiniUnit(rawProgress + positionShift));
+}
+
+function getMiniRadialGradientProgress(
+  gradient: AvatarColorGradient,
+  x: number,
+  y: number,
+  bounds: MiniImagePixelBounds,
+): number {
+  const width = Math.max(bounds.right - bounds.left, 1);
+  const height = Math.max(bounds.bottom - bounds.top, 1);
+  const centerX = bounds.left + (gradient.centerX + 100) / 200 * width;
+  const centerY = bounds.top + (gradient.centerY + 100) / 200 * height;
+  const normalizedDistance = Math.hypot(x - centerX, y - centerY) / getMiniMaxDistanceToBoundsCorner(centerX, centerY, bounds);
+  const centerHold = gradient.position / 100 * 0.9;
+
+  if (normalizedDistance <= centerHold) {
+    return 0;
+  }
+
+  return applyMiniGradientEdgeColorStops(clampMiniUnit((normalizedDistance - centerHold) / Math.max(1 - centerHold, 0.01)));
+}
+
+function mixMiniColors(
+  fromColor: { red: number; green: number; blue: number },
+  toColor: { red: number; green: number; blue: number },
+  progress: number,
+): { red: number; green: number; blue: number } {
+  return {
+    red: fromColor.red + (toColor.red - fromColor.red) * progress,
+    green: fromColor.green + (toColor.green - fromColor.green) * progress,
+    blue: fromColor.blue + (toColor.blue - fromColor.blue) * progress,
+  };
+}
+
+function getMiniImagePixelBounds(imageData: ImageData): MiniImagePixelBounds {
+  let left = imageData.width;
+  let right = 0;
+  let top = imageData.height;
+  let bottom = 0;
+
+  for (let y = 0; y < imageData.height; y += 1) {
+    for (let x = 0; x < imageData.width; x += 1) {
+      const alpha = imageData.data[(y * imageData.width + x) * 4 + 3];
+
+      if (alpha === 0) {
+        continue;
+      }
+
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y);
+    }
+  }
+
+  if (left > right || top > bottom) {
+    return {
+      left: 0,
+      right: Math.max(imageData.width - 1, 0),
+      top: 0,
+      bottom: Math.max(imageData.height - 1, 0),
+    };
+  }
+
+  return { left, right, top, bottom };
+}
+
+function getMiniLinearProjectionBounds(
+  bounds: MiniImagePixelBounds,
+  directionX: number,
+  directionY: number,
+): { min: number; max: number } {
+  const projections = [
+    bounds.left * directionX + bounds.top * directionY,
+    bounds.right * directionX + bounds.top * directionY,
+    bounds.left * directionX + bounds.bottom * directionY,
+    bounds.right * directionX + bounds.bottom * directionY,
+  ];
+
+  return {
+    min: Math.min(...projections),
+    max: Math.max(...projections),
+  };
+}
+
+function getMiniMaxDistanceToBoundsCorner(centerX: number, centerY: number, bounds: MiniImagePixelBounds): number {
+  return Math.max(
+    1,
+    Math.hypot(bounds.left - centerX, bounds.top - centerY),
+    Math.hypot(bounds.right - centerX, bounds.top - centerY),
+    Math.hypot(bounds.left - centerX, bounds.bottom - centerY),
+    Math.hypot(bounds.right - centerX, bounds.bottom - centerY),
+  );
+}
+
+function getMiniTintCacheKey(tintSource: AvatarTintSource): string {
+  return typeof tintSource === 'string' ? tintSource : JSON.stringify(tintSource);
+}
+
+function clampMiniUnit(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function applyMiniGradientEdgeColorStops(progress: number): number {
+  if (progress <= MINI_GRADIENT_EDGE_COLOR_STOP) {
+    return 0;
+  }
+
+  if (progress >= 1 - MINI_GRADIENT_EDGE_COLOR_STOP) {
+    return 1;
+  }
+
+  return (progress - MINI_GRADIENT_EDGE_COLOR_STOP) / (1 - MINI_GRADIENT_EDGE_COLOR_STOP * 2);
 }
 
 function loadMiniImageElement(imageUrl: string): Promise<HTMLImageElement> {

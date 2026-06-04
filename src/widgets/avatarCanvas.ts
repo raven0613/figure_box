@@ -9,6 +9,19 @@ export type AccessoryCategory = 'sideHair' | 'ponytail' | 'accessory';
 export type AccessoryLayerSlot = 'behindBody' | 'onSkin' | 'frontBody' | 'frontFace' | 'frontBangs';
 export type AccessoryRenderMode = 'mirrored' | 'center';
 export type AccessoryPoseKey = 'portrait' | 'chibi';
+export type AvatarGradientType = 'linear' | 'radial';
+
+export interface AvatarColorGradient {
+  type: AvatarGradientType;
+  fromColor: string;
+  toColor: string;
+  position: number;
+  angle: number;
+  centerX: number;
+  centerY: number;
+}
+
+export type AvatarTintSource = string | AvatarColorGradient;
 
 export type AvatarPartKey =
   | 'face'
@@ -57,7 +70,9 @@ export interface AvatarPartDefinition {
 export interface AvatarPartState {
   optionId: number;
   color?: string;
+  colorGradient?: AvatarColorGradient;
   secondaryColor?: string;
+  secondaryColorGradient?: AvatarColorGradient;
   lineColor?: string;
   offsetX?: number;
   offsetY?: number;
@@ -120,8 +135,15 @@ interface AvatarImageLayer {
   folder: string;
   file: string;
   tint?: 'color' | 'line' | 'skin';
-  tintColor?: string;
+  tintColor?: AvatarTintSource;
   shouldDropLightPixels?: boolean;
+}
+
+interface ImageContentBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
 }
 
 export interface AccessoryLayerSlotDefinition {
@@ -150,6 +172,7 @@ const DEFAULT_LINE_COLOR = AVATAR_RIG_COLORS.line;
 const BASE_TINT_LUMINANCE = 128;
 const BLACK_MASK_MAX_LUMINANCE = 8;
 const LINE_LAYER_FILL_LUMINANCE_THRESHOLD = 180;
+const GRADIENT_EDGE_COLOR_STOP = 0.05;
 const AVATAR_PIXEL_SCALE = 2;
 const EYE_DISTANCE = AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.eyeDistance;
 export const MINI_UPPER_EYELID_OFFSET_Y_LIMITS = {
@@ -654,10 +677,6 @@ abstract class AvatarPart {
     return this.state.lineColor ?? this.definition.defaultLineColor ?? DEFAULT_LINE_COLOR;
   }
 
-  protected getFaceColor(): string {
-    return this.context.getPartState('face').color ?? AVATAR_RIG_COLORS.skin;
-  }
-
   protected get scale(): number {
     return this.state.scale ?? DEFAULT_SCALE;
   }
@@ -831,7 +850,9 @@ abstract class ImageAvatarPart extends AvatarPart {
   update(nextState: AvatarPartState): void {
     const previousOptionId = this.state.optionId;
     const previousColor = this.state.color;
+    const previousColorGradient = this.state.colorGradient;
     const previousSecondaryColor = this.state.secondaryColor;
+    const previousSecondaryColorGradient = this.state.secondaryColorGradient;
     const previousLineColor = this.state.lineColor;
     this.state = { ...this.state, ...nextState };
     this.applyTransform();
@@ -839,7 +860,9 @@ abstract class ImageAvatarPart extends AvatarPart {
     if (
       previousOptionId !== this.state.optionId ||
       previousColor !== this.state.color ||
+      getAvatarTintCacheKey(previousColorGradient) !== getAvatarTintCacheKey(this.state.colorGradient) ||
       previousSecondaryColor !== this.state.secondaryColor ||
+      getAvatarTintCacheKey(previousSecondaryColorGradient) !== getAvatarTintCacheKey(this.state.secondaryColorGradient) ||
       previousLineColor !== this.state.lineColor
     ) {
       void this.reloadImages();
@@ -872,7 +895,7 @@ abstract class ImageAvatarPart extends AvatarPart {
         const imageUrl = layer.tint
           ? await tintImageByLuminance(
             assetUrl,
-            layer.tintColor ?? this.getTintColor(layer.tint),
+            layer.tintColor ?? this.getTintSource(layer.tint),
             layer.tint,
             layer.folder === 'face' && layer.tint === 'color',
             layer.shouldDropLightPixels === true,
@@ -919,12 +942,21 @@ abstract class ImageAvatarPart extends AvatarPart {
     this.images.splice(0, this.images.length);
   }
 
-  protected getTintColor(tint: 'color' | 'line' | 'skin'): string {
+  protected getTintSource(tint: 'color' | 'line' | 'skin'): AvatarTintSource {
     if (tint === 'skin') {
-      return this.getFaceColor();
+      return this.getFaceTintSource();
     }
 
-    return tint === 'color' ? this.color : this.lineColor;
+    return tint === 'color' ? this.getColorTintSource() : this.lineColor;
+  }
+
+  protected getColorTintSource(): AvatarTintSource {
+    return this.state.colorGradient ?? this.color;
+  }
+
+  protected getFaceTintSource(): AvatarTintSource {
+    const faceState = this.context.getPartState('face');
+    return faceState.colorGradient ?? faceState.color ?? AVATAR_RIG_COLORS.skin;
   }
 }
 
@@ -1236,8 +1268,8 @@ class EyeBallPart extends MirroredAssetPart {
         ? {
           ...layer,
           tintColor: side === -1
-            ? this.color
-            : this.state.secondaryColor ?? this.color,
+            ? this.getColorTintSource()
+            : this.state.secondaryColorGradient ?? this.state.secondaryColor ?? this.getColorTintSource(),
         }
         : layer);
   }
@@ -1844,8 +1876,16 @@ export class AvatarCanvas {
     this.updatePart(key, { color });
   }
 
+  setColorGradient(key: AvatarPartKey, colorGradient: AvatarColorGradient | undefined): void {
+    this.updatePart(key, { colorGradient });
+  }
+
   setSecondaryColor(key: AvatarPartKey, secondaryColor: string): void {
     this.updatePart(key, { secondaryColor });
+  }
+
+  setSecondaryColorGradient(key: AvatarPartKey, secondaryColorGradient: AvatarColorGradient | undefined): void {
+    this.updatePart(key, { secondaryColorGradient });
   }
 
   setLineColor(key: AvatarPartKey, lineColor: string): void {
@@ -1926,6 +1966,10 @@ export class AvatarCanvas {
 
   setAccessoryColor(instanceId: string, color: string): void {
     this.updateAccessory(instanceId, { color });
+  }
+
+  setAccessoryColorGradient(instanceId: string, colorGradient: AvatarColorGradient | undefined): void {
+    this.updateAccessory(instanceId, { colorGradient });
   }
 
   setAccessoryLineColor(instanceId: string, lineColor: string): void {
@@ -2336,12 +2380,12 @@ function rotatePoint(point: Point2D, degrees: number): Point2D {
 
 async function tintImageByLuminance(
   imageUrl: string,
-  color: string,
+  tintSource: AvatarTintSource,
   tint: 'color' | 'line' | 'skin',
   shouldNormalizeToSourceBrightness = false,
   shouldDropLightPixels = false,
 ): Promise<string> {
-  const cacheKey = `${imageUrl}|${color}|${tint}|${shouldNormalizeToSourceBrightness}|${shouldDropLightPixels}`;
+  const cacheKey = `${imageUrl}|${getAvatarTintCacheKey(tintSource)}|${tint}|${shouldNormalizeToSourceBrightness}|${shouldDropLightPixels}`;
   const cachedUrl = tintCache.get(cacheKey);
 
   if (cachedUrl) {
@@ -2363,8 +2407,8 @@ async function tintImageByLuminance(
   context.drawImage(sourceImage, 0, 0);
 
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const targetColor = parseHexColor(color);
   const maxLuminance = getMaxLuminance(imageData);
+  const contentBounds = getImageContentBounds(imageData);
   const shouldUseAlphaMask = tint === 'skin' || (tint === 'line' && maxLuminance <= BLACK_MASK_MAX_LUMINANCE);
 
   for (let index = 0; index < imageData.data.length; index += 4) {
@@ -2388,6 +2432,10 @@ async function tintImageByLuminance(
       ? Math.max(maxLuminance, 1)
       : BASE_TINT_LUMINANCE;
     const shade = shouldUseAlphaMask ? alpha / 255 : luminance / baseLuminance;
+    const pixelIndex = index / 4;
+    const x = pixelIndex % canvas.width;
+    const y = Math.floor(pixelIndex / canvas.width);
+    const targetColor = getAvatarTintPixelColor(tintSource, x, y, contentBounds);
 
     imageData.data[index] = clampColor(targetColor.red * shade);
     imageData.data[index + 1] = clampColor(targetColor.green * shade);
@@ -2399,6 +2447,160 @@ async function tintImageByLuminance(
   const tintedUrl = canvas.toDataURL('image/png');
   tintCache.set(cacheKey, tintedUrl);
   return tintedUrl;
+}
+
+function getAvatarTintPixelColor(
+  tintSource: AvatarTintSource,
+  x: number,
+  y: number,
+  bounds: ImageContentBounds,
+): { red: number; green: number; blue: number } {
+  if (typeof tintSource === 'string') {
+    return parseHexColor(tintSource);
+  }
+
+  const fromColor = parseHexColor(tintSource.fromColor);
+  const toColor = parseHexColor(tintSource.toColor);
+  const progress = tintSource.type === 'radial'
+    ? getRadialGradientProgress(tintSource, x, y, bounds)
+    : getLinearGradientProgress(tintSource, x, y, bounds);
+
+  return mixAvatarColors(fromColor, toColor, progress);
+}
+
+function getLinearGradientProgress(
+  gradient: AvatarColorGradient,
+  x: number,
+  y: number,
+  bounds: ImageContentBounds,
+): number {
+  const radians = gradient.angle * Math.PI / 180;
+  const directionX = Math.sin(radians);
+  const directionY = Math.cos(radians);
+  const projection = x * directionX + y * directionY;
+  const projectionBounds = getLinearProjectionBounds(bounds, directionX, directionY);
+  const rawProgress = (projection - projectionBounds.min) / Math.max(projectionBounds.max - projectionBounds.min, 1);
+  const positionShift = 0.5 - gradient.position / 100;
+
+  return applyGradientEdgeColorStops(clampUnit(rawProgress + positionShift));
+}
+
+function getRadialGradientProgress(
+  gradient: AvatarColorGradient,
+  x: number,
+  y: number,
+  bounds: ImageContentBounds,
+): number {
+  const width = Math.max(bounds.right - bounds.left, 1);
+  const height = Math.max(bounds.bottom - bounds.top, 1);
+  const centerX = bounds.left + (gradient.centerX + 100) / 200 * width;
+  const centerY = bounds.top + (gradient.centerY + 100) / 200 * height;
+  const distanceX = x - centerX;
+  const distanceY = y - centerY;
+  const maxDistance = getMaxDistanceToBoundsCorner(centerX, centerY, bounds);
+  const centerHold = gradient.position / 100 * 0.9;
+  const normalizedDistance = Math.hypot(distanceX, distanceY) / maxDistance;
+
+  if (normalizedDistance <= centerHold) {
+    return 0;
+  }
+
+  return applyGradientEdgeColorStops(clampUnit((normalizedDistance - centerHold) / Math.max(1 - centerHold, 0.01)));
+}
+
+function mixAvatarColors(
+  fromColor: { red: number; green: number; blue: number },
+  toColor: { red: number; green: number; blue: number },
+  progress: number,
+): { red: number; green: number; blue: number } {
+  return {
+    red: fromColor.red + (toColor.red - fromColor.red) * progress,
+    green: fromColor.green + (toColor.green - fromColor.green) * progress,
+    blue: fromColor.blue + (toColor.blue - fromColor.blue) * progress,
+  };
+}
+
+function getImageContentBounds(imageData: ImageData): ImageContentBounds {
+  let left = imageData.width;
+  let right = 0;
+  let top = imageData.height;
+  let bottom = 0;
+
+  for (let y = 0; y < imageData.height; y += 1) {
+    for (let x = 0; x < imageData.width; x += 1) {
+      const alpha = imageData.data[(y * imageData.width + x) * 4 + 3];
+
+      if (alpha === 0) {
+        continue;
+      }
+
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y);
+    }
+  }
+
+  if (left > right || top > bottom) {
+    return {
+      left: 0,
+      right: Math.max(imageData.width - 1, 0),
+      top: 0,
+      bottom: Math.max(imageData.height - 1, 0),
+    };
+  }
+
+  return { left, right, top, bottom };
+}
+
+function getLinearProjectionBounds(
+  bounds: ImageContentBounds,
+  directionX: number,
+  directionY: number,
+): { min: number; max: number } {
+  const projections = [
+    bounds.left * directionX + bounds.top * directionY,
+    bounds.right * directionX + bounds.top * directionY,
+    bounds.left * directionX + bounds.bottom * directionY,
+    bounds.right * directionX + bounds.bottom * directionY,
+  ];
+
+  return {
+    min: Math.min(...projections),
+    max: Math.max(...projections),
+  };
+}
+
+function getMaxDistanceToBoundsCorner(centerX: number, centerY: number, bounds: ImageContentBounds): number {
+  return Math.max(
+    1,
+    Math.hypot(bounds.left - centerX, bounds.top - centerY),
+    Math.hypot(bounds.right - centerX, bounds.top - centerY),
+    Math.hypot(bounds.left - centerX, bounds.bottom - centerY),
+    Math.hypot(bounds.right - centerX, bounds.bottom - centerY),
+  );
+}
+
+function getAvatarTintCacheKey(tintSource: AvatarTintSource | undefined): string {
+  return typeof tintSource === 'string' || tintSource === undefined
+    ? tintSource ?? ''
+    : JSON.stringify(tintSource);
+}
+
+function clampUnit(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function applyGradientEdgeColorStops(progress: number): number {
+  if (progress <= GRADIENT_EDGE_COLOR_STOP) {
+    return 0;
+  }
+
+  if (progress >= 1 - GRADIENT_EDGE_COLOR_STOP) {
+    return 1;
+  }
+
+  return (progress - GRADIENT_EDGE_COLOR_STOP) / (1 - GRADIENT_EDGE_COLOR_STOP * 2);
 }
 
 function getMaxLuminance(imageData: ImageData): number {

@@ -1,4 +1,5 @@
 import type { AVATAR_RIG_COLORS } from '../../constants/avatarRig';
+import type { AvatarTintSource } from '../avatarCanvas';
 
 export interface MiniSpriteSheet {
   dataUrl: string;
@@ -16,7 +17,7 @@ export type MiniAvatarDirection = 'front' | 'side';
 export interface MiniLayer {
   folder: string;
   file: string;
-  color?: string;
+  color?: AvatarTintSource;
   x: number;
   y: number;
   zIndex: number;

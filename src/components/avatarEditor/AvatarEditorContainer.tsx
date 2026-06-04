@@ -10,7 +10,9 @@ import {
   AVATAR_EDITOR_PART_DEFINITIONS,
   AvatarCanvas,
   AvatarAccessoryInstance,
+  AvatarColorGradient,
   AvatarEditableProperty,
+  AvatarGradientType,
   AvatarPartDefinition,
   AvatarPartKey,
   AvatarPartState,
@@ -197,6 +199,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const isSelectedOptionColorEditable = selectedTarget.type === 'accessory' || (
     selectedPart ? isAvatarPartOptionColorEditable(selectedPart.key, selectedOptionId) : true
   );
+  const canUseColorGradient = selectedTarget.type === 'accessory' || selectedPart?.key !== 'eyes.sclera';
   const accessoriesBySlot = useMemo(
     () => ACCESSORY_LAYER_SLOT_DEFINITIONS.map(slotDefinition => ({
       slot: slotDefinition,
@@ -419,6 +422,40 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     }
   };
 
+  const changeColorGradient = (colorGradient: AvatarColorGradient | undefined) => {
+    if (selectedTarget.type === 'accessory') {
+      avatarCanvasRef.current?.setAccessoryColorGradient(selectedTarget.instanceId, colorGradient);
+      return;
+    }
+
+    if (selectedPart) {
+      avatarCanvasRef.current?.setColorGradient(selectedPart.key, colorGradient);
+    }
+  };
+
+  const changeColorGradientMode = (type: AvatarGradientType | 'solid') => {
+    if (type === 'solid') {
+      changeColorGradient(undefined);
+      return;
+    }
+
+    changeColorGradient({
+      ...(selectedAppearanceState.colorGradient
+        ?? createDefaultColorGradient(type, selectedAppearanceState.color ?? selectedAccessoryDefinition?.defaultColor ?? selectedPart?.defaultColor)),
+      type,
+    });
+  };
+
+  const updateColorGradient = (patch: Partial<AvatarColorGradient>) => {
+    const currentGradient = selectedAppearanceState.colorGradient
+      ?? createDefaultColorGradient('linear', selectedAppearanceState.color ?? selectedAccessoryDefinition?.defaultColor ?? selectedPart?.defaultColor);
+
+    changeColorGradient({
+      ...currentGradient,
+      ...patch,
+    });
+  };
+
   const changeLineColor = (lineColor: string) => {
     if (selectedTarget.type === 'accessory') {
       avatarCanvasRef.current?.setAccessoryLineColor(selectedTarget.instanceId, lineColor);
@@ -434,6 +471,35 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     if (selectedTarget.type === 'part' && selectedPart) {
       avatarCanvasRef.current?.setSecondaryColor(selectedPart.key, secondaryColor);
     }
+  };
+
+  const changeSecondaryColorGradient = (secondaryColorGradient: AvatarColorGradient | undefined) => {
+    if (selectedTarget.type === 'part' && selectedPart) {
+      avatarCanvasRef.current?.setSecondaryColorGradient(selectedPart.key, secondaryColorGradient);
+    }
+  };
+
+  const changeSecondaryColorGradientMode = (type: AvatarGradientType | 'solid') => {
+    if (type === 'solid') {
+      changeSecondaryColorGradient(undefined);
+      return;
+    }
+
+    changeSecondaryColorGradient({
+      ...(selectedPartState.secondaryColorGradient
+        ?? createDefaultColorGradient(type, selectedPartState.secondaryColor ?? selectedPartState.color ?? selectedPart?.defaultColor)),
+      type,
+    });
+  };
+
+  const updateSecondaryColorGradient = (patch: Partial<AvatarColorGradient>) => {
+    const currentGradient = selectedPartState.secondaryColorGradient
+      ?? createDefaultColorGradient('linear', selectedPartState.secondaryColor ?? selectedPartState.color ?? selectedPart?.defaultColor);
+
+    changeSecondaryColorGradient({
+      ...currentGradient,
+      ...patch,
+    });
   };
 
   const setPartVisible = (isVisible: boolean) => {
@@ -962,9 +1028,20 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           </div>
         )}
 
-        {selectedEditableProperties.includes('color') && isSelectedOptionColorEditable && (
+        {selectedEditableProperties.includes('color') && isSelectedOptionColorEditable && canUseColorGradient && (
+          <GradientColorControl
+            title={selectedPart?.key === 'eyes.color' ? 'left color' : 'color'}
+            color={selectedAppearanceState.color ?? selectedAccessoryDefinition?.defaultColor ?? selectedPart?.defaultColor ?? '#000000'}
+            gradient={selectedAppearanceState.colorGradient}
+            onColorChange={changeColor}
+            onGradientModeChange={changeColorGradientMode}
+            onGradientUpdate={updateColorGradient}
+          />
+        )}
+
+        {selectedEditableProperties.includes('color') && isSelectedOptionColorEditable && !canUseColorGradient && (
           <label className={styles.colorField}>
-            <span>{selectedPart?.key === 'eyes.color' ? 'left color' : 'color'}</span>
+            <span>color</span>
             <input
               type="color"
               value={selectedAppearanceState.color ?? selectedAccessoryDefinition?.defaultColor ?? selectedPart?.defaultColor ?? '#000000'}
@@ -974,14 +1051,14 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
         )}
 
         {selectedPart?.key === 'eyes.color' && (
-          <label className={styles.colorField}>
-            <span>right color</span>
-            <input
-              type="color"
-              value={selectedPartState.secondaryColor ?? selectedPartState.color ?? selectedPart.defaultColor ?? '#000000'}
-              onChange={event => changeSecondaryColor(event.target.value)}
-            />
-          </label>
+          <GradientColorControl
+            title="right color"
+            color={selectedPartState.secondaryColor ?? selectedPartState.color ?? selectedPart.defaultColor ?? '#000000'}
+            gradient={selectedPartState.secondaryColorGradient}
+            onColorChange={changeSecondaryColor}
+            onGradientModeChange={changeSecondaryColorGradientMode}
+            onGradientUpdate={updateSecondaryColorGradient}
+          />
         )}
 
         {isMiniClothingBottomPart && (
@@ -1265,6 +1342,118 @@ function getTemplateActionConfirmLabel(action: TemplateAction): string {
   return '刪除';
 }
 
+function GradientColorControl({
+  title,
+  color,
+  gradient,
+  onColorChange,
+  onGradientModeChange,
+  onGradientUpdate,
+}: {
+  title: string;
+  color: string;
+  gradient?: AvatarColorGradient;
+  onColorChange: (color: string) => void;
+  onGradientModeChange: (type: AvatarGradientType | 'solid') => void;
+  onGradientUpdate: (patch: Partial<AvatarColorGradient>) => void;
+}) {
+  return (
+    <div className={styles.controlGroup}>
+      <label className={styles.selectField}>
+        <span>{title}</span>
+        <select
+          value={gradient?.type ?? 'solid'}
+          onChange={event => onGradientModeChange(event.target.value as AvatarGradientType | 'solid')}
+        >
+          <option value="solid">單色</option>
+          <option value="linear">直向漸層</option>
+          <option value="radial">圓形漸層</option>
+        </select>
+      </label>
+
+      {!gradient ? (
+        <label className={styles.colorField}>
+          <span>color</span>
+          <input
+            type="color"
+            value={color}
+            onChange={event => onColorChange(event.target.value)}
+          />
+        </label>
+      ) : (
+        <div className={styles.gradientControls}>
+          <label className={styles.colorField}>
+            <span>{gradient.type === 'radial' ? 'center' : 'top'}</span>
+            <input
+              type="color"
+              value={gradient.fromColor}
+              onChange={event => onGradientUpdate({ fromColor: event.target.value })}
+            />
+          </label>
+          <label className={styles.colorField}>
+            <span>{gradient.type === 'radial' ? 'outer' : 'bottom'}</span>
+            <input
+              type="color"
+              value={gradient.toColor}
+              onChange={event => onGradientUpdate({ toColor: event.target.value })}
+            />
+          </label>
+          <label className={styles.rangeField}>
+            <span>position {gradient.position}</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={gradient.position}
+              onChange={event => onGradientUpdate({ position: Number(event.target.value) })}
+            />
+          </label>
+          {gradient.type === 'linear' && (
+            <label className={styles.rangeField}>
+              <span>angle {gradient.angle}</span>
+              <input
+                type="range"
+                min="0"
+                max="360"
+                step="1"
+                value={gradient.angle}
+                onChange={event => onGradientUpdate({ angle: Number(event.target.value) })}
+              />
+            </label>
+          )}
+          {gradient.type === 'radial' && (
+            <>
+              <label className={styles.rangeField}>
+                <span>center x {gradient.centerX}</span>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={gradient.centerX}
+                  onChange={event => onGradientUpdate({ centerX: Number(event.target.value) })}
+                />
+              </label>
+              <label className={styles.rangeField}>
+                <span>center y {gradient.centerY}</span>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={gradient.centerY}
+                  onChange={event => onGradientUpdate({ centerY: Number(event.target.value) })}
+                />
+              </label>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PartButton({
   part,
   isSelected,
@@ -1409,6 +1598,18 @@ function getSelectedLightDistance(partKey: AvatarPartKey, state: AvatarPartState
       ? MINI_DEFAULT_EYE_LIGHT_DISTANCE
       : DEFAULT_PORTRAIT_EYE_LIGHT_DISTANCE
   );
+}
+
+function createDefaultColorGradient(type: AvatarGradientType, baseColor: string | undefined): AvatarColorGradient {
+  return {
+    type,
+    fromColor: baseColor ?? '#808080',
+    toColor: '#ffffff',
+    position: 50,
+    angle: 0,
+    centerX: 0,
+    centerY: 0,
+  };
 }
 
 function getDraftSaveStatusLabel(status: DraftSaveStatus): string {
