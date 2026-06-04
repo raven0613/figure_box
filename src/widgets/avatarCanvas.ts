@@ -1,6 +1,6 @@
 import { Canvas, Circle, FabricImage, FabricObject, Group } from 'fabric';
 
-import { AVATAR_RIG_COLORS } from '../constants/avatarRig';
+import { AVATAR_PORTRAIT_RIG_LAYOUT, AVATAR_RIG_COLORS } from '../constants/avatarRig';
 
 export type AvatarGroupKey = 'eyes' | 'hair';
 export type AvatarTransformProperty = 'offsetX' | 'offsetY' | 'rotate' | 'scale' | 'flipX';
@@ -150,9 +150,8 @@ const DEFAULT_LINE_COLOR = AVATAR_RIG_COLORS.line;
 const BASE_TINT_LUMINANCE = 128;
 const BLACK_MASK_MAX_LUMINANCE = 8;
 const LINE_LAYER_FILL_LUMINANCE_THRESHOLD = 180;
-const AVATAR_PIXEL_SCALE = 3;
-const EYE_GROUP_OFFSET_Y = -10;
-const EYE_DISTANCE = 50;
+const AVATAR_PIXEL_SCALE = 2;
+const EYE_DISTANCE = AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.eyeDistance;
 export const MINI_UPPER_EYELID_OFFSET_Y_LIMITS = {
   min: -1,
   max: 3,
@@ -303,7 +302,9 @@ export function createDefaultAvatarState(): AvatarState {
       rightVisible: true,
       isVisible: true,
       layerOrder: getDefaultPartLayerOrder(definition.key),
-      lightDistance: definition.key === 'mini.eyeLight' ? undefined : EYE_DISTANCE - 5,
+      lightDistance: definition.key === 'mini.eyeLight'
+        ? undefined
+        : AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.defaultEyeLightDistance,
     };
     return state;
   }, {} as Record<AvatarPartKey, AvatarPartState>);
@@ -680,16 +681,34 @@ abstract class AvatarPart {
   }
 
   protected getGroupBase(key: AvatarGroupKey): Point2D {
-    if (key === 'eyes') {
-      return {
-        x: this.context.centerX,
-        y: this.context.faceCenterY + EYE_GROUP_OFFSET_Y,
-      };
-    }
+    return this.getPortraitGroupPoint(key);
+  }
 
+  protected getPortraitPartPoint(key: keyof typeof AVATAR_PORTRAIT_RIG_LAYOUT.parts): Point2D {
+    const point = AVATAR_PORTRAIT_RIG_LAYOUT.parts[key];
+    return {
+      x: this.context.centerX + point.x,
+      y: this.context.faceCenterY + point.y,
+    };
+  }
+
+  protected getPortraitMirroredPartPoint(key: keyof typeof AVATAR_PORTRAIT_RIG_LAYOUT.parts): Point2D {
+    const point = AVATAR_PORTRAIT_RIG_LAYOUT.parts[key];
     return {
       x: this.context.centerX,
-      y: this.context.faceCenterY - 54,
+      y: this.context.faceCenterY + point.y,
+    };
+  }
+
+  protected getPortraitMirroredPartOffsetX(key: keyof typeof AVATAR_PORTRAIT_RIG_LAYOUT.parts, side: -1 | 1): number {
+    return side * AVATAR_PORTRAIT_RIG_LAYOUT.parts[key].x;
+  }
+
+  protected getPortraitGroupPoint(key: AvatarGroupKey): Point2D {
+    const point = AVATAR_PORTRAIT_RIG_LAYOUT.groups[key];
+    return {
+      x: this.context.centerX + point.x,
+      y: this.context.faceCenterY + point.y,
     };
   }
 
@@ -730,22 +749,22 @@ abstract class AvatarControlGroupPart extends AvatarPart {
 
 class EyeGroupPart extends AvatarControlGroupPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitGroupPoint('eyes').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY + EYE_GROUP_OFFSET_Y;
+    return this.getPortraitGroupPoint('eyes').y;
   }
 
 }
 
 class HairGroupPart extends AvatarControlGroupPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitGroupPoint('hair').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 54;
+    return this.getPortraitGroupPoint('hair').y;
   }
 
 }
@@ -918,7 +937,11 @@ abstract class MirroredAssetPart extends ImageAvatarPart {
   protected abstract resolveSideLayers(side: -1 | 1): AvatarImageLayer[];
 
   protected getSideBaseX(side: -1 | 1): number {
-    return side * EYE_DISTANCE;
+    return side * EYE_DISTANCE + this.getMirroredRigOffsetX(side);
+  }
+
+  protected getMirroredRigOffsetX(_side: -1 | 1): number {
+    return 0;
   }
 
   protected getSideBaseY(): number {
@@ -990,21 +1013,21 @@ abstract class MirroredAssetPart extends ImageAvatarPart {
 
 class FaceControlPart extends AvatarControlGroupPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('face').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY;
+    return this.getPortraitPartPoint('face').y;
   }
 }
 
 class FaceColorPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('face').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY;
+    return this.getPortraitPartPoint('face').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1014,11 +1037,11 @@ class FaceColorPart extends CenterAssetPart {
 
 class FaceLinePart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('face').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY;
+    return this.getPortraitPartPoint('face').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1028,11 +1051,11 @@ class FaceLinePart extends CenterAssetPart {
 
 class EarPart extends MirroredAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('ear').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY + 2;
+    return this.getPortraitMirroredPartPoint('ear').y;
   }
 
   protected resolveSideLayers(): AvatarImageLayer[] {
@@ -1040,17 +1063,17 @@ class EarPart extends MirroredAssetPart {
   }
 
   protected getSideBaseX(side: -1 | 1): number {
-    return side * 111;
+    return side * AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.earDistance + this.getPortraitMirroredPartOffsetX('ear', side);
   }
 }
 
 class ScleraPart extends AvatarPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('sclera').x;
   }
 
   protected get baseY(): number {
-    return this.getGroupBase('eyes').y;
+    return this.getPortraitMirroredPartPoint('sclera').y;
   }
 
   protected createArtwork(): FabricObject[] {
@@ -1090,7 +1113,7 @@ class ScleraPart extends AvatarPart {
 
   private createScleraCircle(side: -1 | 1): Circle {
     return new Circle({
-      radius: 33,
+      radius: 28,
       fill: this.color,
       originX: 'center',
       originY: 'center',
@@ -1115,7 +1138,7 @@ class ScleraPart extends AvatarPart {
       }
 
       object.set({
-        left: side * EYE_DISTANCE + side * (this.state.offsetX ?? 0),
+        left: side * EYE_DISTANCE + this.getPortraitMirroredPartOffsetX('sclera', side) + side * (this.state.offsetX ?? 0),
         top: this.state.offsetY ?? 0,
         angle: side * (this.state.rotate ?? 0),
         scaleX: this.scale,
@@ -1127,11 +1150,11 @@ class ScleraPart extends AvatarPart {
 
 class EyeBallPart extends MirroredAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('eyeBall').x;
   }
 
   protected get baseY(): number {
-    return this.getGroupBase('eyes').y;
+    return this.getPortraitMirroredPartPoint('eyeBall').y;
   }
 
   protected resolveSideLayers(side: -1 | 1): AvatarImageLayer[] {
@@ -1145,15 +1168,19 @@ class EyeBallPart extends MirroredAssetPart {
         }
         : layer);
   }
+
+  protected getMirroredRigOffsetX(side: -1 | 1): number {
+    return this.getPortraitMirroredPartOffsetX('eyeBall', side);
+  }
 }
 
 class EyeLightPart extends MirroredAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('eyeLight').x;
   }
 
   protected get baseY(): number {
-    return this.getGroupBase('eyes').y;
+    return this.getPortraitMirroredPartPoint('eyeLight').y;
   }
 
   protected resolveSideLayers(): AvatarImageLayer[] {
@@ -1161,7 +1188,8 @@ class EyeLightPart extends MirroredAssetPart {
   }
 
   protected getSideBaseX(side: -1 | 1): number {
-    return side * (this.state.lightDistance ?? EYE_DISTANCE - 5);
+    return side * (this.state.lightDistance ?? AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.defaultEyeLightDistance)
+      + this.getPortraitMirroredPartOffsetX('eyeLight', side);
   }
 
   protected getSideBaseY(): number {
@@ -1183,11 +1211,11 @@ class EyeLightPart extends MirroredAssetPart {
 
 class EyebrowPart extends MirroredAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('eyebrow').x;
   }
 
   protected get baseY(): number {
-    return this.getGroupBase('eyes').y - 15;
+    return this.getPortraitMirroredPartPoint('eyebrow').y;
   }
 
   protected resolveSideLayers(): AvatarImageLayer[] {
@@ -1195,31 +1223,39 @@ class EyebrowPart extends MirroredAssetPart {
   }
 
   protected getSideBaseY(): number {
-    return -12;
+    return AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.eyebrowY;
+  }
+
+  protected getMirroredRigOffsetX(side: -1 | 1): number {
+    return this.getPortraitMirroredPartOffsetX('eyebrow', side);
   }
 }
 
 class EyeLidPart extends MirroredAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('eyelid').x;
   }
 
   protected get baseY(): number {
-    return this.getGroupBase('eyes').y - 14;
+    return this.getPortraitMirroredPartPoint('eyelid').y;
   }
 
   protected resolveSideLayers(): AvatarImageLayer[] {
     return [{ folder: 'eyelid', file: `${formatOptionId(this.state.optionId)}.png`, tint: 'line' }];
   }
+
+  protected getMirroredRigOffsetX(side: -1 | 1): number {
+    return this.getPortraitMirroredPartOffsetX('eyelid', side);
+  }
 }
 
 class UpperEyelidPart extends MirroredAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('upperEyelid').x;
   }
 
   protected get baseY(): number {
-    return this.getGroupBase('eyes').y - 9;
+    return this.getPortraitMirroredPartPoint('upperEyelid').y;
   }
 
   protected resolveSideLayers(): AvatarImageLayer[] {
@@ -1227,17 +1263,21 @@ class UpperEyelidPart extends MirroredAssetPart {
   }
 
   protected getSideBaseY(): number {
-    return -7;
+    return AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.upperEyelidY;
+  }
+
+  protected getMirroredRigOffsetX(side: -1 | 1): number {
+    return this.getPortraitMirroredPartOffsetX('upperEyelid', side);
   }
 }
 
 class LowerEyelidPart extends MirroredAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('lowerEyelid').x;
   }
 
   protected get baseY(): number {
-    return this.getGroupBase('eyes').y + 15;
+    return this.getPortraitMirroredPartPoint('lowerEyelid').y;
   }
 
   protected resolveSideLayers(): AvatarImageLayer[] {
@@ -1245,17 +1285,21 @@ class LowerEyelidPart extends MirroredAssetPart {
   }
 
   protected getSideBaseY(): number {
-    return 8;
+    return AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.lowerEyelidY;
+  }
+
+  protected getMirroredRigOffsetX(side: -1 | 1): number {
+    return this.getPortraitMirroredPartOffsetX('lowerEyelid', side);
   }
 }
 
 class NosePart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('nose').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY + 35;
+    return this.getPortraitPartPoint('nose').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1265,11 +1309,11 @@ class NosePart extends CenterAssetPart {
 
 class MouthPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('mouth').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY + 65;
+    return this.getPortraitPartPoint('mouth').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1279,11 +1323,11 @@ class MouthPart extends CenterAssetPart {
 
 class BackHairPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('backHairBottom').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY + 46;
+    return this.getPortraitPartPoint('backHairBottom').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1293,11 +1337,11 @@ class BackHairPart extends CenterAssetPart {
 
 class TopHairPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('backHairTop').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 130;
+    return this.getPortraitPartPoint('backHairTop').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1307,11 +1351,11 @@ class TopHairPart extends CenterAssetPart {
 
 class BangsPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('bangs').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 78;
+    return this.getPortraitPartPoint('bangs').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1329,11 +1373,11 @@ abstract class BaseAccessoryPart extends ImageAvatarPart {
   }
 
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitPartPoint('accessory').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 18;
+    return this.getPortraitPartPoint('accessory').y;
   }
 
   protected resolveAccessoryLayers(): AvatarImageLayer[] {
@@ -1362,11 +1406,11 @@ class CenterAccessoryPart extends BaseAccessoryPart {
 
 class MirroredAccessoryPart extends MirroredAssetPart {
   protected get baseX(): number {
-    return this.context.centerX;
+    return this.getPortraitMirroredPartPoint('accessory').x;
   }
 
   protected get baseY(): number {
-    return this.context.faceCenterY - 18;
+    return this.getPortraitMirroredPartPoint('accessory').y;
   }
 
   protected resolveSideLayers(): AvatarImageLayer[] {
@@ -1378,11 +1422,12 @@ class MirroredAccessoryPart extends MirroredAssetPart {
   }
 
   protected getSideBaseX(side: -1 | 1): number {
-    return side * 100;
+    return side * AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.accessoryDistance
+      + AVATAR_PORTRAIT_RIG_LAYOUT.parts.accessory.x;
   }
 
   protected getSideBaseY(): number {
-    return 30;
+    return AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.accessoryY;
   }
 
   protected getMirroredSourceSide(): -1 | 1 {
@@ -1986,8 +2031,8 @@ export class AvatarCanvas {
     const context: AvatarPartContext = {
       width,
       height,
-      centerX: width / 2,
-      faceCenterY: height / 2 + 26,
+      centerX: width / 2 + AVATAR_PORTRAIT_RIG_LAYOUT.faceCenter.x,
+      faceCenterY: height / 2 + AVATAR_PORTRAIT_RIG_LAYOUT.faceCenter.y,
       getGroupState: key => this.stateStore.getPartState(key),
       getPartState: key => this.stateStore.getPartState(key),
     };

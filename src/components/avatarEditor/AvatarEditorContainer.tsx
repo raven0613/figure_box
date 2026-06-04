@@ -482,6 +482,61 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     };
   };
 
+  useEffect(() => {
+    const handleKeyboardMove = (event: KeyboardEvent) => {
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isKeyboardInputTarget(event.target) ||
+        !hasPositionControls(selectedEditableProperties)
+      ) {
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+
+        if (!isMoveUpDisabled) {
+          movePart(0, -MOVE_STEP);
+        }
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+
+        if (!isMoveDownDisabled) {
+          movePart(0, MOVE_STEP);
+        }
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+
+        if (canMoveX) {
+          movePart(-MOVE_STEP, 0);
+        }
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+
+        if (canMoveX) {
+          movePart(MOVE_STEP, 0);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyboardMove);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyboardMove);
+    };
+  }, [canMoveX, isMoveDownDisabled, isMoveUpDisabled, movePart, selectedEditableProperties]);
+
   const rotatePart = (delta: number) => {
     if (selectedTarget.type === 'accessory') {
       avatarCanvasRef.current?.rotateAccessory(selectedTarget.instanceId, delta, selectedAccessoryPoseKey);
@@ -1217,6 +1272,19 @@ function NudgeButton({
 
 function hasPositionControls(editableProperties: readonly string[]): boolean {
   return editableProperties.includes('offsetX') || editableProperties.includes('offsetY');
+}
+
+function isKeyboardInputTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return (
+    target.isContentEditable ||
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement
+  );
 }
 
 function getHoldMoveMultiplier(tickCount: number): number {

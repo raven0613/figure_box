@@ -19,3 +19,38 @@ export const AVATAR_RIG_COLORS = {
   clothingBottomSideDeco: '#808080',
   accessory: '#ffffff',
 } as const;
+
+export const AVATAR_PORTRAIT_RIG_LAYOUT = {
+  faceCenter: { x: 0, y: 26 },
+  groups: {
+    eyes: { x: 0, y: -10 },
+    hair: { x: 0, y: -54 },
+  },
+  parts: {
+    face: { x: 0, y: 0 },
+    ear: { x: -38, y: 2 },
+    sclera: { x: -10, y: -10 },
+    eyeBall: { x: -14, y: -13 },
+    eyeLight: { x: -10, y: -20 },
+    eyebrow: { x: -8, y: -15 },
+    eyelid: { x: -10, y: -20 },
+    upperEyelid: { x: -14, y: -19 },
+    lowerEyelid: { x: -14, y: -5 },
+    nose: { x: -2, y: 25 },
+    mouth: { x: 0, y: 42 },
+    backHairBottom: { x: 0, y: 36 },
+    backHairTop: { x: 25, y: -90 },
+    bangs: { x: 0, y: -50 },
+    accessory: { x: 0, y: -35 },
+  },
+  mirrored: {
+    eyeDistance: 50,
+    defaultEyeLightDistance: 45,
+    earDistance: 111,
+    accessoryDistance: 60,
+    accessoryY: 30,
+    eyebrowY: -12,
+    upperEyelidY: -7,
+    lowerEyelidY: 8,
+  },
+} as const;

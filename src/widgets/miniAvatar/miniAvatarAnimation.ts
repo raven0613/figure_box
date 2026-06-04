@@ -9,7 +9,6 @@ import type {
 // 取樣/clip 工具，之後新增動畫時會是「definition 檔新增一筆資料 + clip 工具組合」
 
 const WAVE_BODY_BOB_Y = 0.8;
-const WAVE_HEAD_BOB_Y = 0.5;
 const WAVE_RIGHT_ARM_BASE_ANGLE = -60;
 const WAVE_RIGHT_ARM_SWING_ANGLE = 36;
 const WAVE_RIGHT_ARM_OFFSET_X = 5;
@@ -51,11 +50,13 @@ export function createMiniWaveClip(): MiniAnimationClip {
       const progress = getClipLoopProgress(elapsedMs, animation, clip);
       const wavePhase = Math.sin(progress * Math.PI * 2);
       const bobPhase = Math.sin(progress * Math.PI * 2 + Math.PI / 5);
+      const wholeBodyBobY = snapMiniPixelMotionValue(bobPhase * WAVE_BODY_BOB_Y);
 
       return {
         nodes: {
-          body: { y: snapMiniMotionValue(bobPhase * WAVE_BODY_BOB_Y) },
-          head: { y: snapMiniMotionValue(bobPhase * WAVE_HEAD_BOB_Y) },
+          bodyGroup: { y: wholeBodyBobY },
+          head: { y: wholeBodyBobY },
+          legsGroup: { y: wholeBodyBobY },
           rightArm: {
             x: WAVE_RIGHT_ARM_OFFSET_X,
             y: WAVE_RIGHT_ARM_OFFSET_Y,
