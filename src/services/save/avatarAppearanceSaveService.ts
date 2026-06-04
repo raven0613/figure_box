@@ -1,3 +1,4 @@
+import { normalizeAvatarState } from '~/widgets/avatarCanvas';
 import type { AvatarState } from '~/widgets/avatarCanvas';
 
 export const AVATAR_APPEARANCE_SCHEMA_VERSION = 1;
@@ -21,13 +22,15 @@ export interface AvatarAppearanceTemplateRecord {
 }
 
 export function loadAvatarAppearanceDraft(): AvatarAppearanceDraftRecord | null {
-  return readJsonRecord<AvatarAppearanceDraftRecord>(DRAFT_STORAGE_KEY);
+  const draftRecord = readJsonRecord<AvatarAppearanceDraftRecord>(DRAFT_STORAGE_KEY);
+
+  return draftRecord ? normalizeDraftRecord(draftRecord) : null;
 }
 
 export function saveAvatarAppearanceDraft(avatarState: AvatarState): AvatarAppearanceDraftRecord {
   const draftRecord: AvatarAppearanceDraftRecord = {
     schemaVersion: AVATAR_APPEARANCE_SCHEMA_VERSION,
-    avatarState: cloneAvatarState(avatarState),
+    avatarState: cloneAvatarState(normalizeAvatarState(avatarState)),
     updatedAt: Date.now(),
   };
 
@@ -44,6 +47,7 @@ export function listAvatarAppearanceTemplates(): AvatarAppearanceTemplateRecord[
 
   return templates
     .filter(isAvatarAppearanceTemplateRecord)
+    .map(normalizeTemplateRecord)
     .sort((first, second) => second.updatedAt - first.updatedAt);
 }
 
@@ -61,7 +65,7 @@ export function saveAvatarAppearanceTemplate(
     id: currentTemplate?.id ?? createTemplateId(),
     name: name.trim() || createFallbackTemplateName(templates.length),
     schemaVersion: AVATAR_APPEARANCE_SCHEMA_VERSION,
-    avatarState: cloneAvatarState(avatarState),
+    avatarState: cloneAvatarState(normalizeAvatarState(avatarState)),
     createdAt: currentTemplate?.createdAt ?? now,
     updatedAt: now,
   };
@@ -83,6 +87,22 @@ export function deleteAvatarAppearanceTemplate(templateId: string): void {
 
 function cloneAvatarState(avatarState: AvatarState): AvatarState {
   return JSON.parse(JSON.stringify(avatarState)) as AvatarState;
+}
+
+function normalizeDraftRecord(record: AvatarAppearanceDraftRecord): AvatarAppearanceDraftRecord {
+  return {
+    ...record,
+    schemaVersion: AVATAR_APPEARANCE_SCHEMA_VERSION,
+    avatarState: normalizeAvatarState(record.avatarState),
+  };
+}
+
+function normalizeTemplateRecord(record: AvatarAppearanceTemplateRecord): AvatarAppearanceTemplateRecord {
+  return {
+    ...record,
+    schemaVersion: AVATAR_APPEARANCE_SCHEMA_VERSION,
+    avatarState: normalizeAvatarState(record.avatarState),
+  };
 }
 
 function createFallbackTemplateName(templateCount: number): string {

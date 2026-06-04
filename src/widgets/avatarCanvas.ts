@@ -315,6 +315,55 @@ export function createDefaultAvatarState(): AvatarState {
   };
 }
 
+export function normalizeAvatarState(initialState?: Partial<AvatarState>): AvatarState {
+  const defaults = createDefaultAvatarState();
+
+  if (!initialState) {
+    return defaults;
+  }
+
+  AVATAR_PART_DEFINITIONS.forEach(definition => {
+    defaults[definition.key] = {
+      ...defaults[definition.key],
+      ...initialState[definition.key],
+    };
+  });
+
+  const initialAccessories = initialState.accessories;
+
+  if (Array.isArray(initialAccessories)) {
+    return {
+      ...defaults,
+      accessories: normalizeAccessoryOrders(initialAccessories.map(accessory => ({
+        ...createDefaultAccessoryInstance(accessory.category ?? 'sideHair', accessory.order ?? 0, accessory.layerSlot),
+        ...accessory,
+        chibi: {
+          ...createDefaultAccessoryPoseState(
+            accessory.chibi?.layerSlot ?? accessory.layerSlot,
+            accessory.chibi?.order ?? accessory.order ?? 0,
+          ),
+          ...accessory.chibi,
+        },
+      }))),
+    };
+  }
+
+  const legacySideHair = (initialState as Partial<Record<'hair.sideburns', AvatarPartState>>)['hair.sideburns'];
+
+  if (legacySideHair) {
+    return {
+      ...defaults,
+      accessories: [{
+        ...createDefaultAccessoryInstance('sideHair', 0),
+        ...legacySideHair,
+        chibi: createDefaultAccessoryPoseState('frontFace', 0),
+      }],
+    };
+  }
+
+  return defaults;
+}
+
 function getDefaultSecondaryColor(key: AvatarPartKey, defaultColor?: string): string | undefined {
   if (key === 'eyes.color') {
     return defaultColor;
@@ -884,8 +933,32 @@ abstract class CenterAssetPart extends ImageAvatarPart {
     image.set({
       left: 0,
       top: 0,
-      scaleX: AVATAR_PIXEL_SCALE,
-      scaleY: AVATAR_PIXEL_SCALE,
+      scaleX: AVATAR_PIXEL_SCALE * this.scale,
+      scaleY: AVATAR_PIXEL_SCALE * this.scale,
+    });
+  }
+
+  protected applyTransform(): void {
+    if (!this.object) {
+      return;
+    }
+
+    this.updateCenterImages();
+    const transform = this.resolveWorldTransform(this.getPartOffset(), this.getPartRotation(), 1);
+    this.object.set(transform);
+    this.object.setCoords();
+  }
+
+  private updateCenterImages(): void {
+    if (!this.object) {
+      return;
+    }
+
+    this.object.getObjects().forEach(object => {
+      object.set({
+        scaleX: AVATAR_PIXEL_SCALE * this.scale,
+        scaleY: AVATAR_PIXEL_SCALE * this.scale,
+      });
     });
   }
 }
@@ -1700,47 +1773,7 @@ class AvatarStateStore {
   }
 
   private mergeInitialState(initialState?: Partial<AvatarState>): AvatarState {
-    const defaults = createDefaultAvatarState();
-
-    if (!initialState) {
-      return defaults;
-    }
-
-    AVATAR_PART_DEFINITIONS.forEach(definition => {
-      defaults[definition.key] = {
-        ...defaults[definition.key],
-        ...initialState[definition.key],
-      };
-    });
-
-    const initialAccessories = initialState.accessories;
-
-    if (Array.isArray(initialAccessories)) {
-      defaults.accessories = normalizeAccessoryOrders(initialAccessories.map(accessory => ({
-        ...createDefaultAccessoryInstance(accessory.category ?? 'sideHair', accessory.order ?? 0, accessory.layerSlot),
-        ...accessory,
-        chibi: {
-          ...createDefaultAccessoryPoseState(
-            accessory.chibi?.layerSlot ?? accessory.layerSlot,
-            accessory.chibi?.order ?? accessory.order ?? 0,
-          ),
-          ...accessory.chibi,
-        },
-      })));
-      return defaults;
-    }
-
-    const legacySideHair = (initialState as Partial<Record<'hair.sideburns', AvatarPartState>>)['hair.sideburns'];
-
-    if (legacySideHair) {
-      defaults.accessories = [{
-        ...createDefaultAccessoryInstance('sideHair', 0),
-        ...legacySideHair,
-        chibi: createDefaultAccessoryPoseState('frontFace', 0),
-      }];
-    }
-
-    return defaults;
+    return normalizeAvatarState(initialState);
   }
 }
 
