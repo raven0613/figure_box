@@ -55,12 +55,14 @@ export class MiniAvatarCanvas {
       height,
       backgroundColor: MINI_FRONT_IDLE_RIG_LAYOUT.colors.canvasBackground,
       imageSmoothingEnabled: false,
+      allowTouchScrolling: true,
       selection: false,
       preserveObjectStacking: true,
     });
 
-    this.canvas.wrapperEl.style.touchAction = 'none';
-    this.canvas.lowerCanvasEl.style.touchAction = 'none';
+    this.canvas.wrapperEl.style.touchAction = 'pan-y';
+    this.canvas.lowerCanvasEl.style.touchAction = 'pan-y';
+    this.canvas.upperCanvasEl.style.touchAction = 'pan-y';
     this.canvas.lowerCanvasEl.style.imageRendering = 'pixelated';
     this.canvas.upperCanvasEl.style.imageRendering = 'pixelated';
     void this.render(this.isAnimationEnabled ? sampleMiniAnimation(this.animation, 0) : {});

@@ -1,5 +1,5 @@
 import type { AVATAR_RIG_COLORS } from '../../constants/avatarRig';
-import type { AvatarTintSource } from '../avatarCanvas';
+import type { AccessoryCategory, AvatarTintSource } from '../avatarCanvas';
 
 export interface MiniSpriteSheet {
   dataUrl: string;
@@ -148,6 +148,7 @@ export interface MiniAccessoryRigLayout {
   center: MiniPoint;
   mirrored: MiniPoint;
   mirroredDistance: number;
+  byCategoryOption: Record<AccessoryCategory, MiniOptionOffsetMap>;
 }
 
 export type MiniColorRigLayout = typeof AVATAR_RIG_COLORS;

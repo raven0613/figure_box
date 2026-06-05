@@ -109,6 +109,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [selectedEyeLightPoseKey, setSelectedEyeLightPoseKey] = useState<AccessoryPoseKey>('portrait');
   const [selectedEyelidPoseKey, setSelectedEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
   const [draggingAccessoryId, setDraggingAccessoryId] = useState<string | null>(null);
+  const [canUseNativeDrag, setCanUseNativeDrag] = useState(false);
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
   const [avatarTemplates, setAvatarTemplates] = useState<AvatarAppearanceTemplateRecord[]>(() => (
     listAvatarAppearanceTemplates()
@@ -235,6 +236,22 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   useEffect(() => {
     onAvatarChangeRef.current = onAvatarChange;
   }, [onAvatarChange]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      setCanUseNativeDrag(true);
+      return;
+    }
+
+    const pointerMedia = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const updateCanUseNativeDrag = () => setCanUseNativeDrag(pointerMedia.matches);
+    updateCanUseNativeDrag();
+    pointerMedia.addEventListener('change', updateCanUseNativeDrag);
+
+    return () => {
+      pointerMedia.removeEventListener('change', updateCanUseNativeDrag);
+    };
+  }, []);
 
   const refreshSpriteSheetPreview = useCallback(() => {
     const miniAvatarCanvas = miniAvatarCanvasRef.current;
@@ -815,6 +832,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
                 <AccessoryButton
                   key={accessory.instanceId}
                   accessory={accessory}
+                  canDrag={canUseNativeDrag}
                   isSelected={selectedTarget.type === 'accessory' && selectedTarget.instanceId === accessory.instanceId}
                   onDragEnd={() => setDraggingAccessoryId(null)}
                   onDragStart={() => setDraggingAccessoryId(accessory.instanceId)}
@@ -917,7 +935,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           <div className={styles.miniPreviewShell} aria-label="Mini live animation preview">
             <div className={styles.miniCanvasHost} ref={miniAnimationCanvasHostRef} />
           </div>
-          <div className={styles.spriteSheetShell} aria-label="Mini sprite sheet output">
+          {/* <div className={styles.spriteSheetShell} aria-label="Mini sprite sheet output">
             <div className={styles.spriteSheetViewport}>
               {spriteSheet && (
                 <img
@@ -933,7 +951,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
                 ? `${spriteSheet.sheetWidth}x${spriteSheet.sheetHeight} / ${spriteSheet.frameWidth}x${spriteSheet.frameHeight} / ${spriteSheet.frameCount} frames`
                 : 'baking'}
             </div>
-          </div>
+          </div> */}
           <div className={styles.spriteSheetAnimationShell} aria-label="Mini sprite sheet animation preview">
             <div className={styles.spriteSheetAnimationViewport}>
               {spriteSheetAnimationStyle && (
@@ -1479,6 +1497,7 @@ function PartButton({
 
 function AccessoryButton({
   accessory,
+  canDrag,
   isSelected,
   onDragEnd,
   onDragStart,
@@ -1486,6 +1505,7 @@ function AccessoryButton({
   onSelect,
 }: {
   accessory: AvatarAccessoryInstance;
+  canDrag: boolean;
   isSelected: boolean;
   onDragEnd: () => void;
   onDragStart: () => void;
@@ -1496,16 +1516,29 @@ function AccessoryButton({
     <button
       className={isSelected ? styles.activeAccessoryButton : styles.accessoryButton}
       type="button"
-      draggable
+      draggable={canDrag}
       onClick={onSelect}
       onDragEnd={onDragEnd}
-      onDragOver={event => event.preventDefault()}
+      onDragOver={event => {
+        if (canDrag) {
+          event.preventDefault();
+        }
+      }}
       onDragStart={event => {
+        if (!canDrag) {
+          event.preventDefault();
+          return;
+        }
+
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', accessory.instanceId);
         onDragStart();
       }}
       onDrop={event => {
+        if (!canDrag) {
+          return;
+        }
+
         event.preventDefault();
         onDrop();
       }}
@@ -1535,6 +1568,8 @@ function NudgeButton({
   onHoldStart: (deltaX: number, deltaY: number) => void;
   onHoldStop: () => void;
 }) {
+  const didHandlePointerDownRef = useRef(false);
+
   return (
     <button
       type="button"
@@ -1545,23 +1580,37 @@ function NudgeButton({
           return;
         }
 
-        if (event.detail === 0) {
+        if (event.detail === 0 || !didHandlePointerDownRef.current) {
           onMove(deltaX, deltaY);
         }
+
+        didHandlePointerDownRef.current = false;
       }}
       onContextMenu={event => event.preventDefault()}
-      onPointerCancel={onHoldStop}
+      onPointerCancel={() => {
+        didHandlePointerDownRef.current = false;
+        onHoldStop();
+      }}
       onPointerDown={event => {
         if (disabled) {
           return;
         }
 
+        if (event.pointerType === 'touch') {
+          didHandlePointerDownRef.current = false;
+          return;
+        }
+
         event.currentTarget.setPointerCapture(event.pointerId);
+        didHandlePointerDownRef.current = true;
         onHoldStart(deltaX, deltaY);
       }}
       onPointerLeave={onHoldStop}
       onPointerUp={event => {
-        event.currentTarget.releasePointerCapture(event.pointerId);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+
         onHoldStop();
       }}
     >

@@ -13,6 +13,7 @@
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   box-shadow: 0 16px 42px rgba(15, 23, 42, 0.24);
+  touch-action: pan-y;
 }
 
 .partMenu,
@@ -69,6 +70,7 @@
   font-size: 13px;
   line-height: 1.2;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 .partButton,
@@ -114,6 +116,7 @@
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 .accessoryToolbar button:disabled {
@@ -271,6 +274,7 @@
   font-weight: 800;
   line-height: 1.2;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 .activeAnimationButton {
@@ -287,6 +291,7 @@
   background: #f7f5ef;
   border: 1px solid #94a3b8;
   border-radius: 8px;
+  touch-action: pan-y;
 }
 
 .miniPreviewShell {
@@ -325,6 +330,7 @@
     -8px 0;
   background-size: 16px 16px;
   border: 1px solid #cbd5e1;
+  touch-action: pan-y;
 }
 
 .spriteSheetViewport {
@@ -366,10 +372,12 @@
   position: relative;
   width: 520px;
   height: 560px;
+  touch-action: pan-y;
 
   :global(.canvas-container) {
     position: relative !important;
     inset: auto !important;
+    touch-action: pan-y !important;
   }
 }
 
@@ -413,6 +421,7 @@
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 .activeSegmentButton {

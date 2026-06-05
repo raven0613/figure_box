@@ -5,6 +5,7 @@ import {
   isAvatarPartOptionColorEditable,
 } from '../avatarCanvas';
 import type {
+  AccessoryCategory,
   AccessoryLayerSlot,
   AccessoryRenderMode,
   AvatarAccessoryInstance,
@@ -33,6 +34,7 @@ import {
   MINI_SIDE_IDLE_RIG_LAYOUT,
 } from './miniAvatarRig';
 import type {
+  MiniAccessoryRigLayout,
   MiniBodyRigLayout,
   MiniIdleRigLayout,
   MiniLayer,
@@ -50,6 +52,14 @@ interface MiniMirroredSocketPoints {
   left: MiniPoint;
   right: MiniPoint;
 }
+
+const MINI_HEAD_BACK_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.behindBody;
+const MINI_HEAD_ON_SKIN_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.onSkin;
+const MINI_HEAD_BODY_FRONT_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.frontBody;
+const MINI_HEAD_MAIN_Z_INDEX = 10;
+const MINI_HEAD_FRONT_FACE_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.frontFace;
+const MINI_HEAD_BANGS_Z_INDEX = 30;
+const MINI_HEAD_FRONT_BANGS_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.frontBangs;
 
 export async function createMiniFrontIdleLayers(state: AvatarState, pose: MiniPose = {}): Promise<MiniLayer[]> {
   return new MiniFrontIdleLayerRenderer(state, pose).createLayers();
@@ -226,69 +236,113 @@ class MiniFrontIdleLayerRenderer {
         },
       ],
     };
-    const headNode: MiniRigNode = {
-      transform: createMiniNodeTransform(headCenter, this.getPoseNodeTransform('head')),
+    const headTransform = createMiniNodeTransform(headCenter, this.getPoseNodeTransform('head'));
+    const eyesNode: MiniRigNode = {
+      transform: this.getPoseNodeTransform('eyes'),
+      layers: isSmileBlinkFrame
+        ? []
+        : [
+          ...this.createMirroredColorOnlyLayers('sclera', '01', scleraColor, scleraColor, rig.eyes.eyeDistance + scleraOffset.x, scleraOffset.y, 13.9),
+          ...this.createMirroredColorAndLineLayers('lower_eyelid', '01', rig.colors.lowerEyelidColor, this.getPartLineColor('eyes.lowerEyelid'), rig.eyes.eyeDistance + lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
+          ...this.createMirroredColorOnlyLayers('eye_ball', '01', leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + eyeBallOffset.x, eyeBallOffset.y, 15),
+        ],
+      children: [
+        ...(isSmileBlinkFrame
+          ? []
+          : [{
+            transform: createMiniNodeTransform(
+              { x: 0, y: eyeLightY - headCenter.y },
+              this.getPoseNodeTransform('eyeLight'),
+            ),
+            layers: this.createMirroredLineOnlyLayers('eye_light', '01', rig.colors.eyeLight, eyeLightDistance, 0, 16, 0, eyeLightOffsetX),
+          }]),
+        {
+          transform: createMiniNodeTransform(
+            { x: 0, y: upperLidY - headCenter.y },
+            {
+              ...this.getPoseNodeTransform('upperEyelid'),
+              angle: upperLidAngle + (this.getPoseNodeTransform('upperEyelid').angle ?? 0),
+            },
+          ),
+          layers: this.createUpperEyelidLayers(skinColor, leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + upperLidOffset.x),
+        },
+        {
+          transform: createMiniNodeTransform(
+            { x: 0, y: upperLidY - headCenter.y },
+            this.getPoseNodeTransform('eyelid'),
+          ),
+          layers: this.createEyelidLayers(rig.eyes.eyeDistance + upperLidOffset.x),
+        },
+        {
+          transform: this.getPoseNodeTransform('eyebrow'),
+          layers: this.createMirroredLineOnlyLayers('eyebrow', '01', this.getPartLineColor('eyes.eyebrow'), rig.eyes.eyeDistance + eyebrowOffset.x, eyebrowOffset.y, 19),
+        },
+      ],
+    };
+    const headBackNode: MiniRigNode = {
+      transform: headTransform,
       precompose: true,
-      precomposeZIndex: 10,
+      precomposeZIndex: MINI_HEAD_BACK_Z_INDEX,
       layers: [
         ...this.createColorAndLineLayers('back_hair_bottom', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineColor('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 10),
+      ],
+      children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['behindBody']),
+    };
+    const headOnSkinNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_ON_SKIN_Z_INDEX,
+      children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['onSkin']),
+    };
+    const headBodyFrontNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_BODY_FRONT_Z_INDEX,
+      children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['frontBody']),
+    };
+    const headMainNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_MAIN_Z_INDEX,
+      layers: [
         ...this.createColorAndLineLayers('face', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
         ...this.createColorAndLineLayers('back_hair_top', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineColor('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5),
         ...this.createMirroredColorAndLineLayers('ear', '01', skinColor, skinLineColor, rig.earDistance + earOffset.x, earOffset.y, 13.8),
         ...this.createLineOnlyLayers('mouth', '01', this.getPartLineColor('mouth'), mouthOffset.x, mouthOffset.y, 20),
+      ],
+      children: [eyesNode],
+    };
+    const headFrontFaceNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_FRONT_FACE_Z_INDEX,
+      children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['frontFace']),
+    };
+    const headBangsNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_BANGS_Z_INDEX,
+      layers: [
         ...this.createColorAndLineLayers('bangs', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineColor('hair.bangs'), bangsOffset.x, bangsOffset.y, 30),
         ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
       ],
-      children: [
-        ...this.createAccessoryNodes(accessoryBases),
-        {
-          transform: this.getPoseNodeTransform('eyes'),
-          layers: isSmileBlinkFrame
-            ? []
-            : [
-              ...this.createMirroredColorOnlyLayers('sclera', '01', scleraColor, scleraColor, rig.eyes.eyeDistance + scleraOffset.x, scleraOffset.y, 13.9),
-              ...this.createMirroredColorAndLineLayers('lower_eyelid', '01', rig.colors.lowerEyelidColor, this.getPartLineColor('eyes.lowerEyelid'), rig.eyes.eyeDistance + lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
-              ...this.createMirroredColorOnlyLayers('eye_ball', '01', leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + eyeBallOffset.x, eyeBallOffset.y, 15),
-            ],
-          children: [
-            ...(isSmileBlinkFrame
-              ? []
-              : [{
-                transform: createMiniNodeTransform(
-                  { x: 0, y: eyeLightY - headCenter.y },
-                  this.getPoseNodeTransform('eyeLight'),
-                ),
-                layers: this.createMirroredLineOnlyLayers('eye_light', '01', rig.colors.eyeLight, eyeLightDistance, 0, 16, 0, eyeLightOffsetX),
-              }]),
-            {
-              transform: createMiniNodeTransform(
-                { x: 0, y: upperLidY - headCenter.y },
-                {
-                  ...this.getPoseNodeTransform('upperEyelid'),
-                  angle: upperLidAngle + (this.getPoseNodeTransform('upperEyelid').angle ?? 0),
-                },
-              ),
-              layers: this.createUpperEyelidLayers(skinColor, leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + upperLidOffset.x),
-            },
-            {
-              transform: createMiniNodeTransform(
-                { x: 0, y: upperLidY - headCenter.y },
-                this.getPoseNodeTransform('eyelid'),
-              ),
-              layers: this.createEyelidLayers(rig.eyes.eyeDistance + upperLidOffset.x),
-            },
-            {
-              transform: this.getPoseNodeTransform('eyebrow'),
-              layers: this.createMirroredLineOnlyLayers('eyebrow', '01', this.getPartLineColor('eyes.eyebrow'), rig.eyes.eyeDistance + eyebrowOffset.x, eyebrowOffset.y, 19),
-            },
-          ],
-        },
-      ],
+    };
+    const headFrontBangsNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_FRONT_BANGS_Z_INDEX,
+      children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['frontBangs']),
     };
     const rootNode: MiniRigNode = {
       children: [
+        headBackNode,
         bodyNode,
-        headNode,
+        headOnSkinNode,
+        headBodyFrontNode,
+        headMainNode,
+        headFrontFaceNode,
+        headBangsNode,
+        headFrontBangsNode,
       ],
     };
 
@@ -509,27 +563,37 @@ class MiniFrontIdleLayerRenderer {
     return this.createMirroredLineOnlyLayers(folder, '01', this.getPartLineColor('mini.eyelid'), distance, 0, 18);
   }
 
-  private createAccessoryNodes(bases: Record<AccessoryRenderMode, MiniPoint>): MiniRigNode[] {
+  private createAccessoryNodes(
+    bases: Record<AccessoryRenderMode, MiniPoint>,
+    accessoryRig: MiniAccessoryRigLayout,
+    layerSlots?: readonly AccessoryLayerSlot[],
+  ): MiniRigNode[] {
     return this.state.accessories.flatMap(accessory => {
       const definition = getAccessoryCategoryDefinition(accessory.category);
       const pose = getAccessoryPoseState(accessory, 'chibi');
+
+      if (!isAccessoryInLayerSlots(pose.layerSlot, layerSlots)) {
+        return [];
+      }
+
       const base = bases[definition.renderMode];
       const optionId = formatMiniOptionId(accessory.optionId);
+      const optionOffset = getMiniScaledOffset(getMiniAccessoryOptionOffset(accessoryRig, accessory.category, optionId));
       const zIndex = getMiniAccessoryZIndex(pose.layerSlot, pose.order);
       const folder = definition.assetFolder;
 
       if (definition.renderMode === 'mirrored') {
         return [
-          this.createAccessorySideNode(accessory, folder, optionId, -1, base, zIndex),
-          this.createAccessorySideNode(accessory, folder, optionId, 1, base, zIndex),
+          this.createAccessorySideNode(accessory, folder, optionId, -1, base, optionOffset, zIndex),
+          this.createAccessorySideNode(accessory, folder, optionId, 1, base, optionOffset, zIndex),
         ].filter((node): node is MiniRigNode => node !== null);
       }
 
       return [
         {
           transform: {
-            x: base.x + pose.offsetX * MINI_PIXEL_SCALE,
-            y: base.y + pose.offsetY * MINI_PIXEL_SCALE,
+            x: base.x + optionOffset.x + pose.offsetX * MINI_PIXEL_SCALE,
+            y: base.y + optionOffset.y + pose.offsetY * MINI_PIXEL_SCALE,
             angle: pose.rotate,
             scale: pose.scale,
             flipX: pose.flipX,
@@ -546,6 +610,7 @@ class MiniFrontIdleLayerRenderer {
     optionId: string,
     side: -1 | 1,
     base: MiniPoint,
+    optionOffset: MiniPoint,
     zIndex: number,
   ): MiniRigNode | null {
     const definition = getAccessoryCategoryDefinition(accessory.category);
@@ -557,8 +622,8 @@ class MiniFrontIdleLayerRenderer {
 
     return {
       transform: {
-        x: base.x + side * (MINI_FRONT_IDLE_RIG_LAYOUT.accessories.mirroredDistance + pose.offsetX * MINI_PIXEL_SCALE),
-        y: base.y + pose.offsetY * MINI_PIXEL_SCALE,
+        x: base.x + side * (MINI_FRONT_IDLE_RIG_LAYOUT.accessories.mirroredDistance + optionOffset.x + pose.offsetX * MINI_PIXEL_SCALE),
+        y: base.y + optionOffset.y + pose.offsetY * MINI_PIXEL_SCALE,
         angle: side * pose.rotate,
         scale: pose.scale,
         flipX: getMiniMirroredAccessoryFlipX(side, pose.flipX),
@@ -798,60 +863,102 @@ class MiniSideIdleLayerRenderer {
         },
       ],
     };
-    const headNode: MiniRigNode = {
-      transform: createMiniNodeTransform(headCenter, this.getPoseNodeTransform('head')),
+    const headTransform = createMiniNodeTransform(headCenter, this.getPoseNodeTransform('head'));
+    const eyesNode: MiniRigNode = {
+      transform: this.getPoseNodeTransform('eyes'),
+      layers: isSmileBlinkFrame
+        ? []
+        : [
+          ...this.createColorOnlyLayers('sclera/side', '01', scleraColor, scleraOffset.x, scleraOffset.y, 13.9),
+          ...this.createLineOnlyLayers('lower_eyelid/side', '01', this.getPartLineColor('eyes.lowerEyelid'), lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
+          ...this.createColorOnlyLayers('eye_ball/side', '01', eyeColor, eyeBallOffset.x, eyeBallOffset.y, 15),
+          ...this.createLineOnlyLayers('eye_light', '01', rig.colors.eyeLight, eyeLightX, eyeLightY, 16),
+        ],
+      children: [
+        {
+          transform: createMiniNodeTransform(
+            { x: upperLidOffset.x, y: upperLidY },
+            {
+              ...this.getPoseNodeTransform('upperEyelid'),
+              angle: upperLidAngle + (this.getPoseNodeTransform('upperEyelid').angle ?? 0),
+            },
+          ),
+          layers: this.createSideUpperEyelidLayers(skinColor, eyeColor),
+        },
+        {
+          transform: createMiniNodeTransform(
+            { x: eyelidOffset.x, y: eyelidY },
+            this.getPoseNodeTransform('eyelid'),
+          ),
+          layers: this.createSideEyelidLayers(),
+        },
+        {
+          transform: this.getPoseNodeTransform('eyebrow'),
+          layers: this.createLineOnlyLayers('eyebrow/side', '01', this.getPartLineColor('eyes.eyebrow'), eyebrowOffset.x, eyebrowOffset.y, 19),
+        },
+      ],
+    };
+    const headBackNode: MiniRigNode = {
+      transform: headTransform,
       precompose: true,
-      precomposeZIndex: 10,
+      precomposeZIndex: MINI_HEAD_BACK_Z_INDEX,
+      children: this.createAccessoryNodes(rig, ['behindBody']),
+    };
+    const headOnSkinNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_ON_SKIN_Z_INDEX,
+      children: this.createAccessoryNodes(rig, ['onSkin']),
+    };
+    const headBodyFrontNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_BODY_FRONT_Z_INDEX,
+      children: this.createAccessoryNodes(rig, ['frontBody']),
+    };
+    const headMainNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_MAIN_Z_INDEX,
       layers: [
         ...this.createColorAndLineLayers('face/side', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
         ...this.createColorAndLineLayers('back_hair_bottom/side', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineColor('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 13.2),
         ...this.createColorAndLineLayers('back_hair_top/side', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineColor('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5),
         ...this.createColorAndLineLayers('ear/side', '01', skinColor, skinLineColor, earOffset.x, earOffset.y, 13.8),
+      ],
+      children: [eyesNode],
+    };
+    const headFrontFaceNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_FRONT_FACE_Z_INDEX,
+      children: this.createAccessoryNodes(rig, ['frontFace']),
+    };
+    const headBangsNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_BANGS_Z_INDEX,
+      layers: [
         ...this.createColorAndLineLayers('bangs/side', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineColor('hair.bangs'), bangsOffset.x, bangsOffset.y, 30),
         ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
       ],
-      children: [
-        ...this.createAccessoryNodes(rig),
-        {
-          transform: this.getPoseNodeTransform('eyes'),
-          layers: isSmileBlinkFrame
-            ? []
-            : [
-              ...this.createColorOnlyLayers('sclera/side', '01', scleraColor, scleraOffset.x, scleraOffset.y, 13.9),
-              ...this.createLineOnlyLayers('lower_eyelid/side', '01', this.getPartLineColor('eyes.lowerEyelid'), lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
-              ...this.createColorOnlyLayers('eye_ball/side', '01', eyeColor, eyeBallOffset.x, eyeBallOffset.y, 15),
-              ...this.createLineOnlyLayers('eye_light', '01', rig.colors.eyeLight, eyeLightX, eyeLightY, 16),
-            ],
-          children: [
-            {
-              transform: createMiniNodeTransform(
-                { x: upperLidOffset.x, y: upperLidY },
-                {
-                  ...this.getPoseNodeTransform('upperEyelid'),
-                  angle: upperLidAngle + (this.getPoseNodeTransform('upperEyelid').angle ?? 0),
-                },
-              ),
-              layers: this.createSideUpperEyelidLayers(skinColor, eyeColor),
-            },
-            {
-              transform: createMiniNodeTransform(
-                { x: eyelidOffset.x, y: eyelidY },
-                this.getPoseNodeTransform('eyelid'),
-              ),
-              layers: this.createSideEyelidLayers(),
-            },
-            {
-              transform: this.getPoseNodeTransform('eyebrow'),
-              layers: this.createLineOnlyLayers('eyebrow/side', '01', this.getPartLineColor('eyes.eyebrow'), eyebrowOffset.x, eyebrowOffset.y, 19),
-            },
-          ],
-        },
-      ],
+    };
+    const headFrontBangsNode: MiniRigNode = {
+      transform: headTransform,
+      precompose: true,
+      precomposeZIndex: MINI_HEAD_FRONT_BANGS_Z_INDEX,
+      children: this.createAccessoryNodes(rig, ['frontBangs']),
     };
     const rootNode: MiniRigNode = {
       children: [
+        headBackNode,
         bodyNode,
-        headNode,
+        headOnSkinNode,
+        headBodyFrontNode,
+        headMainNode,
+        headFrontFaceNode,
+        headBangsNode,
+        headFrontBangsNode,
       ],
     };
 
@@ -982,13 +1089,19 @@ class MiniSideIdleLayerRenderer {
     return this.createLineOnlyLayers(folder, '01', this.getPartLineColor('mini.eyelid'), 0, 0, 18);
   }
 
-  private createAccessoryNodes(rig: MiniIdleRigLayout): MiniRigNode[] {
+  private createAccessoryNodes(rig: MiniIdleRigLayout, layerSlots?: readonly AccessoryLayerSlot[]): MiniRigNode[] {
     return this.state.accessories.flatMap(accessory => {
       const definition = getAccessoryCategoryDefinition(accessory.category);
       const pose = getAccessoryPoseState(accessory, 'chibi');
+
+      if (!isAccessoryInLayerSlots(pose.layerSlot, layerSlots)) {
+        return [];
+      }
+
       const optionId = formatMiniOptionId(accessory.optionId);
       const zIndex = getMiniAccessoryZIndex(pose.layerSlot, pose.order);
       const folder = getMiniSideFolderWithFallback(definition.assetFolder, optionId);
+      const optionOffset = getMiniScaledOffset(getMiniAccessoryOptionOffset(rig.accessories, accessory.category, optionId));
       const baseOffset = definition.renderMode === 'mirrored'
         ? rig.accessories.mirrored
         : rig.accessories.center;
@@ -1000,8 +1113,8 @@ class MiniSideIdleLayerRenderer {
 
       return [{
         transform: {
-          x: base.x + pose.offsetX * MINI_PIXEL_SCALE,
-          y: base.y + pose.offsetY * MINI_PIXEL_SCALE,
+          x: base.x + optionOffset.x + pose.offsetX * MINI_PIXEL_SCALE,
+          y: base.y + optionOffset.y + pose.offsetY * MINI_PIXEL_SCALE,
           angle: pose.rotate,
           scale: pose.scale,
           flipX: pose.flipX,
@@ -1206,8 +1319,23 @@ function getMiniOptionOffset(offsets: MiniOptionOffsetMap, optionId: string): Mi
   return offsets[Number(optionId)] ?? { x: 0, y: 0 };
 }
 
+function getMiniAccessoryOptionOffset(
+  accessoryRig: MiniAccessoryRigLayout,
+  category: AccessoryCategory,
+  optionId: string,
+): MiniPoint {
+  return getMiniOptionOffset(accessoryRig.byCategoryOption[category], optionId);
+}
+
 function getMiniClothingBodyZIndex(layerOrder: number): number {
   return MINI_CLOTHING_BODY_Z_INDEX + layerOrder * MINI_CLOTHING_LAYER_Z_STEP;
+}
+
+function isAccessoryInLayerSlots(
+  layerSlot: AccessoryLayerSlot,
+  allowedLayerSlots?: readonly AccessoryLayerSlot[],
+): boolean {
+  return allowedLayerSlots === undefined || allowedLayerSlots.includes(layerSlot);
 }
 
 function getMiniAccessoryZIndex(layerSlot: AccessoryLayerSlot, order: number): number {

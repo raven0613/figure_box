@@ -780,6 +780,19 @@ abstract class AvatarPart {
     };
   }
 
+  protected getPortraitPartOptionOffset(
+    key: keyof typeof AVATAR_PORTRAIT_RIG_LAYOUT.partsByOption,
+    optionId = this.state.optionId,
+  ): Point2D {
+    const offsets = AVATAR_PORTRAIT_RIG_LAYOUT.partsByOption[key] as Record<number, Point2D | undefined>;
+    return offsets[optionId] ?? { x: 0, y: 0 };
+  }
+
+  protected getPortraitAccessoryOptionOffset(accessory: AvatarAccessoryInstance): Point2D {
+    const offsets = AVATAR_PORTRAIT_RIG_LAYOUT.accessoriesByOption[accessory.category] as Record<number, Point2D | undefined>;
+    return offsets[accessory.optionId] ?? { x: 0, y: 0 };
+  }
+
   protected updateArtworkColor(): void {
     // Image-backed parts override this when they have tintable layers.
   }
@@ -1428,11 +1441,13 @@ class MouthPart extends CenterAssetPart {
 
 class BackHairPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.getPortraitPartPoint('backHairBottom').x;
+    return this.getPortraitPartPoint('backHairBottom').x
+      + this.getPortraitPartOptionOffset('backHairBottom').x;
   }
 
   protected get baseY(): number {
-    return this.getPortraitPartPoint('backHairBottom').y;
+    return this.getPortraitPartPoint('backHairBottom').y
+      + this.getPortraitPartOptionOffset('backHairBottom').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1442,11 +1457,13 @@ class BackHairPart extends CenterAssetPart {
 
 class TopHairPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.getPortraitPartPoint('backHairTop').x;
+    return this.getPortraitPartPoint('backHairTop').x
+      + this.getPortraitPartOptionOffset('backHairTop').x;
   }
 
   protected get baseY(): number {
-    return this.getPortraitPartPoint('backHairTop').y;
+    return this.getPortraitPartPoint('backHairTop').y
+      + this.getPortraitPartOptionOffset('backHairTop').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1456,11 +1473,13 @@ class TopHairPart extends CenterAssetPart {
 
 class BangsPart extends CenterAssetPart {
   protected get baseX(): number {
-    return this.getPortraitPartPoint('bangs').x;
+    return this.getPortraitPartPoint('bangs').x
+      + this.getPortraitPartOptionOffset('bangs').x;
   }
 
   protected get baseY(): number {
-    return this.getPortraitPartPoint('bangs').y;
+    return this.getPortraitPartPoint('bangs').y
+      + this.getPortraitPartOptionOffset('bangs').y;
   }
 
   protected resolveLayers(): AvatarImageLayer[] {
@@ -1478,11 +1497,13 @@ abstract class BaseAccessoryPart extends ImageAvatarPart {
   }
 
   protected get baseX(): number {
-    return this.getPortraitPartPoint('accessory').x;
+    return this.getPortraitPartPoint('accessory').x
+      + this.getPortraitAccessoryOptionOffset(this.accessoryState).x;
   }
 
   protected get baseY(): number {
-    return this.getPortraitPartPoint('accessory').y;
+    return this.getPortraitPartPoint('accessory').y
+      + this.getPortraitAccessoryOptionOffset(this.accessoryState).y;
   }
 
   protected resolveAccessoryLayers(): AvatarImageLayer[] {
@@ -1527,12 +1548,19 @@ class MirroredAccessoryPart extends MirroredAssetPart {
   }
 
   protected getSideBaseX(side: -1 | 1): number {
+    const accessoryState = this.state as AvatarAccessoryInstance;
+    const optionOffset = this.getPortraitAccessoryOptionOffset(accessoryState);
+
     return side * AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.accessoryDistance
-      + AVATAR_PORTRAIT_RIG_LAYOUT.parts.accessory.x;
+      + AVATAR_PORTRAIT_RIG_LAYOUT.parts.accessory.x
+      + side * optionOffset.x;
   }
 
   protected getSideBaseY(): number {
-    return AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.accessoryY;
+    const accessoryState = this.state as AvatarAccessoryInstance;
+    const optionOffset = this.getPortraitAccessoryOptionOffset(accessoryState);
+
+    return AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.accessoryY + optionOffset.y;
   }
 
   protected getMirroredSourceSide(): -1 | 1 {
@@ -1832,12 +1860,14 @@ export class AvatarCanvas {
       height,
       backgroundColor: AVATAR_RIG_COLORS.canvasBackground,
       imageSmoothingEnabled: false,
+      allowTouchScrolling: true,
       selection: false,
       preserveObjectStacking: true,
     });
 
-    this.canvas.wrapperEl.style.touchAction = 'none';
-    this.canvas.lowerCanvasEl.style.touchAction = 'none';
+    this.canvas.wrapperEl.style.touchAction = 'pan-y';
+    this.canvas.lowerCanvasEl.style.touchAction = 'pan-y';
+    this.canvas.upperCanvasEl.style.touchAction = 'pan-y';
     this.canvas.lowerCanvasEl.style.imageRendering = 'pixelated';
     this.canvas.upperCanvasEl.style.imageRendering = 'pixelated';
     this.buildAvatar(width, height);

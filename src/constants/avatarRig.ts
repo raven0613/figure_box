@@ -43,6 +43,46 @@ export const AVATAR_PORTRAIT_RIG_LAYOUT = {
     bangs: { x: 0, y: -50 },
     accessory: { x: 0, y: -35 },
   },
+  partsByOption: {
+    backHairBottom: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 0 },
+      3: { x: 0, y: 0 },
+    },
+    backHairTop: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 0 },
+      3: { x: 0, y: 0 },
+    },
+    bangs: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 0 },
+      3: { x: 0, y: 0 },
+    },
+  },
+  accessoriesByOption: {
+    sideHair: {
+      1: { x: 0, y: 0 },
+      2: { x: 12, y: 18 },
+      3: { x: 0, y: 0 },
+      4: { x: 0, y: 0 },
+      5: { x: 0, y: 0 },
+    },
+    ponytail: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 0 },
+      3: { x: 0, y: 0 },
+      4: { x: 0, y: 0 },
+      5: { x: 0, y: 0 },
+    },
+    accessory: {
+      1: { x: 0, y: 0 },
+      2: { x: 0, y: 0 },
+      3: { x: 0, y: 0 },
+      4: { x: 0, y: 0 },
+      5: { x: 0, y: 0 },
+    },
+  },
   mirrored: {
     eyeDistance: 50,
     defaultEyeLightDistance: 45,

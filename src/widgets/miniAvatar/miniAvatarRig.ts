@@ -27,7 +27,7 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
   bodyCenter: { x: 0, y: 108 },
   face: { x: 0, y: 0 },
   earDistance: 39,
-  ear: { x: -6.5, y: 6 },
+  ear: { x: -7.5, y: 7 },
   mouth: { x: 0, y: 9 },
   bodyByType: {
     1: {
@@ -108,12 +108,12 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
     backHairBottomByOption: {
       1: { x: 0, y: 0 },
       2: { x: 0, y: 0 },
-      3: { x: 0, y: 0 },
+      3: { x: 0, y: -1 },
     },
     backHairTopByOption: {
       1: { x: 0, y: 0 },
       2: { x: 0, y: -1 },
-      3: { x: 0.5, y: -2 },
+      3: { x: -0.5, y: -4 },
     },
     bangsByOption: {
       1: { x: 0, y: 0 },
@@ -130,6 +130,29 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
     center: { x: 0, y: 0 },
     mirrored: { x: 0, y: 5.5 },
     mirroredDistance: 23,
+    byCategoryOption: {
+      sideHair: {
+        1: { x: 0, y: 0 },
+        2: { x: 0, y: 1 },
+        3: { x: 2, y: -4 },
+        4: { x: 0, y: 0 },
+        5: { x: 0, y: 0 },
+      },
+      ponytail: {
+        1: { x: 0, y: 0 },
+        2: { x: 0, y: 0 },
+        3: { x: 0, y: 0 },
+        4: { x: 0, y: 0 },
+        5: { x: 0, y: 0 },
+      },
+      accessory: {
+        1: { x: 0, y: 0 },
+        2: { x: 0, y: 0 },
+        3: { x: 0, y: 0 },
+        4: { x: 0, y: 0 },
+        5: { x: 0, y: 0 },
+      },
+    },
   },
   colors: AVATAR_RIG_COLORS,
 };
@@ -141,7 +164,7 @@ export const MINI_SIDE_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
   bodyCenter: { x: 0, y: 108 },
   face: { x: 0, y: 0 },
   earDistance: 0,
-  ear: { x: -1.5, y: 6 },
+  ear: { x: 1.5, y: 6 },
   mouth: { x: 0, y: 0 },
   bodyByType: {
     1: {
@@ -206,29 +229,29 @@ export const MINI_SIDE_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
     lowerEyelid: { x: -8, y: 5 },
     eyeBall: { x: -9, y: 4.5 },
     eyeLight: { x: -8, y: -1 },
-    upperEyeLid: { x: -8, y: 1.5 },
-    eyelid: { x: -9, y: 2.5 },
-    eyebrow: { x: -8, y: 1.5 },
+    upperEyeLid: { x: -8, y: 1 },
+    eyelid: { x: -9, y: 2 },
+    eyebrow: { x: -8, y: 1 },
   },
   hair: {
-    backHairTop: { x: 1, y: -6 },
-    backHairBottom: { x: 7.5, y: 8 },
+    backHairTop: { x: 1.5, y: -6 },
+    backHairBottom: { x: 7.5, y: 7.5 },
     bangs: { x: -6.5, y: -1.5 },
     hairLight: { x: 0, y: -10 },
     backHairBottomByOption: {
       1: { x: 0, y: 0 },
-      2: { x: 0, y: 0 },
-      3: { x: 0, y: 0 },
+      2: { x: 0.5, y: 1.5 },
+      3: { x: 0.5, y: 1 },
     },
     backHairTopByOption: {
       1: { x: 0, y: 0 },
-      2: { x: 0, y: -1 },
-      3: { x: 0.5, y: -2 },
+      2: { x: 1, y: 0.5 },
+      3: { x: -1, y: -2 },
     },
     bangsByOption: {
       1: { x: 0, y: 0 },
-      2: { x: 0, y: -1.5 },
-      3: { x: 0, y: -1 },
+      2: { x: -0.5, y: -3 },
+      3: { x: -2.5, y: 1 },
     },
   },
   clothing: {
@@ -240,6 +263,29 @@ export const MINI_SIDE_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
     center: { x: 0, y: 0 },
     mirrored: { x: -0.5, y: 5.5 },
     mirroredDistance: 0,
+    byCategoryOption: {
+      sideHair: {
+        1: { x: 0, y: 0 },
+        2: { x: -2, y: 2 },
+        3: { x: 3, y: -3 },
+        4: { x: 0, y: 0 },
+        5: { x: 0, y: 0 },
+      },
+      ponytail: {
+        1: { x: 0, y: 0 },
+        2: { x: 0, y: 0 },
+        3: { x: 0, y: 0 },
+        4: { x: 0, y: 0 },
+        5: { x: 0, y: 0 },
+      },
+      accessory: {
+        1: { x: 0, y: 0 },
+        2: { x: 0, y: 0 },
+        3: { x: 0, y: 0 },
+        4: { x: 0, y: 0 },
+        5: { x: 0, y: 0 },
+      },
+    },
   },
   colors: AVATAR_RIG_COLORS,
 };
