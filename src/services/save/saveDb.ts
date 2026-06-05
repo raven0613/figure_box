@@ -18,6 +18,7 @@ import {
   type ShopSaveRecord,
   type WorldProgressRecord,
 } from './saveTypes';
+import { deleteMiniSpriteSheetCacheDatabase } from './miniSpriteSheetCacheService';
 
 export interface GenericSaveRecord {
   id: string;
@@ -127,5 +128,8 @@ export function getSaveTable(tableName: SaveTableName): Table<unknown, string> {
 
 export async function deleteSaveDatabase(): Promise<void> {
   await saveDb.close();
-  await Dexie.delete(SAVE_DATABASE_NAME);
+  await Promise.all([
+    Dexie.delete(SAVE_DATABASE_NAME),
+    deleteMiniSpriteSheetCacheDatabase(),
+  ]);
 }

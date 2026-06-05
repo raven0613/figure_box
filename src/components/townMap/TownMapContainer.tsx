@@ -27,6 +27,7 @@ import type { JoinableActivity } from '~/services/characterEvents/joinableActivi
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
+import { loadTownCharacterSpriteSet } from '~/services/townSpritePreloadService';
 import {
   TOWN_APARTMENT_OBJECT_ID,
   TOWN_APARTMENT_SPACE_ID,
@@ -44,6 +45,7 @@ import { itemService, type InventoryGroup } from '~/services/items/itemService';
 import { itemPlacementService } from '~/services/items/itemPlacementService';
 import { itemTransferService } from '~/services/items/itemTransferService';
 import { DEFAULT_ITEM_SHOP_ID, shopService } from '~/services/items/shopService';
+import { TOWN_MAP_CELL_SIZE } from '~/constants/townMapWidgetConstants';
 import type {
   ItemDefinition,
   ItemDefinitionId,
@@ -378,7 +380,7 @@ export function TownMapContainer({
 
     const canvasHost = canvasHostRef.current;
     const widget = FabricTownMapWidget.mount(canvasHost, {
-      cellSize: 10,
+      cellSize: TOWN_MAP_CELL_SIZE,
       onTileClick: tile => {
         const placementItem = placementDraftRef.current;
 
@@ -522,6 +524,10 @@ export function TownMapContainer({
     });
 
     widgetRef.current = widget;
+    let isWidgetDisposed = false;
+
+    void syncCharacterSpriteRenderers(widget, () => isWidgetDisposed);
+
     const characterController = new TownCharacterController({
       widget,
       initialRelationshipStore: relationshipStoreService.getSnapshot(),
@@ -544,6 +550,7 @@ export function TownMapContainer({
     widget.syncPlacedItems(getPlacedItemViews(TOWN_WORLD_SPACE_ID));
 
     return () => {
+      isWidgetDisposed = true;
       characterController.dispose();
       characterControllerRef.current = null;
       widgetRef.current = null;
@@ -1009,6 +1016,27 @@ function showGiftPreview(characterIds: readonly string[], widget: FabricTownMapW
   characterIds.forEach(characterId => {
     widget?.showCharacterEmote(characterId, '?', 700);
   });
+}
+
+async function syncCharacterSpriteRenderers(
+  widget: FabricTownMapWidget,
+  isWidgetDisposed: () => boolean,
+): Promise<void> {
+  await Promise.all(
+    CHARACTER_SEEDS.map(async character => {
+      try {
+        const spriteSet = await loadTownCharacterSpriteSet(character);
+
+        if (isWidgetDisposed()) {
+          return;
+        }
+
+        await widget.setCharacterSpriteSheets(character.id, spriteSet);
+      } catch (error) {
+        console.error('Failed to sync town character sprite renderer:', error);
+      }
+    }),
+  );
 }
 
 function areSameStringLists(first: readonly string[], second: readonly string[]): boolean {

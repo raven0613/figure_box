@@ -4,12 +4,24 @@ import type { CharacterPerformanceAnimationId } from '~/constants/presentationAn
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import { PresentationAnimationService } from '~/services/presentationAnimationService';
 import type { ItemDefinition } from '~/typing/item';
-import { CharacterTokenFactory, getRequestMarkerStyle } from './townMapCharacterTokenFactory';
+import { TOWN_MAP_CHARACTER_RENDER_SCALE } from '~/constants/townMapWidgetConstants';
+import {
+  CharacterTokenFactory,
+  getCharacterUiGroupTop,
+  getRequestMarkerStyle,
+} from './townMapCharacterTokenFactory';
 import { TownMapItemGlyphFactory } from './townMapItemGlyphFactory';
 import type { GridCoordinate } from './townMapGrid';
 import type { TownMapCharacter } from './townMapWidgetTypes';
 import { sortEntityLayer, updateEntitySortMetadata } from './townMapLayerSorter';
 import type { TownMapCharacterTracker } from './townMapCharacterTracker';
+import {
+  createTownMapCharacterSpriteRenderer,
+  type TownMapCharacterSpriteBody,
+  type TownMapCharacterSpriteDirection,
+  type TownMapCharacterSpriteRenderer,
+  type TownMapCharacterSpriteSet,
+} from './townMapCharacterSpriteRenderer';
 
 interface TownMapCharacterLayerOptions {
   canvas: Canvas;
@@ -27,8 +39,14 @@ export class TownMapCharacterLayer {
   private readonly presentationAnimations = new PresentationAnimationService();
   private readonly characterTokens = new Map<string, Group>();
   private readonly heldItems = new Map<string, Group>();
+  private readonly heldItemDefinitions = new Map<string, ItemDefinition>();
   private readonly characters = new Map<string, TownMapCharacter>();
+  private readonly spriteRenderers = new Map<string, TownMapCharacterSpriteRenderer>();
+  private readonly spriteLoadVersions = new Map<string, number>();
+  private readonly spriteDirections = new Map<string, TownMapCharacterSpriteDirection>();
   private isCharacterDraggingEnabled = true;
+  private isDisposed = false;
+  private viewportZoom = 1;
 
   constructor(options: TownMapCharacterLayerOptions) {
     this.canvas = options.canvas;
@@ -37,11 +55,16 @@ export class TownMapCharacterLayer {
   }
 
   dispose(): void {
+    this.isDisposed = true;
     this.presentationAnimations.cancelAll();
     Array.from(this.heldItems.keys()).forEach(characterId => {
       this.releaseHeldItem(characterId);
     });
     this.characterTokens.clear();
+    this.heldItemDefinitions.clear();
+    this.spriteRenderers.clear();
+    this.spriteLoadVersions.clear();
+    this.spriteDirections.clear();
   }
 
   getToken(characterId: string): Group | undefined {
@@ -83,14 +106,70 @@ export class TownMapCharacterLayer {
       return;
     }
 
-    const token = this.characterTokenFactory.create(character, position, this.cellSize);
+    const token = this.characterTokenFactory.create(
+      character,
+      position,
+      this.cellSize,
+      undefined,
+      this.createSpriteBody(character.id),
+    );
 
     token.set('selectable', this.isCharacterDraggingEnabled);
+    this.applyTokenUiZoom(token);
     updateEntitySortMetadata(token, position.y);
     this.characterTokens.set(character.id, token);
     this.canvas.add(token);
     sortEntityLayer(this.canvas);
     this.characterTracker.update();
+  }
+
+  async setCharacterSpriteSheets(characterId: string, spriteSet: TownMapCharacterSpriteSet): Promise<void> {
+    if (this.isDisposed) {
+      return;
+    }
+
+    const loadVersion = (this.spriteLoadVersions.get(characterId) ?? 0) + 1;
+
+    this.spriteLoadVersions.set(characterId, loadVersion);
+
+    try {
+      const renderer = await createTownMapCharacterSpriteRenderer(spriteSet, this.cellSize);
+
+      if (this.isDisposed || this.spriteLoadVersions.get(characterId) !== loadVersion) {
+        return;
+      }
+
+      this.spriteRenderers.set(characterId, renderer);
+      this.rebuildCharacterToken(characterId);
+    } catch (error) {
+      console.error('Failed to load town map character sprite renderer:', error);
+    }
+  }
+
+  setCharacterSpriteDirection(characterId: string, direction: TownMapCharacterSpriteDirection): void {
+    this.spriteDirections.set(characterId, direction);
+
+    const token = this.characterTokens.get(characterId);
+    const spriteBody = token?.get('spriteBodyObject') as TownMapCharacterSpriteBody | undefined;
+
+    if (!spriteBody) {
+      return;
+    }
+
+    spriteBody.setTownMapSpriteDirection(direction);
+    this.canvas.requestRenderAll();
+  }
+
+  syncViewportZoom(zoom: number): void {
+    if (this.viewportZoom === zoom) {
+      return;
+    }
+
+    this.viewportZoom = zoom;
+    this.characterTokens.forEach(token => {
+      this.applyTokenUiZoom(token);
+    });
+    this.canvas.requestRenderAll();
   }
 
   setCharacterDraggingEnabled(isEnabled: boolean): void {
@@ -141,6 +220,7 @@ export class TownMapCharacterLayer {
     this.updateStoredCharacter(characterId, {
       statusText,
     });
+    this.applyTokenUiZoom(token);
     token.setCoords();
     this.canvas.requestRenderAll();
   }
@@ -157,6 +237,7 @@ export class TownMapCharacterLayer {
     this.updateStoredCharacter(characterId, {
       expression: expressionText,
     });
+    this.applyTokenUiZoom(token);
     token.setCoords();
     this.canvas.requestRenderAll();
   }
@@ -178,6 +259,7 @@ export class TownMapCharacterLayer {
       }
 
       requestMarker.set({ text: '', visible: false });
+      this.applyTokenUiZoom(token);
       token.setCoords();
       this.canvas.requestRenderAll();
       return;
@@ -188,6 +270,7 @@ export class TownMapCharacterLayer {
       visible: true,
       ...getRequestMarkerStyle(marker.level),
     });
+    this.applyTokenUiZoom(token);
     token.setCoords();
     this.canvas.requestRenderAll();
   }
@@ -203,18 +286,20 @@ export class TownMapCharacterLayer {
 
     const heldItem = this.itemGlyphFactory.createHeldItemGlyph(itemDefinition, this.cellSize);
 
+    this.heldItemDefinitions.set(characterId, itemDefinition);
     this.heldItems.set(characterId, heldItem);
     this.rebuildCharacterToken(characterId);
   }
 
   releaseHeldItem(characterId: string): void {
-    const heldItem = this.heldItems.get(characterId);
+    const hasHeldItem = this.heldItems.has(characterId) || this.heldItemDefinitions.has(characterId);
 
-    if (!heldItem) {
+    if (!hasHeldItem) {
       return;
     }
 
     this.heldItems.delete(characterId);
+    this.heldItemDefinitions.delete(characterId);
     this.presentationAnimations.cancel(this.getHeldItemAnimationKey(characterId));
     this.presentationAnimations.cancel(this.getCharacterJumpAnimationKey(characterId));
     this.rebuildCharacterToken(characterId);
@@ -228,6 +313,7 @@ export class TownMapCharacterLayer {
     }
 
     this.heldItems.delete(characterId);
+    this.heldItemDefinitions.delete(characterId);
     this.presentationAnimations.cancel(this.getHeldItemAnimationKey(characterId));
     this.presentationAnimations.cancel(this.getCharacterJumpAnimationKey(characterId));
     this.canvas.remove(token);
@@ -302,6 +388,10 @@ export class TownMapCharacterLayer {
   }
 
   private rebuildCharacterToken(characterId: string): void {
+    if (this.isDisposed) {
+      return;
+    }
+
     const currentToken = this.characterTokens.get(characterId);
     const character = this.characters.get(characterId);
 
@@ -313,15 +403,18 @@ export class TownMapCharacterLayer {
       x: currentToken.left ?? 0,
       y: currentToken.top ?? 0,
     };
-    const heldItem = this.heldItems.get(characterId);
+    const heldItem = this.createHeldItemGlyph(characterId);
 
-    if (heldItem) {
-      this.positionHeldItemInSlot(heldItem);
-    }
-
-    const nextToken = this.characterTokenFactory.create(character, currentPosition, this.cellSize, heldItem);
+    const nextToken = this.characterTokenFactory.create(
+      character,
+      currentPosition,
+      this.cellSize,
+      heldItem,
+      this.createSpriteBody(characterId),
+    );
 
     this.copyRequestMarker(currentToken, nextToken);
+    this.applyTokenUiZoom(nextToken);
     updateEntitySortMetadata(nextToken, getNumericTokenValue(currentToken, 'sortBottomY') || currentPosition.y);
     nextToken.set('entityLayerRank', getNumericTokenValue(currentToken, 'entityLayerRank'));
     this.canvas.remove(currentToken);
@@ -332,15 +425,53 @@ export class TownMapCharacterLayer {
     this.canvas.requestRenderAll();
   }
 
-  private positionHeldItemInSlot(heldItem: Group): void {
-    heldItem.set({
-      left: heldItem.left ?? 0,
-      top: heldItem.top ?? 0,
-      originX: 'center',
-      originY: 'center',
-      dirty: true,
+  private createSpriteBody(characterId: string): TownMapCharacterSpriteBody | undefined {
+    const renderer = this.spriteRenderers.get(characterId);
+
+    if (!renderer) {
+      return undefined;
+    }
+
+    return renderer.createBody(this.spriteDirections.get(characterId) ?? 'front');
+  }
+
+  private createHeldItemGlyph(characterId: string): Group | undefined {
+    const itemDefinition = this.heldItemDefinitions.get(characterId);
+
+    if (!itemDefinition) {
+      this.heldItems.delete(characterId);
+      return undefined;
+    }
+
+    const heldItem = this.itemGlyphFactory.createHeldItemGlyph(itemDefinition, this.cellSize);
+
+    this.heldItems.set(characterId, heldItem);
+    return heldItem;
+  }
+
+  private applyTokenUiZoom(token: Group): void {
+    const inverseZoom = 1 / this.viewportZoom;
+    const uiGroup = token.get('uiGroupObject') as Group | undefined;
+
+    if (!uiGroup) {
+      return;
+    }
+
+    uiGroup.set({
+      top: this.getCharacterUiGroupTop(),
+      scaleX: inverseZoom,
+      scaleY: inverseZoom,
     });
-    heldItem.setCoords();
+    uiGroup.setCoords();
+
+    token.setCoords();
+  }
+
+  private getCharacterUiGroupTop(): number {
+    return getCharacterUiGroupTop(
+      this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE,
+      this.viewportZoom,
+    );
   }
 
   private copyRequestMarker(sourceToken: Group, targetToken: Group): void {

@@ -20,16 +20,15 @@ export const gameFlowMachine = createMachine(
     },
     states: {
       [GameState.Loading]: {
-        initial: 'success',
         entry: assign({
         }),
-        states: {
-          success: {
-            type: 'final' as const,
+        on: {
+          LOADING_COMPLETE: {
+            target: GameState.Active,
           },
-        },
-        onDone: {
-          target: GameState.Active,
+          LOADING_FAILED: {
+            target: GameState.Error,
+          },
         },
       },
 

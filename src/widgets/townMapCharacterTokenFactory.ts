@@ -1,18 +1,29 @@
-import { Circle, Group, Rect, Text } from 'fabric';
+import { Circle, Group, Rect, Text, type FabricObject } from 'fabric';
 import { Expression } from '~/constants/character';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import type { GridCoordinate } from './townMapGrid';
 import type { TownMapCharacter } from './townMapWidgetTypes';
 import {
   CHARACTER_RADIUS_RATIO,
-  CHARACTER_SCALE,
+  TOWN_MAP_CHARACTER_RENDER_SCALE,
 } from '../constants/townMapWidgetConstants';
+
+const CHARACTER_UI_MARGIN_SCREEN_PX = 6;
+const CHARACTER_UI_STATUS_TOP = 0;
+const CHARACTER_UI_EXPRESSION_TOP = -13;
+const CHARACTER_UI_REQUEST_TOP = -26;
 
 // 角色 token 建立
 export class CharacterTokenFactory {
-  create(character: TownMapCharacter, center: GridCoordinate, cellSize: number, heldItem?: Group): Group {
-    const renderSize = cellSize * CHARACTER_SCALE;
-    const token = new Circle({
+  create(
+    character: TownMapCharacter,
+    center: GridCoordinate,
+    cellSize: number,
+    heldItem?: Group,
+    spriteBody?: FabricObject,
+  ): Group {
+    const renderSize = cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE;
+    const fallbackToken = new Circle({
       radius: renderSize * CHARACTER_RADIUS_RATIO,
       fill: character.color ?? '#f2d16b',
       stroke: '#2d2d2d',
@@ -22,7 +33,7 @@ export class CharacterTokenFactory {
       selectable: false,
       evented: false,
     });
-    const label = new Text(character.label ?? character.id.slice(0, 1).toUpperCase(), {
+    const label = spriteBody ? null : new Text(character.label ?? character.id.slice(0, 1).toUpperCase(), {
       fontSize: renderSize * 0.28,
       fontWeight: '700',
       fontFamily: 'Arial, sans-serif',
@@ -32,8 +43,17 @@ export class CharacterTokenFactory {
       selectable: false,
       evented: false,
     });
+    const hitArea = new Rect({
+      width: renderSize,
+      height: renderSize,
+      fill: 'rgba(0,0,0,0)',
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
     const status = new Text(character.statusText ?? '', {
-      top: -renderSize * 0.48,
+      top: CHARACTER_UI_STATUS_TOP,
       fontSize: 10,
       fontFamily: 'Arial, sans-serif',
       fill: '#20252b',
@@ -44,7 +64,7 @@ export class CharacterTokenFactory {
       evented: false,
     });
     const expression = new Text(character.expression ?? Expression.Normal, {
-      top: -renderSize * 0.82,
+      top: CHARACTER_UI_EXPRESSION_TOP,
       fontSize: 10,
       fontFamily: 'Arial, sans-serif',
       fill: '#24313a',
@@ -55,7 +75,7 @@ export class CharacterTokenFactory {
       evented: false,
     });
     const requestMarker = new Text('', {
-      top: -renderSize * 1.16,
+      top: CHARACTER_UI_REQUEST_TOP,
       fontSize: 11,
       fontFamily: 'Arial, sans-serif',
       fontWeight: '700',
@@ -114,7 +134,31 @@ export class CharacterTokenFactory {
       evented: false,
       objectCaching: false,
     });
-    const group = new Group([requestMarker, expression, status, token, label, heldItemSlot], {
+    const uiGroup = new Group([requestMarker, expression, status], {
+      left: 0,
+      top: getCharacterUiGroupTop(renderSize, 1),
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+      objectCaching: false,
+    });
+    const bodyObject = spriteBody ?? fallbackToken;
+
+    bodyObject.set({
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+
+    const group = new Group([
+      uiGroup,
+      hitArea,
+      bodyObject,
+      ...(label ? [label] : []),
+      heldItemSlot,
+    ], {
       left: center.x,
       top: center.y,
       originX: 'center',
@@ -128,17 +172,24 @@ export class CharacterTokenFactory {
       lockRotation: true,
       hoverCursor: 'grab',
       moveCursor: 'grabbing',
+      objectCaching: false,
     });
 
     group.set('characterId', character.id);
     group.set('statusObject', status);
     group.set('expressionObject', expression);
     group.set('requestMarkerObject', requestMarker);
+    group.set('uiGroupObject', uiGroup);
+    group.set('spriteBodyObject', spriteBody);
     group.set('heldItemSlotObject', heldItemSlot);
     group.set('heldItemMountObject', heldItemMount);
     group.set('heldItemMountBoundsObject', heldItemMountBounds);
     return group;
   }
+}
+
+export function getCharacterUiGroupTop(renderSize: number, zoom: number): number {
+  return -renderSize / 2 - CHARACTER_UI_MARGIN_SCREEN_PX / zoom;
 }
 
 export function getRequestMarkerStyle(level: CharacterRequestLevel): {

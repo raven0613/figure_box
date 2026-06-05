@@ -18,6 +18,12 @@ class CharacterAvatarSaveService {
     return Array.from(this.recordsByCharacterId.values()).map(cloneCharacterAvatarRecord);
   }
 
+  getRecord(characterId: string): CharacterAvatarRecord | null {
+    const record = this.recordsByCharacterId.get(characterId);
+
+    return record ? cloneCharacterAvatarRecord(record) : null;
+  }
+
   upsert(record: CharacterAvatarRecord): void {
     this.recordsByCharacterId.set(record.characterId, cloneCharacterAvatarRecord(record));
   }

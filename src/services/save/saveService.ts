@@ -67,6 +67,7 @@ import {
 } from './saveTransferService';
 import { worldProgressService } from './worldProgressService';
 import { offlineSessionService } from '~/services/offlineSimulation/offlineSessionService';
+import { clearMiniSpriteBakeCache } from '~/widgets/miniAvatar/miniSpriteBakeCache';
 
 const AUTOSAVE_DELAY_MS = 600;
 const CHARACTER_SAVE_MIN_INTERVAL_MS = 5000;
@@ -248,6 +249,7 @@ class SaveService {
     }
 
     this.dirtyDomains.clear();
+    clearMiniSpriteBakeCache();
     await deleteSaveDatabase();
     this.initializationPromise = null;
   }

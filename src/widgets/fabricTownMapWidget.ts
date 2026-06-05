@@ -29,6 +29,10 @@ import type {
   FabricTownMapOptions,
   TownMapCharacter,
 } from './townMapWidgetTypes';
+import type {
+  TownMapCharacterSpriteDirection,
+  TownMapCharacterSpriteSet,
+} from './townMapCharacterSpriteRenderer';
 
 export type {
   FabricTownMapOptions,
@@ -101,7 +105,9 @@ export class FabricTownMapWidget {
       mapHeight: this.mapHeight,
       viewportWidth: this.mapWidth,
       viewportHeight: this.mapHeight,
-      onZoomChange: options.onZoomChange,
+      onZoomChange: zoom => {
+        this.handleZoomChange(zoom, options.onZoomChange);
+      },
     });
     this.characterTracker = new TownMapCharacterTracker({
       canvas: this.canvas,
@@ -134,6 +140,9 @@ export class FabricTownMapWidget {
       },
       startAnimationLoop: () => this.startAnimationLoop(),
       stopAnimationLoopIfIdle: () => this.stopAnimationLoopIfIdle(),
+      setCharacterDirection: (characterId, direction) => {
+        this.characterLayer.setCharacterSpriteDirection(characterId, direction);
+      },
     });
     const pointerController = new TownMapPointerController({
       canvas: this.canvas,
@@ -248,6 +257,14 @@ export class FabricTownMapWidget {
 
   updateCharacterExpression(characterId: string, expressionText: Expression): void {
     this.characterLayer.updateCharacterExpression(characterId, expressionText);
+  }
+
+  setCharacterSpriteSheets(characterId: string, spriteSet: TownMapCharacterSpriteSet): Promise<void> {
+    return this.characterLayer.setCharacterSpriteSheets(characterId, spriteSet);
+  }
+
+  setCharacterSpriteDirection(characterId: string, direction: TownMapCharacterSpriteDirection): void {
+    this.characterLayer.setCharacterSpriteDirection(characterId, direction);
   }
 
   updateCharacterRequestMarker(
@@ -722,6 +739,12 @@ export class FabricTownMapWidget {
     updateEntitySortMetadata(shape, center.y + this.cellSize * 0.5);
     this.placedItemShapes.set(placedObject.id, shape);
     this.canvas.add(shape);
+  }
+
+  private handleZoomChange(zoom: number, onZoomChange?: (zoom: number) => void): void {
+    this.characterLayer?.syncViewportZoom(zoom);
+    this.floatingTextLayer?.syncViewportZoom(zoom);
+    onZoomChange?.(zoom);
   }
 }
 

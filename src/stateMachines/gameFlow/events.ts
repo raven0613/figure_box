@@ -18,6 +18,8 @@ export enum WidgetEventType {
 }
 
 export type GameFlowEvents =
+  | { type: 'LOADING_COMPLETE' }
+  | { type: 'LOADING_FAILED' }
   | { type: 'OPEN_SYSTEM_UI' }
   | { type: 'CLOSE_SYSTEM_UI' }
   | { type: 'START_INTERACTION' }

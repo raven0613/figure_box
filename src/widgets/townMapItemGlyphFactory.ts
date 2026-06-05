@@ -1,13 +1,13 @@
 import { Circle, Ellipse, Group, Polygon, Rect, Text, type FabricObject } from 'fabric';
 import type { ItemDefinition } from '~/typing/item';
-import { CHARACTER_SCALE } from '~/constants/townMapWidgetConstants';
+import { TOWN_MAP_CHARACTER_RENDER_SCALE } from '~/constants/townMapWidgetConstants';
 
 const DEFAULT_HELD_ITEM_SCALE = 0.45;
 
 export class TownMapItemGlyphFactory {
   createHeldItemGlyph(itemDefinition: ItemDefinition, cellSize: number): Group {
     const scale = itemDefinition.visual.scale?.held ?? DEFAULT_HELD_ITEM_SCALE;
-    const size = cellSize * CHARACTER_SCALE * scale;
+    const size = cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * scale;
     const glyph = this.createGlyphByAssetId(itemDefinition.visual.assetId, itemDefinition.id, size);
 
     glyph.set({

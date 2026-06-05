@@ -4,8 +4,8 @@ import type { MapDialogueBubbleAnimation } from '~/constants/event';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { GridCoordinate } from './townMapGrid';
 import {
-  CHARACTER_SCALE,
   FLOATING_UI_LAYER_RANK,
+  TOWN_MAP_CHARACTER_RENDER_SCALE,
 } from '../constants/townMapWidgetConstants';
 
 interface BubbleAnimationState {
@@ -42,6 +42,7 @@ export class TownMapFloatingTextLayer {
   private readonly bubbleAnimations = new Map<string, BubbleAnimationState>();
   private readonly mapActivityLabels = new Map<string, Text>();
   private readonly mapActivityTimers = new Map<string, number>();
+  private viewportZoom = 1;
 
   constructor(options: TownMapFloatingTextLayerOptions) {
     this.canvas = options.canvas;
@@ -82,7 +83,7 @@ export class TownMapFloatingTextLayer {
     this.bubbleAnimations.delete(characterId);
 
     const bubble = this.getOrCreateCharacterBubble(characterId, text);
-    const top = anchor.y - this.cellSize * CHARACTER_SCALE * 0.46;
+    const top = anchor.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 0.46;
 
     bubble.set({
       text,
@@ -121,8 +122,8 @@ export class TownMapFloatingTextLayer {
 
     emote.set({
       text,
-      left: anchor.x + this.cellSize * CHARACTER_SCALE * 0.42,
-      top: anchor.y - this.cellSize * CHARACTER_SCALE * 0.72,
+      left: anchor.x + this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 0.42,
+      top: anchor.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 0.72,
       opacity: 1,
     });
     this.canvas.bringObjectToFront(emote);
@@ -178,7 +179,7 @@ export class TownMapFloatingTextLayer {
     label.set({
       text: activity.label,
       left: center.x,
-      top: center.y - this.cellSize * CHARACTER_SCALE * 1.1,
+      top: center.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 1.1,
       ...getMapActivityToneStyle(activity.tone),
     });
     this.canvas.bringObjectToFront(label);
@@ -190,6 +191,18 @@ export class TownMapFloatingTextLayer {
         this.mapActivityTimers.delete(activity.id);
       }, durationMs));
     }
+  }
+
+  syncViewportZoom(zoom: number): void {
+    if (this.viewportZoom === zoom) {
+      return;
+    }
+
+    this.viewportZoom = zoom;
+    this.characterBubbles.forEach(text => this.applyTextViewportZoom(text));
+    this.characterEmotes.forEach(text => this.applyTextViewportZoom(text));
+    this.mapActivityLabels.forEach(text => this.applyTextViewportZoom(text));
+    this.canvas.requestRenderAll();
   }
 
   removeMapActivity(activityId: string): void {
@@ -312,6 +325,7 @@ export class TownMapFloatingTextLayer {
 
     bubble.set('sortBottomY', Number.POSITIVE_INFINITY);
     bubble.set('entityLayerRank', FLOATING_UI_LAYER_RANK);
+    this.applyTextViewportZoom(bubble);
     this.characterBubbles.set(characterId, bubble);
     this.canvas.add(bubble);
     return bubble;
@@ -338,6 +352,7 @@ export class TownMapFloatingTextLayer {
 
     emote.set('sortBottomY', Number.POSITIVE_INFINITY);
     emote.set('entityLayerRank', FLOATING_UI_LAYER_RANK);
+    this.applyTextViewportZoom(emote);
     this.characterEmotes.set(characterId, emote);
     this.canvas.add(emote);
     return emote;
@@ -364,6 +379,7 @@ export class TownMapFloatingTextLayer {
 
     label.set('sortBottomY', Number.POSITIVE_INFINITY);
     label.set('entityLayerRank', FLOATING_UI_LAYER_RANK);
+    this.applyTextViewportZoom(label);
     this.mapActivityLabels.set(activity.id, label);
     this.canvas.add(label);
     return label;
@@ -378,6 +394,16 @@ export class TownMapFloatingTextLayer {
 
     this.canvas.remove(object);
     objects.delete(id);
+  }
+
+  private applyTextViewportZoom(text: Text): void {
+    const inverseZoom = 1 / this.viewportZoom;
+
+    text.set({
+      scaleX: inverseZoom,
+      scaleY: inverseZoom,
+    });
+    text.setCoords();
   }
 
   private clearTimerMap(timerMap: Map<string, number>): void {

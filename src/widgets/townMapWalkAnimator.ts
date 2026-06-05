@@ -1,5 +1,6 @@
 import type { Group } from 'fabric';
 import type { GridCoordinate } from './townMapGrid';
+import type { TownMapCharacterSpriteDirection } from './townMapCharacterSpriteRenderer';
 
 interface WalkState {
   token: Group;
@@ -25,6 +26,7 @@ interface TownMapWalkAnimatorOptions {
   positionToken: (token: Group, position: GridCoordinate) => void;
   startAnimationLoop: () => void;
   stopAnimationLoopIfIdle: () => void;
+  setCharacterDirection: (characterId: string, direction: TownMapCharacterSpriteDirection) => void;
 }
 
 const MAX_WALK_FRAME_DELTA_MS = 50;
@@ -39,6 +41,7 @@ export class TownMapWalkAnimator {
   private readonly positionToken: (token: Group, position: GridCoordinate) => void;
   private readonly startAnimationLoop: () => void;
   private readonly stopAnimationLoopIfIdle: () => void;
+  private readonly setCharacterDirection: (characterId: string, direction: TownMapCharacterSpriteDirection) => void;
   private readonly walkers = new Map<string, WalkState>();
 
   constructor(options: TownMapWalkAnimatorOptions) {
@@ -50,6 +53,7 @@ export class TownMapWalkAnimator {
     this.positionToken = options.positionToken;
     this.startAnimationLoop = options.startAnimationLoop;
     this.stopAnimationLoopIfIdle = options.stopAnimationLoopIfIdle;
+    this.setCharacterDirection = options.setCharacterDirection;
   }
 
   dispose(): void {
@@ -79,6 +83,7 @@ export class TownMapWalkAnimator {
       return;
     }
 
+    const startingTile = this.getCharacterTile(characterId);
     const firstWaypoint = this.moveCharacterToTile(characterId, path[0]);
 
     if (!firstWaypoint) {
@@ -87,19 +92,30 @@ export class TownMapWalkAnimator {
       return;
     }
 
-    this.walkers.set(characterId, this.createWalkState(
+    const walkState = this.createWalkState(
       characterId,
       token,
       path,
       firstWaypoint,
       onArrive,
       onBlocked,
-    ));
+    );
+
+    this.setCharacterDirection(
+      characterId,
+      startingTile
+        ? getDirectionForMovement(startingTile, path[0])
+        : getDirectionForMovement(walkState.allPoints[0], walkState.allPoints[1]),
+    );
+    this.walkers.set(characterId, walkState);
     this.startAnimationLoop();
   }
 
   cancelWalk(characterId: string): void {
-    this.walkers.delete(characterId);
+    if (this.walkers.delete(characterId)) {
+      this.setCharacterDirection(characterId, 'front');
+    }
+
     this.stopAnimationLoopIfIdle();
   }
 
@@ -198,6 +214,7 @@ export class TownMapWalkAnimator {
       const final = walker.allPoints[walker.allPoints.length - 1];
 
       this.positionToken(walker.token, final);
+      this.setCharacterDirection(walker.characterId, 'front');
       walker.onArrive(walker.path[walker.path.length - 1]);
       return 'done';
     }
@@ -212,6 +229,13 @@ export class TownMapWalkAnimator {
     if (nextWaypoint) {
       const nextPointIndex = walker.currentSegment + 1;
 
+      this.setCharacterDirection(
+        walker.characterId,
+        getDirectionForMovement(
+          walker.path[walker.currentSegment - 1],
+          walker.path[walker.currentSegment],
+        ),
+      );
       walker.allPoints[nextPointIndex] = nextWaypoint;
       walker.segmentLengths[walker.currentSegment] = getSegmentLength(
         walker.allPoints[walker.currentSegment],
@@ -223,6 +247,7 @@ export class TownMapWalkAnimator {
     const snapPoint = walker.allPoints[walker.currentSegment];
 
     this.positionToken(walker.token, snapPoint);
+    this.setCharacterDirection(walker.characterId, 'front');
     walker.onBlocked(this.getCharacterTile(walker.characterId) ?? walker.path[walker.currentSegment]);
     return false;
   }
@@ -254,4 +279,15 @@ function getInterpolatedPosition(walker: WalkState): GridCoordinate {
     x: from.x + (to.x - from.x) * progress,
     y: from.y + (to.y - from.y) * progress,
   };
+}
+
+function getDirectionForMovement(from: GridCoordinate, to: GridCoordinate): TownMapCharacterSpriteDirection {
+  const deltaX = to.x - from.x;
+  const deltaY = to.y - from.y;
+
+  if (Math.abs(deltaX) <= Math.abs(deltaY)) {
+    return 'front';
+  }
+
+  return deltaX < 0 ? 'side-left' : 'side-right';
 }

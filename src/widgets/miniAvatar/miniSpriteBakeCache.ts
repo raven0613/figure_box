@@ -2,6 +2,7 @@ import type { AvatarState } from '../avatarCanvas';
 import { MINI_CANVAS_HEIGHT, MINI_CANVAS_WIDTH } from './miniAvatarRig';
 import { bakeMiniAnimationSpriteSheet } from './miniSpriteBaker';
 import type { MiniAnimation, MiniSpriteSheet } from './miniAvatarTypes';
+import { miniSpriteSheetCacheService } from '~/services/save/miniSpriteSheetCacheService';
 
 const SPRITE_BAKE_CACHE_SCHEMA_VERSION = 1;
 const MAX_MINI_SPRITE_BAKE_CACHE_SIZE = 32;
@@ -21,7 +22,7 @@ export function bakeCachedMiniAnimationSpriteSheet(
   }
 
   trimMiniSpriteBakeCache();
-  const spriteSheetPromise = bakeMiniAnimationSpriteSheet(state, animation)
+  const spriteSheetPromise = loadOrBakeMiniAnimationSpriteSheet(cacheKey, state, animation)
     .catch(error => {
       miniSpriteBakeCache.delete(cacheKey);
       throw error;
@@ -32,6 +33,11 @@ export function bakeCachedMiniAnimationSpriteSheet(
 
 export function clearMiniSpriteBakeCache(): void {
   miniSpriteBakeCache.clear();
+}
+
+export async function clearPersistedMiniSpriteBakeCache(): Promise<void> {
+  miniSpriteBakeCache.clear();
+  await miniSpriteSheetCacheService.clear();
 }
 
 export function createMiniSpriteBakeCacheKey(state: AvatarState, animation: MiniAnimation): string {
@@ -80,6 +86,39 @@ function hashStableString(value: string): string {
   }
 
   return (hash >>> 0).toString(36);
+}
+
+async function loadOrBakeMiniAnimationSpriteSheet(
+  cacheKey: string,
+  state: AvatarState,
+  animation: MiniAnimation,
+): Promise<MiniSpriteSheet> {
+  const persistedSpriteSheet = await loadPersistedMiniSpriteSheet(cacheKey);
+
+  if (persistedSpriteSheet) {
+    return persistedSpriteSheet;
+  }
+
+  const spriteSheet = await bakeMiniAnimationSpriteSheet(state, animation);
+  await persistMiniSpriteSheet(cacheKey, spriteSheet);
+  return spriteSheet;
+}
+
+async function loadPersistedMiniSpriteSheet(cacheKey: string): Promise<MiniSpriteSheet | null> {
+  try {
+    return await miniSpriteSheetCacheService.get(cacheKey);
+  } catch (error) {
+    console.error('Failed to read mini sprite sheet cache:', error);
+    return null;
+  }
+}
+
+async function persistMiniSpriteSheet(cacheKey: string, spriteSheet: MiniSpriteSheet): Promise<void> {
+  try {
+    await miniSpriteSheetCacheService.put(cacheKey, spriteSheet);
+  } catch (error) {
+    console.error('Failed to persist mini sprite sheet cache:', error);
+  }
 }
 
 function trimMiniSpriteBakeCache(): void {
