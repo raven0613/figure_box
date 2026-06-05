@@ -9,6 +9,7 @@ import type {
   AccessoryLayerSlot,
   AccessoryRenderMode,
   AvatarAccessoryInstance,
+  AvatarGradientCoordinateSpace,
   AvatarPartKey,
   AvatarState,
   AvatarTintSource,
@@ -83,7 +84,7 @@ class MiniFrontIdleLayerRenderer {
     const bodyOptionId = this.resolveOptionId('body', this.getPartOptionId('mini.bodyType') || rig.bodyTypeId);
     const bodyTypeId = Number(bodyOptionId);
     const skinColor = this.getPartColor('face', rig.colors.skin);
-    const skinLineColor = this.getPartLineColor('face');
+    const skinLineColor = this.getPartLineTintSource('face');
     const topId = resolveMiniDirectoryOptionId('clothing/tops', this.getPartOptionId('mini.clothingTop'));
     const bottomId = resolveMiniDirectoryOptionId('clothing/bottoms', this.getPartOptionId('mini.clothingBottom'));
     const backHairBottomId = this.resolveOptionId('back_hair_bottom', this.getPartOptionId('hair.backHair'));
@@ -145,9 +146,9 @@ class MiniFrontIdleLayerRenderer {
     const leftEyeColor = this.getPartColor('eyes.color', rig.colors.eyeBall);
     const rightEyeColor = this.getPartSecondaryTintSource('eyes.color', leftEyeColor);
     const topColor = this.getEditablePartColor('mini.clothingTop', rig.colors.clothingTop);
-    const topLineColor = this.getPartLineColor('mini.clothingTop');
+    const topLineColor = this.getPartLineTintSource('mini.clothingTop');
     const bottomColor = this.getEditablePartColor('mini.clothingBottom', rig.colors.clothingBottom);
-    const bottomLineColor = this.getPartLineColor('mini.clothingBottom');
+    const bottomLineColor = this.getPartLineTintSource('mini.clothingBottom');
     const isTopVisible = this.isPartVisible('mini.clothingTop') && topId !== null;
     const isBottomVisible = this.isPartVisible('mini.clothingBottom') && bottomId !== null;
     const topBodyZIndex = getMiniClothingBodyZIndex(this.getPartLayerOrder('mini.clothingTop'));
@@ -243,7 +244,7 @@ class MiniFrontIdleLayerRenderer {
         ? []
         : [
           ...this.createMirroredColorOnlyLayers('sclera', '01', scleraColor, scleraColor, rig.eyes.eyeDistance + scleraOffset.x, scleraOffset.y, 13.9),
-          ...this.createMirroredColorAndLineLayers('lower_eyelid', '01', rig.colors.lowerEyelidColor, this.getPartLineColor('eyes.lowerEyelid'), rig.eyes.eyeDistance + lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
+          ...this.createMirroredColorAndLineLayers('lower_eyelid', '01', rig.colors.lowerEyelidColor, this.getPartLineTintSource('eyes.lowerEyelid'), rig.eyes.eyeDistance + lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
           ...this.createMirroredColorOnlyLayers('eye_ball', '01', leftEyeColor, rightEyeColor, rig.eyes.eyeDistance + eyeBallOffset.x, eyeBallOffset.y, 15),
         ],
       children: [
@@ -275,7 +276,7 @@ class MiniFrontIdleLayerRenderer {
         },
         {
           transform: this.getPoseNodeTransform('eyebrow'),
-          layers: this.createMirroredLineOnlyLayers('eyebrow', '01', this.getPartLineColor('eyes.eyebrow'), rig.eyes.eyeDistance + eyebrowOffset.x, eyebrowOffset.y, 19),
+          layers: this.createMirroredLineOnlyLayers('eyebrow', '01', this.getPartLineTintSource('eyes.eyebrow'), rig.eyes.eyeDistance + eyebrowOffset.x, eyebrowOffset.y, 19),
         },
       ],
     };
@@ -284,7 +285,7 @@ class MiniFrontIdleLayerRenderer {
       precompose: true,
       precomposeZIndex: MINI_HEAD_BACK_Z_INDEX,
       layers: [
-        ...this.createColorAndLineLayers('back_hair_bottom', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineColor('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 10),
+        ...this.createColorAndLineLayers('back_hair_bottom', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineTintSource('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 10, this.getPartColorGradientSpace('hair.backHair')),
       ],
       children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['behindBody']),
     };
@@ -306,9 +307,9 @@ class MiniFrontIdleLayerRenderer {
       precomposeZIndex: MINI_HEAD_MAIN_Z_INDEX,
       layers: [
         ...this.createColorAndLineLayers('face', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
-        ...this.createColorAndLineLayers('back_hair_top', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineColor('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5),
+        ...this.createColorAndLineLayers('back_hair_top', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineTintSource('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5, this.getPartColorGradientSpace('hair.topHair')),
         ...this.createMirroredColorAndLineLayers('ear', '01', skinColor, skinLineColor, rig.earDistance + earOffset.x, earOffset.y, 13.8),
-        ...this.createLineOnlyLayers('mouth', '01', this.getPartLineColor('mouth'), mouthOffset.x, mouthOffset.y, 20),
+        ...this.createLineOnlyLayers('mouth', '01', this.getPartLineTintSource('mouth'), mouthOffset.x, mouthOffset.y, 20),
       ],
       children: [eyesNode],
     };
@@ -323,7 +324,7 @@ class MiniFrontIdleLayerRenderer {
       precompose: true,
       precomposeZIndex: MINI_HEAD_BANGS_Z_INDEX,
       layers: [
-        ...this.createColorAndLineLayers('bangs', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineColor('hair.bangs'), bangsOffset.x, bangsOffset.y, 30),
+        ...this.createColorAndLineLayers('bangs', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineTintSource('hair.bangs'), bangsOffset.x, bangsOffset.y, 30, this.getPartColorGradientSpace('hair.bangs')),
         ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
       ],
     };
@@ -353,13 +354,14 @@ class MiniFrontIdleLayerRenderer {
     folder: string,
     optionId: string,
     color: AvatarTintSource,
-    lineColor: string,
+    lineColor: AvatarTintSource,
     x: number,
     y: number,
     zIndex: number,
+    colorGradientSpace?: AvatarGradientCoordinateSpace,
   ): MiniLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, x, y, zIndex },
+      { folder, file: `${optionId}_color.png`, color, colorGradientSpace, x, y, zIndex },
       { folder, file: `${optionId}_line.png`, color: lineColor, x, y, zIndex: zIndex + 0.1 },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
@@ -369,7 +371,7 @@ class MiniFrontIdleLayerRenderer {
     colorFile: string,
     lineFile: string,
     color: AvatarTintSource | undefined,
-    lineColor: string | undefined,
+    lineColor: AvatarTintSource | undefined,
     x: number,
     y: number,
     zIndex: number,
@@ -385,7 +387,7 @@ class MiniFrontIdleLayerRenderer {
     colorFile: string,
     lineFile: string,
     color: AvatarTintSource | undefined,
-    lineColor: string | undefined,
+    lineColor: AvatarTintSource | undefined,
     zIndex: number,
     x = 0,
     y = 0,
@@ -400,7 +402,7 @@ class MiniFrontIdleLayerRenderer {
   private createLineOnlyLayers(
     folder: string,
     optionId: string,
-    color: string,
+    color: AvatarTintSource,
     x: number,
     y: number,
     zIndex: number,
@@ -415,7 +417,7 @@ class MiniFrontIdleLayerRenderer {
     folder: string,
     optionId: string,
     color: AvatarTintSource,
-    lineColor: string,
+    lineColor: AvatarTintSource,
     distance: number,
     y: number,
     zIndex: number,
@@ -431,7 +433,7 @@ class MiniFrontIdleLayerRenderer {
     folder: string,
     optionId: string,
     color: AvatarTintSource,
-    lineColor: string,
+    lineColor: AvatarTintSource,
     socketPoints: MiniMirroredSocketPoints,
     zIndex: number,
     leftTransform: MiniTransform = {},
@@ -471,13 +473,14 @@ class MiniFrontIdleLayerRenderer {
     folder: string,
     optionId: string,
     color: AvatarTintSource,
-    lineColor: string,
+    lineColor: AvatarTintSource,
     zIndex: number,
     flipX = false,
     anchorOffset: MiniPoint = { x: 0, y: 0 },
+    colorGradientSpace?: AvatarGradientCoordinateSpace,
   ): MiniLocalLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, x: anchorOffset.x, y: anchorOffset.y, zIndex, flipX },
+      { folder, file: `${optionId}_color.png`, color, colorGradientSpace, x: anchorOffset.x, y: anchorOffset.y, zIndex, flipX },
       { folder, file: `${optionId}_line.png`, color: lineColor, x: anchorOffset.x, y: anchorOffset.y, zIndex: zIndex + 0.1, flipX },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
@@ -504,7 +507,7 @@ class MiniFrontIdleLayerRenderer {
   private createMirroredLineOnlyLayers(
     folder: string,
     optionId: string,
-    color: string,
+    color: AvatarTintSource,
     distance: number,
     y: number,
     zIndex: number,
@@ -543,7 +546,7 @@ class MiniFrontIdleLayerRenderer {
     rightEyeColor: AvatarTintSource,
     distance: number,
   ): MiniLayer[] {
-    const lineColor = this.getPartLineColor('eyes.upperEyelid');
+    const lineColor = this.getPartLineTintSource('eyes.upperEyelid');
 
     if (this.pose.eyeExpression === 'smileBlink') {
       return this.createMirroredLineOnlyLayers('express/smile/upper_eyelid', '01', lineColor, distance, 0, 17);
@@ -560,7 +563,7 @@ class MiniFrontIdleLayerRenderer {
       ? 'express/smile/eyelid'
       : 'eyelid';
 
-    return this.createMirroredLineOnlyLayers(folder, '01', this.getPartLineColor('mini.eyelid'), distance, 0, 18);
+    return this.createMirroredLineOnlyLayers(folder, '01', this.getPartLineTintSource('mini.eyelid'), distance, 0, 18);
   }
 
   private createAccessoryNodes(
@@ -598,7 +601,14 @@ class MiniFrontIdleLayerRenderer {
             scale: pose.scale,
             flipX: pose.flipX,
           },
-          layers: this.createAccessoryImageLayers(folder, optionId, accessory.colorGradient ?? accessory.color ?? definition.defaultColor, accessory.lineColor ?? definition.defaultLineColor, zIndex),
+          layers: this.createAccessoryImageLayers(
+            folder,
+            optionId,
+            accessory.colorGradient ?? accessory.color ?? definition.defaultColor,
+            accessory.lineColorGradient ?? accessory.lineColor ?? definition.defaultLineColor,
+            zIndex,
+            accessory.colorGradientSpace,
+          ),
         },
       ];
     });
@@ -632,8 +642,9 @@ class MiniFrontIdleLayerRenderer {
         folder,
         optionId,
         accessory.colorGradient ?? accessory.color ?? definition.defaultColor,
-        accessory.lineColor ?? definition.defaultLineColor,
+        accessory.lineColorGradient ?? accessory.lineColor ?? definition.defaultLineColor,
         zIndex,
+        accessory.colorGradientSpace,
       ),
     };
   }
@@ -642,11 +653,12 @@ class MiniFrontIdleLayerRenderer {
     folder: string,
     optionId: string,
     color: AvatarTintSource,
-    lineColor: string,
+    lineColor: AvatarTintSource,
     zIndex: number,
+    colorGradientSpace?: AvatarGradientCoordinateSpace,
   ): MiniLocalLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, zIndex },
+      { folder, file: `${optionId}_color.png`, color, colorGradientSpace, zIndex },
       { folder, file: `${optionId}_line.png`, color: lineColor, zIndex: zIndex + 0.1 },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
@@ -663,8 +675,12 @@ class MiniFrontIdleLayerRenderer {
     return this.state[key].secondaryColorGradient ?? this.state[key].secondaryColor ?? fallbackColor;
   }
 
-  private getPartLineColor(key: AvatarPartKey): string {
-    return this.state[key].lineColor ?? MINI_FRONT_IDLE_RIG_LAYOUT.colors.line;
+  private getPartLineTintSource(key: AvatarPartKey): AvatarTintSource {
+    return this.state[key].lineColorGradient ?? this.state[key].lineColor ?? MINI_FRONT_IDLE_RIG_LAYOUT.colors.line;
+  }
+
+  private getPartColorGradientSpace(key: AvatarPartKey): AvatarGradientCoordinateSpace | undefined {
+    return this.state[key].colorGradientSpace;
   }
 
   private getEditablePartColor(key: AvatarPartKey, fallbackColor: string): AvatarTintSource | undefined {
@@ -712,7 +728,7 @@ class MiniSideIdleLayerRenderer {
     const bodyOptionId = this.resolveOptionId('body/side', this.getPartOptionId('mini.bodyType') || rig.bodyTypeId);
     const bodyTypeId = Number(bodyOptionId);
     const skinColor = this.getPartColor('face', rig.colors.skin);
-    const skinLineColor = this.getPartLineColor('face');
+    const skinLineColor = this.getPartLineTintSource('face');
     const topId = resolveMiniDirectoryOptionId('clothing/tops', this.getPartOptionId('mini.clothingTop'));
     const bottomId = resolveMiniDirectoryOptionId('clothing/bottoms', this.getPartOptionId('mini.clothingBottom'));
     const backHairBottomId = this.resolveOptionId('back_hair_bottom/side', this.getPartOptionId('hair.backHair'));
@@ -772,9 +788,9 @@ class MiniSideIdleLayerRenderer {
     const eyeColor = this.getPartColor('eyes.color', rig.colors.eyeBall);
     const scleraColor = this.getPartColor('eyes.sclera', rig.colors.sclera);
     const topColor = this.getEditablePartColor('mini.clothingTop', rig.colors.clothingTop);
-    const topLineColor = this.getPartLineColor('mini.clothingTop');
+    const topLineColor = this.getPartLineTintSource('mini.clothingTop');
     const bottomColor = this.getEditablePartColor('mini.clothingBottom', rig.colors.clothingBottom);
-    const bottomLineColor = this.getPartLineColor('mini.clothingBottom');
+    const bottomLineColor = this.getPartLineTintSource('mini.clothingBottom');
     const bottomDecoColor = this.getPartSecondaryColor('mini.clothingBottom', rig.colors.clothingBottomSideDeco);
     const isTopVisible = this.isPartVisible('mini.clothingTop') && topId !== null;
     const isBottomVisible = this.isPartVisible('mini.clothingBottom') && bottomId !== null;
@@ -870,7 +886,7 @@ class MiniSideIdleLayerRenderer {
         ? []
         : [
           ...this.createColorOnlyLayers('sclera/side', '01', scleraColor, scleraOffset.x, scleraOffset.y, 13.9),
-          ...this.createLineOnlyLayers('lower_eyelid/side', '01', this.getPartLineColor('eyes.lowerEyelid'), lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
+          ...this.createLineOnlyLayers('lower_eyelid/side', '01', this.getPartLineTintSource('eyes.lowerEyelid'), lowerEyelidOffset.x, lowerEyelidOffset.y, 14),
           ...this.createColorOnlyLayers('eye_ball/side', '01', eyeColor, eyeBallOffset.x, eyeBallOffset.y, 15),
           ...this.createLineOnlyLayers('eye_light', '01', rig.colors.eyeLight, eyeLightX, eyeLightY, 16),
         ],
@@ -894,7 +910,7 @@ class MiniSideIdleLayerRenderer {
         },
         {
           transform: this.getPoseNodeTransform('eyebrow'),
-          layers: this.createLineOnlyLayers('eyebrow/side', '01', this.getPartLineColor('eyes.eyebrow'), eyebrowOffset.x, eyebrowOffset.y, 19),
+          layers: this.createLineOnlyLayers('eyebrow/side', '01', this.getPartLineTintSource('eyes.eyebrow'), eyebrowOffset.x, eyebrowOffset.y, 19),
         },
       ],
     };
@@ -922,8 +938,8 @@ class MiniSideIdleLayerRenderer {
       precomposeZIndex: MINI_HEAD_MAIN_Z_INDEX,
       layers: [
         ...this.createColorAndLineLayers('face/side', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
-        ...this.createColorAndLineLayers('back_hair_bottom/side', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineColor('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 13.2),
-        ...this.createColorAndLineLayers('back_hair_top/side', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineColor('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5),
+        ...this.createColorAndLineLayers('back_hair_bottom/side', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineTintSource('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 13.2, this.getPartColorGradientSpace('hair.backHair')),
+        ...this.createColorAndLineLayers('back_hair_top/side', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineTintSource('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5, this.getPartColorGradientSpace('hair.topHair')),
         ...this.createColorAndLineLayers('ear/side', '01', skinColor, skinLineColor, earOffset.x, earOffset.y, 13.8),
       ],
       children: [eyesNode],
@@ -939,7 +955,7 @@ class MiniSideIdleLayerRenderer {
       precompose: true,
       precomposeZIndex: MINI_HEAD_BANGS_Z_INDEX,
       layers: [
-        ...this.createColorAndLineLayers('bangs/side', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineColor('hair.bangs'), bangsOffset.x, bangsOffset.y, 30),
+        ...this.createColorAndLineLayers('bangs/side', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineTintSource('hair.bangs'), bangsOffset.x, bangsOffset.y, 30, this.getPartColorGradientSpace('hair.bangs')),
         ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
       ],
     };
@@ -969,13 +985,14 @@ class MiniSideIdleLayerRenderer {
     folder: string,
     optionId: string,
     color: AvatarTintSource,
-    lineColor: string,
+    lineColor: AvatarTintSource,
     x: number,
     y: number,
     zIndex: number,
+    colorGradientSpace?: AvatarGradientCoordinateSpace,
   ): MiniLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, x, y, zIndex },
+      { folder, file: `${optionId}_color.png`, color, colorGradientSpace, x, y, zIndex },
       { folder, file: `${optionId}_line.png`, color: lineColor, x, y, zIndex: zIndex + 0.1 },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
@@ -997,7 +1014,7 @@ class MiniSideIdleLayerRenderer {
   private createLineOnlyLayers(
     folder: string,
     optionId: string,
-    color: string,
+    color: AvatarTintSource,
     x: number,
     y: number,
     zIndex: number,
@@ -1013,7 +1030,7 @@ class MiniSideIdleLayerRenderer {
     colorFile: string,
     lineFile: string,
     color: AvatarTintSource | undefined,
-    lineColor: string | undefined,
+    lineColor: AvatarTintSource | undefined,
     x: number,
     y: number,
     zIndex: number,
@@ -1042,7 +1059,7 @@ class MiniSideIdleLayerRenderer {
     colorFile: string,
     lineFile: string,
     color: AvatarTintSource | undefined,
-    lineColor: string | undefined,
+    lineColor: AvatarTintSource | undefined,
     zIndex: number,
     x = 0,
     y = 0,
@@ -1057,19 +1074,20 @@ class MiniSideIdleLayerRenderer {
     folder: string,
     optionId: string,
     color: AvatarTintSource,
-    lineColor: string,
+    lineColor: AvatarTintSource,
     zIndex: number,
     flipX = false,
     anchorOffset: MiniPoint = { x: 0, y: 0 },
+    colorGradientSpace?: AvatarGradientCoordinateSpace,
   ): MiniLocalLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, x: anchorOffset.x, y: anchorOffset.y, zIndex, flipX },
+      { folder, file: `${optionId}_color.png`, color, colorGradientSpace, x: anchorOffset.x, y: anchorOffset.y, zIndex, flipX },
       { folder, file: `${optionId}_line.png`, color: lineColor, x: anchorOffset.x, y: anchorOffset.y, zIndex: zIndex + 0.1, flipX },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
 
   private createSideUpperEyelidLayers(skinColor: AvatarTintSource, eyeColor: AvatarTintSource): MiniLayer[] {
-    const lineColor = this.getPartLineColor('eyes.upperEyelid');
+    const lineColor = this.getPartLineTintSource('eyes.upperEyelid');
 
     if (this.pose.eyeExpression === 'smileBlink') {
       return this.createLineOnlyLayers('express/smile/upper_eyelid/side', '01', lineColor, 0, 0, 17);
@@ -1086,7 +1104,7 @@ class MiniSideIdleLayerRenderer {
       ? 'express/smile/eyelid/side'
       : 'eyelid/side';
 
-    return this.createLineOnlyLayers(folder, '01', this.getPartLineColor('mini.eyelid'), 0, 0, 18);
+    return this.createLineOnlyLayers(folder, '01', this.getPartLineTintSource('mini.eyelid'), 0, 0, 18);
   }
 
   private createAccessoryNodes(rig: MiniIdleRigLayout, layerSlots?: readonly AccessoryLayerSlot[]): MiniRigNode[] {
@@ -1119,7 +1137,14 @@ class MiniSideIdleLayerRenderer {
           scale: pose.scale,
           flipX: pose.flipX,
         },
-        layers: this.createAccessoryImageLayers(folder, optionId, accessory.colorGradient ?? accessory.color ?? definition.defaultColor, accessory.lineColor ?? definition.defaultLineColor, zIndex),
+        layers: this.createAccessoryImageLayers(
+          folder,
+          optionId,
+          accessory.colorGradient ?? accessory.color ?? definition.defaultColor,
+          accessory.lineColorGradient ?? accessory.lineColor ?? definition.defaultLineColor,
+          zIndex,
+          accessory.colorGradientSpace,
+        ),
       }];
     });
   }
@@ -1128,11 +1153,12 @@ class MiniSideIdleLayerRenderer {
     folder: string,
     optionId: string,
     color: AvatarTintSource,
-    lineColor: string,
+    lineColor: AvatarTintSource,
     zIndex: number,
+    colorGradientSpace?: AvatarGradientCoordinateSpace,
   ): MiniLocalLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, zIndex },
+      { folder, file: `${optionId}_color.png`, color, colorGradientSpace, zIndex },
       { folder, file: `${optionId}_line.png`, color: lineColor, zIndex: zIndex + 0.1 },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
@@ -1149,8 +1175,12 @@ class MiniSideIdleLayerRenderer {
     return this.state[key].secondaryColor ?? fallbackColor;
   }
 
-  private getPartLineColor(key: AvatarPartKey): string {
-    return this.state[key].lineColor ?? MINI_SIDE_IDLE_RIG_LAYOUT.colors.line;
+  private getPartLineTintSource(key: AvatarPartKey): AvatarTintSource {
+    return this.state[key].lineColorGradient ?? this.state[key].lineColor ?? MINI_SIDE_IDLE_RIG_LAYOUT.colors.line;
+  }
+
+  private getPartColorGradientSpace(key: AvatarPartKey): AvatarGradientCoordinateSpace | undefined {
+    return this.state[key].colorGradientSpace;
   }
 
   private getEditablePartColor(key: AvatarPartKey, fallbackColor: string): AvatarTintSource | undefined {

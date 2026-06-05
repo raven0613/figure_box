@@ -41,7 +41,16 @@ function flattenNode(node: MiniRigNode, parentTransform: ResolvedMiniTransform):
 }
 
 function createPrecomposedMiniLayer(node: MiniRigNode, transform: ResolvedMiniTransform): MiniLayer[] {
-  const compositeLayers = flattenNodeContent(node);
+  const compositeLayers = flattenNodeContent(node)
+    .map(layer => ({
+      ...layer,
+      colorAnchor: layer.colorGradientSpace === 'sharedHair' && layer.colorAnchor === undefined
+        ? {
+          x: transform.x + layer.x,
+          y: transform.y + layer.y,
+        }
+        : layer.colorAnchor,
+    }));
 
   if (compositeLayers.length === 0) {
     return [];
@@ -114,6 +123,12 @@ function transformMiniLayer(layer: MiniLocalLayer, transform: ResolvedMiniTransf
     ...layer,
     x: transform.x + rotatedPoint.x * transform.scale,
     y: transform.y + rotatedPoint.y * transform.scale,
+    colorAnchor: layer.colorGradientSpace === 'sharedHair' && layer.colorAnchor === undefined
+      ? {
+        x: transform.x + rotatedPoint.x * transform.scale,
+        y: transform.y + rotatedPoint.y * transform.scale,
+      }
+      : layer.colorAnchor,
     zIndex: layer.zIndex + transform.zIndexOffset,
     angle: transform.angle + (layer.angle ?? 0) * (transform.flipX ? -1 : 1),
     scale: transform.scale * layerScale,

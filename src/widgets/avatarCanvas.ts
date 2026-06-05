@@ -10,6 +10,7 @@ export type AccessoryLayerSlot = 'behindBody' | 'onSkin' | 'frontBody' | 'frontF
 export type AccessoryRenderMode = 'mirrored' | 'center';
 export type AccessoryPoseKey = 'portrait' | 'chibi';
 export type AvatarGradientType = 'linear' | 'radial';
+export type AvatarGradientCoordinateSpace = 'local' | 'sharedHair';
 
 export interface AvatarColorGradient {
   type: AvatarGradientType;
@@ -71,9 +72,11 @@ export interface AvatarPartState {
   optionId: number;
   color?: string;
   colorGradient?: AvatarColorGradient;
+  colorGradientSpace?: AvatarGradientCoordinateSpace;
   secondaryColor?: string;
   secondaryColorGradient?: AvatarColorGradient;
   lineColor?: string;
+  lineColorGradient?: AvatarColorGradient;
   offsetX?: number;
   offsetY?: number;
   rotate?: number;
@@ -136,6 +139,7 @@ interface AvatarImageLayer {
   file: string;
   tint?: 'color' | 'line' | 'skin';
   tintColor?: AvatarTintSource;
+  tintCoordinateSpace?: AvatarGradientCoordinateSpace;
   shouldDropLightPixels?: boolean;
 }
 
@@ -144,6 +148,13 @@ interface ImageContentBounds {
   right: number;
   top: number;
   bottom: number;
+}
+
+interface AvatarTintCoordinateOptions {
+  coordinateSpace: AvatarGradientCoordinateSpace;
+  anchorPoint: Point2D;
+  pixelScaleX: number;
+  pixelScaleY: number;
 }
 
 export interface AccessoryLayerSlotDefinition {
@@ -174,6 +185,12 @@ const BLACK_MASK_MAX_LUMINANCE = 8;
 const LINE_LAYER_FILL_LUMINANCE_THRESHOLD = 180;
 const GRADIENT_EDGE_COLOR_STOP = 0.05;
 const AVATAR_PIXEL_SCALE = 2;
+const SHARED_HAIR_GRADIENT_BOUNDS: ImageContentBounds = {
+  left: 0,
+  right: DEFAULT_CANVAS_WIDTH,
+  top: 0,
+  bottom: DEFAULT_CANVAS_HEIGHT,
+};
 const EYE_DISTANCE = AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.eyeDistance;
 export const MINI_UPPER_EYELID_OFFSET_Y_LIMITS = {
   min: -1,
@@ -677,6 +694,10 @@ abstract class AvatarPart {
     return this.state.lineColor ?? this.definition.defaultLineColor ?? DEFAULT_LINE_COLOR;
   }
 
+  protected get lineTintSource(): AvatarTintSource {
+    return this.state.lineColorGradient ?? this.lineColor;
+  }
+
   protected get scale(): number {
     return this.state.scale ?? DEFAULT_SCALE;
   }
@@ -864,9 +885,12 @@ abstract class ImageAvatarPart extends AvatarPart {
     const previousOptionId = this.state.optionId;
     const previousColor = this.state.color;
     const previousColorGradient = this.state.colorGradient;
+    const previousColorGradientSpace = this.state.colorGradientSpace;
+    const previousSharedHairTintTransformKey = getSharedHairTintTransformKey(this.state);
     const previousSecondaryColor = this.state.secondaryColor;
     const previousSecondaryColorGradient = this.state.secondaryColorGradient;
     const previousLineColor = this.state.lineColor;
+    const previousLineColorGradient = this.state.lineColorGradient;
     this.state = { ...this.state, ...nextState };
     this.applyTransform();
 
@@ -874,9 +898,15 @@ abstract class ImageAvatarPart extends AvatarPart {
       previousOptionId !== this.state.optionId ||
       previousColor !== this.state.color ||
       getAvatarTintCacheKey(previousColorGradient) !== getAvatarTintCacheKey(this.state.colorGradient) ||
+      previousColorGradientSpace !== this.state.colorGradientSpace ||
+      (
+        this.state.colorGradientSpace === 'sharedHair' &&
+        previousSharedHairTintTransformKey !== getSharedHairTintTransformKey(this.state)
+      ) ||
       previousSecondaryColor !== this.state.secondaryColor ||
       getAvatarTintCacheKey(previousSecondaryColorGradient) !== getAvatarTintCacheKey(this.state.secondaryColorGradient) ||
-      previousLineColor !== this.state.lineColor
+      previousLineColor !== this.state.lineColor ||
+      getAvatarTintCacheKey(previousLineColorGradient) !== getAvatarTintCacheKey(this.state.lineColorGradient)
     ) {
       void this.reloadImages();
     }
@@ -910,6 +940,11 @@ abstract class ImageAvatarPart extends AvatarPart {
             assetUrl,
             layer.tintColor ?? this.getTintSource(layer.tint),
             layer.tint,
+            {
+              anchorPoint: this.getTintAnchorPoint(layer),
+              coordinateSpace: layer.tintCoordinateSpace ?? this.getTintCoordinateSpace(layer.tint),
+              ...this.getTintPixelScale(),
+            },
             layer.folder === 'face' && layer.tint === 'color',
             layer.shouldDropLightPixels === true,
           )
@@ -960,11 +995,33 @@ abstract class ImageAvatarPart extends AvatarPart {
       return this.getFaceTintSource();
     }
 
-    return tint === 'color' ? this.getColorTintSource() : this.lineColor;
+    return tint === 'color' ? this.getColorTintSource() : this.lineTintSource;
   }
 
   protected getColorTintSource(): AvatarTintSource {
     return this.state.colorGradient ?? this.color;
+  }
+
+  protected getTintCoordinateSpace(tint: 'color' | 'line' | 'skin'): AvatarGradientCoordinateSpace {
+    return tint === 'color' ? this.state.colorGradientSpace ?? 'local' : 'local';
+  }
+
+  protected getTintAnchorPoint(_layer: AvatarImageLayer): Point2D {
+    const transform = this.resolveWorldTransform(this.getPartOffset(), this.getPartRotation(), 1);
+
+    return {
+      x: transform.left,
+      y: transform.top,
+    };
+  }
+
+  protected getTintPixelScale(): { pixelScaleX: number; pixelScaleY: number } {
+    const transform = this.resolveWorldTransform(this.getPartOffset(), this.getPartRotation(), 1);
+
+    return {
+      pixelScaleX: Math.abs(transform.scaleX) * AVATAR_PIXEL_SCALE * this.scale,
+      pixelScaleY: Math.abs(transform.scaleY) * AVATAR_PIXEL_SCALE * this.scale,
+    };
   }
 
   protected getFaceTintSource(): AvatarTintSource {
@@ -1053,6 +1110,16 @@ abstract class MirroredAssetPart extends ImageAvatarPart {
   }
 
   protected abstract resolveSideLayers(side: -1 | 1): AvatarImageLayer[];
+
+  protected getTintAnchorPoint(layer: AvatarImageLayer): Point2D {
+    const side = layer.file.includes('__right') ? 1 : -1;
+    const transform = this.resolveWorldTransform({ x: 0, y: 0 }, 0, 1);
+
+    return {
+      x: transform.left + this.getSideBaseX(side) + this.getSideOffsetX(side),
+      y: transform.top + this.getSideBaseY() + (this.state.offsetY ?? 0),
+    };
+  }
 
   protected getSideBaseX(side: -1 | 1): number {
     return side * EYE_DISTANCE + this.getMirroredRigOffsetX(side);
@@ -1903,11 +1970,31 @@ export class AvatarCanvas {
   }
 
   setColor(key: AvatarPartKey, color: string): void {
-    this.updatePart(key, { color });
+    this.updatePart(key, { color, colorGradientSpace: undefined });
+  }
+
+  setColorWithGradientSpace(
+    key: AvatarPartKey,
+    color: string,
+    colorGradientSpace: AvatarGradientCoordinateSpace | undefined,
+  ): void {
+    this.updatePart(key, { color, colorGradientSpace });
   }
 
   setColorGradient(key: AvatarPartKey, colorGradient: AvatarColorGradient | undefined): void {
-    this.updatePart(key, { colorGradient });
+    this.updatePart(key, { colorGradient, colorGradientSpace: undefined });
+  }
+
+  setColorGradientWithGradientSpace(
+    key: AvatarPartKey,
+    colorGradient: AvatarColorGradient | undefined,
+    colorGradientSpace: AvatarGradientCoordinateSpace | undefined,
+  ): void {
+    this.updatePart(key, { colorGradient, colorGradientSpace });
+  }
+
+  setColorGradientSpace(key: AvatarPartKey, colorGradientSpace: AvatarGradientCoordinateSpace | undefined): void {
+    this.updatePart(key, { colorGradientSpace });
   }
 
   setSecondaryColor(key: AvatarPartKey, secondaryColor: string): void {
@@ -1920,6 +2007,10 @@ export class AvatarCanvas {
 
   setLineColor(key: AvatarPartKey, lineColor: string): void {
     this.updatePart(key, { lineColor });
+  }
+
+  setLineColorGradient(key: AvatarPartKey, lineColorGradient: AvatarColorGradient | undefined): void {
+    this.updatePart(key, { lineColorGradient });
   }
 
   setVisible(key: AvatarPartKey, isVisible: boolean): void {
@@ -1995,15 +2086,42 @@ export class AvatarCanvas {
   }
 
   setAccessoryColor(instanceId: string, color: string): void {
-    this.updateAccessory(instanceId, { color });
+    this.updateAccessory(instanceId, { color, colorGradientSpace: undefined });
+  }
+
+  setAccessoryColorWithGradientSpace(
+    instanceId: string,
+    color: string,
+    colorGradientSpace: AvatarGradientCoordinateSpace | undefined,
+  ): void {
+    this.updateAccessory(instanceId, { color, colorGradientSpace });
   }
 
   setAccessoryColorGradient(instanceId: string, colorGradient: AvatarColorGradient | undefined): void {
-    this.updateAccessory(instanceId, { colorGradient });
+    this.updateAccessory(instanceId, { colorGradient, colorGradientSpace: undefined });
+  }
+
+  setAccessoryColorGradientWithGradientSpace(
+    instanceId: string,
+    colorGradient: AvatarColorGradient | undefined,
+    colorGradientSpace: AvatarGradientCoordinateSpace | undefined,
+  ): void {
+    this.updateAccessory(instanceId, { colorGradient, colorGradientSpace });
+  }
+
+  setAccessoryColorGradientSpace(
+    instanceId: string,
+    colorGradientSpace: AvatarGradientCoordinateSpace | undefined,
+  ): void {
+    this.updateAccessory(instanceId, { colorGradientSpace });
   }
 
   setAccessoryLineColor(instanceId: string, lineColor: string): void {
     this.updateAccessory(instanceId, { lineColor });
+  }
+
+  setAccessoryLineColorGradient(instanceId: string, lineColorGradient: AvatarColorGradient | undefined): void {
+    this.updateAccessory(instanceId, { lineColorGradient });
   }
 
   moveAccessory(
@@ -2412,10 +2530,22 @@ async function tintImageByLuminance(
   imageUrl: string,
   tintSource: AvatarTintSource,
   tint: 'color' | 'line' | 'skin',
+  coordinateOptions: AvatarTintCoordinateOptions,
   shouldNormalizeToSourceBrightness = false,
   shouldDropLightPixels = false,
 ): Promise<string> {
-  const cacheKey = `${imageUrl}|${getAvatarTintCacheKey(tintSource)}|${tint}|${shouldNormalizeToSourceBrightness}|${shouldDropLightPixels}`;
+  const cacheKey = [
+    imageUrl,
+    getAvatarTintCacheKey(tintSource),
+    tint,
+    coordinateOptions.coordinateSpace,
+    Math.round(coordinateOptions.anchorPoint.x * 100) / 100,
+    Math.round(coordinateOptions.anchorPoint.y * 100) / 100,
+    Math.round(coordinateOptions.pixelScaleX * 100) / 100,
+    Math.round(coordinateOptions.pixelScaleY * 100) / 100,
+    shouldNormalizeToSourceBrightness,
+    shouldDropLightPixels,
+  ].join('|');
   const cachedUrl = tintCache.get(cacheKey);
 
   if (cachedUrl) {
@@ -2465,7 +2595,8 @@ async function tintImageByLuminance(
     const pixelIndex = index / 4;
     const x = pixelIndex % canvas.width;
     const y = Math.floor(pixelIndex / canvas.width);
-    const targetColor = getAvatarTintPixelColor(tintSource, x, y, contentBounds);
+    const tintSample = getAvatarTintSamplePoint(x, y, canvas.width, canvas.height, contentBounds, coordinateOptions);
+    const targetColor = getAvatarTintPixelColor(tintSource, tintSample.x, tintSample.y, tintSample.bounds);
 
     imageData.data[index] = clampColor(targetColor.red * shade);
     imageData.data[index + 1] = clampColor(targetColor.green * shade);
@@ -2477,6 +2608,25 @@ async function tintImageByLuminance(
   const tintedUrl = canvas.toDataURL('image/png');
   tintCache.set(cacheKey, tintedUrl);
   return tintedUrl;
+}
+
+function getAvatarTintSamplePoint(
+  x: number,
+  y: number,
+  imageWidth: number,
+  imageHeight: number,
+  localBounds: ImageContentBounds,
+  coordinateOptions: AvatarTintCoordinateOptions,
+): { x: number; y: number; bounds: ImageContentBounds } {
+  if (coordinateOptions.coordinateSpace !== 'sharedHair') {
+    return { x, y, bounds: localBounds };
+  }
+
+  return {
+    x: coordinateOptions.anchorPoint.x + (x - imageWidth / 2) * coordinateOptions.pixelScaleX,
+    y: coordinateOptions.anchorPoint.y + (y - imageHeight / 2) * coordinateOptions.pixelScaleY,
+    bounds: SHARED_HAIR_GRADIENT_BOUNDS,
+  };
 }
 
 function getAvatarTintPixelColor(
@@ -2615,6 +2765,17 @@ function getAvatarTintCacheKey(tintSource: AvatarTintSource | undefined): string
   return typeof tintSource === 'string' || tintSource === undefined
     ? tintSource ?? ''
     : JSON.stringify(tintSource);
+}
+
+function getSharedHairTintTransformKey(state: AvatarPartState): string {
+  return [
+    state.offsetX ?? 0,
+    state.offsetY ?? 0,
+    state.scale ?? DEFAULT_SCALE,
+    state.flipX === true ? '1' : '0',
+    state.leftVisible === false ? '0' : '1',
+    state.rightVisible === false ? '0' : '1',
+  ].join('|');
 }
 
 function clampUnit(value: number): number {

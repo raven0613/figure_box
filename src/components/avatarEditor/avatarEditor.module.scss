@@ -445,6 +445,64 @@
   gap: 8px;
 }
 
+.swapGradientButton {
+  min-height: 34px;
+}
+
+.applyButton,
+.activeApplyButton {
+  width: 100%;
+  min-height: 36px;
+}
+
+.activeApplyButton {
+  color: #ffffff;
+  background: #2563eb;
+  border-color: #1d4ed8;
+}
+
+.applyPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+
+.applyPanel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.sharedGradientStatus,
+.joinSharedGradientButton {
+  align-self: flex-start;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sharedGradientStatus {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+}
+
+.joinSharedGradientButton {
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+}
+
+.applyTargetList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .rangeField {
   display: flex;
   flex-direction: column;

@@ -12,6 +12,7 @@ import {
   AvatarAccessoryInstance,
   AvatarColorGradient,
   AvatarEditableProperty,
+  AvatarGradientCoordinateSpace,
   AvatarGradientType,
   AvatarPartDefinition,
   AvatarPartKey,
@@ -79,6 +80,13 @@ type TemplateAction =
   | { type: 'overwrite'; template: AvatarAppearanceTemplateRecord }
   | { type: 'delete'; template: AvatarAppearanceTemplateRecord }
   | { type: 'reset' };
+type HairApplyKind = 'color' | 'line';
+type HairApplyTarget =
+  | { id: string; type: 'part'; key: AvatarPartKey; label: string }
+  | { id: string; type: 'accessory'; instanceId: string; label: string };
+
+const HAIR_COLOR_PART_KEYS: readonly AvatarPartKey[] = ['hair.backHair', 'hair.topHair', 'hair.bangs'];
+const HAIR_ACCESSORY_CATEGORIES: readonly AccessoryCategory[] = ['sideHair', 'ponytail'];
 
 export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEditorContainerProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -120,6 +128,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [spriteSheet, setSpriteSheet] = useState<MiniSpriteSheet | null>(null);
   const [spriteSheetFrameIndex, setSpriteSheetFrameIndex] = useState(0);
   const [selectedMiniAnimationId, setSelectedMiniAnimationId] = useState(MINI_WAVE_BLINK_ANIMATION.id);
+  const [hairApplyPanel, setHairApplyPanel] = useState<{ kind: HairApplyKind; selectedTargetIds: string[] } | null>(null);
 
   const selectedPart = useMemo(
     () => selectedTarget.type === 'part'
@@ -201,6 +210,33 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     selectedPart ? isAvatarPartOptionColorEditable(selectedPart.key, selectedOptionId) : true
   );
   const canUseColorGradient = selectedTarget.type === 'accessory' || selectedPart?.key !== 'eyes.sclera';
+  const isSelectedHairColorSource = selectedTarget.type === 'accessory'
+    ? selectedAccessory !== null && HAIR_ACCESSORY_CATEGORIES.includes(selectedAccessory.category)
+    : selectedPart !== null && HAIR_COLOR_PART_KEYS.includes(selectedPart.key);
+  const hairApplyTargets = useMemo<HairApplyTarget[]>(() => {
+    const partTargets = HAIR_COLOR_PART_KEYS
+      .flatMap<HairApplyTarget>(key => {
+        const definition = AVATAR_EDITOR_PART_DEFINITIONS.find(part => part.key === key);
+
+        return definition
+          ? [{ id: `part:${key}`, type: 'part' as const, key, label: definition.label }]
+          : [];
+      });
+    const accessoryTargets = avatarState.accessories
+      .filter(accessory => HAIR_ACCESSORY_CATEGORIES.includes(accessory.category))
+      .map(accessory => ({
+        id: `accessory:${accessory.instanceId}`,
+        type: 'accessory' as const,
+        instanceId: accessory.instanceId,
+        label: getAccessoryDisplayName(accessory),
+      }));
+
+    return [...partTargets, ...accessoryTargets];
+  }, [avatarState.accessories]);
+  const sharedHairColorTargets = useMemo(
+    () => hairApplyTargets.filter(target => getHairApplyTargetColorState(target, avatarState)?.colorGradientSpace === 'sharedHair'),
+    [avatarState, hairApplyTargets]
+  );
   const accessoriesBySlot = useMemo(
     () => ACCESSORY_LAYER_SLOT_DEFINITIONS.map(slotDefinition => ({
       slot: slotDefinition,
@@ -236,6 +272,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   useEffect(() => {
     onAvatarChangeRef.current = onAvatarChange;
   }, [onAvatarChange]);
+
+  useEffect(() => {
+    setHairApplyPanel(null);
+  }, [selectedTarget]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -428,7 +468,44 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     }
   };
 
+  const setHairTargetColor = (
+    target: HairApplyTarget,
+    color: string,
+    colorGradientSpace?: AvatarGradientCoordinateSpace,
+  ) => {
+    if (target.type === 'part') {
+      avatarCanvasRef.current?.setColorWithGradientSpace(target.key, color, colorGradientSpace);
+      return;
+    }
+
+    avatarCanvasRef.current?.setAccessoryColorWithGradientSpace(target.instanceId, color, colorGradientSpace);
+  };
+
+  const setHairTargetColorGradient = (
+    target: HairApplyTarget,
+    colorGradient: AvatarColorGradient | undefined,
+    colorGradientSpace?: AvatarGradientCoordinateSpace,
+  ) => {
+    if (target.type === 'part') {
+      avatarCanvasRef.current?.setColorGradientWithGradientSpace(target.key, colorGradient, colorGradientSpace);
+      return;
+    }
+
+    avatarCanvasRef.current?.setAccessoryColorGradientWithGradientSpace(target.instanceId, colorGradient, colorGradientSpace);
+  };
+
+  const changeSharedHairColorTargets = (
+    updateTarget: (target: HairApplyTarget) => void,
+  ) => {
+    sharedHairColorTargets.forEach(updateTarget);
+  };
+
   const changeColor = (color: string) => {
+    if (isSelectedHairColorSource && selectedAppearanceState.colorGradientSpace === 'sharedHair') {
+      changeSharedHairColorTargets(target => setHairTargetColor(target, color, 'sharedHair'));
+      return;
+    }
+
     if (selectedTarget.type === 'accessory') {
       avatarCanvasRef.current?.setAccessoryColor(selectedTarget.instanceId, color);
       return;
@@ -440,6 +517,13 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   };
 
   const changeColorGradient = (colorGradient: AvatarColorGradient | undefined) => {
+    if (isSelectedHairColorSource && selectedAppearanceState.colorGradientSpace === 'sharedHair') {
+      changeSharedHairColorTargets(target => (
+        setHairTargetColorGradient(target, cloneAvatarColorGradient(colorGradient), 'sharedHair')
+      ));
+      return;
+    }
+
     if (selectedTarget.type === 'accessory') {
       avatarCanvasRef.current?.setAccessoryColorGradient(selectedTarget.instanceId, colorGradient);
       return;
@@ -447,6 +531,21 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
     if (selectedPart) {
       avatarCanvasRef.current?.setColorGradient(selectedPart.key, colorGradient);
+    }
+  };
+
+  const toggleSelectedSharedHairGradientSpace = () => {
+    const nextGradientSpace = selectedAppearanceState.colorGradientSpace === 'sharedHair'
+      ? undefined
+      : 'sharedHair';
+
+    if (selectedTarget.type === 'accessory') {
+      avatarCanvasRef.current?.setAccessoryColorGradientSpace(selectedTarget.instanceId, nextGradientSpace);
+      return;
+    }
+
+    if (selectedPart) {
+      avatarCanvasRef.current?.setColorGradientSpace(selectedPart.key, nextGradientSpace);
     }
   };
 
@@ -482,6 +581,123 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     if (selectedLineColorPartKey) {
       avatarCanvasRef.current?.setLineColor(selectedLineColorPartKey, lineColor);
     }
+  };
+
+  const changeLineColorGradient = (lineColorGradient: AvatarColorGradient | undefined) => {
+    if (selectedTarget.type === 'accessory') {
+      avatarCanvasRef.current?.setAccessoryLineColorGradient(selectedTarget.instanceId, lineColorGradient);
+      return;
+    }
+
+    if (selectedLineColorPartKey) {
+      avatarCanvasRef.current?.setLineColorGradient(selectedLineColorPartKey, lineColorGradient);
+    }
+  };
+
+  const changeLineColorGradientMode = (type: AvatarGradientType | 'solid') => {
+    if (type === 'solid') {
+      changeLineColorGradient(undefined);
+      return;
+    }
+
+    changeLineColorGradient({
+      ...(selectedLineColorState.lineColorGradient
+        ?? createDefaultColorGradient(
+          type,
+          selectedLineColorState.lineColor ?? selectedAccessoryDefinition?.defaultLineColor ?? selectedPart?.defaultLineColor,
+        )),
+      type,
+    });
+  };
+
+  const updateLineColorGradient = (patch: Partial<AvatarColorGradient>) => {
+    const currentGradient = selectedLineColorState.lineColorGradient
+      ?? createDefaultColorGradient(
+        'linear',
+        selectedLineColorState.lineColor ?? selectedAccessoryDefinition?.defaultLineColor ?? selectedPart?.defaultLineColor,
+      );
+
+    changeLineColorGradient({
+      ...currentGradient,
+      ...patch,
+    });
+  };
+
+  const openHairApplyPanel = (kind: HairApplyKind) => {
+    setHairApplyPanel(currentPanel => currentPanel?.kind === kind
+      ? null
+      : { kind, selectedTargetIds: [] });
+  };
+
+  const toggleHairApplyTarget = (targetId: string, isSelected: boolean) => {
+    setHairApplyPanel(currentPanel => {
+      if (!currentPanel) {
+        return currentPanel;
+      }
+
+      const selectedTargetIds = isSelected
+        ? [...currentPanel.selectedTargetIds, targetId]
+        : currentPanel.selectedTargetIds.filter(selectedTargetId => selectedTargetId !== targetId);
+
+      return {
+        ...currentPanel,
+        selectedTargetIds: Array.from(new Set(selectedTargetIds)),
+      };
+    });
+  };
+
+  const setAllHairApplyTargets = (isSelected: boolean) => {
+    setHairApplyPanel(currentPanel => currentPanel
+      ? {
+        ...currentPanel,
+        selectedTargetIds: isSelected ? hairApplyTargets.map(target => target.id) : [],
+      }
+      : currentPanel);
+  };
+
+  const applyHairSettingsToTargets = (colorGradientSpace?: AvatarGradientCoordinateSpace) => {
+    if (!hairApplyPanel) {
+      return;
+    }
+
+    const selectedTargets = hairApplyTargets.filter(target => hairApplyPanel.selectedTargetIds.includes(target.id));
+    const sourceColor = selectedAppearanceState.color
+      ?? selectedAccessoryDefinition?.defaultColor
+      ?? selectedPart?.defaultColor
+      ?? '#000000';
+    const sourceLineColor = selectedLineColorState.lineColor
+      ?? selectedAccessoryDefinition?.defaultLineColor
+      ?? selectedPart?.defaultLineColor
+      ?? '#262626';
+    const sourceColorGradient = cloneAvatarColorGradient(selectedAppearanceState.colorGradient);
+    const sourceLineColorGradient = cloneAvatarColorGradient(selectedLineColorState.lineColorGradient);
+
+    selectedTargets.forEach(target => {
+      if (hairApplyPanel.kind === 'color') {
+        if (target.type === 'part') {
+          avatarCanvasRef.current?.setColor(target.key, sourceColor);
+          avatarCanvasRef.current?.setColorGradient(target.key, cloneAvatarColorGradient(sourceColorGradient));
+          avatarCanvasRef.current?.setColorGradientSpace(target.key, colorGradientSpace);
+          return;
+        }
+
+        avatarCanvasRef.current?.setAccessoryColor(target.instanceId, sourceColor);
+        avatarCanvasRef.current?.setAccessoryColorGradient(target.instanceId, cloneAvatarColorGradient(sourceColorGradient));
+        avatarCanvasRef.current?.setAccessoryColorGradientSpace(target.instanceId, colorGradientSpace);
+        return;
+      }
+
+      if (target.type === 'part') {
+        avatarCanvasRef.current?.setLineColor(target.key, sourceLineColor);
+        avatarCanvasRef.current?.setLineColorGradient(target.key, cloneAvatarColorGradient(sourceLineColorGradient));
+        return;
+      }
+
+      avatarCanvasRef.current?.setAccessoryLineColor(target.instanceId, sourceLineColor);
+      avatarCanvasRef.current?.setAccessoryLineColorGradient(target.instanceId, cloneAvatarColorGradient(sourceLineColorGradient));
+    });
+
+    setHairApplyPanel(null);
   };
 
   const changeSecondaryColor = (secondaryColor: string) => {
@@ -1047,14 +1263,48 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
         )}
 
         {selectedEditableProperties.includes('color') && isSelectedOptionColorEditable && canUseColorGradient && (
-          <GradientColorControl
-            title={selectedPart?.key === 'eyes.color' ? 'left color' : 'color'}
-            color={selectedAppearanceState.color ?? selectedAccessoryDefinition?.defaultColor ?? selectedPart?.defaultColor ?? '#000000'}
-            gradient={selectedAppearanceState.colorGradient}
-            onColorChange={changeColor}
-            onGradientModeChange={changeColorGradientMode}
-            onGradientUpdate={updateColorGradient}
-          />
+          <>
+            <GradientColorControl
+              title={selectedPart?.key === 'eyes.color' ? 'left color' : 'color'}
+              color={selectedAppearanceState.color ?? selectedAccessoryDefinition?.defaultColor ?? selectedPart?.defaultColor ?? '#000000'}
+              gradient={selectedAppearanceState.colorGradient}
+              onColorChange={changeColor}
+              onGradientModeChange={changeColorGradientMode}
+              onGradientUpdate={updateColorGradient}
+            />
+            {isSelectedHairColorSource && (
+              <button
+                className={selectedAppearanceState.colorGradientSpace === 'sharedHair'
+                  ? styles.sharedGradientStatus
+                  : styles.joinSharedGradientButton}
+                type="button"
+                onClick={toggleSelectedSharedHairGradientSpace}
+              >
+                {selectedAppearanceState.colorGradientSpace === 'sharedHair'
+                  ? '共用座標中'
+                  : '加入共用座標'}
+              </button>
+            )}
+            {isSelectedHairColorSource && (
+              <HairApplyButton
+                kind="color"
+                isActive={hairApplyPanel?.kind === 'color'}
+                onClick={() => openHairApplyPanel('color')}
+              />
+            )}
+            {isSelectedHairColorSource && hairApplyPanel?.kind === 'color' && (
+              <HairApplyPanel
+                targets={hairApplyTargets}
+                selectedTargetIds={hairApplyPanel.selectedTargetIds}
+                onToggleTarget={toggleHairApplyTarget}
+                onToggleAll={setAllHairApplyTargets}
+                onApply={() => applyHairSettingsToTargets()}
+                onApplySharedHairGradient={selectedAppearanceState.colorGradient
+                  ? () => applyHairSettingsToTargets('sharedHair')
+                  : undefined}
+              />
+            )}
+          </>
         )}
 
         {selectedEditableProperties.includes('color') && isSelectedOptionColorEditable && !canUseColorGradient && (
@@ -1091,14 +1341,32 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
         )}
 
         {selectedEditableProperties.includes('lineColor') && (
-          <label className={styles.colorField}>
-            <span>line</span>
-            <input
-              type="color"
-              value={selectedLineColorState.lineColor ?? selectedAccessoryDefinition?.defaultLineColor ?? selectedPart?.defaultLineColor ?? '#262626'}
-              onChange={event => changeLineColor(event.target.value)}
+          <>
+            <GradientColorControl
+              title="line"
+              color={selectedLineColorState.lineColor ?? selectedAccessoryDefinition?.defaultLineColor ?? selectedPart?.defaultLineColor ?? '#262626'}
+              gradient={selectedLineColorState.lineColorGradient}
+              onColorChange={changeLineColor}
+              onGradientModeChange={changeLineColorGradientMode}
+              onGradientUpdate={updateLineColorGradient}
             />
-          </label>
+            {isSelectedHairColorSource && (
+              <HairApplyButton
+                kind="line"
+                isActive={hairApplyPanel?.kind === 'line'}
+                onClick={() => openHairApplyPanel('line')}
+              />
+            )}
+            {isSelectedHairColorSource && hairApplyPanel?.kind === 'line' && (
+              <HairApplyPanel
+                targets={hairApplyTargets}
+                selectedTargetIds={hairApplyPanel.selectedTargetIds}
+                onToggleTarget={toggleHairApplyTarget}
+                onToggleAll={setAllHairApplyTargets}
+                onApply={() => applyHairSettingsToTargets()}
+              />
+            )}
+          </>
         )}
 
         {selectedEditableProperties.includes('visibility') && (
@@ -1416,6 +1684,16 @@ function GradientColorControl({
               onChange={event => onGradientUpdate({ toColor: event.target.value })}
             />
           </label>
+          <button
+            className={styles.swapGradientButton}
+            type="button"
+            onClick={() => onGradientUpdate({
+              fromColor: gradient.toColor,
+              toColor: gradient.fromColor,
+            })}
+          >
+            交換兩端顏色
+          </button>
           <label className={styles.rangeField}>
             <span>position {gradient.position}</span>
             <input
@@ -1467,6 +1745,85 @@ function GradientColorControl({
             </>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function HairApplyButton({
+  kind,
+  isActive,
+  onClick,
+}: {
+  kind: HairApplyKind;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={isActive ? styles.activeApplyButton : styles.applyButton}
+      type="button"
+      onClick={onClick}
+    >
+      套用{kind === 'color' ? '顏色' : '線色'}
+    </button>
+  );
+}
+
+function HairApplyPanel({
+  targets,
+  selectedTargetIds,
+  onToggleTarget,
+  onToggleAll,
+  onApply,
+  onApplySharedHairGradient,
+}: {
+  targets: HairApplyTarget[];
+  selectedTargetIds: string[];
+  onToggleTarget: (targetId: string, isSelected: boolean) => void;
+  onToggleAll: (isSelected: boolean) => void;
+  onApply: () => void;
+  onApplySharedHairGradient?: () => void;
+}) {
+  const isAllSelected = targets.length > 0 && selectedTargetIds.length === targets.length;
+
+  return (
+    <div className={styles.applyPanel}>
+      <label className={styles.toggleField}>
+        <input
+          type="checkbox"
+          checked={isAllSelected}
+          onChange={event => onToggleAll(event.target.checked)}
+        />
+        <span>全選</span>
+      </label>
+      <div className={styles.applyTargetList}>
+        {targets.map(target => (
+          <label className={styles.toggleField} key={target.id}>
+            <input
+              type="checkbox"
+              checked={selectedTargetIds.includes(target.id)}
+              onChange={event => onToggleTarget(target.id, event.target.checked)}
+            />
+            <span>{target.label}</span>
+          </label>
+        ))}
+      </div>
+      <button
+        type="button"
+        disabled={selectedTargetIds.length === 0}
+        onClick={onApply}
+      >
+        確定套用
+      </button>
+      {onApplySharedHairGradient && (
+        <button
+          type="button"
+          disabled={selectedTargetIds.length === 0}
+          onClick={onApplySharedHairGradient}
+        >
+          套用共用座標漸層
+        </button>
       )}
     </div>
   );
@@ -1659,6 +2016,21 @@ function createDefaultColorGradient(type: AvatarGradientType, baseColor: string 
     centerX: 0,
     centerY: 0,
   };
+}
+
+function cloneAvatarColorGradient(colorGradient: AvatarColorGradient | undefined): AvatarColorGradient | undefined {
+  return colorGradient ? { ...colorGradient } : undefined;
+}
+
+function getHairApplyTargetColorState(
+  target: HairApplyTarget,
+  avatarState: AvatarState,
+): AvatarPartState | AvatarAccessoryInstance | null {
+  if (target.type === 'part') {
+    return avatarState[target.key];
+  }
+
+  return avatarState.accessories.find(accessory => accessory.instanceId === target.instanceId) ?? null;
 }
 
 function getDraftSaveStatusLabel(status: DraftSaveStatus): string {

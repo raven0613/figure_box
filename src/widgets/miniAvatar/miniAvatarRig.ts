@@ -23,8 +23,8 @@ export const MINI_ACCESSORY_SLOT_Z_INDEX: Record<AccessoryLayerSlot, number> = {
 export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
   bodyTypeId: 1,
   baselineBodyTypeId: 1,
-  headCenter: { x: 0, y: 58 },
-  bodyCenter: { x: 0, y: 108 },
+  headCenter: { x: 0, y: 85 },
+  bodyCenter: { x: 0, y: 135 }, // 影響整個身體的位置
   face: { x: 0, y: 0 },
   earDistance: 39,
   ear: { x: -7.5, y: 7 },
@@ -160,8 +160,8 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
 export const MINI_SIDE_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
   bodyTypeId: 1,
   baselineBodyTypeId: 1,
-  headCenter: { x: 1.5, y: 58 },
-  bodyCenter: { x: 0, y: 108 },
+  headCenter: { x: 1.5, y: 85 },
+  bodyCenter: { x: 0, y: 135 },
   face: { x: 0, y: 0 },
   earDistance: 0,
   ear: { x: 1.5, y: 6 },

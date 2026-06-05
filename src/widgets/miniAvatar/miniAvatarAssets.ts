@@ -2,9 +2,11 @@ import { FabricImage } from 'fabric';
 
 import {
   MINI_BASE_TINT_LUMINANCE,
+  MINI_CANVAS_HEIGHT,
+  MINI_CANVAS_WIDTH,
   MINI_PIXEL_SCALE,
 } from './miniAvatarRig';
-import type { AvatarColorGradient, AvatarTintSource } from '../avatarCanvas';
+import type { AvatarColorGradient, AvatarGradientCoordinateSpace, AvatarTintSource } from '../avatarCanvas';
 import type { MiniImageContentBounds, MiniLayer } from './miniAvatarTypes';
 
 interface MiniImagePixelBounds {
@@ -22,6 +24,12 @@ interface MiniCompositeImageLayer {
 const MINI_GRADIENT_EDGE_COLOR_STOP = 0.05;
 const MINI_TRANSFORM_EPSILON = 0.0001;
 const MINI_TRANSFORM_SUPERSAMPLE = 2;
+const MINI_SHARED_HAIR_GRADIENT_BOUNDS: MiniImagePixelBounds = {
+  left: -90,
+  right: MINI_CANVAS_WIDTH - 90,
+  top: -60,
+  bottom: MINI_CANVAS_HEIGHT - 60,
+}; // 共用漸層：寬高跟胸像的漸層差不多
 const miniTintCache = new Map<string, string>();
 const miniContentBoundsCache = new Map<string, Promise<MiniImageContentBounds>>();
 const miniCompositeLayerCache = new Map<string, Promise<string>>();
@@ -39,7 +47,11 @@ export async function createMiniLayerImage(layer: MiniLayer): Promise<FabricImag
 
   const assetUrl = getMiniAvatarAssetUrl(layer.folder, layer.file);
   const imageUrl = layer.color
-    ? await tintMiniImageByLuminance(assetUrl, layer.color)
+    ? await tintMiniImageByLuminance(assetUrl, layer.color, {
+      anchorPoint: layer.colorAnchor ?? { x: layer.x, y: layer.y },
+      coordinateSpace: layer.colorGradientSpace ?? 'local',
+      pixelScale: MINI_PIXEL_SCALE * (layer.scale ?? 1),
+    })
     : assetUrl;
   const image = await FabricImage.fromURL(imageUrl);
   image.set({
@@ -236,6 +248,8 @@ function getMiniCompositeLayerCacheKey(layers: MiniLayer[]): string {
       layer.flipX === true ? '1' : '0',
       roundMiniTransformValue(layer.zIndex),
       serializeMiniTintSource(layer.color),
+      layer.colorGradientSpace ?? 'local',
+      layer.colorAnchor ? `${roundMiniTransformValue(layer.colorAnchor.x)},${roundMiniTransformValue(layer.colorAnchor.y)}` : '',
     ].join(':')),
   ].join('|');
 }
@@ -294,7 +308,11 @@ async function renderMiniCompositeLayerUrl(layers: MiniLayer[]): Promise<string>
 async function loadMiniLayerImageElement(layer: MiniLayer): Promise<HTMLImageElement> {
   const assetUrl = getMiniAvatarAssetUrl(layer.folder, layer.file);
   const imageUrl = layer.color
-    ? await tintMiniImageByLuminance(assetUrl, layer.color)
+    ? await tintMiniImageByLuminance(assetUrl, layer.color, {
+      anchorPoint: layer.colorAnchor ?? { x: layer.x, y: layer.y },
+      coordinateSpace: layer.colorGradientSpace ?? 'local',
+      pixelScale: MINI_PIXEL_SCALE * (layer.scale ?? 1),
+    })
     : assetUrl;
 
   return loadMiniImageElement(imageUrl);
@@ -474,8 +492,25 @@ function getFirstAvailableMiniDirectoryOptionId(folder: string): string | null {
   return optionIds[0] ?? null;
 }
 
-async function tintMiniImageByLuminance(imageUrl: string, tintSource: AvatarTintSource): Promise<string> {
-  const cacheKey = `${imageUrl}|${getMiniTintCacheKey(tintSource)}`;
+interface MiniTintCoordinateOptions {
+  coordinateSpace: AvatarGradientCoordinateSpace;
+  anchorPoint: { x: number; y: number };
+  pixelScale: number;
+}
+
+async function tintMiniImageByLuminance(
+  imageUrl: string,
+  tintSource: AvatarTintSource,
+  coordinateOptions: MiniTintCoordinateOptions,
+): Promise<string> {
+  const cacheKey = [
+    imageUrl,
+    getMiniTintCacheKey(tintSource),
+    coordinateOptions.coordinateSpace,
+    Math.round(coordinateOptions.anchorPoint.x * 100) / 100,
+    Math.round(coordinateOptions.anchorPoint.y * 100) / 100,
+    Math.round(coordinateOptions.pixelScale * 100) / 100,
+  ].join('|');
   const cachedUrl = miniTintCache.get(cacheKey);
 
   if (cachedUrl) {
@@ -519,7 +554,8 @@ async function tintMiniImageByLuminance(imageUrl: string, tintSource: AvatarTint
     const pixelIndex = index / 4;
     const x = pixelIndex % canvas.width;
     const y = Math.floor(pixelIndex / canvas.width);
-    const targetColor = getMiniTintPixelColor(tintSource, x, y, contentBounds);
+    const tintSample = getMiniTintSamplePoint(x, y, canvas.width, canvas.height, contentBounds, coordinateOptions);
+    const targetColor = getMiniTintPixelColor(tintSource, tintSample.x, tintSample.y, tintSample.bounds);
 
     imageData.data[index] = clampMiniColor(targetColor.red * shade);
     imageData.data[index + 1] = clampMiniColor(targetColor.green * shade);
@@ -531,6 +567,25 @@ async function tintMiniImageByLuminance(imageUrl: string, tintSource: AvatarTint
   const tintedUrl = canvas.toDataURL('image/png');
   miniTintCache.set(cacheKey, tintedUrl);
   return tintedUrl;
+}
+
+function getMiniTintSamplePoint(
+  x: number,
+  y: number,
+  imageWidth: number,
+  imageHeight: number,
+  localBounds: MiniImagePixelBounds,
+  coordinateOptions: MiniTintCoordinateOptions,
+): { x: number; y: number; bounds: MiniImagePixelBounds } {
+  if (coordinateOptions.coordinateSpace !== 'sharedHair') {
+    return { x, y, bounds: localBounds };
+  }
+
+  return {
+    x: coordinateOptions.anchorPoint.x + (x - imageWidth / 2) * coordinateOptions.pixelScale,
+    y: coordinateOptions.anchorPoint.y + (y - imageHeight / 2) * coordinateOptions.pixelScale,
+    bounds: MINI_SHARED_HAIR_GRADIENT_BOUNDS,
+  };
 }
 
 function getMiniTintPixelColor(
