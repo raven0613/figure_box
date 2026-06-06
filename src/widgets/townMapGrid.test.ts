@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { TownMapGrid, type GridCoordinate } from './townMapGrid';
+import { TownMapGrid, type GridCoordinate, type TownMapGridOptions } from './townMapGrid';
 import type { TownMapCellData } from '~/constants/townMap';
 
 const walkableCell = (): TownMapCellData => ({
@@ -16,7 +16,9 @@ const blockedCell = (): TownMapCellData => ({
   interactableObject: null,
 });
 
-const createGrid = (rows: TownMapCellData[][]): TownMapGrid => new TownMapGrid(rows, []);
+const createGrid = (rows: TownMapCellData[][], options?: TownMapGridOptions): TownMapGrid => (
+  new TownMapGrid(rows, [], options)
+);
 
 describe('TownMapGrid character occupancy', () => {
   test('allows multiple characters to occupy the same walkable tile', () => {
@@ -55,5 +57,35 @@ describe('TownMapGrid character occupancy', () => {
 
     expect(grid.findPath({ x: 0, y: 0 }, { x: 1, y: 0 })).toBeNull();
     expect(grid.moveOccupant('alice', { x: 1, y: 0 })).toBe(false);
+  });
+
+  test('allows diagonal movement by default', () => {
+    const grid = createGrid([
+      [walkableCell(), walkableCell()],
+      [walkableCell(), walkableCell()],
+    ]);
+
+    expect(grid.findPath({ x: 0, y: 0 }, { x: 1, y: 1 })).toEqual([{ x: 1, y: 1 }]);
+  });
+
+  test('finds cardinal-only paths when diagonal movement is disabled', () => {
+    const grid = createGrid([
+      [walkableCell(), walkableCell()],
+      [walkableCell(), walkableCell()],
+    ], { allowDiagonalMovement: false });
+
+    expect(grid.findPath({ x: 0, y: 0 }, { x: 1, y: 1 })).toEqual([
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+    ]);
+  });
+
+  test('prevents diagonal corner cutting when diagonal movement is enabled', () => {
+    const grid = createGrid([
+      [walkableCell(), blockedCell()],
+      [blockedCell(), walkableCell()],
+    ], { allowDiagonalMovement: true });
+
+    expect(grid.findPath({ x: 0, y: 0 }, { x: 1, y: 1 })).toBeNull();
   });
 });

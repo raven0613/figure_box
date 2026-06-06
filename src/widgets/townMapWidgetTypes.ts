@@ -11,6 +11,7 @@ export interface TownMapCharacter extends CharacterPlacement {
 export interface FabricTownMapOptions {
   baseCanvasElement?: HTMLCanvasElement;
   cellSize?: number;
+  allowDiagonalMovement?: boolean;
   onZoomChange?: (zoom: number) => void;
   onTileClick?: (tile: TownMapTile) => void;
   onMapObjectClick?: (objectId: string) => void;

@@ -69,6 +69,7 @@ const PLAYER_DEMO_ITEM_IDS: readonly ItemDefinitionId[] = [
   'wooden_chair',
 ];
 const GIFT_DROP_CHARACTER_RADIUS = 1;
+const ALLOW_DIAGONAL_MOVEMENT = false; // 斜走
 
 interface TownMapContainerProps {
   expressionByCharacterId?: Partial<Record<string, Expression>>;
@@ -381,6 +382,7 @@ export function TownMapContainer({
     const canvasHost = canvasHostRef.current;
     const widget = FabricTownMapWidget.mount(canvasHost, {
       cellSize: TOWN_MAP_CELL_SIZE,
+      allowDiagonalMovement: ALLOW_DIAGONAL_MOVEMENT,
       onTileClick: tile => {
         const placementItem = placementDraftRef.current;
 

@@ -19,7 +19,9 @@ import type { ItemDefinition, PlacedObject } from '~/typing/item';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
 import {
+  TOWN_MAP_GRID,
   TOWN_MAP_FLOOR_DECORATIONS,
+  TOWN_MAP_OBJECTS,
   type TownMapCellData,
   type TownMapFloorDecorationData,
   type TownMapObjectData,
@@ -58,7 +60,7 @@ export class FabricTownMapWidget {
   private readonly characterLayer: TownMapCharacterLayer;
   private readonly floatingTextLayer: TownMapFloatingTextLayer;
   private readonly walkAnimator: TownMapWalkAnimator;
-  private readonly grid = new TownMapGrid();
+  private readonly grid: TownMapGrid;
   private readonly terrainStyles = new TerrainStyleCatalog();
   private readonly objectGlyphFactory = new MapObjectGlyphFactory();
   private readonly itemGlyphFactory = new TownMapItemGlyphFactory();
@@ -71,6 +73,9 @@ export class FabricTownMapWidget {
 
   constructor(canvasElement: HTMLCanvasElement | string, options: FabricTownMapOptions = {}) {
     this.cellSize = options.cellSize ?? DEFAULT_CELL_SIZE;
+    this.grid = new TownMapGrid(TOWN_MAP_GRID, TOWN_MAP_OBJECTS, {
+      allowDiagonalMovement: options.allowDiagonalMovement,
+    });
 
     const entityCanvasElement = typeof canvasElement === 'string'
       ? document.getElementById(canvasElement) as HTMLCanvasElement | null

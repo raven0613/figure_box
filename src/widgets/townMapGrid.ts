@@ -14,16 +14,26 @@ export interface CharacterPlacement extends GridCoordinate {
   id: string;
 }
 
+export interface TownMapGridOptions {
+  allowDiagonalMovement?: boolean;
+}
+
 export class TownMapGrid {
   readonly width: number;
   readonly height: number;
+  private readonly allowDiagonalMovement: boolean;
   private readonly tiles: TownMapTile[];
   private readonly mapObjects: TownMapObjectData[];
   private readonly occupantToTile = new Map<string, number>();
   private readonly tileToOccupants = new Map<number, Set<string>>();
 
-  constructor(rows: TownMapCellData[][] = TOWN_MAP_GRID, mapObjects: readonly TownMapObjectData[] = TOWN_MAP_OBJECTS) {
+  constructor(
+    rows: TownMapCellData[][] = TOWN_MAP_GRID,
+    mapObjects: readonly TownMapObjectData[] = TOWN_MAP_OBJECTS,
+    options: TownMapGridOptions = {},
+  ) {
     const gridRows = this.cloneRows(rows);
+    this.allowDiagonalMovement = options.allowDiagonalMovement ?? true;
     this.height = gridRows.length;
     this.width = gridRows[0]?.length ?? 0;
     this.tiles = this.createFlatTiles(gridRows);
@@ -336,7 +346,6 @@ export class TownMapGrid {
 
     return getChebyshevDistance({ x, y }, { x: nearestX, y: nearestY });
   }
-  // 尋路：可以走斜的
   private getNeighborCoords(x: number, y: number): GridCoordinate[] {
     const cardinals: GridCoordinate[] = [
       { x: 0, y: -1 },
@@ -361,6 +370,10 @@ export class TownMapGrid {
       if (this.isInside(nx, ny)) {
         results.push({ x: nx, y: ny });
       }
+    }
+
+    if (!this.allowDiagonalMovement) {
+      return results;
     }
 
     for (const diag of diagonals) {
