@@ -12,7 +12,7 @@ export interface MiniSpriteSheet {
   frameCount: number;
 }
 
-export type MiniAvatarDirection = 'front' | 'side';
+export type MiniAvatarDirection = 'front' | 'side' | 'back';
 
 export interface MiniLayer {
   folder: string;

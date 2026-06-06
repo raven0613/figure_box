@@ -3,7 +3,6 @@ import { FabricImage } from 'fabric';
 import {
   MINI_BASE_TINT_LUMINANCE,
   MINI_CANVAS_HEIGHT,
-  MINI_CANVAS_WIDTH,
   MINI_PIXEL_SCALE,
 } from './miniAvatarRig';
 import type { AvatarColorGradient, AvatarGradientCoordinateSpace, AvatarTintSource } from '../avatarCanvas';
@@ -26,7 +25,8 @@ const MINI_TRANSFORM_EPSILON = 0.0001;
 const MINI_TRANSFORM_SUPERSAMPLE = 2;
 const MINI_SHARED_HAIR_GRADIENT_BOUNDS: MiniImagePixelBounds = {
   left: -90,
-  right: MINI_CANVAS_WIDTH - 90,
+  // right: MINI_CANVAS_WIDTH - 90,
+  right: 82,
   top: -60,
   bottom: MINI_CANVAS_HEIGHT - 60,
 }; // 共用漸層：寬高跟胸像的漸層差不多

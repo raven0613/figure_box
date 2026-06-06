@@ -20,6 +20,14 @@ export const MINI_ACCESSORY_SLOT_Z_INDEX: Record<AccessoryLayerSlot, number> = {
   frontBangs: 32,
 };
 
+export const MINI_BACK_ACCESSORY_SLOT_Z_INDEX: Record<AccessoryLayerSlot, number> = {
+  behindBody: 32,
+  onSkin: -1,
+  frontBody: -2,
+  frontFace: -3,
+  frontBangs: -4,
+};
+
 export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
   bodyTypeId: 1,
   baselineBodyTypeId: 1,
@@ -155,6 +163,27 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
     },
   },
   colors: AVATAR_RIG_COLORS,
+};
+
+export const MINI_BACK_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
+  ...MINI_FRONT_IDLE_RIG_LAYOUT,
+  bodyByType: { ...MINI_FRONT_IDLE_RIG_LAYOUT.bodyByType },
+  eyes: { ...MINI_FRONT_IDLE_RIG_LAYOUT.eyes },
+  hair: {
+    ...MINI_FRONT_IDLE_RIG_LAYOUT.hair,
+    backHairBottomByOption: { ...MINI_FRONT_IDLE_RIG_LAYOUT.hair.backHairBottomByOption },
+    backHairTopByOption: { ...MINI_FRONT_IDLE_RIG_LAYOUT.hair.backHairTopByOption },
+    bangsByOption: { ...MINI_FRONT_IDLE_RIG_LAYOUT.hair.bangsByOption },
+  },
+  clothing: { ...MINI_FRONT_IDLE_RIG_LAYOUT.clothing },
+  accessories: {
+    ...MINI_FRONT_IDLE_RIG_LAYOUT.accessories,
+    byCategoryOption: {
+      sideHair: { ...MINI_FRONT_IDLE_RIG_LAYOUT.accessories.byCategoryOption.sideHair },
+      ponytail: { ...MINI_FRONT_IDLE_RIG_LAYOUT.accessories.byCategoryOption.ponytail },
+      accessory: { ...MINI_FRONT_IDLE_RIG_LAYOUT.accessories.byCategoryOption.accessory },
+    },
+  },
 };
 
 export const MINI_SIDE_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {

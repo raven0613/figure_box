@@ -25,6 +25,8 @@ import {
 import {
   MINI_ACCESSORY_ORDER_STEP,
   MINI_ACCESSORY_SLOT_Z_INDEX,
+  MINI_BACK_ACCESSORY_SLOT_Z_INDEX,
+  MINI_BACK_IDLE_RIG_LAYOUT,
   MINI_CENTER_X,
   MINI_CLOTHING_BODY_Z_INDEX,
   MINI_CLOTHING_LAYER_Z_STEP,
@@ -54,6 +56,12 @@ interface MiniMirroredSocketPoints {
   right: MiniPoint;
 }
 
+interface MiniAssetPair {
+  folder: string;
+  colorFile: string;
+  lineFile: string;
+}
+
 const MINI_HEAD_BACK_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.behindBody;
 const MINI_HEAD_ON_SKIN_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.onSkin;
 const MINI_HEAD_BODY_FRONT_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.frontBody;
@@ -63,24 +71,34 @@ const MINI_HEAD_BANGS_Z_INDEX = 30;
 const MINI_HEAD_FRONT_BANGS_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.frontBangs;
 
 export async function createMiniFrontIdleLayers(state: AvatarState, pose: MiniPose = {}): Promise<MiniLayer[]> {
-  return new MiniFrontIdleLayerRenderer(state, pose).createLayers();
+  return new MiniFrontBackIdleLayerRenderer(state, pose, 'front').createLayers();
+}
+
+export async function createMiniBackIdleLayers(state: AvatarState, pose: MiniPose = {}): Promise<MiniLayer[]> {
+  return new MiniFrontBackIdleLayerRenderer(state, pose, 'back').createLayers();
 }
 
 export async function createMiniSideIdleLayers(state: AvatarState, pose: MiniPose = {}): Promise<MiniLayer[]> {
   return new MiniSideIdleLayerRenderer(state, pose).createLayers();
 }
 
-class MiniFrontIdleLayerRenderer {
+class MiniFrontBackIdleLayerRenderer {
   private readonly state: AvatarState;
   private readonly pose: MiniPose;
+  private readonly direction: 'front' | 'back';
 
-  constructor(state: AvatarState, pose: MiniPose) {
+  constructor(state: AvatarState, pose: MiniPose, direction: 'front' | 'back') {
     this.state = state;
     this.pose = pose;
+    this.direction = direction;
   }
 
   async createLayers(): Promise<MiniLayer[]> {
-    const rig = MINI_FRONT_IDLE_RIG_LAYOUT;
+    const isBack = this.direction === 'back';
+    const rig = isBack ? MINI_BACK_IDLE_RIG_LAYOUT : MINI_FRONT_IDLE_RIG_LAYOUT;
+    const accessorySlotZIndex = isBack
+      ? MINI_BACK_ACCESSORY_SLOT_Z_INDEX
+      : MINI_ACCESSORY_SLOT_Z_INDEX;
     const bodyOptionId = this.resolveOptionId('body', this.getPartOptionId('mini.bodyType') || rig.bodyTypeId);
     const bodyTypeId = Number(bodyOptionId);
     const skinColor = this.getPartColor('face', rig.colors.skin);
@@ -90,6 +108,12 @@ class MiniFrontIdleLayerRenderer {
     const backHairBottomId = this.resolveOptionId('back_hair_bottom', this.getPartOptionId('hair.backHair'));
     const backHairTopId = this.resolveOptionId('back_hair_top', this.getPartOptionId('hair.topHair'));
     const bangsId = this.resolveOptionId('bangs', this.getPartOptionId('hair.bangs'));
+    const backHairBottomFolder = isBack
+      ? getMiniBackFolderWithFallback('back_hair_bottom', backHairBottomId)
+      : 'back_hair_bottom';
+    const backHairTopFolder = isBack
+      ? getMiniBackFolderWithFallback('back_hair_top', backHairTopId)
+      : 'back_hair_top';
     const bodyRig = rig.bodyByType[bodyTypeId] ?? rig.bodyByType[1];
     const defaultHeadCenter = getMiniCanvasPoint(rig.headCenter);
     const bodyCenter = await getMiniBodyCenter(rig, bodyRig);
@@ -167,13 +191,33 @@ class MiniFrontIdleLayerRenderer {
         topArmOffset.y,
       )
       : [];
+    const topBodyAssets = topId === null
+      ? null
+      : resolveMiniBackAssetPair(
+        `clothing/tops/${topId}`,
+        `back_body_${bodyOptionId}_color.png`,
+        `back_body_${bodyOptionId}_line.png`,
+        `front_body_${bodyOptionId}_color.png`,
+        `front_body_${bodyOptionId}_line.png`,
+        isBack,
+      );
+    const bottomAssets = bottomId === null
+      ? null
+      : resolveMiniBackAssetPair(
+        `clothing/bottoms/${bottomId}`,
+        'back_color.png',
+        'back_line.png',
+        'front_color.png',
+        'front_line.png',
+        isBack,
+      );
     const clothingLayers = [
-      ...(isTopVisible
+      ...(isTopVisible && topBodyAssets
         ? [
           ...this.createNamedColorAndLineLayers(
-            `clothing/tops/${topId}`,
-            `front_body_${bodyOptionId}_color.png`,
-            `front_body_${bodyOptionId}_line.png`,
+            topBodyAssets.folder,
+            topBodyAssets.colorFile,
+            topBodyAssets.lineFile,
             topColor,
             topLineColor,
             bodyOffset.x + topBodyOffset.x,
@@ -182,11 +226,11 @@ class MiniFrontIdleLayerRenderer {
           ),
         ]
         : []),
-      ...(isBottomVisible
+      ...(isBottomVisible && bottomAssets
         ? this.createNamedColorAndLineLayers(
-          `clothing/bottoms/${bottomId}`,
-          'front_color.png',
-          'front_line.png',
+          bottomAssets.folder,
+          bottomAssets.colorFile,
+          bottomAssets.lineFile,
           bottomColor,
           bottomLineColor,
           bottomAnchorOffset.x + bottomOffset.x,
@@ -283,22 +327,22 @@ class MiniFrontIdleLayerRenderer {
     const headBackNode: MiniRigNode = {
       transform: headTransform,
       precompose: true,
-      precomposeZIndex: MINI_HEAD_BACK_Z_INDEX,
-      layers: [
-        ...this.createColorAndLineLayers('back_hair_bottom', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineTintSource('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 10, this.getPartColorGradientSpace('hair.backHair')),
-      ],
+      precomposeZIndex: accessorySlotZIndex.behindBody,
+      layers: isBack
+        ? []
+        : this.createColorAndLineLayers(backHairBottomFolder, backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineTintSource('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 10, this.getPartColorGradientSpace('hair.backHair')),
       children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['behindBody']),
     };
     const headOnSkinNode: MiniRigNode = {
       transform: headTransform,
       precompose: true,
-      precomposeZIndex: MINI_HEAD_ON_SKIN_Z_INDEX,
+      precomposeZIndex: accessorySlotZIndex.onSkin,
       children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['onSkin']),
     };
     const headBodyFrontNode: MiniRigNode = {
       transform: headTransform,
       precompose: true,
-      precomposeZIndex: MINI_HEAD_BODY_FRONT_Z_INDEX,
+      precomposeZIndex: accessorySlotZIndex.frontBody,
       children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['frontBody']),
     };
     const headMainNode: MiniRigNode = {
@@ -307,31 +351,40 @@ class MiniFrontIdleLayerRenderer {
       precomposeZIndex: MINI_HEAD_MAIN_Z_INDEX,
       layers: [
         ...this.createColorAndLineLayers('face', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
-        ...this.createColorAndLineLayers('back_hair_top', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineTintSource('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5, this.getPartColorGradientSpace('hair.topHair')),
+        ...(!isBack
+          ? this.createColorAndLineLayers(backHairTopFolder, backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineTintSource('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5, this.getPartColorGradientSpace('hair.topHair'))
+          : []),
         ...this.createMirroredColorAndLineLayers('ear', '01', skinColor, skinLineColor, rig.earDistance + earOffset.x, earOffset.y, 13.8),
-        ...this.createLineOnlyLayers('mouth', '01', this.getPartLineTintSource('mouth'), mouthOffset.x, mouthOffset.y, 20),
+        ...(!isBack
+          ? this.createLineOnlyLayers('mouth', '01', this.getPartLineTintSource('mouth'), mouthOffset.x, mouthOffset.y, 20)
+          : []),
       ],
-      children: [eyesNode],
+      children: isBack ? [] : [eyesNode],
     };
     const headFrontFaceNode: MiniRigNode = {
       transform: headTransform,
       precompose: true,
-      precomposeZIndex: MINI_HEAD_FRONT_FACE_Z_INDEX,
+      precomposeZIndex: accessorySlotZIndex.frontFace,
       children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['frontFace']),
     };
     const headBangsNode: MiniRigNode = {
       transform: headTransform,
       precompose: true,
       precomposeZIndex: MINI_HEAD_BANGS_Z_INDEX,
-      layers: [
-        ...this.createColorAndLineLayers('bangs', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineTintSource('hair.bangs'), bangsOffset.x, bangsOffset.y, 30, this.getPartColorGradientSpace('hair.bangs')),
-        ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
-      ],
+      layers: isBack
+        ? [
+          ...this.createColorAndLineLayers(backHairBottomFolder, backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineTintSource('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 30, this.getPartColorGradientSpace('hair.backHair')),
+          ...this.createColorAndLineLayers(backHairTopFolder, backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineTintSource('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 30.5, this.getPartColorGradientSpace('hair.topHair')),
+        ]
+        : [
+          ...this.createColorAndLineLayers('bangs', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineTintSource('hair.bangs'), bangsOffset.x, bangsOffset.y, 30, this.getPartColorGradientSpace('hair.bangs')),
+          ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
+        ],
     };
     const headFrontBangsNode: MiniRigNode = {
       transform: headTransform,
       precompose: true,
-      precomposeZIndex: MINI_HEAD_FRONT_BANGS_Z_INDEX,
+      precomposeZIndex: accessorySlotZIndex.frontBangs,
       children: this.createAccessoryNodes(accessoryBases, rig.accessories, ['frontBangs']),
     };
     const rootNode: MiniRigNode = {
@@ -587,8 +640,8 @@ class MiniFrontIdleLayerRenderer {
 
       if (definition.renderMode === 'mirrored') {
         return [
-          this.createAccessorySideNode(accessory, folder, optionId, -1, base, optionOffset, zIndex),
-          this.createAccessorySideNode(accessory, folder, optionId, 1, base, optionOffset, zIndex),
+          this.createAccessorySideNode(accessory, folder, optionId, -1, base, optionOffset, zIndex, accessoryRig.mirroredDistance),
+          this.createAccessorySideNode(accessory, folder, optionId, 1, base, optionOffset, zIndex, accessoryRig.mirroredDistance),
         ].filter((node): node is MiniRigNode => node !== null);
       }
 
@@ -622,6 +675,7 @@ class MiniFrontIdleLayerRenderer {
     base: MiniPoint,
     optionOffset: MiniPoint,
     zIndex: number,
+    mirroredDistance: number,
   ): MiniRigNode | null {
     const definition = getAccessoryCategoryDefinition(accessory.category);
     const pose = getAccessoryPoseState(accessory, 'chibi');
@@ -632,7 +686,7 @@ class MiniFrontIdleLayerRenderer {
 
     return {
       transform: {
-        x: base.x + side * (MINI_FRONT_IDLE_RIG_LAYOUT.accessories.mirroredDistance + optionOffset.x + pose.offsetX * MINI_PIXEL_SCALE),
+        x: base.x + side * (mirroredDistance + optionOffset.x + pose.offsetX * MINI_PIXEL_SCALE),
         y: base.y + optionOffset.y + pose.offsetY * MINI_PIXEL_SCALE,
         angle: side * pose.rotate,
         scale: pose.scale,
@@ -1380,6 +1434,32 @@ function getMiniMirroredAccessoryFlipX(
   const sourceSide = 1;
 
   return side !== sourceSide ? !isUserFlipped : isUserFlipped;
+}
+
+function getMiniBackFolderWithFallback(folder: string, optionId: string): string {
+  const backFolder = `${folder}/back`;
+  const hasBackPair = hasMiniAvatarAsset(backFolder, `${optionId}_color.png`)
+    && hasMiniAvatarAsset(backFolder, `${optionId}_line.png`);
+
+  return hasBackPair ? backFolder : folder;
+}
+
+function resolveMiniBackAssetPair(
+  folder: string,
+  backColorFile: string,
+  backLineFile: string,
+  frontColorFile: string,
+  frontLineFile: string,
+  useBackAssets: boolean,
+): MiniAssetPair {
+  const backFolder = `${folder}/back`;
+  const hasBackPair = useBackAssets
+    && hasMiniAvatarAsset(backFolder, backColorFile)
+    && hasMiniAvatarAsset(backFolder, backLineFile);
+
+  return hasBackPair
+    ? { folder: backFolder, colorFile: backColorFile, lineFile: backLineFile }
+    : { folder, colorFile: frontColorFile, lineFile: frontLineFile };
 }
 
 function getMiniSideFolderWithFallback(folder: string, optionId: string): string {

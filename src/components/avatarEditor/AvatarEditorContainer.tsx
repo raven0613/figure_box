@@ -92,10 +92,12 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const miniCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const miniSideCanvasHostRef = useRef<HTMLDivElement | null>(null);
+  const miniBackCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const miniAnimationCanvasHostRef = useRef<HTMLDivElement | null>(null);
   const avatarCanvasRef = useRef<AvatarCanvas | null>(null);
   const miniAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const miniSideAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
+  const miniBackAvatarCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const miniAnimationCanvasRef = useRef<MiniAvatarCanvas | null>(null);
   const spriteSheetBakeVersionRef = useRef(0);
   const draftAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -344,6 +346,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     setAvatarState(state);
     miniAvatarCanvasRef.current?.setState(state);
     miniSideAvatarCanvasRef.current?.setState(state);
+    miniBackAvatarCanvasRef.current?.setState(state);
     miniAnimationCanvasRef.current?.setState(state);
     onAvatarChangeRef.current?.(state);
     scheduleDraftAutosave(state);
@@ -360,13 +363,20 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   }, [avatarState.accessories, selectedTarget]);
 
   useEffect(() => {
-    if (!canvasHostRef.current || !miniCanvasHostRef.current || !miniSideCanvasHostRef.current || !miniAnimationCanvasHostRef.current) {
+    if (
+      !canvasHostRef.current
+      || !miniCanvasHostRef.current
+      || !miniSideCanvasHostRef.current
+      || !miniBackCanvasHostRef.current
+      || !miniAnimationCanvasHostRef.current
+    ) {
       return;
     }
 
     const canvasHost = canvasHostRef.current;
     const miniCanvasHost = miniCanvasHostRef.current;
     const miniSideCanvasHost = miniSideCanvasHostRef.current;
+    const miniBackCanvasHost = miniBackCanvasHostRef.current;
     const miniAnimationCanvasHost = miniAnimationCanvasHostRef.current;
     const avatarCanvas = AvatarCanvas.mount(canvasHost, {
       initialState: initialStateRef.current,
@@ -379,6 +389,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       initialState: avatarCanvas.getState(),
       direction: 'side',
     });
+    const miniBackAvatarCanvas = MiniAvatarCanvas.mount(miniBackCanvasHost, {
+      initialState: avatarCanvas.getState(),
+      direction: 'back',
+    });
     const miniAnimationCanvas = MiniAvatarCanvas.mount(miniAnimationCanvasHost, {
       initialState: avatarCanvas.getState(),
       isAnimationEnabled: true,
@@ -386,6 +400,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     avatarCanvasRef.current = avatarCanvas;
     miniAvatarCanvasRef.current = miniAvatarCanvas;
     miniSideAvatarCanvasRef.current = miniSideAvatarCanvas;
+    miniBackAvatarCanvasRef.current = miniBackAvatarCanvas;
     miniAnimationCanvasRef.current = miniAnimationCanvas;
     refreshSpriteSheetPreview();
 
@@ -394,14 +409,17 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       avatarCanvasRef.current = null;
       miniAvatarCanvasRef.current = null;
       miniSideAvatarCanvasRef.current = null;
+      miniBackAvatarCanvasRef.current = null;
       miniAnimationCanvasRef.current = null;
       void avatarCanvas.destroy();
       void miniAvatarCanvas.destroy();
       void miniSideAvatarCanvas.destroy();
+      void miniBackAvatarCanvas.destroy();
       void miniAnimationCanvas.destroy();
       canvasHost.replaceChildren();
       miniCanvasHost.replaceChildren();
       miniSideCanvasHost.replaceChildren();
+      miniBackCanvasHost.replaceChildren();
       miniAnimationCanvasHost.replaceChildren();
     };
   }, [handleAvatarCanvasChange, refreshSpriteSheetPreview]);
@@ -1146,6 +1164,9 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
             </div>
             <div className={styles.miniPreviewShell} aria-label="Mini side avatar preview">
               <div className={styles.miniCanvasHost} ref={miniSideCanvasHostRef} />
+            </div>
+            <div className={styles.miniPreviewShell} aria-label="Mini back avatar preview">
+              <div className={styles.miniCanvasHost} ref={miniBackCanvasHostRef} />
             </div>
           </div>
           <div className={styles.miniPreviewShell} aria-label="Mini live animation preview">

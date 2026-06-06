@@ -7,7 +7,11 @@ import {
 } from './miniAvatar/miniAvatarAnimation';
 import { MINI_WAVE_BLINK_ANIMATION } from './miniAvatar/miniAvatarAnimationDefinitions';
 import { createMiniLayerImages } from './miniAvatar/miniAvatarAssets';
-import { createMiniFrontIdleLayers, createMiniSideIdleLayers } from './miniAvatar/miniAvatarLayerRenderer';
+import {
+  createMiniBackIdleLayers,
+  createMiniFrontIdleLayers,
+  createMiniSideIdleLayers,
+} from './miniAvatar/miniAvatarLayerRenderer';
 import {
   MINI_CANVAS_HEIGHT,
   MINI_CANVAS_WIDTH,
@@ -150,9 +154,7 @@ export class MiniAvatarCanvas {
     this.renderVersion = currentRenderVersion;
     this.canvas.remove(...this.canvas.getObjects());
 
-    const layers = this.direction === 'side'
-      ? await createMiniSideIdleLayers(this.state, pose)
-      : await createMiniFrontIdleLayers(this.state, pose);
+    const layers = await createMiniIdleLayers(this.state, this.direction, pose);
     const images = await createMiniLayerImages(
       [...layers].sort((first, second) => first.zIndex - second.zIndex),
     );
@@ -164,4 +166,20 @@ export class MiniAvatarCanvas {
     this.canvas.add(...images);
     this.canvas.requestRenderAll();
   }
+}
+
+function createMiniIdleLayers(
+  state: AvatarState,
+  direction: MiniAvatarDirection,
+  pose: MiniPose,
+) {
+  if (direction === 'side') {
+    return createMiniSideIdleLayers(state, pose);
+  }
+
+  if (direction === 'back') {
+    return createMiniBackIdleLayers(state, pose);
+  }
+
+  return createMiniFrontIdleLayers(state, pose);
 }

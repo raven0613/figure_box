@@ -199,8 +199,9 @@ export const MINI_UPPER_EYELID_OFFSET_Y_LIMITS = {
 const ACCESSORY_ORDER_STEP = 0.01;
 const CHIBI_ACCESSORY_POSITION_SCALE = 0.5;
 const CHIBI_SIDE_HAIR_POSITION_SCALE = 0.5;
+// 衣服是否可調色
 const NON_TINTABLE_MINI_CLOTHING_OPTIONS = {
-  tops: new Set([1, 2]),
+  tops: new Set([1, 2, 3]),
   bottoms: new Set<number>(),
 };
 const tintCache = new Map<string, string>();
@@ -1630,15 +1631,6 @@ class MirroredAccessoryPart extends MirroredAssetPart {
     return AVATAR_PORTRAIT_RIG_LAYOUT.mirrored.accessoryY + optionOffset.y;
   }
 
-  protected getMirroredSourceSide(): -1 | 1 {
-    const accessoryState = this.state as AvatarAccessoryInstance;
-
-    if (accessoryState.category === 'sideHair') {
-      return [1, 3, 5].includes(this.state.optionId) ? -1 : 1;
-    }
-
-    return 1;
-  }
 }
 
 class AvatarPartFactory {

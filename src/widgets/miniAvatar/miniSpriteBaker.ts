@@ -8,7 +8,11 @@ import {
 } from './miniAvatarAnimation';
 import { MINI_WAVE_BLINK_ANIMATION } from './miniAvatarAnimationDefinitions';
 import { createMiniLayerImages } from './miniAvatarAssets';
-import { createMiniFrontIdleLayers, createMiniSideIdleLayers } from './miniAvatarLayerRenderer';
+import {
+  createMiniBackIdleLayers,
+  createMiniFrontIdleLayers,
+  createMiniSideIdleLayers,
+} from './miniAvatarLayerRenderer';
 import {
   MINI_CANVAS_HEIGHT,
   MINI_CANVAS_WIDTH,
@@ -82,6 +86,10 @@ function createMiniDirectionalIdleLayers(
 ): Promise<MiniLayer[]> {
   if (direction === 'side') {
     return createMiniSideIdleLayers(state, pose);
+  }
+
+  if (direction === 'back') {
+    return createMiniBackIdleLayers(state, pose);
   }
 
   return createMiniFrontIdleLayers(state, pose);

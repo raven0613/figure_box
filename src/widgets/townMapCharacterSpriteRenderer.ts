@@ -52,7 +52,7 @@ export class TownMapCharacterSpriteRenderer {
       selectable: false,
       evented: false,
       objectCaching: false,
-    }) as TownMapCharacterSpriteBody;
+    });
 
     spriteBody._render = (context: CanvasRenderingContext2D) => {
       const animation = direction === 'front' ? this.front : this.side;
@@ -84,17 +84,19 @@ export class TownMapCharacterSpriteRenderer {
       context.restore();
     };
 
-    spriteBody.setTownMapSpriteDirection = (nextDirection: TownMapCharacterSpriteDirection) => {
-      if (direction === nextDirection) {
-        return;
-      }
+    return Object.assign(spriteBody, {
+      setTownMapSpriteDirection(nextDirection: TownMapCharacterSpriteDirection) {
+        if (direction === nextDirection) {
+          return;
+        }
 
-      direction = nextDirection;
-      spriteBody.dirty = true;
-    };
-    spriteBody.getTownMapSpriteDirection = () => direction;
-
-    return spriteBody;
+        direction = nextDirection;
+        spriteBody.dirty = true;
+      },
+      getTownMapSpriteDirection() {
+        return direction;
+      },
+    });
   }
 }
 
