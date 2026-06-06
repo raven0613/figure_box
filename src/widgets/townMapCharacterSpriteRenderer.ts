@@ -2,7 +2,7 @@ import { FabricImage } from 'fabric';
 import { TOWN_MAP_CHARACTER_RENDER_SCALE } from '~/constants/townMapWidgetConstants';
 import type { MiniSpriteSheet } from './miniAvatar/miniAvatarTypes';
 
-export type TownMapCharacterSpriteDirection = 'front' | 'side-left' | 'side-right';
+export type TownMapCharacterSpriteDirection = 'front' | 'back' | 'side-left' | 'side-right';
 
 export interface TownMapCharacterSpriteAnimation {
   spriteSheet: MiniSpriteSheet;
@@ -11,6 +11,7 @@ export interface TownMapCharacterSpriteAnimation {
 
 export interface TownMapCharacterSpriteSet {
   front: TownMapCharacterSpriteAnimation;
+  back: TownMapCharacterSpriteAnimation;
   side: TownMapCharacterSpriteAnimation;
 }
 
@@ -25,17 +26,20 @@ interface LoadedSpriteAnimation extends TownMapCharacterSpriteAnimation {
 
 interface TownMapCharacterSpriteRendererOptions {
   front: LoadedSpriteAnimation;
+  back: LoadedSpriteAnimation;
   side: LoadedSpriteAnimation;
   renderSize: number;
 }
 
 export class TownMapCharacterSpriteRenderer {
   private readonly front: LoadedSpriteAnimation;
+  private readonly back: LoadedSpriteAnimation;
   private readonly side: LoadedSpriteAnimation;
   private readonly renderSize: number;
 
   constructor(options: TownMapCharacterSpriteRendererOptions) {
     this.front = options.front;
+    this.back = options.back;
     this.side = options.side;
     this.renderSize = options.renderSize;
   }
@@ -55,7 +59,7 @@ export class TownMapCharacterSpriteRenderer {
     });
 
     spriteBody._render = (context: CanvasRenderingContext2D) => {
-      const animation = direction === 'front' ? this.front : this.side;
+      const animation = this.getAnimation(direction);
       const spriteSheet = animation.spriteSheet;
       const frameIndex = getSpriteFrameIndex(animation, animationStartedAt);
       const column = frameIndex % spriteSheet.columns;
@@ -98,14 +102,27 @@ export class TownMapCharacterSpriteRenderer {
       },
     });
   }
+
+  private getAnimation(direction: TownMapCharacterSpriteDirection): LoadedSpriteAnimation {
+    if (direction === 'front') {
+      return this.front;
+    }
+
+    if (direction === 'back') {
+      return this.back;
+    }
+
+    return this.side;
+  }
 }
 
 export async function createTownMapCharacterSpriteRenderer(
   spriteSet: TownMapCharacterSpriteSet,
   cellSize: number,
 ): Promise<TownMapCharacterSpriteRenderer> {
-  const [frontImage, sideImage] = await Promise.all([
+  const [frontImage, backImage, sideImage] = await Promise.all([
     loadSpriteImage(spriteSet.front.spriteSheet.dataUrl),
+    loadSpriteImage(spriteSet.back.spriteSheet.dataUrl),
     loadSpriteImage(spriteSet.side.spriteSheet.dataUrl),
   ]);
 
@@ -113,6 +130,10 @@ export async function createTownMapCharacterSpriteRenderer(
     front: {
       ...spriteSet.front,
       image: frontImage,
+    },
+    back: {
+      ...spriteSet.back,
+      image: backImage,
     },
     side: {
       ...spriteSet.side,

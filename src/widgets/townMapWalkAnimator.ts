@@ -286,7 +286,7 @@ function getDirectionForMovement(from: GridCoordinate, to: GridCoordinate): Town
   const deltaY = to.y - from.y;
 
   if (Math.abs(deltaX) <= Math.abs(deltaY)) {
-    return 'front';
+    return deltaY < 0 ? 'back' : 'front';
   }
 
   return deltaX < 0 ? 'side-left' : 'side-right';

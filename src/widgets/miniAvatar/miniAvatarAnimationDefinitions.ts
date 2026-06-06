@@ -39,6 +39,20 @@ export const MINI_WALK_FRONT_ANIMATION: MiniAnimation = {
   ],
 };
 
+export const MINI_WALK_BACK_ANIMATION: MiniAnimation = {
+  id: 'walk_back',
+  label: '背面走路',
+  version: 1,
+  direction: 'back',
+  durationMs: 2800,
+  fps: 12,
+  columns: 6,
+  isLooping: true,
+  clips: [
+    createMiniWalkFrontClip(),
+  ],
+};
+
 export const MINI_WALK_SIDE_ANIMATION: MiniAnimation = {
   id: 'walk_side',
   label: '側面走路',
@@ -60,5 +74,6 @@ export const MINI_WALK_SIDE_ANIMATION: MiniAnimation = {
 export const MINI_AVATAR_ANIMATION_DEFINITIONS = [
   MINI_WAVE_BLINK_ANIMATION,
   MINI_WALK_FRONT_ANIMATION,
+  MINI_WALK_BACK_ANIMATION,
   MINI_WALK_SIDE_ANIMATION,
 ];

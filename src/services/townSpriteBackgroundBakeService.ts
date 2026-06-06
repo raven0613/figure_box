@@ -1,6 +1,7 @@
 import { CHARACTER_SEEDS } from '~/constants/character';
 import {
   MINI_AVATAR_ANIMATION_DEFINITIONS,
+  MINI_WALK_BACK_ANIMATION,
   MINI_WALK_FRONT_ANIMATION,
   MINI_WALK_SIDE_ANIMATION,
 } from '~/widgets/miniAvatar/miniAvatarAnimationDefinitions';
@@ -41,6 +42,7 @@ type IdleSchedulerWindow = Window & {
 };
 
 const REQUIRED_TOWN_SPRITE_ANIMATION_IDS = new Set([
+  MINI_WALK_BACK_ANIMATION.id,
   MINI_WALK_FRONT_ANIMATION.id,
   MINI_WALK_SIDE_ANIMATION.id,
 ]);

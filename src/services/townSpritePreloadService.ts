@@ -9,6 +9,7 @@ import {
   getMiniAnimationFrameDurationMs,
 } from '~/widgets/miniAvatar/miniAvatarAnimation';
 import {
+  MINI_WALK_BACK_ANIMATION,
   MINI_WALK_FRONT_ANIMATION,
   MINI_WALK_SIDE_ANIMATION,
 } from '~/widgets/miniAvatar/miniAvatarAnimationDefinitions';
@@ -68,6 +69,7 @@ export async function preloadTownRequiredSpriteSheets(
   const characters = options.characters ?? CHARACTER_SEEDS;
   const animations = options.animations ?? [
     MINI_WALK_FRONT_ANIMATION,
+    MINI_WALK_BACK_ANIMATION,
     MINI_WALK_SIDE_ANIMATION,
   ];
   const jobs = createPreloadJobs(characters, animations);
@@ -139,8 +141,9 @@ export async function loadTownCharacterSpriteSet(
   character: TownSpritePreloadCharacter,
 ): Promise<TownMapCharacterSpriteSet> {
   const avatarState = resolveTownSpriteAvatarState(character);
-  const [frontSpriteSheet, sideSpriteSheet] = await Promise.all([
+  const [frontSpriteSheet, backSpriteSheet, sideSpriteSheet] = await Promise.all([
     bakeCachedMiniAnimationSpriteSheet(avatarState, MINI_WALK_FRONT_ANIMATION),
+    bakeCachedMiniAnimationSpriteSheet(avatarState, MINI_WALK_BACK_ANIMATION),
     bakeCachedMiniAnimationSpriteSheet(avatarState, MINI_WALK_SIDE_ANIMATION),
   ]);
 
@@ -148,6 +151,10 @@ export async function loadTownCharacterSpriteSet(
     front: {
       spriteSheet: frontSpriteSheet,
       frameDurationMs: getMiniAnimationFrameDurationMs(MINI_WALK_FRONT_ANIMATION),
+    },
+    back: {
+      spriteSheet: backSpriteSheet,
+      frameDurationMs: getMiniAnimationFrameDurationMs(MINI_WALK_BACK_ANIMATION),
     },
     side: {
       spriteSheet: sideSpriteSheet,

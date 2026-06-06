@@ -1,7 +1,7 @@
 import { normalizeAvatarState } from '~/widgets/avatarCanvas';
 import type { AvatarState } from '~/widgets/avatarCanvas';
 
-export const AVATAR_APPEARANCE_SCHEMA_VERSION = 1;
+export const AVATAR_APPEARANCE_SCHEMA_VERSION = 3;
 
 const DRAFT_STORAGE_KEY = 'figureBox.avatarEditor.currentDraft.v1';
 const TEMPLATE_STORAGE_KEY = 'figureBox.avatarEditor.templates.v1';

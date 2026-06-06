@@ -69,6 +69,7 @@ const MINI_HEAD_MAIN_Z_INDEX = 10;
 const MINI_HEAD_FRONT_FACE_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.frontFace;
 const MINI_HEAD_BANGS_Z_INDEX = 30;
 const MINI_HEAD_FRONT_BANGS_Z_INDEX = MINI_ACCESSORY_SLOT_Z_INDEX.frontBangs;
+const MINI_BACK_HEAD_MAIN_Z_INDEX = -2;
 
 export async function createMiniFrontIdleLayers(state: AvatarState, pose: MiniPose = {}): Promise<MiniLayer[]> {
   return new MiniFrontBackIdleLayerRenderer(state, pose, 'front').createLayers();
@@ -348,7 +349,7 @@ class MiniFrontBackIdleLayerRenderer {
     const headMainNode: MiniRigNode = {
       transform: headTransform,
       precompose: true,
-      precomposeZIndex: MINI_HEAD_MAIN_Z_INDEX,
+      precomposeZIndex: isBack ? MINI_BACK_HEAD_MAIN_Z_INDEX : MINI_HEAD_MAIN_Z_INDEX,
       layers: [
         ...this.createColorAndLineLayers('face', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
         ...(!isBack
@@ -626,7 +627,7 @@ class MiniFrontBackIdleLayerRenderer {
   ): MiniRigNode[] {
     return this.state.accessories.flatMap(accessory => {
       const definition = getAccessoryCategoryDefinition(accessory.category);
-      const pose = getAccessoryPoseState(accessory, 'chibi');
+      const pose = getAccessoryPoseState(accessory, this.direction === 'back' ? 'chibiBack' : 'chibi');
 
       if (!isAccessoryInLayerSlots(pose.layerSlot, layerSlots)) {
         return [];
@@ -678,7 +679,7 @@ class MiniFrontBackIdleLayerRenderer {
     mirroredDistance: number,
   ): MiniRigNode | null {
     const definition = getAccessoryCategoryDefinition(accessory.category);
-    const pose = getAccessoryPoseState(accessory, 'chibi');
+    const pose = getAccessoryPoseState(accessory, this.direction === 'back' ? 'chibiBack' : 'chibi');
 
     if ((side === -1 && pose.leftVisible === false) || (side === 1 && pose.rightVisible === false)) {
       return null;

@@ -8,7 +8,7 @@ export type AvatarEditableProperty = AvatarTransformProperty | 'color' | 'lineCo
 export type AccessoryCategory = 'sideHair' | 'ponytail' | 'accessory';
 export type AccessoryLayerSlot = 'behindBody' | 'onSkin' | 'frontBody' | 'frontFace' | 'frontBangs';
 export type AccessoryRenderMode = 'mirrored' | 'center';
-export type AccessoryPoseKey = 'portrait' | 'chibi';
+export type AccessoryPoseKey = 'portrait' | 'chibi' | 'chibiBack';
 export type AvatarGradientType = 'linear' | 'radial';
 export type AvatarGradientCoordinateSpace = 'local' | 'sharedHair';
 
@@ -95,6 +95,8 @@ export interface AvatarAccessoryInstance extends AvatarPartState {
   layerSlot: AccessoryLayerSlot;
   order: number;
   chibi: AvatarAccessoryPoseState;
+  chibiBack: AvatarAccessoryPoseState;
+  isChibiBackFollowingFront: boolean;
 }
 
 export interface AvatarAccessoryPoseState {
@@ -375,17 +377,45 @@ export function normalizeAvatarState(initialState?: Partial<AvatarState>): Avata
   if (Array.isArray(initialAccessories)) {
     return {
       ...defaults,
-      accessories: normalizeAccessoryOrders(initialAccessories.map(accessory => ({
-        ...createDefaultAccessoryInstance(accessory.category ?? 'sideHair', accessory.order ?? 0, accessory.layerSlot),
-        ...accessory,
-        chibi: {
+      accessories: normalizeAccessoryOrders(initialAccessories.map(accessory => {
+        const defaultAccessory = createDefaultAccessoryInstance(
+          accessory.category ?? 'sideHair',
+          accessory.order ?? 0,
+          accessory.layerSlot,
+        );
+        const chibi = {
           ...createDefaultAccessoryPoseState(
             accessory.chibi?.layerSlot ?? accessory.layerSlot,
             accessory.chibi?.order ?? accessory.order ?? 0,
           ),
           ...accessory.chibi,
-        },
-      }))),
+        };
+        const isChibiBackFollowingFront = accessory.isChibiBackFollowingFront
+          ?? accessory.chibiBack === undefined;
+        const chibiBack = accessory.chibiBack
+          ? {
+            ...createDefaultAccessoryPoseState(
+              accessory.chibiBack.layerSlot ?? accessory.layerSlot,
+              accessory.chibiBack.order ?? accessory.order ?? 0,
+            ),
+            ...accessory.chibiBack,
+          }
+          : createMirroredAccessoryPoseState(chibi, defaultAccessory.category);
+
+        return {
+          ...defaultAccessory,
+          ...accessory,
+          chibi,
+          chibiBack: {
+            ...createDefaultAccessoryPoseState(
+              chibiBack.layerSlot ?? accessory.layerSlot,
+              chibiBack.order ?? accessory.order ?? 0,
+            ),
+            ...chibiBack,
+          },
+          isChibiBackFollowingFront,
+        };
+      })),
     };
   }
 
@@ -398,6 +428,8 @@ export function normalizeAvatarState(initialState?: Partial<AvatarState>): Avata
         ...createDefaultAccessoryInstance('sideHair', 0),
         ...legacySideHair,
         chibi: createDefaultAccessoryPoseState('frontFace', 0),
+        chibiBack: createDefaultAccessoryPoseState('frontFace', 0),
+        isChibiBackFollowingFront: true,
       }],
     };
   }
@@ -519,6 +551,8 @@ export function createDefaultAccessoryInstance(
     layerSlot: layerSlot ?? definition.defaultLayerSlot,
     order,
     chibi: createDefaultAccessoryPoseState(layerSlot ?? definition.defaultLayerSlot, order),
+    chibiBack: createDefaultAccessoryPoseState(layerSlot ?? definition.defaultLayerSlot, order),
+    isChibiBackFollowingFront: true,
   };
 }
 
@@ -526,15 +560,18 @@ export function getAccessoryPoseState(
   accessory: AvatarAccessoryInstance,
   poseKey: AccessoryPoseKey,
 ): AvatarAccessoryPoseState {
-  if (poseKey === 'chibi') {
+  if (poseKey !== 'portrait') {
+    const pose = poseKey === 'chibiBack' && accessory.isChibiBackFollowingFront
+      ? createMirroredAccessoryPoseState(accessory.chibi, accessory.category)
+      : poseKey === 'chibiBack'
+        ? accessory.chibiBack
+        : accessory.chibi;
+
     return {
       ...createDefaultAccessoryPoseState(accessory.layerSlot, accessory.order),
-      ...accessory.chibi,
+      ...pose,
       layerSlot: accessory.layerSlot,
       order: accessory.order,
-      flipX: accessory.flipX === true,
-      leftVisible: accessory.leftVisible !== false,
-      rightVisible: accessory.rightVisible !== false,
     };
   }
 
@@ -565,6 +602,22 @@ function createDefaultAccessoryPoseState(
     flipX: false,
     leftVisible: true,
     rightVisible: true,
+  };
+}
+
+function createMirroredAccessoryPoseState(
+  pose: AvatarAccessoryPoseState,
+  category: AccessoryCategory,
+): AvatarAccessoryPoseState {
+  const isMirroredAccessory = getAccessoryCategoryDefinition(category).renderMode === 'mirrored';
+
+  return {
+    ...pose,
+    offsetX: isMirroredAccessory ? pose.offsetX : -pose.offsetX,
+    rotate: isMirroredAccessory ? pose.rotate : -pose.rotate,
+    flipX: isMirroredAccessory ? pose.flipX : !pose.flipX,
+    leftVisible: pose.rightVisible,
+    rightVisible: pose.leftVisible,
   };
 }
 
@@ -1782,10 +1835,12 @@ class AvatarStateStore {
         return accessory;
       }
 
+      const poseProperty = poseKey === 'chibiBack' ? 'chibiBack' : 'chibi';
+
       return {
         ...accessory,
-        chibi: {
-          ...getAccessoryPoseState(accessory, 'chibi'),
+        [poseProperty]: {
+          ...getAccessoryPoseState(accessory, poseKey),
           ...patch,
         },
       };
@@ -1838,6 +1893,11 @@ class AvatarStateStore {
           layerSlot,
           order: nextOrder,
         },
+        chibiBack: {
+          ...getAccessoryPoseState(accessory, 'chibiBack'),
+          layerSlot,
+          order: nextOrder,
+        },
       };
     });
     const normalizedAccessories = normalizeAccessoryOrders(nextAccessories).map(accessory => (
@@ -1846,6 +1906,11 @@ class AvatarStateStore {
           ...accessory,
           chibi: {
             ...accessory.chibi,
+            layerSlot: accessory.layerSlot,
+            order: accessory.order,
+          },
+          chibiBack: {
+            ...accessory.chibiBack,
             layerSlot: accessory.layerSlot,
             order: accessory.order,
           },
@@ -1882,6 +1947,14 @@ class AvatarStateStore {
     ].map((accessory, order) => ({
       ...accessory,
       order,
+      chibi: {
+        ...accessory.chibi,
+        order,
+      },
+      chibiBack: {
+        ...accessory.chibiBack,
+        order,
+      },
     }));
     const otherSlots = this.state.accessories.filter(accessory => accessory.layerSlot !== source.layerSlot);
 
@@ -2167,19 +2240,14 @@ export class AvatarCanvas {
     const pose = getAccessoryPoseState(current, poseKey);
     const nextFlipX = pose.flipX !== true;
 
-    this.updateAccessory(instanceId, {
-      flipX: nextFlipX,
-      chibi: {
-        ...getAccessoryPoseState(current, 'chibi'),
-        flipX: nextFlipX,
-      },
-    });
+    this.updateAccessoryPose(instanceId, poseKey, { flipX: nextFlipX });
   }
 
   setAccessorySideVisible(
     instanceId: string,
     side: 'left' | 'right',
     isVisible: boolean,
+    poseKey: AccessoryPoseKey = 'portrait',
   ): void {
     const current = this.getAccessoryState(instanceId);
 
@@ -2191,13 +2259,7 @@ export class AvatarCanvas {
       ? { leftVisible: isVisible }
       : { rightVisible: isVisible };
 
-    this.updateAccessory(instanceId, {
-      ...visibilityPatch,
-      chibi: {
-        ...getAccessoryPoseState(current, 'chibi'),
-        ...visibilityPatch,
-      },
-    });
+    this.updateAccessoryPose(instanceId, poseKey, visibilityPatch);
   }
 
   setAccessoryLayerSlot(
@@ -2215,7 +2277,10 @@ export class AvatarCanvas {
     this.emitChange();
   }
 
-  estimateAccessoryChibiPoseFromPortrait(instanceId: string): void {
+  estimateAccessoryChibiPoseFromPortrait(
+    instanceId: string,
+    poseKey: Extract<AccessoryPoseKey, 'chibi' | 'chibiBack'> = 'chibi',
+  ): void {
     const accessory = this.getAccessoryState(instanceId);
 
     if (!accessory) {
@@ -2224,10 +2289,45 @@ export class AvatarCanvas {
 
     const portraitPose = getAccessoryPoseState(accessory, 'portrait');
     const positionScale = getChibiAccessoryPositionScale(accessory.category);
-    this.updateAccessoryPose(instanceId, 'chibi', {
+    this.updateAccessoryPose(instanceId, poseKey, {
       ...portraitPose,
       offsetX: Math.round(portraitPose.offsetX * positionScale),
       offsetY: Math.round(portraitPose.offsetY * positionScale),
+    });
+  }
+
+  setAccessoryChibiBackFollowingFront(instanceId: string, shouldFollow: boolean): void {
+    const accessory = this.getAccessoryState(instanceId);
+
+    if (!accessory) {
+      return;
+    }
+
+    this.updateAccessory(instanceId, {
+      isChibiBackFollowingFront: shouldFollow,
+      ...(shouldFollow
+        ? {}
+        : {
+          chibiBack: createMirroredAccessoryPoseState(
+            getAccessoryPoseState(accessory, 'chibi'),
+            accessory.category,
+          ),
+        }),
+    });
+  }
+
+  applyAccessoryChibiBackMirror(instanceId: string): void {
+    const accessory = this.getAccessoryState(instanceId);
+
+    if (!accessory) {
+      return;
+    }
+
+    this.updateAccessory(instanceId, {
+      chibiBack: createMirroredAccessoryPoseState(
+        getAccessoryPoseState(accessory, 'chibi'),
+        accessory.category,
+      ),
     });
   }
 
@@ -2482,6 +2582,16 @@ function normalizeAccessoryOrders(accessories: AvatarAccessoryInstance[]): Avata
     .map((accessory, order) => ({
       ...accessory,
       order,
+      chibi: {
+        ...accessory.chibi,
+        layerSlot: accessory.layerSlot,
+        order,
+      },
+      chibiBack: {
+        ...accessory.chibiBack,
+        layerSlot: accessory.layerSlot,
+        order,
+      },
     })));
 }
 

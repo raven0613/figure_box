@@ -81,6 +81,7 @@ type TemplateAction =
   | { type: 'delete'; template: AvatarAppearanceTemplateRecord }
   | { type: 'reset' };
 type HairApplyKind = 'color' | 'line';
+type PortraitChibiPoseKey = Extract<AccessoryPoseKey, 'portrait' | 'chibi'>;
 type HairApplyTarget =
   | { id: string; type: 'part'; key: AvatarPartKey; label: string }
   | { id: string; type: 'accessory'; instanceId: string; label: string };
@@ -115,9 +116,9 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   // 預設選項
   const [selectedTarget, setSelectedTarget] = useState<SelectedTarget>({ type: 'part', key: 'mini.bodyType' });
   const [selectedAccessoryPoseKey, setSelectedAccessoryPoseKey] = useState<AccessoryPoseKey>('portrait');
-  const [selectedUpperEyelidPoseKey, setSelectedUpperEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
-  const [selectedEyeLightPoseKey, setSelectedEyeLightPoseKey] = useState<AccessoryPoseKey>('portrait');
-  const [selectedEyelidPoseKey, setSelectedEyelidPoseKey] = useState<AccessoryPoseKey>('portrait');
+  const [selectedUpperEyelidPoseKey, setSelectedUpperEyelidPoseKey] = useState<PortraitChibiPoseKey>('portrait');
+  const [selectedEyeLightPoseKey, setSelectedEyeLightPoseKey] = useState<PortraitChibiPoseKey>('portrait');
+  const [selectedEyelidPoseKey, setSelectedEyelidPoseKey] = useState<PortraitChibiPoseKey>('portrait');
   const [draggingAccessoryId, setDraggingAccessoryId] = useState<string | null>(null);
   const [canUseNativeDrag, setCanUseNativeDrag] = useState(false);
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
@@ -163,12 +164,14 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       : isEyelidChibiMode
         ? EYELID_CHIBI_EDITABLE_PROPERTIES
         : baseEditableProperties;
-  const canMoveX = selectedEditableProperties.includes('offsetX');
-  const canMoveY = selectedEditableProperties.includes('offsetY');
   const selectedLabel = selectedAccessory ? getAccessoryDisplayName(selectedAccessory) : selectedPart?.label ?? '';
   const selectedAccessoryPose = selectedAccessory
     ? getAccessoryPoseState(selectedAccessory, selectedAccessoryPoseKey)
     : null;
+  const isAccessoryBackPoseFollowingFront = selectedAccessoryPoseKey === 'chibiBack'
+    && selectedAccessory?.isChibiBackFollowingFront === true;
+  const canMoveX = selectedEditableProperties.includes('offsetX') && !isAccessoryBackPoseFollowingFront;
+  const canMoveY = selectedEditableProperties.includes('offsetY') && !isAccessoryBackPoseFollowingFront;
   const selectedPartState = selectedPart ? avatarState[selectedPart.key] : avatarState.face;
   const selectedPartControlKey = isUpperEyelidChibiMode
     ? 'mini.upperEyelid'
@@ -767,6 +770,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
   const movePart = (deltaX: number, deltaY: number) => {
     if (selectedTarget.type === 'accessory') {
+      if (isAccessoryBackPoseFollowingFront) {
+        return;
+      }
+
       avatarCanvasRef.current?.moveAccessory(selectedTarget.instanceId, deltaX, deltaY, selectedAccessoryPoseKey);
       return;
     }
@@ -862,6 +869,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
   const rotatePart = (delta: number) => {
     if (selectedTarget.type === 'accessory') {
+      if (isAccessoryBackPoseFollowingFront) {
+        return;
+      }
+
       avatarCanvasRef.current?.rotateAccessory(selectedTarget.instanceId, delta, selectedAccessoryPoseKey);
       return;
     }
@@ -873,6 +884,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
   const scalePart = (delta: number) => {
     if (selectedTarget.type === 'accessory') {
+      if (isAccessoryBackPoseFollowingFront) {
+        return;
+      }
+
       avatarCanvasRef.current?.scaleAccessory(selectedTarget.instanceId, delta, selectedAccessoryPoseKey);
       return;
     }
@@ -884,6 +899,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
   const flipPart = () => {
     if (selectedTarget.type === 'accessory') {
+      if (isAccessoryBackPoseFollowingFront) {
+        return;
+      }
+
       avatarCanvasRef.current?.flipAccessory(selectedTarget.instanceId, selectedAccessoryPoseKey);
       return;
     }
@@ -895,10 +914,15 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
   const setSideVisible = (side: 'left' | 'right', isVisible: boolean) => {
     if (selectedTarget.type === 'accessory') {
+      if (isAccessoryBackPoseFollowingFront) {
+        return;
+      }
+
       avatarCanvasRef.current?.setAccessorySideVisible(
         selectedTarget.instanceId,
         side,
-        isVisible
+        isVisible,
+        selectedAccessoryPoseKey,
       );
     }
   };
@@ -945,11 +969,33 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   };
 
   const estimateChibiPoseFromPortrait = () => {
+    if (!selectedAccessory || selectedAccessoryPoseKey !== 'chibi') {
+      return;
+    }
+
+    avatarCanvasRef.current?.estimateAccessoryChibiPoseFromPortrait(
+      selectedAccessory.instanceId,
+      selectedAccessoryPoseKey,
+    );
+  };
+
+  const setChibiBackFollowingFront = (shouldFollow: boolean) => {
     if (!selectedAccessory) {
       return;
     }
 
-    avatarCanvasRef.current?.estimateAccessoryChibiPoseFromPortrait(selectedAccessory.instanceId);
+    avatarCanvasRef.current?.setAccessoryChibiBackFollowingFront(
+      selectedAccessory.instanceId,
+      shouldFollow,
+    );
+  };
+
+  const applyChibiBackMirror = () => {
+    if (!selectedAccessory || selectedAccessory.isChibiBackFollowingFront) {
+      return;
+    }
+
+    avatarCanvasRef.current?.applyAccessoryChibiBackMirror(selectedAccessory.instanceId);
   };
 
   const dropAccessoryOn = (targetAccessory: AvatarAccessoryInstance) => {
@@ -1227,7 +1273,11 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
         </div>
 
         {(selectedAccessory || isUpperEyelidPart || isEyeLightPart || isEyelidPart) && (
-          <div className={styles.segmentedControl} role="tablist" aria-label={`${selectedLabel}位置模式`}>
+          <div
+            className={selectedAccessory ? styles.accessorySegmentedControl : styles.segmentedControl}
+            role="tablist"
+            aria-label={`${selectedLabel}位置模式`}
+          >
             <button
               className={selectedPoseKey === 'portrait' ? styles.activeSegmentButton : styles.segmentButton}
               type="button"
@@ -1278,8 +1328,21 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               role="tab"
               aria-selected={selectedPoseKey === 'chibi'}
             >
-              Q版
+              {selectedAccessory ? 'Q正面' : 'Q版'}
             </button>
+            {selectedAccessory && (
+              <button
+                className={selectedAccessoryPoseKey === 'chibiBack'
+                  ? styles.activeSegmentButton
+                  : styles.segmentButton}
+                type="button"
+                onClick={() => setSelectedAccessoryPoseKey('chibiBack')}
+                role="tab"
+                aria-selected={selectedAccessoryPoseKey === 'chibiBack'}
+              >
+                Q背面
+              </button>
+            )}
           </div>
         )}
 
@@ -1436,6 +1499,29 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           </label>
         )}
 
+        {selectedAccessory && selectedAccessoryPoseKey === 'chibiBack' && (
+          <div className={styles.controlGroup}>
+            <label className={styles.toggleField}>
+              <input
+                type="checkbox"
+                checked={selectedAccessory.isChibiBackFollowingFront}
+                onChange={event => setChibiBackFollowingFront(event.target.checked)}
+              />
+              <span>跟隨 Q正面鏡像</span>
+            </label>
+            <div className={styles.valueRow}>
+              {selectedAccessory.isChibiBackFollowingFront
+                ? '背面由 Q正面即時計算，目前不可調整'
+                : '背面使用獨立設定'}
+            </div>
+            {!selectedAccessory.isChibiBackFollowingFront && (
+              <button type="button" onClick={applyChibiBackMirror}>
+                重新套用 Q正面鏡像
+              </button>
+            )}
+          </div>
+        )}
+
         {hasPositionControls(selectedEditableProperties) && (
           <div className={styles.controlGroup}>
             <div className={styles.controlTitle}>x.y 軸</div>
@@ -1491,10 +1577,20 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           <div className={styles.controlGroup}>
             <div className={styles.controlTitle}>rotate</div>
             <div className={styles.actionRow}>
-              <button type="button" onClick={() => rotatePart(-ROTATE_STEP)} aria-label="逆時針旋轉">
+              <button
+                type="button"
+                disabled={isAccessoryBackPoseFollowingFront}
+                onClick={() => rotatePart(-ROTATE_STEP)}
+                aria-label="逆時針旋轉"
+              >
                 逆時針
               </button>
-              <button type="button" onClick={() => rotatePart(ROTATE_STEP)} aria-label="順時針旋轉">
+              <button
+                type="button"
+                disabled={isAccessoryBackPoseFollowingFront}
+                onClick={() => rotatePart(ROTATE_STEP)}
+                aria-label="順時針旋轉"
+              >
                 順時針
               </button>
             </div>
@@ -1506,10 +1602,20 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           <div className={styles.controlGroup}>
             <div className={styles.controlTitle}>scale</div>
             <div className={styles.actionRow}>
-              <button type="button" onClick={() => scalePart(-SCALE_STEP)} aria-label="縮小">
+              <button
+                type="button"
+                disabled={isAccessoryBackPoseFollowingFront}
+                onClick={() => scalePart(-SCALE_STEP)}
+                aria-label="縮小"
+              >
                 縮小
               </button>
-              <button type="button" onClick={() => scalePart(SCALE_STEP)} aria-label="放大">
+              <button
+                type="button"
+                disabled={isAccessoryBackPoseFollowingFront}
+                onClick={() => scalePart(SCALE_STEP)}
+                aria-label="放大"
+              >
                 放大
               </button>
             </div>
@@ -1521,7 +1627,12 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
           <div className={styles.controlGroup}>
             <div className={styles.controlTitle}>flip</div>
             <div className={styles.actionRow}>
-              <button type="button" onClick={flipPart} aria-label="左右翻轉">
+              <button
+                type="button"
+                disabled={isAccessoryBackPoseFollowingFront}
+                onClick={flipPart}
+                aria-label="左右翻轉"
+              >
                 左右翻轉
               </button>
             </div>
@@ -1536,6 +1647,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               <input
                 type="checkbox"
                 checked={selectedState.leftVisible !== false}
+                disabled={isAccessoryBackPoseFollowingFront}
                 onChange={event => setSideVisible('left', event.target.checked)}
               />
               <span>左</span>
@@ -1544,6 +1656,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               <input
                 type="checkbox"
                 checked={selectedState.rightVisible !== false}
+                disabled={isAccessoryBackPoseFollowingFront}
                 onChange={event => setSideVisible('right', event.target.checked)}
               />
               <span>右</span>
@@ -1569,7 +1682,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
         {selectedAccessory && (
           <div className={styles.controlGroup}>
             {selectedAccessoryPoseKey === 'chibi' && (
-              <button type="button" onClick={estimateChibiPoseFromPortrait}>
+              <button
+                type="button"
+                onClick={estimateChibiPoseFromPortrait}
+              >
                 套用胸像比例位置
               </button>
             )}
