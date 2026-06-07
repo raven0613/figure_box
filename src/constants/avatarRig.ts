@@ -28,7 +28,7 @@ export const AVATAR_PORTRAIT_RIG_LAYOUT = {
   },
   parts: {
     face: { x: 0, y: 0 },
-    ear: { x: -38, y: 2 },
+    ear: { x: -36, y: -6 },
     sclera: { x: -10, y: -10 },
     eyeBall: { x: -14, y: -13 },
     eyeLight: { x: -8, y: -12 },
@@ -41,6 +41,7 @@ export const AVATAR_PORTRAIT_RIG_LAYOUT = {
     backHairBottom: { x: 0, y: 27 },
     backHairTop: { x: 0, y: -93 },
     bangs: { x: 0, y: -50 },
+    hairLight: { x: 0, y: -50 },
     accessory: { x: 0, y: -35 },
   },
   partsByOption: {
@@ -48,16 +49,19 @@ export const AVATAR_PORTRAIT_RIG_LAYOUT = {
       1: { x: 0, y: 0 },
       2: { x: 0, y: 0 },
       3: { x: 0, y: 0 },
+      7: { x: -6, y: -8 },
     },
     backHairTop: {
       1: { x: 0, y: 0 },
       2: { x: 0, y: 0 },
       3: { x: 0, y: 0 },
+      7: { x: -3, y: -6 },
     },
     bangs: {
       1: { x: 0, y: 0 },
       2: { x: 0, y: 0 },
       3: { x: 0, y: 0 },
+      7: { x: -17, y: -8.5 },
     },
   },
   accessoriesByOption: {
@@ -67,6 +71,7 @@ export const AVATAR_PORTRAIT_RIG_LAYOUT = {
       3: { x: 0, y: 0 },
       4: { x: 0, y: 0 },
       5: { x: 0, y: 0 },
+      6: { x: 34.5, y: -37 },
     },
     ponytail: {
       1: { x: 0, y: 0 },
@@ -81,6 +86,9 @@ export const AVATAR_PORTRAIT_RIG_LAYOUT = {
       3: { x: 0, y: 0 },
       4: { x: 0, y: 0 },
       5: { x: 0, y: 0 },
+    },
+    skinMarking: {
+      1: { x: -20, y: 85 },
     },
   },
   mirrored: {

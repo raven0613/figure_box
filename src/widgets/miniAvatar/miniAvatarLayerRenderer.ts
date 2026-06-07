@@ -3,6 +3,7 @@ import {
   getAccessoryLayerSlotDefinition,
   getAccessoryPoseState,
   isAvatarPartOptionColorEditable,
+  resolveAccessoryColorFileName,
 } from '../avatarCanvas';
 import type {
   AccessoryCategory,
@@ -109,6 +110,10 @@ class MiniFrontBackIdleLayerRenderer {
     const backHairBottomId = this.resolveOptionId('back_hair_bottom', this.getPartOptionId('hair.backHair'));
     const backHairTopId = this.resolveOptionId('back_hair_top', this.getPartOptionId('hair.topHair'));
     const bangsId = this.resolveOptionId('bangs', this.getPartOptionId('hair.bangs'));
+    const earId = this.resolveOptionId('ear', this.getPartOptionId('ear'));
+    const hairLightId = formatMiniOptionId(this.getPartOptionId('hair.light'));
+    const hairLightFolder = getMiniHairLightFolder(this.direction, hairLightId);
+    const hairLightPositionState = this.state[isBack ? 'mini.hairLightBack' : 'mini.hairLightFront'];
     const backHairBottomFolder = isBack
       ? getMiniBackFolderWithFallback('back_hair_bottom', backHairBottomId)
       : 'back_hair_bottom';
@@ -145,7 +150,10 @@ class MiniFrontBackIdleLayerRenderer {
       rig.hair.bangs,
       getMiniOptionOffset(rig.hair.bangsByOption, bangsId),
     ));
-    const hairLightOffset = getMiniScaledOffset(rig.hair.hairLight);
+    const hairLightOffset = getMiniScaledOffset(addMiniPoints(rig.hair.hairLight, {
+      x: hairLightPositionState.offsetX ?? 0,
+      y: hairLightPositionState.offsetY ?? 0,
+    }));
     const topBodyOffset = getMiniScaledOffset(rig.clothing.topBody);
     const topArmOffset = getMiniScaledOffset(rig.clothing.topArm);
     const bottomAnchorOffset = getMiniScaledOffset(bodyRig.bottomAnchor);
@@ -355,7 +363,7 @@ class MiniFrontBackIdleLayerRenderer {
         ...(!isBack
           ? this.createColorAndLineLayers(backHairTopFolder, backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineTintSource('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5, this.getPartColorGradientSpace('hair.topHair'))
           : []),
-        ...this.createMirroredColorAndLineLayers('ear', '01', skinColor, skinLineColor, rig.earDistance + earOffset.x, earOffset.y, 13.8),
+        ...this.createMirroredColorAndLineLayers('ear', earId, skinColor, skinLineColor, rig.earDistance + earOffset.x, earOffset.y, 13.8),
         ...(!isBack
           ? this.createLineOnlyLayers('mouth', '01', this.getPartLineTintSource('mouth'), mouthOffset.x, mouthOffset.y, 20)
           : []),
@@ -376,10 +384,11 @@ class MiniFrontBackIdleLayerRenderer {
         ? [
           ...this.createColorAndLineLayers(backHairBottomFolder, backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineTintSource('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 30, this.getPartColorGradientSpace('hair.backHair')),
           ...this.createColorAndLineLayers(backHairTopFolder, backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineTintSource('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 30.5, this.getPartColorGradientSpace('hair.topHair')),
+          ...this.createLineOnlyLayers(hairLightFolder, hairLightId, this.getPartColor('hair.light', rig.colors.hairLight), hairLightOffset.x, hairLightOffset.y, 31),
         ]
         : [
           ...this.createColorAndLineLayers('bangs', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineTintSource('hair.bangs'), bangsOffset.x, bangsOffset.y, 30, this.getPartColorGradientSpace('hair.bangs')),
-          ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
+          ...this.createLineOnlyLayers(hairLightFolder, hairLightId, this.getPartColor('hair.light', rig.colors.hairLight), hairLightOffset.x, hairLightOffset.y, 31),
         ],
     };
     const headFrontBangsNode: MiniRigNode = {
@@ -658,6 +667,7 @@ class MiniFrontBackIdleLayerRenderer {
           layers: this.createAccessoryImageLayers(
             folder,
             optionId,
+            resolveAccessoryColorFileName(accessory.category, accessory.optionId, accessory.colorVariantId),
             accessory.colorGradient ?? accessory.color ?? definition.defaultColor,
             accessory.lineColorGradient ?? accessory.lineColor ?? definition.defaultLineColor,
             zIndex,
@@ -696,6 +706,7 @@ class MiniFrontBackIdleLayerRenderer {
       layers: this.createAccessoryImageLayers(
         folder,
         optionId,
+        resolveAccessoryColorFileName(accessory.category, accessory.optionId, accessory.colorVariantId),
         accessory.colorGradient ?? accessory.color ?? definition.defaultColor,
         accessory.lineColorGradient ?? accessory.lineColor ?? definition.defaultLineColor,
         zIndex,
@@ -707,13 +718,14 @@ class MiniFrontBackIdleLayerRenderer {
   private createAccessoryImageLayers(
     folder: string,
     optionId: string,
+    colorFile: string,
     color: AvatarTintSource,
     lineColor: AvatarTintSource,
     zIndex: number,
     colorGradientSpace?: AvatarGradientCoordinateSpace,
   ): MiniLocalLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, colorGradientSpace, zIndex },
+      { folder, file: colorFile, color, colorGradientSpace, zIndex },
       { folder, file: `${optionId}_line.png`, color: lineColor, zIndex: zIndex + 0.1 },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
@@ -789,6 +801,10 @@ class MiniSideIdleLayerRenderer {
     const backHairBottomId = this.resolveOptionId('back_hair_bottom/side', this.getPartOptionId('hair.backHair'));
     const backHairTopId = this.resolveOptionId('back_hair_top/side', this.getPartOptionId('hair.topHair'));
     const bangsId = this.resolveOptionId('bangs/side', this.getPartOptionId('hair.bangs'));
+    const earId = this.resolveOptionId('ear/side', this.getPartOptionId('ear'));
+    const hairLightId = formatMiniOptionId(this.getPartOptionId('hair.light'));
+    const hairLightFolder = getMiniHairLightFolder('side', hairLightId);
+    const hairLightPositionState = this.state['mini.hairLightSide'];
     const bodyRig = rig.bodyByType[bodyTypeId] ?? rig.bodyByType[1];
     const defaultHeadCenter = getMiniCanvasPoint(rig.headCenter);
     const bodyCenter = await getMiniBodyCenter(rig, bodyRig);
@@ -821,7 +837,10 @@ class MiniSideIdleLayerRenderer {
       rig.hair.bangs,
       getMiniOptionOffset(rig.hair.bangsByOption, bangsId),
     ));
-    const hairLightOffset = getMiniScaledOffset(rig.hair.hairLight);
+    const hairLightOffset = getMiniScaledOffset(addMiniPoints(rig.hair.hairLight, {
+      x: hairLightPositionState.offsetX ?? 0,
+      y: hairLightPositionState.offsetY ?? 0,
+    }));
     const topBodyOffset = getMiniScaledOffset(rig.clothing.topBody);
     const topArmOffset = getMiniScaledOffset(rig.clothing.topArm);
     const bottomAnchorOffset = getMiniScaledOffset(bodyRig.bottomAnchor);
@@ -995,7 +1014,7 @@ class MiniSideIdleLayerRenderer {
         ...this.createColorAndLineLayers('face/side', '01', skinColor, skinLineColor, faceOffset.x, faceOffset.y, 13),
         ...this.createColorAndLineLayers('back_hair_bottom/side', backHairBottomId, this.getPartColor('hair.backHair', rig.colors.hair), this.getPartLineTintSource('hair.backHair'), backHairBottomOffset.x, backHairBottomOffset.y, 13.2, this.getPartColorGradientSpace('hair.backHair')),
         ...this.createColorAndLineLayers('back_hair_top/side', backHairTopId, this.getPartColor('hair.topHair', rig.colors.hair), this.getPartLineTintSource('hair.topHair'), backHairTopOffset.x, backHairTopOffset.y, 13.5, this.getPartColorGradientSpace('hair.topHair')),
-        ...this.createColorAndLineLayers('ear/side', '01', skinColor, skinLineColor, earOffset.x, earOffset.y, 13.8),
+        ...this.createColorAndLineLayers('ear/side', earId, skinColor, skinLineColor, earOffset.x, earOffset.y, 13.8),
       ],
       children: [eyesNode],
     };
@@ -1011,7 +1030,7 @@ class MiniSideIdleLayerRenderer {
       precomposeZIndex: MINI_HEAD_BANGS_Z_INDEX,
       layers: [
         ...this.createColorAndLineLayers('bangs/side', bangsId, this.getPartColor('hair.bangs', rig.colors.hair), this.getPartLineTintSource('hair.bangs'), bangsOffset.x, bangsOffset.y, 30, this.getPartColorGradientSpace('hair.bangs')),
-        ...this.createLineOnlyLayers('hair_light', '01', rig.colors.hairLight, hairLightOffset.x, hairLightOffset.y, 31),
+        ...this.createLineOnlyLayers(hairLightFolder, hairLightId, this.getPartColor('hair.light', rig.colors.hairLight), hairLightOffset.x, hairLightOffset.y, 31),
       ],
     };
     const headFrontBangsNode: MiniRigNode = {
@@ -1165,7 +1184,7 @@ class MiniSideIdleLayerRenderer {
   private createAccessoryNodes(rig: MiniIdleRigLayout, layerSlots?: readonly AccessoryLayerSlot[]): MiniRigNode[] {
     return this.state.accessories.flatMap(accessory => {
       const definition = getAccessoryCategoryDefinition(accessory.category);
-      const pose = getAccessoryPoseState(accessory, 'chibi');
+      const pose = getAccessoryPoseState(accessory, 'chibiSide');
 
       if (!isAccessoryInLayerSlots(pose.layerSlot, layerSlots)) {
         return [];
@@ -1195,6 +1214,7 @@ class MiniSideIdleLayerRenderer {
         layers: this.createAccessoryImageLayers(
           folder,
           optionId,
+          resolveAccessoryColorFileName(accessory.category, accessory.optionId, accessory.colorVariantId),
           accessory.colorGradient ?? accessory.color ?? definition.defaultColor,
           accessory.lineColorGradient ?? accessory.lineColor ?? definition.defaultLineColor,
           zIndex,
@@ -1207,13 +1227,14 @@ class MiniSideIdleLayerRenderer {
   private createAccessoryImageLayers(
     folder: string,
     optionId: string,
+    colorFile: string,
     color: AvatarTintSource,
     lineColor: AvatarTintSource,
     zIndex: number,
     colorGradientSpace?: AvatarGradientCoordinateSpace,
   ): MiniLocalLayer[] {
     return [
-      { folder, file: `${optionId}_color.png`, color, colorGradientSpace, zIndex },
+      { folder, file: colorFile, color, colorGradientSpace, zIndex },
       { folder, file: `${optionId}_line.png`, color: lineColor, zIndex: zIndex + 0.1 },
     ].filter(layer => hasMiniAvatarAsset(layer.folder, layer.file));
   }
@@ -1471,6 +1492,17 @@ function getMiniSideFolderWithFallback(folder: string, optionId: string): string
   }
 
   return folder;
+}
+
+function getMiniHairLightFolder(direction: 'front' | 'back' | 'side', optionId: string): string {
+  if (direction === 'front') {
+    return 'hair_light';
+  }
+
+  const directionalFolder = `hair_light/${direction}`;
+  return hasMiniAvatarAsset(directionalFolder, `${optionId}_line.png`)
+    ? directionalFolder
+    : 'hair_light';
 }
 
 function getMiniCanvasPoint(point: MiniPoint): MiniPoint {

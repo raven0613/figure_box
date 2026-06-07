@@ -20,6 +20,7 @@ import {
   AvatarState,
   createDefaultAvatarState,
   getAccessoryCategoryDefinition,
+  getAccessoryColorVariantOptions,
   getAccessoryDisplayName,
   getAccessoryLayerSlotDefinition,
   getAccessoryPoseState,
@@ -57,6 +58,7 @@ const LIGHT_DISTANCE_STEP = 2;
 const UPPER_EYELID_CHIBI_EDITABLE_PROPERTIES: AvatarEditableProperty[] = ['lineColor', 'offsetY', 'rotate'];
 const EYE_LIGHT_CHIBI_EDITABLE_PROPERTIES: AvatarEditableProperty[] = ['offsetX', 'offsetY'];
 const EYELID_CHIBI_EDITABLE_PROPERTIES: AvatarEditableProperty[] = ['lineColor'];
+const HAIR_LIGHT_MINI_EDITABLE_PROPERTIES: AvatarEditableProperty[] = ['offsetX', 'offsetY'];
 const DEFAULT_PORTRAIT_EYE_LIGHT_DISTANCE = 45;
 
 interface HoldMoveState {
@@ -82,6 +84,7 @@ type TemplateAction =
   | { type: 'reset' };
 type HairApplyKind = 'color' | 'line';
 type PortraitChibiPoseKey = Extract<AccessoryPoseKey, 'portrait' | 'chibi'>;
+type HairLightPoseKey = 'portrait' | 'front' | 'back' | 'side';
 type HairApplyTarget =
   | { id: string; type: 'part'; key: AvatarPartKey; label: string }
   | { id: string; type: 'accessory'; instanceId: string; label: string };
@@ -119,6 +122,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const [selectedUpperEyelidPoseKey, setSelectedUpperEyelidPoseKey] = useState<PortraitChibiPoseKey>('portrait');
   const [selectedEyeLightPoseKey, setSelectedEyeLightPoseKey] = useState<PortraitChibiPoseKey>('portrait');
   const [selectedEyelidPoseKey, setSelectedEyelidPoseKey] = useState<PortraitChibiPoseKey>('portrait');
+  const [selectedHairLightPoseKey, setSelectedHairLightPoseKey] = useState<HairLightPoseKey>('portrait');
   const [draggingAccessoryId, setDraggingAccessoryId] = useState<string | null>(null);
   const [canUseNativeDrag, setCanUseNativeDrag] = useState(false);
   const [avatarState, setAvatarState] = useState<AvatarState>(() => createDefaultAvatarState());
@@ -148,22 +152,34 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   const selectedAccessoryDefinition = selectedAccessory
     ? getAccessoryCategoryDefinition(selectedAccessory.category)
     : null;
+  const selectedAccessoryColorVariants = selectedAccessory
+    ? getAccessoryColorVariantOptions(selectedAccessory.category, selectedAccessory.optionId)
+    : [];
+  const selectedAccessoryColorVariantId = selectedAccessoryColorVariants.some(
+    variant => variant.id === selectedAccessory?.colorVariantId,
+  )
+    ? selectedAccessory?.colorVariantId
+    : selectedAccessoryColorVariants[0]?.id;
   const selectedOptions = selectedAccessoryDefinition?.options ?? selectedPart?.options ?? [];
   const baseEditableProperties = selectedAccessoryDefinition?.editableProperties ?? selectedPart?.editableProperties ?? [];
   const isUpperEyelidPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.upperEyelid';
   const isEyeLightPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.light';
   const isEyelidPart = selectedTarget.type === 'part' && selectedPart?.key === 'eyes.eyelid';
+  const isHairLightPart = selectedTarget.type === 'part' && selectedPart?.key === 'hair.light';
   const isMiniClothingBottomPart = selectedTarget.type === 'part' && selectedPart?.key === 'mini.clothingBottom';
   const isUpperEyelidChibiMode = isUpperEyelidPart && selectedUpperEyelidPoseKey === 'chibi';
   const isEyeLightChibiMode = isEyeLightPart && selectedEyeLightPoseKey === 'chibi';
   const isEyelidChibiMode = isEyelidPart && selectedEyelidPoseKey === 'chibi';
+  const isHairLightMiniMode = isHairLightPart && selectedHairLightPoseKey !== 'portrait';
   const selectedEditableProperties = isUpperEyelidChibiMode
     ? UPPER_EYELID_CHIBI_EDITABLE_PROPERTIES
     : isEyeLightChibiMode
       ? EYE_LIGHT_CHIBI_EDITABLE_PROPERTIES
       : isEyelidChibiMode
         ? EYELID_CHIBI_EDITABLE_PROPERTIES
-        : baseEditableProperties;
+        : isHairLightMiniMode
+          ? HAIR_LIGHT_MINI_EDITABLE_PROPERTIES
+          : baseEditableProperties;
   const selectedLabel = selectedAccessory ? getAccessoryDisplayName(selectedAccessory) : selectedPart?.label ?? '';
   const selectedAccessoryPose = selectedAccessory
     ? getAccessoryPoseState(selectedAccessory, selectedAccessoryPoseKey)
@@ -179,14 +195,18 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
       ? 'mini.eyeLight'
       : isEyelidChibiMode
         ? 'mini.eyelid'
-        : selectedPart?.key;
+        : isHairLightMiniMode
+          ? getHairLightMiniPartKey(selectedHairLightPoseKey)
+          : selectedPart?.key;
   const selectedPartControlState = isUpperEyelidChibiMode
     ? avatarState['mini.upperEyelid']
     : isEyeLightChibiMode
       ? avatarState['mini.eyeLight']
       : isEyelidChibiMode
         ? avatarState['mini.eyelid']
-        : selectedPartState;
+        : isHairLightMiniMode
+          ? avatarState[getHairLightMiniPartKey(selectedHairLightPoseKey)]
+          : selectedPartState;
   const selectedAppearanceState = selectedAccessory ?? selectedPartState;
   const selectedState = selectedAccessoryPose ?? selectedPartControlState;
   const selectedLineColorState = isEyelidChibiMode ? avatarState['mini.eyelid'] : selectedAppearanceState;
@@ -205,11 +225,13 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     : DEFAULT_PORTRAIT_EYE_LIGHT_DISTANCE;
   const selectedPoseKey = selectedAccessory
     ? selectedAccessoryPoseKey
-    : isEyeLightPart
-      ? selectedEyeLightPoseKey
-      : isEyelidPart
-        ? selectedEyelidPoseKey
-        : selectedUpperEyelidPoseKey;
+    : isHairLightPart
+      ? selectedHairLightPoseKey
+      : isEyeLightPart
+        ? selectedEyeLightPoseKey
+        : isEyelidPart
+          ? selectedEyelidPoseKey
+          : selectedUpperEyelidPoseKey;
   const selectedOptionId = selectedAppearanceState.optionId;
   const isSelectedOptionColorEditable = selectedTarget.type === 'accessory' || (
     selectedPart ? isAvatarPartOptionColorEditable(selectedPart.key, selectedOptionId) : true
@@ -535,6 +557,14 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     if (selectedPart) {
       avatarCanvasRef.current?.setColor(selectedPart.key, color);
     }
+  };
+
+  const changeAccessoryColorVariant = (colorVariantId: number) => {
+    if (selectedTarget.type !== 'accessory') {
+      return;
+    }
+
+    avatarCanvasRef.current?.setAccessoryColorVariant(selectedTarget.instanceId, colorVariantId);
   };
 
   const changeColorGradient = (colorGradient: AvatarColorGradient | undefined) => {
@@ -969,7 +999,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
   };
 
   const estimateChibiPoseFromPortrait = () => {
-    if (!selectedAccessory || selectedAccessoryPoseKey !== 'chibi') {
+    if (
+      !selectedAccessory ||
+      (selectedAccessoryPoseKey !== 'chibi' && selectedAccessoryPoseKey !== 'chibiSide')
+    ) {
       return;
     }
 
@@ -1047,6 +1080,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     setSelectedUpperEyelidPoseKey('portrait');
     setSelectedEyeLightPoseKey('portrait');
     setSelectedEyelidPoseKey('portrait');
+    setSelectedHairLightPoseKey('portrait');
   };
 
   const confirmTemplateAction = () => {
@@ -1331,23 +1365,86 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
               {selectedAccessory ? 'Q正面' : 'Q版'}
             </button>
             {selectedAccessory && (
+              <>
+                <button
+                  className={selectedAccessoryPoseKey === 'chibiBack'
+                    ? styles.activeSegmentButton
+                    : styles.segmentButton}
+                  type="button"
+                  onClick={() => setSelectedAccessoryPoseKey('chibiBack')}
+                  role="tab"
+                  aria-selected={selectedAccessoryPoseKey === 'chibiBack'}
+                >
+                  Q背面
+                </button>
+                <button
+                  className={selectedAccessoryPoseKey === 'chibiSide'
+                    ? styles.activeSegmentButton
+                    : styles.segmentButton}
+                  type="button"
+                  onClick={() => setSelectedAccessoryPoseKey('chibiSide')}
+                  role="tab"
+                  aria-selected={selectedAccessoryPoseKey === 'chibiSide'}
+                >
+                  Q側面
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {isHairLightPart && (
+          <div
+            className={styles.hairLightSegmentedControl}
+            role="tablist"
+            aria-label={`${selectedLabel}位置模式`}
+          >
+            {([
+              ['portrait', '胸像'],
+              ['front', 'Q正面'],
+              ['back', 'Q背面'],
+              ['side', 'Q側面'],
+            ] as const).map(([poseKey, label]) => (
               <button
-                className={selectedAccessoryPoseKey === 'chibiBack'
+                className={selectedHairLightPoseKey === poseKey
                   ? styles.activeSegmentButton
                   : styles.segmentButton}
                 type="button"
-                onClick={() => setSelectedAccessoryPoseKey('chibiBack')}
+                key={poseKey}
+                onClick={() => setSelectedHairLightPoseKey(poseKey)}
                 role="tab"
-                aria-selected={selectedAccessoryPoseKey === 'chibiBack'}
+                aria-selected={selectedHairLightPoseKey === poseKey}
               >
-                Q背面
+                {label}
               </button>
-            )}
+            ))}
           </div>
         )}
 
         {selectedEditableProperties.includes('color') && isSelectedOptionColorEditable && canUseColorGradient && (
           <>
+            {selectedAccessory && selectedAccessoryColorVariants.length > 0 && (
+              <div>
+                <div className={styles.controlTitle}>color image</div>
+                <div className={styles.optionList} role="radiogroup" aria-label="color image options">
+                  {selectedAccessoryColorVariants.map(variant => (
+                    <button
+                      className={variant.id === selectedAccessoryColorVariantId
+                        ? styles.activeOptionButton
+                        : styles.optionButton}
+                      type="button"
+                      key={variant.id}
+                      onClick={() => changeAccessoryColorVariant(variant.id)}
+                      role="radio"
+                      aria-checked={variant.id === selectedAccessoryColorVariantId}
+                    >
+                      <span>{variant.label}</span>
+                      <span className={styles.optionId}>{variant.id}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <GradientColorControl
               title={selectedPart?.key === 'eyes.color' ? 'left color' : 'color'}
               color={selectedAppearanceState.color ?? selectedAccessoryDefinition?.defaultColor ?? selectedPart?.defaultColor ?? '#000000'}
@@ -1681,7 +1778,7 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
 
         {selectedAccessory && (
           <div className={styles.controlGroup}>
-            {selectedAccessoryPoseKey === 'chibi' && (
+            {(selectedAccessoryPoseKey === 'chibi' || selectedAccessoryPoseKey === 'chibiSide') && (
               <button
                 type="button"
                 onClick={estimateChibiPoseFromPortrait}
@@ -2168,6 +2265,18 @@ function getHairApplyTargetColorState(
   }
 
   return avatarState.accessories.find(accessory => accessory.instanceId === target.instanceId) ?? null;
+}
+
+function getHairLightMiniPartKey(poseKey: HairLightPoseKey): AvatarPartKey {
+  if (poseKey === 'back') {
+    return 'mini.hairLightBack';
+  }
+
+  if (poseKey === 'side') {
+    return 'mini.hairLightSide';
+  }
+
+  return 'mini.hairLightFront';
 }
 
 function getDraftSaveStatusLabel(status: DraftSaveStatus): string {
