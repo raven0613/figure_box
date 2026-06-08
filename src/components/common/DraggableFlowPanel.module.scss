@@ -1,0 +1,40 @@
+.content {
+  gap: 0;
+  padding: 0;
+}
+
+.navigation {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(28, 31, 35, 0.1);
+  background: #ffffff;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(28, 31, 35, 0.16);
+  border-radius: 6px;
+  background: #f7f3ea;
+  color: #24313a;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.backButton:hover {
+  border-color: rgba(59, 119, 110, 0.48);
+  background: #edf7f2;
+}
+
+.backButton:focus-visible {
+  outline: 2px solid #3b776e;
+  outline-offset: 2px;
+}

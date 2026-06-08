@@ -11,6 +11,7 @@ import {
   TownCharacterController,
   type CharacterSnapshot,
 } from '~/services/townCharacterController';
+import type { CharacterSeed } from '~/services/townCharacterTypes';
 import { saveService } from '~/services/save/saveService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
 import type { GodDropOpportunity } from '~/services/godDropOpportunityService';
@@ -45,6 +46,7 @@ import { itemService, type InventoryGroup } from '~/services/items/itemService';
 import { itemPlacementService } from '~/services/items/itemPlacementService';
 import { itemTransferService } from '~/services/items/itemTransferService';
 import { DEFAULT_ITEM_SHOP_ID, shopService } from '~/services/items/shopService';
+import { getPlayableCharacters } from '~/services/playableCharacterService';
 import { TOWN_MAP_CELL_SIZE } from '~/constants/townMapWidgetConstants';
 import type {
   ItemDefinition,
@@ -75,6 +77,11 @@ interface TownMapContainerProps {
   expressionByCharacterId?: Partial<Record<string, Expression>>;
   mapDialoguePresentation?: EventDialoguePresentation | null;
   romanceRuleRevision?: number;
+  characterRosterRevision?: number;
+  apartmentReveal?: {
+    characterId: string;
+    revision: number;
+  } | null;
   onCharacterExpressionsChange?: (expressionByCharacterId: Partial<Record<string, Expression>>) => void;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
 }
@@ -126,6 +133,8 @@ export function TownMapContainer({
   expressionByCharacterId = {},
   mapDialoguePresentation = null,
   romanceRuleRevision = 0,
+  characterRosterRevision = 0,
+  apartmentReveal = null,
   onCharacterExpressionsChange,
   onDialogueRequest,
 }: TownMapContainerProps) {
@@ -156,6 +165,10 @@ export function TownMapContainer({
   const [pickupChain, setPickupChain] = useState<PickupChainState | null>(null);
   const [characterInventoryWindow, setCharacterInventoryWindow] = useState<CharacterInventoryWindowState | null>(null);
   const [mapZoom, setMapZoom] = useState(1);
+  const playableCharacters = useMemo(
+    () => getPlayableCharacters(),
+    [characterRosterRevision],
+  );
   const placementDraftRef = useRef<ItemInstance | null>(null);
   const pickupChainRef = useRef<PickupChainState | null>(null);
   const lastAppliedRomanceRuleRevisionRef = useRef(romanceRuleRevision);
@@ -175,10 +188,15 @@ export function TownMapContainer({
     [characterRequests, characterSnapshots],
   );
   const apartmentResidents = useMemo(
-    () => getApartmentResidents(characterSnapshots, TOWN_APARTMENT_SPACE_ID, apartmentRequestItems),
-    [apartmentRequestItems, characterSnapshots],
+    () => getApartmentResidents(
+      characterSnapshots,
+      TOWN_APARTMENT_SPACE_ID,
+      apartmentRequestItems,
+      apartmentReveal?.characterId ?? null,
+    ),
+    [apartmentRequestItems, apartmentReveal?.characterId, characterSnapshots],
   );
-  const selectedCharacterName = CHARACTER_SEEDS.find(character => character.id === selectedCharacterId)?.name ?? selectedCharacterId;
+  const selectedCharacterName = playableCharacters.find(character => character.id === selectedCharacterId)?.name ?? selectedCharacterId;
   const transferHistoryDefinition = transferHistoryItem ? itemService.getDefinition(transferHistoryItem.definitionId) : null;
   const placementDraftDefinition = placementDraft ? itemService.getDefinition(placementDraft.definitionId) : null;
   const placementDraftName = placementDraftDefinition
@@ -528,10 +546,11 @@ export function TownMapContainer({
     widgetRef.current = widget;
     let isWidgetDisposed = false;
 
-    void syncCharacterSpriteRenderers(widget, () => isWidgetDisposed);
+    void syncCharacterSpriteRenderers(widget, playableCharacters, () => isWidgetDisposed);
 
     const characterController = new TownCharacterController({
       widget,
+      characters: playableCharacters,
       initialRelationshipStore: relationshipStoreService.getSnapshot(),
       onDialogueRequest,
       onCharacterSnapshot: (characterId, snapshot) => {
@@ -568,7 +587,15 @@ export function TownMapContainer({
       void widget.destroy();
       canvasHost.replaceChildren();
     };
-  }, [cancelPickupChain, cancelPlacementDraft, handleRelationshipStoreChange, onDialogueRequest, pickupPlacedItem, refreshPlayerInventory, refreshShopStock]);
+  }, [cancelPickupChain, cancelPlacementDraft, handleRelationshipStoreChange, onDialogueRequest, pickupPlacedItem, playableCharacters, refreshPlayerInventory, refreshShopStock]);
+
+  useEffect(() => {
+    if (!apartmentReveal) {
+      return;
+    }
+
+    setIsApartmentPanelOpen(true);
+  }, [apartmentReveal]);
 
   useEffect(() => {
     seedDemoPlayerInventory();
@@ -862,6 +889,7 @@ export function TownMapContainer({
       {giftTargetPicker ? (
         <GiftTargetPicker
           state={giftTargetPicker}
+          characters={playableCharacters}
           onSelectTarget={characterId => {
             giftItemToCharacter(giftTargetPicker.itemInstance, characterId);
             setGiftTargetPicker(null);
@@ -925,7 +953,7 @@ export function TownMapContainer({
           </div> */}
 
           <div className={styles.characterList}>
-            {CHARACTER_SEEDS.map(character => {
+            {playableCharacters.map(character => {
               const snapshot = characterSnapshots[character.id];
               const summary = snapshot ? getCharacterStateSummary(snapshot.value) : null;
               const isSelected = selectedCharacterId === character.id;
@@ -1022,10 +1050,11 @@ function showGiftPreview(characterIds: readonly string[], widget: FabricTownMapW
 
 async function syncCharacterSpriteRenderers(
   widget: FabricTownMapWidget,
+  characters: readonly CharacterSeed[],
   isWidgetDisposed: () => boolean,
 ): Promise<void> {
   await Promise.all(
-    CHARACTER_SEEDS.map(async character => {
+    characters.map(async character => {
       try {
         const spriteSet = await loadTownCharacterSpriteSet(character);
 
@@ -1187,10 +1216,12 @@ function GiftDragPreview({
 
 function GiftTargetPicker({
   state,
+  characters,
   onSelectTarget,
   onCancel,
 }: {
   state: GiftTargetPickerState;
+  characters: readonly CharacterSeed[];
   onSelectTarget: (characterId: string) => void;
   onCancel: () => void;
 }) {
@@ -1210,7 +1241,7 @@ function GiftTargetPicker({
           type="button"
           onClick={() => onSelectTarget(characterId)}
         >
-          {CHARACTER_SEEDS.find(character => character.id === characterId)?.name ?? characterId}
+          {characters.find(character => character.id === characterId)?.name ?? characterId}
         </button>
       ))}
       <button
@@ -1373,6 +1404,7 @@ function getApartmentResidents(
   snapshots: Record<string, CharacterSnapshot>,
   apartmentSpaceId: string,
   apartmentRequests: readonly ApartmentRequestItem[],
+  featuredCharacterId: string | null = null,
 ): ApartmentResident[] {
   return Object.values(snapshots)
     .filter(snapshot => (
@@ -1392,7 +1424,18 @@ function getApartmentResidents(
           levelLabel: item.levelLabel,
           status: item.request.status,
         })),
-    }));
+    }))
+    .sort((leftResident, rightResident) => {
+      if (leftResident.id === featuredCharacterId) {
+        return -1;
+      }
+
+      if (rightResident.id === featuredCharacterId) {
+        return 1;
+      }
+
+      return 0;
+    });
 }
 
 function CharacterRequestDebugPanel({

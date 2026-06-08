@@ -1,4 +1,4 @@
-import { CHARACTER_SEEDS, Expression, type Position } from '~/constants/character';
+import { Expression, type Position } from '~/constants/character';
 import {
   CharacterPerformanceRunner,
   type CharacterPerformanceDialogueRequest,
@@ -50,6 +50,7 @@ import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSav
 import { saveService } from '~/services/save/saveService';
 import { offlineRuntimeSyncService } from '~/services/offlineSimulation/offlineRuntimeSyncService';
 import type { CharacterRuntimeSnapshot } from '~/services/save/saveTypes';
+import { getSeedPlayableCharacters } from '~/services/playableCharacterService';
 
 export type { CharacterSnapshot } from '~/services/townCharacterTypes';
 
@@ -62,6 +63,7 @@ const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
+  characters?: readonly CharacterSeed[];
   initialRelationshipStore?: RelationshipStore;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
   onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
@@ -73,6 +75,7 @@ interface TownCharacterControllerOptions {
 
 export class TownCharacterController {
   private readonly widget: FabricTownMapWidget;
+  private readonly characters: readonly CharacterSeed[];
   private readonly actorRegistry: CharacterActorRegistry;
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly activityManager: JoinableActivityManager;
@@ -100,10 +103,11 @@ export class TownCharacterController {
 
   constructor(options: TownCharacterControllerOptions) {
     this.widget = options.widget;
+    this.characters = options.characters ?? getSeedPlayableCharacters();
     this.onDialogueRequest = options.onDialogueRequest;
     this.spatialQueries = new TownSpatialQueryService({
       widget: this.widget,
-      characterIds: CHARACTER_SEEDS.map(character => character.id),
+      characterIds: this.characters.map(character => character.id),
     });
     this.requestIndicatorPresenter = new CharacterRequestIndicatorPresenter({
       widget: this.widget,
@@ -113,6 +117,7 @@ export class TownCharacterController {
     });
     this.relationshipCoordinator = new TownRelationshipCoordinator({
       widget: this.widget,
+      characterSeeds: this.characters,
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
       initialRelationshipStore: options.initialRelationshipStore,
@@ -330,6 +335,7 @@ export class TownCharacterController {
       onOpportunityChange: options.onGodDropOpportunityChange,
     });
     this.tickCoordinator = new TownCharacterTickCoordinator({
+      characterSeeds: this.characters,
       requestService: this.characterRequestService,
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       isCharacterActive: characterId => this.actorRegistry.isActive(characterId),
@@ -366,7 +372,7 @@ export class TownCharacterController {
   }
 
   start(): void {
-    CHARACTER_SEEDS.forEach(character => {
+    this.characters.forEach(character => {
       this.seedCharacterItems(character);
     });
     this.tickCoordinator.start();
@@ -436,7 +442,7 @@ export class TownCharacterController {
   }
 
   normalizeRomanceFeelings(): void {
-    CHARACTER_SEEDS.forEach(character => {
+    this.characters.forEach(character => {
       this.sendToCharacter(character.id, { type: EventType.NormalizeRomanceFeelings });
     });
   }
@@ -618,7 +624,11 @@ export class TownCharacterController {
       : characterRuntimeSaveService.getRuntimeSnapshot(character.id);
     const runtime = previousContext ?? savedRuntime ?? undefined;
 
-    this.movementCoordinator.placeCharacter(character.id, character, runtime);
+    if (runtime?.presence.kind === 'contained') {
+      this.movementCoordinator.registerCharacterRenderData(character.id, character);
+    } else {
+      this.movementCoordinator.placeCharacter(character.id, character, runtime);
+    }
 
     this.actorRegistry.spawn(character, {
       id: character.id,

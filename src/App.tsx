@@ -4,9 +4,19 @@ import { createActor, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 import { OfflineRecapDebugWindow } from '~/components/debug/OfflineRecapDebugWindow';
 import { SaveDebugPanel } from '~/components/debug/SaveDebugPanel';
 import { CHARACTER_SEEDS, Expression } from '~/constants/character';
+import { createCharacterCreationSuccessDialogueScript } from '~/constants/characterCreationDialogue';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
 import { MAP_DIALOGUE_BOUNCE_DEMO, MAP_DIALOGUE_FADE_DEMO } from '~/constants/mapDialogueDemo';
 import i18n from '~/i18n';
+import {
+  bakeCreatedCharacterSprites,
+  type CharacterCreationBakeProgress,
+} from '~/services/characterCreationBakeService';
+import {
+  deletePlayerCharacterCreation,
+  markPlayerCharacterCreationReady,
+  type CreatePlayerCharacterResult,
+} from '~/services/characterCreationService';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
 import {
   createDefaultRomanceProfiles,
@@ -25,6 +35,7 @@ import { GameState } from '~/stateMachines/gameFlow/states';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { DialogueViewScript } from '~/typing/dialogueView';
 import { AvatarEditorContainer } from './components/avatarEditor/AvatarEditorContainer';
+import { CharacterManagementPanel } from './components/character/CharacterManagementPanel';
 import { DialogueWindow } from './components/dialogue/DialogueWindow';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import styles from './App.module.scss';
@@ -38,6 +49,11 @@ interface AppLoadingState {
   total: number;
 }
 
+interface CharacterCreationBakeState extends AppLoadingState {
+  characterName: string;
+  error: string | null;
+}
+
 function App() {
   const gameFlowActorRef = useRef<ActorRefFrom<typeof gameFlowMachine> | null>(null);
   const [gameFlowSnapshot, setGameFlowSnapshot] = useState<SnapshotFrom<typeof gameFlowMachine> | null>(null);
@@ -49,7 +65,14 @@ function App() {
   const [saveInitializationError, setSaveInitializationError] = useState<string | null>(null);
   const [isSaveDebugOpen, setIsSaveDebugOpen] = useState(false);
   const [isOfflineRecapDebugOpen, setIsOfflineRecapDebugOpen] = useState(false);
+  const [isCharacterPanelOpen, setIsCharacterPanelOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [characterRosterRevision, setCharacterRosterRevision] = useState(0);
+  const [apartmentReveal, setApartmentReveal] = useState<{
+    characterId: string;
+    revision: number;
+  } | null>(null);
+  const [characterCreationBakeState, setCharacterCreationBakeState] = useState<CharacterCreationBakeState | null>(null);
   const [globalRomanceDefault, setGlobalRomanceDefault] = useState<GlobalRomanceDefault>('allow');
   const [romanceRules, setRomanceRules] = useState<RomanceRule[]>([]);
   const [romanceProfilesByCharacterId, setRomanceProfilesByCharacterId] = useState<Record<string, CharacterRomanceProfile>>(
@@ -107,6 +130,66 @@ function App() {
       return null;
     });
   }, [resetDialogueParticipantExpressions]);
+  const completeCreatedCharacter = useCallback(async (creationResult: CreatePlayerCharacterResult) => {
+    const characterName = creationResult.profileRecord.name;
+
+    setCharacterCreationBakeState({
+      characterName,
+      label: 'Preparing sprites',
+      completed: 0,
+      total: 0,
+      error: null,
+    });
+
+    try {
+      await bakeCreatedCharacterSprites({
+        creationResult,
+        onProgress: (progress: CharacterCreationBakeProgress) => {
+          setCharacterCreationBakeState({
+            characterName,
+            label: progress.label,
+            completed: progress.completed,
+            total: progress.total,
+            error: null,
+          });
+        },
+      });
+      const readyProfileRecord = await markPlayerCharacterCreationReady(creationResult.characterId);
+      const profileColor = readyProfileRecord.profile.color;
+      const characterColor = typeof profileColor === 'string' && profileColor.length > 0
+        ? profileColor
+        : '#f0cc5f';
+
+      setCharacterCreationBakeState(null);
+      setCharacterRosterRevision(revision => revision + 1);
+      setApartmentReveal({
+        characterId: creationResult.characterId,
+        revision: Date.now(),
+      });
+      setActiveDialogueScript(createCharacterCreationSuccessDialogueScript({
+        characterId: creationResult.characterId,
+        name: readyProfileRecord.name,
+        color: characterColor,
+        label: createCharacterDialogueLabel(readyProfileRecord.name),
+      }));
+    } catch (error) {
+      console.error('Character creation bake failed.', error);
+      await deletePlayerCharacterCreation(creationResult.characterId).catch(cleanupError => {
+        console.error('Failed to clean up incomplete character creation.', cleanupError);
+      });
+      setCharacterCreationBakeState({
+        characterName,
+        label: 'Character creation failed',
+        completed: 0,
+        total: 0,
+        error: error instanceof Error ? error.message : '創建角色失敗，請再試一次。',
+      });
+    }
+  }, []);
+  const handleCharacterCreated = useCallback((creationResult: CreatePlayerCharacterResult) => {
+    setIsCharacterPanelOpen(false);
+    void completeCreatedCharacter(creationResult);
+  }, [completeCreatedCharacter]);
   const setSaveDebugOpen = useCallback((isOpen: boolean) => {
     setIsSaveDebugOpen(isOpen);
     settingsService.setSaveDebugPanelOpen(isOpen);
@@ -322,6 +405,14 @@ function App() {
           </button>
         </div>
         <button
+          className={styles.characterMenuButton}
+          type="button"
+          disabled={!isGameActive || characterCreationBakeState !== null}
+          onClick={() => setIsCharacterPanelOpen(true)}
+        >
+          角色
+        </button>
+        <button
           className={styles.menuButton}
           type="button"
           title="設定"
@@ -344,6 +435,25 @@ function App() {
             ) : null}
           </div>
         ) : null}
+        {characterCreationBakeState ? (
+          <div className={styles.creationBakeStatus} role="status" aria-live="polite">
+            <strong>{characterCreationBakeState.error ? '創建角色失敗' : '正在烘焙角色'}</strong>
+            <span>{characterCreationBakeState.characterName}</span>
+            <span>{characterCreationBakeState.error ?? characterCreationBakeState.label}</span>
+            {!characterCreationBakeState.error && characterCreationBakeState.total > 0 ? (
+              <span>{characterCreationBakeState.completed} / {characterCreationBakeState.total}</span>
+            ) : null}
+            {characterCreationBakeState.error ? (
+              <button
+                className={styles.creationBakeDismissButton}
+                type="button"
+                onClick={() => setCharacterCreationBakeState(null)}
+              >
+                關閉
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {/* <FabricDrawingBoardContainer
           isOpen={true}
           initialData={[]}
@@ -353,9 +463,12 @@ function App() {
         {/* <AvatarEditorContainer /> */}
         {isGameActive ? (
           <TownMapContainer
+            key={characterRosterRevision}
             expressionByCharacterId={dialogueExpressionByCharacterId}
             mapDialoguePresentation={mapDialoguePresentation}
             romanceRuleRevision={romanceRuleRevision}
+            characterRosterRevision={characterRosterRevision}
+            apartmentReveal={apartmentReveal}
             onCharacterExpressionsChange={handleCharacterExpressionsChange}
             onDialogueRequest={handleDialogueRequest}
           />
@@ -365,6 +478,12 @@ function App() {
         ) : null}
         {isOfflineRecapDebugOpen ? (
           <OfflineRecapDebugWindow onClose={() => setIsOfflineRecapDebugOpen(false)} />
+        ) : null}
+        {isCharacterPanelOpen ? (
+          <CharacterManagementPanel
+            onClose={() => setIsCharacterPanelOpen(false)}
+            onCharacterCreated={handleCharacterCreated}
+          />
         ) : null}
         {isSettingsOpen ? (
           <SettingsPanel
@@ -392,6 +511,10 @@ function App() {
 
 function getNormalizedPath(): string {
   return window.location.pathname.replace(/\/$/, '');
+}
+
+function createCharacterDialogueLabel(name: string): string {
+  return (Array.from(name.trim())[0] ?? '?').toUpperCase();
 }
 
 export default App;

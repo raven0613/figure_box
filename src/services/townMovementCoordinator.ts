@@ -62,15 +62,22 @@ export class TownMovementCoordinator {
     this.syncCharacterWithWidget(characterId, snapshot);
   }
 
+  registerCharacterRenderData(characterId: string, character: {
+    color: string;
+    label: string;
+  }): void {
+    this.characterRenderDataById.set(characterId, {
+      color: character.color,
+      label: character.label,
+    });
+  }
+
   placeCharacter(characterId: string, character: {
     position: Position;
     color: string;
     label: string;
   }, previousContext?: Pick<CharacterSnapshot['context'], 'position' | 'status'>): void {
-    this.characterRenderDataById.set(characterId, {
-      color: character.color,
-      label: character.label,
-    });
+    this.registerCharacterRenderData(characterId, character);
 
     const placed = this.widget.placeCharacter({
       id: characterId,

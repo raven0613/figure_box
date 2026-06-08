@@ -1,4 +1,4 @@
-import { CHARACTER_SEEDS, SocialStatus } from '~/constants/character';
+import { SocialStatus } from '~/constants/character';
 import type { CharacterEventNearbyRelationship } from '~/services/characterEvents/types';
 import type { CharacterRequestCharacterTarget } from '~/services/characterRequests/types';
 import { TownRelationshipTicker } from '~/services/townRelationshipTicker';
@@ -16,6 +16,7 @@ import {
   type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
+import { getSeedPlayableCharacters } from '~/services/playableCharacterService';
 
 interface TownRelationshipCoordinatorOptions {
   widget: FabricTownMapWidget;
@@ -39,7 +40,7 @@ export class TownRelationshipCoordinator {
       sendToCharacter: options.sendToCharacter,
     });
     this.getCharacterSnapshot = options.getCharacterSnapshot;
-    this.characterSeeds = options.characterSeeds ?? CHARACTER_SEEDS;
+    this.characterSeeds = options.characterSeeds ?? getSeedPlayableCharacters();
     this.onRelationshipStoreChange = options.onRelationshipStoreChange;
     this.relationshipStore = options.initialRelationshipStore ?? createRelationshipStore();
   }

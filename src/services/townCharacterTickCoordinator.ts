@@ -1,4 +1,4 @@
-import { CHARACTER_SEEDS } from '~/constants/character';
+import { getSeedPlayableCharacters } from '~/services/playableCharacterService';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import type {
   CharacterEventNearbyRelationship,
@@ -67,7 +67,7 @@ export class TownCharacterTickCoordinator {
   private tickTimer: number | null = null;
 
   constructor(options: TownCharacterTickCoordinatorOptions) {
-    this.characterSeeds = options.characterSeeds ?? CHARACTER_SEEDS;
+    this.characterSeeds = options.characterSeeds ?? getSeedPlayableCharacters();
     this.requestService = options.requestService;
     this.getCharacterSnapshot = options.getCharacterSnapshot;
     this.isCharacterActive = options.isCharacterActive;

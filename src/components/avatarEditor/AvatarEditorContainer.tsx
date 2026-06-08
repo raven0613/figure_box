@@ -427,6 +427,10 @@ export function AvatarEditorContainer({ initialState, onAvatarChange }: AvatarEd
     miniSideAvatarCanvasRef.current = miniSideAvatarCanvas;
     miniBackAvatarCanvasRef.current = miniBackAvatarCanvas;
     miniAnimationCanvasRef.current = miniAnimationCanvas;
+    const mountedAvatarState = avatarCanvas.getState();
+
+    setAvatarState(mountedAvatarState);
+    onAvatarChangeRef.current?.(mountedAvatarState);
     refreshSpriteSheetPreview();
 
     return () => {

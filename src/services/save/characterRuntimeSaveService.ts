@@ -99,6 +99,15 @@ class CharacterRuntimeSaveService {
     return cloneCharacterRuntimeSnapshot(snapshot);
   }
 
+  upsertRuntimeSnapshot(snapshot: CharacterRuntimeSnapshot): CharacterRuntimeSnapshot {
+    this.snapshotsByCharacterId.set(snapshot.id, cloneCharacterRuntimeSnapshot(snapshot));
+    return cloneCharacterRuntimeSnapshot(snapshot);
+  }
+
+  deleteRuntimeSnapshot(characterId: string): void {
+    this.snapshotsByCharacterId.delete(characterId);
+  }
+
   getSaveRecords(): readonly CharacterRuntimeSaveRecord[] {
     const timestamp = Date.now();
 
