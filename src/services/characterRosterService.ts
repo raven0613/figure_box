@@ -40,7 +40,7 @@ export function getCharacterRoster(
     housing: null,
     creationStatus: null,
   }));
-  const seedCharacterIds = new Set(seedEntries.map(character => character.id));
+  const seedCharacterIds = new Set<string>(seedEntries.map(character => character.id));
   const savedEntries = profileRecords
     .filter(record => !seedCharacterIds.has(record.id))
     .map(createSavedRosterEntry);

@@ -14,7 +14,7 @@ const DEFAULT_PLAYER_CHARACTER_SATURATION = 70;
 export function getPlayableCharacters(
   profileRecords: readonly CharacterProfileRecord[] = characterProfileSaveService.getRecords(),
 ): readonly CharacterSeed[] {
-  const seedIds = new Set(CHARACTER_SEEDS.map(character => character.id));
+  const seedIds = new Set<string>(CHARACTER_SEEDS.map(character => character.id));
   const seedCharacters = getSeedPlayableCharacters();
   const playerCreatedCharacters = profileRecords
     .filter(record => !seedIds.has(record.id))
@@ -33,11 +33,15 @@ export function getSeedPlayableCharacters(): readonly CharacterSeed[] {
     saturation: character.saturation,
     ...('ownItems' in character && character.ownItems
       ? {
-        ownItems: character.ownItems.map(item => ({
-          definitionId: item.definitionId,
-          quantity: item.quantity,
-          ...(item.state === 'held' || item.state === 'stored' ? { state: item.state } : {}),
-        })),
+        ownItems: character.ownItems.map(item => {
+          const state = 'state' in item ? item.state : undefined;
+
+          return {
+            definitionId: item.definitionId,
+            quantity: item.quantity,
+            ...(state === 'held' || state === 'stored' ? { state } : {}),
+          };
+        }),
       }
       : {}),
   }));
