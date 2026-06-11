@@ -120,6 +120,249 @@
     ]
   },
   {
+    "id": "social.chat.argument.preference",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "expression",
+        "target": "initiator",
+        "expression": "mad",
+        "durationMs": 1800
+      },
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "{initiator}：你怎麼會覺得那個比較好？",
+        "durationMs": 3200
+      },
+      {
+        "phase": "accepted",
+        "type": "expression",
+        "target": "target",
+        "expression": "mad",
+        "durationMs": 1800
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：明明就是我說的比較好！",
+        "durationMs": 3200
+      },
+      {
+        "phase": "rejectedMood",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：我現在不想跟你爭。",
+        "durationMs": 2800
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "argumentPreference",
+        "label": "爭論喜好中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "{initiator} 和 {target} 正在爭執哪個比較好",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expression": "mad",
+        "delayMs": 800,
+        "durationMs": 4200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "angry",
+        "delayMs": 1000,
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "roll",
+        "participantCount": {
+          "min": 2
+        },
+        "rollId": "argumentReaction",
+        "delayMs": 5000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "雙方都重新想了一下自己的說法",
+        "delayMs": 8500,
+        "durationMs": 2200
+      },
+      {
+        "phase": "active",
+        "type": "roll",
+        "participantCount": {
+          "min": 2
+        },
+        "rollId": "argumentResult",
+        "delayMs": 11000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "argumentPreference",
+        "label": "爭論被打斷了",
+        "durationMs": 5000
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.defend",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expression": "mad",
+        "durationMs": 2600
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "target",
+        "emoteId": "angry",
+        "durationMs": 1600
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target} 完全不打算退讓",
+        "durationMs": 2800
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.consider",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expression": "curious",
+        "durationMs": 2400
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target} 開始認真考慮對方的說法",
+        "durationMs": 2800
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.agreed",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expression": "laugh",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "laugh",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "兩人最後接受了彼此的喜好",
+        "durationMs": 3500
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.fellApart",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expression": "mad",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "sigh",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "兩人不歡而散",
+        "durationMs": 3500
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.unexpectedAgreement",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 1600
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expression": "laugh",
+        "delayMs": 1600,
+        "durationMs": 2200
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "沒想到兩人找到了意外的共同點",
+        "durationMs": 3800
+      }
+    ]
+  },
+  {
     "id": "social.playTogether.active",
     "steps": [
       {

@@ -10,6 +10,7 @@ import type {
   CharacterEventNearbyVisibleItem,
 } from "~/services/characterEvents/types";
 import type { JoinableActivity } from "~/services/characterEvents/joinableActivities";
+import type { ActivityOutcomeResolvedBy } from "~/services/characterEvents/activityOutcomeResolver";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
 
 export enum WidgetEventType {
@@ -56,6 +57,8 @@ export type CharacterEvent =
     activityId: string;
     participantIds?: readonly string[];
     activityEffects?: CharacterEventActivityEffects;
+    outcomeId?: string;
+    resolvedBy?: ActivityOutcomeResolvedBy;
     timestamp?: number;
   }
   | {

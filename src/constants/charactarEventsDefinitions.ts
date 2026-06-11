@@ -8,8 +8,10 @@ import { loadCharacterEventDefinitions } from '../utils/jsonParser/definitionSch
 import type {
   CharacterEventClauseMode,
   CharacterEventRuleClause,
+  CharacterEventRuleValue,
   CharacterEventWeightModifier,
 } from '../services/characterEvents/rules';
+import type { ComparisonOperator } from '~/constants/event';
 import type { OfflineRecapTemplate } from '~/services/offlineSimulation/types';
 
 export interface CharacterEventDefinition {
@@ -106,6 +108,7 @@ export interface CharacterEventActivity {
   joinRequirements?: CharacterEventJoinRequirement;
   cooldowns: CharacterEventCooldowns;
   effects?: CharacterEventActivityEffects;
+  rolls?: readonly CharacterEventActivityRoll[];
 }
 
 export type CharacterEventActivityType = 'chat' | 'playWithItem' | 'playAtLocation';
@@ -141,6 +144,39 @@ export interface CharacterEventActivityEffects {
   moodValueDelta?: number;
   moodStageTarget?: Mood;
   playNeedDelta?: number;
+}
+
+export type CharacterEventActivityRollRulePath =
+  | `initiator.${string}`
+  | `target.${string}`
+  | `activity.${string}`;
+
+export interface CharacterEventActivityRollRuleClause {
+  path: CharacterEventActivityRollRulePath;
+  operator: ComparisonOperator;
+  value: CharacterEventRuleValue;
+}
+
+export interface CharacterEventActivityRollWeightModifier
+  extends CharacterEventActivityRollRuleClause {
+  add?: number;
+  multiplier?: number;
+}
+
+export interface CharacterEventActivityRollBranch {
+  id: string;
+  baseWeight: number;
+  conditionMode?: CharacterEventClauseMode;
+  conditions?: readonly CharacterEventActivityRollRuleClause[];
+  weightModifiers?: readonly CharacterEventActivityRollWeightModifier[];
+  performanceId?: string;
+  effects?: CharacterEventActivityEffects;
+}
+
+export interface CharacterEventActivityRoll {
+  id: string;
+  resolvesActivity?: boolean;
+  branches: readonly CharacterEventActivityRollBranch[];
 }
 
 export interface CharacterEventCooldowns {

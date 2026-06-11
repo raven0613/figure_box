@@ -24,7 +24,16 @@ const VALID_PERFORMANCE_PHASES = [
   'end',
 ] as const;
 const VALID_PERFORMANCE_TARGETS = ['initiator', 'target', 'both'] as const;
-const VALID_PERFORMANCE_STEP_TYPES = ['bubble', 'expression', 'emote', 'mapEffect', 'motion', 'animation', 'dialogue'] as const;
+const VALID_PERFORMANCE_STEP_TYPES = [
+  'bubble',
+  'expression',
+  'emote',
+  'mapEffect',
+  'motion',
+  'animation',
+  'dialogue',
+  'roll',
+] as const;
 const VALID_EXPRESSIONS = Object.values(Expression);
 
 type CharacterPerformanceRecord = Record<string, unknown>;
@@ -98,6 +107,16 @@ function readPerformanceStep(
       durationMs: readOptionalNonNegativeNumber(rawStep, 'durationMs', definitionIndex),
       type,
       animationId: readPerformanceAnimationId(rawStep, definitionIndex),
+    };
+  }
+
+  if (type === 'roll') {
+    return {
+      phase: readPerformancePhase(rawStep, definitionIndex),
+      participantCount: readOptionalParticipantCount(rawStep, definitionIndex),
+      delayMs: readOptionalNonNegativeNumber(rawStep, 'delayMs', definitionIndex),
+      type,
+      rollId: readRequiredString(rawStep, 'rollId', definitionIndex),
     };
   }
 

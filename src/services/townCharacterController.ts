@@ -10,6 +10,11 @@ import {
   type JoinableActivity,
   type JoinableActivityManager,
 } from '~/services/characterEvents/joinableActivities';
+import {
+  ActivityOutcomeResolver,
+  type ResolveActivityOutcomeInput,
+  type ResolvedActivityOutcome,
+} from '~/services/characterEvents/activityOutcomeResolver';
 import { EventType, type CharacterEvent } from '~/stateMachines/gameFlow/events';
 import type { RelationshipStore } from '~/stateMachines/gameFlow/relationships';
 import { TownActivityCoordinator } from '~/services/townActivityCoordinator';
@@ -51,6 +56,7 @@ import { saveService } from '~/services/save/saveService';
 import { offlineRuntimeSyncService } from '~/services/offlineSimulation/offlineRuntimeSyncService';
 import type { CharacterRuntimeSnapshot } from '~/services/save/saveTypes';
 import { getSeedPlayableCharacters } from '~/services/playableCharacterService';
+import { createDefaultCharacterPersonality } from '~/constants/characterPersonality';
 
 export type { CharacterSnapshot } from '~/services/townCharacterTypes';
 
@@ -79,6 +85,7 @@ export class TownCharacterController {
   private readonly actorRegistry: CharacterActorRegistry;
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly activityManager: JoinableActivityManager;
+  private readonly activityOutcomeResolver: ActivityOutcomeResolver;
   private readonly activityCoordinator: TownActivityCoordinator;
   private readonly movementCoordinator: TownMovementCoordinator;
   private readonly relationshipCoordinator: TownRelationshipCoordinator;
@@ -124,6 +131,9 @@ export class TownCharacterController {
       onRelationshipStoreChange: options.onRelationshipStoreChange,
     });
     this.activityManager = createJoinableActivityManager();
+    this.activityOutcomeResolver = new ActivityOutcomeResolver({
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+    });
     this.heldItemCoordinator = new CharacterHeldItemCoordinator({
       widget: this.widget,
       getActivityById: activityId => this.activityManager.getActivity(activityId) ?? null,
@@ -155,6 +165,9 @@ export class TownCharacterController {
       },
       playDialogue: request => {
         this.onDialogueRequest?.(request);
+      },
+      rollActivity: request => {
+        this.activityCoordinator.resolveActivityRoll(request);
       },
     });
     this.movementCoordinator = new TownMovementCoordinator({
@@ -275,6 +288,10 @@ export class TownCharacterController {
       activityManager: this.activityManager,
       performanceRunner: this.performanceRunner,
       getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
+      getCharacterPersonality: characterId => (
+        this.characters.find(character => character.id === characterId)?.personality
+        ?? createDefaultCharacterPersonality()
+      ),
       getCharacterPosition: characterId => this.spatialQueries.getCharacterPosition(characterId),
       getRelationshipStatus: (characterId, targetCharacterId) => (
         this.relationshipCoordinator.getMutualRelationshipStatus(characterId, targetCharacterId)
@@ -292,6 +309,7 @@ export class TownCharacterController {
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
       },
+      resolveActivityOutcome: input => this.resolveActivityOutcome(input),
       notifyActivitiesChanged: () => this.notifyJoinableActivitiesChanged(),
     });
     this.godDropCoordinator = new GodDropCoordinator({
@@ -447,6 +465,10 @@ export class TownCharacterController {
     });
   }
 
+  resolveActivityOutcome(input: ResolveActivityOutcomeInput): ResolvedActivityOutcome {
+    return this.activityOutcomeResolver.resolveActivityOutcome(input);
+  }
+
   chooseGodDropCandidate(candidateId: string): void {
     this.godDropCoordinator.chooseCandidate(candidateId);
   }
@@ -480,6 +502,7 @@ export class TownCharacterController {
     this.performanceRunner.dispose();
     this.heldItemCoordinator.clear();
     this.activityManager.clear();
+    this.activityOutcomeResolver.clear();
     this.requestFlowCoordinator.clear();
     this.requestIndicatorPresenter.clear();
     this.actorRegistry.dispose();

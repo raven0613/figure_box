@@ -6,6 +6,7 @@ import { characterProfileSaveService } from '~/services/save/characterProfileSav
 import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSaveService';
 import type { CharacterProfileRecord } from '~/services/save/saveTypes';
 import type { CharacterSeed } from '~/services/townCharacterTypes';
+import { createDefaultCharacterPersonality } from '~/constants/characterPersonality';
 
 const DEFAULT_PLAYER_CHARACTER_COLOR = '#f0cc5f';
 const DEFAULT_PLAYER_CHARACTER_POSITION = { x: 0, y: 0 };
@@ -31,6 +32,7 @@ export function getSeedPlayableCharacters(): readonly CharacterSeed[] {
     color: character.color,
     position: { ...character.position },
     saturation: character.saturation,
+    personality: createDefaultCharacterPersonality(),
     ...('ownItems' in character && character.ownItems
       ? {
         ownItems: character.ownItems.map(item => {
@@ -67,6 +69,7 @@ function createPlayablePlayerCharacter(record: CharacterProfileRecord): Characte
       ? { ...runtimeSnapshot.position }
       : { ...DEFAULT_PLAYER_CHARACTER_POSITION },
     saturation: runtimeSnapshot?.status.saturation ?? DEFAULT_PLAYER_CHARACTER_SATURATION,
+    personality: { ...record.profile.personality },
   }];
 }
 

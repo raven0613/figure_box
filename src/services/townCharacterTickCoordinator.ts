@@ -157,6 +157,22 @@ export class TownCharacterTickCoordinator {
   }
 
   private tickCharacter(characterId: string, timestamp: number): void {
+    const snapshot = this.getCharacterSnapshot(characterId);
+    const isParticipatingInActivity = Boolean(
+      snapshot?.context.currentActivity ||
+      snapshot?.context.pendingActivityJoin,
+    );
+
+    if (isParticipatingInActivity) {
+      this.scheduleNextDecision(characterId, timestamp);
+      this.sendToCharacter(characterId, {
+        type: EventType.Tick,
+        timestamp,
+        allowAutonomousDecision: false,
+      });
+      return;
+    }
+
     const allowAutonomousDecision = this.canCharacterDecideNow(characterId, timestamp);
     const didLeaveApartment = allowAutonomousDecision &&
       this.maybeLeaveApartmentForOutsideNeed(characterId);
@@ -208,11 +224,15 @@ export class TownCharacterTickCoordinator {
       return false;
     }
 
+    this.scheduleNextDecision(characterId, timestamp);
+    return true;
+  }
+
+  private scheduleNextDecision(characterId: string, timestamp: number): void {
     this.nextDecisionAtByCharacterId.set(characterId, timestamp + randomBetween(
       DECISION_INTERVAL_MIN_MS,
       DECISION_INTERVAL_MAX_MS,
     ));
-    return true;
   }
 }
 

@@ -1,28 +1,27 @@
-import type { ComparisonOperator } from '~/constants/event';
 import type {
   CharacterContext,
   CharacterUtilityScores,
 } from '~/stateMachines/gameFlow/context';
 import type { CharacterEventDecisionInput } from './types';
+import {
+  applyRuleWeightModifiers,
+  matchesRuleClauses,
+  type RuleClause,
+  type RuleClauseMode,
+  type RuleValue,
+  type RuleWeightModifier,
+} from '~/services/ruleEvaluator';
 
 export type CharacterEventRulePath =
   | `character.${string}`
   | `utility.${string}`
   | `input.${string}`;
 
-export type CharacterEventRuleValue = string | number | boolean | null | CharacterEventRuleValue[];
-export type CharacterEventClauseMode = 'all' | 'some';
+export type CharacterEventRuleValue = RuleValue;
+export type CharacterEventClauseMode = RuleClauseMode;
 
-export interface CharacterEventRuleClause {
-  path: CharacterEventRulePath;
-  operator: ComparisonOperator;
-  value: CharacterEventRuleValue;
-}
-
-export interface CharacterEventWeightModifier extends CharacterEventRuleClause {
-  add?: number;
-  multiplier?: number;
-}
+export type CharacterEventRuleClause = RuleClause<CharacterEventRulePath>;
+export type CharacterEventWeightModifier = RuleWeightModifier<CharacterEventRulePath>;
 
 export interface CharacterEventRuleContext {
   character: CharacterContext;
@@ -87,15 +86,12 @@ export function matchesCharacterEventClauses(
   mode: CharacterEventClauseMode | undefined,
   context: CharacterEventRuleContext,
 ): boolean {
-  if (!clauses?.length) {
-    return true;
-  }
-
-  if (mode === 'some') {
-    return clauses.some(clause => matchesCharacterEventClause(clause, context));
-  }
-
-  return clauses.every(clause => matchesCharacterEventClause(clause, context));
+  return matchesRuleClauses(
+    clauses,
+    mode,
+    context,
+    readCharacterEventRuleValue,
+  );
 }
 
 export function applyCharacterEventWeightModifiers(
@@ -103,46 +99,12 @@ export function applyCharacterEventWeightModifiers(
   modifiers: readonly CharacterEventWeightModifier[] | undefined,
   context: CharacterEventRuleContext,
 ): number {
-  if (!modifiers?.length) {
-    return baseWeight;
-  }
-
-  return modifiers.reduce((weight, modifier) => {
-    if (!matchesCharacterEventClause(modifier, context)) {
-      return weight;
-    }
-
-    return Math.max(0, weight * (modifier.multiplier ?? 1) + (modifier.add ?? 0));
-  }, baseWeight);
-}
-
-function matchesCharacterEventClause(
-  clause: CharacterEventRuleClause,
-  context: CharacterEventRuleContext,
-): boolean {
-  const actual = readCharacterEventRuleValue(clause.path, context);
-  const expected = clause.value;
-
-  switch (clause.operator) {
-    case '==':
-      return actual === expected;
-    case '!=':
-      return actual !== expected;
-    case '>':
-      return Number(actual) > Number(expected);
-    case '>=':
-      return Number(actual) >= Number(expected);
-    case '<':
-      return Number(actual) < Number(expected);
-    case '<=':
-      return Number(actual) <= Number(expected);
-    case 'in':
-      return Array.isArray(expected) && expected.includes(actual as CharacterEventRuleValue);
-    case 'includes':
-      return Array.isArray(actual) && actual.includes(expected);
-    default:
-      return false;
-  }
+  return applyRuleWeightModifiers(
+    baseWeight,
+    modifiers,
+    context,
+    readCharacterEventRuleValue,
+  );
 }
 
 function readCharacterEventRuleValue(

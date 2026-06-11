@@ -28,7 +28,8 @@ export type CharacterPerformanceStep =
   | CharacterPerformanceMapEffectStep
   | CharacterPerformanceMotionStep
   | CharacterPerformanceAnimationStep
-  | CharacterPerformanceDialogueStep;
+  | CharacterPerformanceDialogueStep
+  | CharacterPerformanceRollStep;
 
 export interface CharacterPerformanceBubbleStep {
   type: 'bubble';
@@ -101,6 +102,14 @@ export interface CharacterPerformanceDialogueStep {
   displayMode?: 'preview' | 'ambient';
   delayMs?: number;
   durationMs?: number;
+}
+
+export interface CharacterPerformanceRollStep {
+  type: 'roll';
+  phase: CharacterPerformancePhase;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
+  rollId: string;
+  delayMs?: number;
 }
 
 export interface CharacterPerformanceParticipantCountCondition {

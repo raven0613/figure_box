@@ -1,15 +1,25 @@
-import type { CharacterEventActivity } from '../../constants/charactarEventsDefinitions';
+import type {
+  CharacterEventActivity,
+  CharacterEventActivityEffects,
+  CharacterEventActivityRoll,
+  CharacterEventActivityRollBranch,
+  CharacterEventActivityRollRuleClause,
+  CharacterEventActivityRollRulePath,
+} from '../../constants/charactarEventsDefinitions';
+import type { ComparisonOperator } from '../../constants/event';
 import { Feeling, Mood } from '../../constants/character';
 import {
   includesString,
   isRecord,
   readOptionalBoolean,
+  readOptionalClauseMode,
   readOptionalNonNegativeNumber,
   readOptionalNumber,
   readOptionalString,
   readOptionalStringList,
   readRequiredNonNegativeNumber,
   readRequiredString,
+  isRuleValue,
   type CharacterEventDefinitionRecord,
 } from './schemaReaders';
 
@@ -18,6 +28,7 @@ const VALID_ACTIVITY_START_PHASES = ['active', 'traveling'] as const;
 const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
 const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
 const VALID_MOODS = Object.values(Mood) as Mood[];
+const VALID_OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'includes'] as const;
 const TIME_TEXT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 // activity / joinRequirements parser
@@ -49,6 +60,7 @@ export function readOptionalActivity(
     joinRequirements: readOptionalJoinRequirement(value, index),
     cooldowns: readRequiredCooldowns(value, index),
     effects: readOptionalActivityEffects(value, index),
+    rolls: readOptionalActivityRolls(value, index),
   };
 }
 
@@ -142,8 +154,16 @@ function readOptionalActivityEffects(
     return undefined;
   }
 
+  return readActivityEffects(value, 'activity.effects', index);
+}
+
+function readActivityEffects(
+  value: unknown,
+  label: string,
+  index: number,
+): CharacterEventActivityEffects {
   if (!isRecord(value)) {
-    throw new Error(`Character event definition at index ${index} has invalid activity.effects.`);
+    throw new Error(`Character event definition at index ${index} has invalid ${label}.`);
   }
 
   return {
@@ -153,6 +173,220 @@ function readOptionalActivityEffects(
     moodStageTarget: readOptionalMood(value, 'moodStageTarget', index),
     playNeedDelta: readOptionalNumber(value, 'playNeedDelta', index),
   };
+}
+
+function readOptionalActivityRolls(
+  activity: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['rolls'] {
+  const value = activity.rolls;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.rolls.`);
+  }
+
+  const rolls = value.map((roll, rollIndex) => readActivityRoll(roll, rollIndex, index));
+  assertUniqueIds(rolls, 'activity.rolls', index);
+
+  return rolls;
+}
+
+function readActivityRoll(
+  rawRoll: unknown,
+  rollIndex: number,
+  index: number,
+): CharacterEventActivityRoll {
+  if (!isRecord(rawRoll)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity.rolls[${rollIndex}].`);
+  }
+
+  const rawBranches = rawRoll.branches;
+  const resolvesActivity = readOptionalBoolean(rawRoll, 'resolvesActivity', index);
+
+  if (!Array.isArray(rawBranches) || rawBranches.length === 0) {
+    throw new Error(
+      `Character event definition at index ${index} must include non-empty activity.rolls[${rollIndex}].branches.`,
+    );
+  }
+
+  const branches = rawBranches.map((branch, branchIndex) => (
+    readActivityRollBranch(branch, rollIndex, branchIndex, index)
+  ));
+  assertUniqueIds(branches, `activity.rolls[${rollIndex}].branches`, index);
+
+  if (!resolvesActivity && branches.some(branch => branch.effects !== undefined)) {
+    throw new Error(
+      `Character event definition at index ${index} has effects on non-resolving ` +
+      `activity.rolls[${rollIndex}].`,
+    );
+  }
+
+  return {
+    id: readRequiredString(rawRoll, 'id', index),
+    resolvesActivity,
+    branches,
+  };
+}
+
+function readActivityRollBranch(
+  rawBranch: unknown,
+  rollIndex: number,
+  branchIndex: number,
+  index: number,
+): CharacterEventActivityRollBranch {
+  if (!isRecord(rawBranch)) {
+    throw new Error(
+      `Character event definition at index ${index} has invalid ` +
+      `activity.rolls[${rollIndex}].branches[${branchIndex}].`,
+    );
+  }
+
+  return {
+    id: readRequiredString(rawBranch, 'id', index),
+    baseWeight: readRequiredNonNegativeNumber(rawBranch, 'baseWeight', index),
+    conditionMode: readOptionalClauseMode(rawBranch, 'conditionMode', index),
+    conditions: readOptionalActivityRollClauses(rawBranch, 'conditions', index),
+    weightModifiers: readOptionalActivityRollWeightModifiers(rawBranch, index),
+    performanceId: readOptionalString(rawBranch, 'performanceId', index),
+    effects: rawBranch.effects === undefined
+      ? undefined
+      : readActivityEffects(
+        rawBranch.effects,
+        `activity.rolls[${rollIndex}].branches[${branchIndex}].effects`,
+        index,
+      ),
+  };
+}
+
+function readOptionalActivityRollClauses(
+  definition: CharacterEventDefinitionRecord,
+  key: string,
+  index: number,
+): CharacterEventActivityRollRuleClause[] | undefined {
+  const value = definition[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity roll ${key}.`);
+  }
+
+  return value.map((clause, clauseIndex) => (
+    readActivityRollClause(clause, `${key}[${clauseIndex}]`, index)
+  ));
+}
+
+function readOptionalActivityRollWeightModifiers(
+  branch: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivityRollBranch['weightModifiers'] {
+  const value = branch.weightModifiers;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity roll weightModifiers.`);
+  }
+
+  return value.map((modifier, modifierIndex) => {
+    if (!isRecord(modifier)) {
+      throw new Error(
+        `Character event definition at index ${index} has invalid activity roll ` +
+        `weightModifiers[${modifierIndex}].`,
+      );
+    }
+
+    return {
+      ...readActivityRollClause(modifier, `weightModifiers[${modifierIndex}]`, index),
+      add: readOptionalNumber(modifier, 'add', index),
+      multiplier: readOptionalNumber(modifier, 'multiplier', index),
+    };
+  });
+}
+
+function readActivityRollClause(
+  rawClause: unknown,
+  label: string,
+  index: number,
+): CharacterEventActivityRollRuleClause {
+  if (!isRecord(rawClause)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity roll ${label}.`);
+  }
+
+  return {
+    path: readActivityRollRulePath(rawClause, index),
+    operator: readActivityRollOperator(rawClause, index),
+    value: readActivityRollRuleValue(rawClause, index),
+  };
+}
+
+function readActivityRollRulePath(
+  clause: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivityRollRulePath {
+  const value = readRequiredString(clause, 'path', index);
+
+  if (
+    !value.startsWith('initiator.') &&
+    !value.startsWith('target.') &&
+    !value.startsWith('activity.')
+  ) {
+    throw new Error(`Character event definition at index ${index} has invalid activity roll path "${value}".`);
+  }
+
+  return value as CharacterEventActivityRollRulePath;
+}
+
+function readActivityRollOperator(
+  clause: CharacterEventDefinitionRecord,
+  index: number,
+): ComparisonOperator {
+  const value = readRequiredString(clause, 'operator', index);
+
+  if (!includesString(VALID_OPERATORS, value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity roll operator "${value}".`);
+  }
+
+  return value;
+}
+
+function readActivityRollRuleValue(
+  clause: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivityRollRuleClause['value'] {
+  const value = clause.value;
+
+  if (!isRuleValue(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid activity roll rule value.`);
+  }
+
+  return value;
+}
+
+function assertUniqueIds(
+  entries: readonly { id: string }[],
+  label: string,
+  index: number,
+): void {
+  const seenIds = new Set<string>();
+
+  entries.forEach(entry => {
+    if (seenIds.has(entry.id)) {
+      throw new Error(
+        `Character event definition at index ${index} has duplicate ${label} id "${entry.id}".`,
+      );
+    }
+
+    seenIds.add(entry.id);
+  });
 }
 
 function readOptionalFeeling(
