@@ -8,6 +8,7 @@ import type {
 } from '../../constants/charactarEventsDefinitions';
 import type { ComparisonOperator } from '../../constants/event';
 import { Feeling, Mood } from '../../constants/character';
+import { readOptionalOfflineRecap } from './offlineRecapSchema';
 import {
   includesString,
   isRecord,
@@ -259,6 +260,11 @@ function readActivityRollBranch(
         `activity.rolls[${rollIndex}].branches[${branchIndex}].effects`,
         index,
       ),
+    offlineRecap: readOptionalOfflineRecap(
+      rawBranch,
+      index,
+      `activity.rolls[${rollIndex}].branches[${branchIndex}].offlineRecap`,
+    ),
   };
 }
 

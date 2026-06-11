@@ -448,6 +448,10 @@
         "baseWeight": 6,
         "presentationTags": ["emote.angry", "motion.turn"],
         "performanceId": "social.chat.argument.preference",
+        "offlineRecap": {
+          "summary": "{participantNameList} 為了彼此的喜好爭論了起來。",
+          "detail": "兩人各自堅持自己的看法。"
+        },
         "activity": {
           "key": "chat.argument.preference",
           "type": "chat",
@@ -553,6 +557,10 @@
                   "effects": {
                     "relationshipIntimacyDelta": 1,
                     "moodValueDelta": 4
+                  },
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 爭論了一番，最後接受了彼此的看法。",
+                    "detail": "這次爭論反而讓他們更了解對方。"
                   }
                 },
                 {
@@ -582,6 +590,10 @@
                   "effects": {
                     "relationshipIntimacyDelta": -1,
                     "moodValueDelta": -5
+                  },
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 因為喜好不同而不歡而散。",
+                    "detail": "兩人的氣氛比爭論前更僵了。"
                   }
                 },
                 {
@@ -612,6 +624,10 @@
                   "effects": {
                     "relationshipIntimacyDelta": 2,
                     "moodValueDelta": 6
+                  },
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 原本爭論不休，最後卻意外達成共識。",
+                    "detail": "意外的共同點讓他們親近了不少。"
                   }
                 }
               ]

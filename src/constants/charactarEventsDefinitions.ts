@@ -66,6 +66,7 @@ export interface CharacterEventPresentationVariant {
   weightModifiers?: readonly CharacterEventWeightModifier[];
   presentationTags?: readonly string[];
   performanceId?: string;
+  offlineRecap?: OfflineRecapTemplate;
   activity?: CharacterEventActivity;
 }
 
@@ -171,6 +172,7 @@ export interface CharacterEventActivityRollBranch {
   weightModifiers?: readonly CharacterEventActivityRollWeightModifier[];
   performanceId?: string;
   effects?: CharacterEventActivityEffects;
+  offlineRecap?: OfflineRecapTemplate;
 }
 
 export interface CharacterEventActivityRoll {

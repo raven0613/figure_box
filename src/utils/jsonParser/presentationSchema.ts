@@ -3,6 +3,7 @@ import type {
   CharacterEventTransitionPresentation,
 } from '../../constants/charactarEventsDefinitions';
 import { readOptionalActivity } from './activitySchema';
+import { readOptionalOfflineRecap } from './offlineRecapSchema';
 import {
   readOptionalRuleClauses,
   readOptionalWeightModifiers,
@@ -89,6 +90,11 @@ function readPresentationVariant(
     weightModifiers: readOptionalWeightModifiers(rawVariant, 'weightModifiers', definitionIndex),
     presentationTags: readOptionalStringList(rawVariant, 'presentationTags', definitionIndex),
     performanceId: readOptionalString(rawVariant, 'performanceId', definitionIndex),
+    offlineRecap: readOptionalOfflineRecap(
+      rawVariant,
+      definitionIndex,
+      `presentationVariants[${variantIndex}].offlineRecap`,
+    ),
     activity: readOptionalActivity(rawVariant, definitionIndex),
   };
 }
@@ -109,4 +115,3 @@ function assertUniquePresentationVariantIds(
     seenIds.add(variant.id);
   });
 }
-

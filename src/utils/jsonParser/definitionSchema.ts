@@ -4,9 +4,9 @@ import type {
   CharacterEventInterruptPolicy,
   CharacterEventInteractionPresentation,
 } from '../../constants/charactarEventsDefinitions';
-import type { OfflineRecapTemplate } from '~/services/offlineSimulation/types';
 import { Feeling, Mood, SocialStatus } from '../../constants/character';
 import { readCharacterEventAction } from './actionSchema';
+import { readOptionalOfflineRecap } from './offlineRecapSchema';
 import {
   readOptionalRuleClauses,
   readOptionalWeightModifiers,
@@ -74,7 +74,7 @@ function parseCharacterEventDefinition(
   const acceptance = readOptionalAcceptance(rawDefinition, index);
   const interruptPolicy = readOptionalInterruptPolicy(rawDefinition, 'interruptPolicy', index);
   const commitment = readOptionalNumber(rawDefinition, 'commitment', index);
-  const offlineRecap = readOptionalOfflineRecap(rawDefinition, index);
+  const offlineRecap = readOptionalOfflineRecap(rawDefinition, index, 'offlineRecap');
   const onInterrupted = readOptionalTransitionPresentations(rawDefinition, 'onInterrupted', index);
   const onInterruptRejected = readOptionalTransitionPresentations(rawDefinition, 'onInterruptRejected', index);
 
@@ -100,43 +100,6 @@ function parseCharacterEventDefinition(
     onInterrupted,
     onInterruptRejected,
   };
-}
-
-function readOptionalOfflineRecap(
-  definition: CharacterEventDefinitionRecord,
-  index: number,
-): OfflineRecapTemplate | undefined {
-  const value = definition.offlineRecap;
-
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!isRecord(value)) {
-    throw new Error(`Character event definition at index ${index} has invalid offlineRecap.`);
-  }
-
-  const offlineRecap = {
-    summary: readOptionalString(value, 'summary', index),
-    detail: readOptionalString(value, 'detail', index),
-    quote: readOptionalString(value, 'quote', index),
-    priority: readOptionalNumber(value, 'priority', index),
-    sequenceKey: readOptionalString(value, 'sequenceKey', index),
-    sequenceOrder: readOptionalNumber(value, 'sequenceOrder', index),
-  };
-
-  if (
-    !offlineRecap.summary &&
-    !offlineRecap.detail &&
-    !offlineRecap.quote &&
-    offlineRecap.priority === undefined &&
-    !offlineRecap.sequenceKey &&
-    offlineRecap.sequenceOrder === undefined
-  ) {
-    throw new Error(`Character event definition at index ${index} has empty offlineRecap.`);
-  }
-
-  return offlineRecap;
 }
 
 function readOptionalInteractionPresentation(

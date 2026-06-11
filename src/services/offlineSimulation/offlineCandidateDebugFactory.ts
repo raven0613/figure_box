@@ -10,7 +10,6 @@ import {
 import { resolveOfflineEventPreview } from './offlineEventResolver';
 import {
   getOfflineCandidateActivityType,
-  getOfflineCandidateRecapPriority,
   resolveOfflineRecapTemplate,
 } from './offlineRecapTemplates';
 import type {
@@ -26,8 +25,10 @@ export function createOfflineCandidateDebug(
 ): OfflineCharacterCandidateDebug {
   const policy = resolveOfflineEventPolicy(OFFLINE_SIMULATION_POLICY, candidate);
   const offlineWeight = policy.enabled ? candidate.weight * policy.weightMultiplier : 0;
-  const activityType = getOfflineCandidateActivityType(candidate);
   const resolutionPreview = resolveOfflineEventPreview(candidate, context, input, contexts);
+  const activityType = resolutionPreview.kind === 'group'
+    ? resolutionPreview.activityType
+    : getOfflineCandidateActivityType(candidate);
 
   return {
     id: candidate.id,
@@ -52,7 +53,7 @@ function createRecapPreview(
   contexts: readonly CharacterContext[],
   resolutionPreview: ReturnType<typeof resolveOfflineEventPreview>,
 ): OfflineRecapPreview {
-  const resolvedTemplate = resolveOfflineRecapTemplate(candidate);
+  const resolvedTemplate = resolveOfflineRecapTemplate(candidate, resolutionPreview);
   const variables = {
     ...createTemplateVariables(context, input, contexts),
     ...(resolutionPreview.kind === 'unsupported'
@@ -69,7 +70,7 @@ function createRecapPreview(
     quote: resolvedTemplate.template.quote
       ? formatTemplate(resolvedTemplate.template.quote, variables)
       : undefined,
-    priority: getOfflineCandidateRecapPriority(candidate),
+    priority: resolvedTemplate.template.priority ?? 0,
     sequenceKey: resolvedTemplate.template.sequenceKey,
     sequenceOrder: resolvedTemplate.template.sequenceOrder,
   };
