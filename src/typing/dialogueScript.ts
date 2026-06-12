@@ -1,5 +1,5 @@
 import type { CharacterBaseSetting, Expression } from '~/constants/character';
-import type { DialogueAvatarSlot } from './dialogueView';
+import type { DialogueAvatarSlot, DialogueViewInstruction } from './dialogueView';
 
 export interface DialogueScriptDefinition {
   id: string;
@@ -63,6 +63,16 @@ export type DialogueScriptChoiceResultDefinition =
     branchGroupId: string;
   }
   | {
+    type: 'activityRoll';
+    rollId: string;
+    contentPoolId?: string;
+    subjectKey?: string;
+    subjectKeys?: readonly string[];
+    lines?: readonly DialogueScriptInstructionDefinition[];
+    lineVariants?: readonly (readonly DialogueScriptInstructionDefinition[])[];
+    branchLines: Readonly<Record<string, readonly DialogueScriptInstructionDefinition[]>>;
+  }
+  | {
     type: 'end';
   };
 
@@ -120,5 +130,11 @@ export interface DialogueScriptRuntimeContext {
     intimacy: number;
   }[];
   recentBranchIds?: readonly string[];
+  templateValues?: Readonly<Record<string, string>>;
+  resolveActivityRoll?: (rollId: string) => string | null;
+  resolveDialogueContent?: (
+    contentPoolId: string,
+    subjectKey: string,
+  ) => readonly DialogueViewInstruction[] | null;
   random?: () => number;
 }

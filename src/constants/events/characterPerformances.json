@@ -120,6 +120,199 @@
     ]
   },
   {
+    "id": "social.chat.gossip",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "expression",
+        "target": "initiator",
+        "expression": "laugh",
+        "durationMs": 1600
+      },
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "{initiator}：我跟你說......",
+        "durationMs": 2800
+      },
+      {
+        "phase": "accepted",
+        "type": "expression",
+        "target": "target",
+        "expression": "curious",
+        "durationMs": 1600
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：嗯嗯，然後呢？",
+        "durationMs": 2600
+      },
+      {
+        "phase": "rejectedBusy",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：等等再跟我說，我現在有事。",
+        "durationMs": 2800
+      },
+      {
+        "phase": "rejectedMood",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：我現在不太想聽別人的事。",
+        "durationMs": 2800
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipTogether",
+        "label": "聊八卦中",
+        "durationMs": 16000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "我跟你說......",
+        "delayMs": 1000,
+        "durationMs": 2600
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "target",
+        "text": "嗯嗯嗯嗯！？",
+        "delayMs": 4200,
+        "durationMs": 2400
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expression": "surprised",
+        "delayMs": 4200,
+        "durationMs": 3000
+      },
+      {
+        "phase": "active",
+        "type": "roll",
+        "participantCount": {
+          "min": 2
+        },
+        "rollId": "gossipResult",
+        "delayMs": 7600
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipTogether",
+        "label": "八卦被打斷了",
+        "durationMs": 5000
+      }
+    ]
+  },
+  {
+    "id": "social.chat.gossip.sharedSurprise",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "嗯嗯嗯嗯....",
+        "durationMs": 2800
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expression": "surprised",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipSharedSurprise",
+        "label": "討論了{dialogueSubjectName}的八卦",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipSharedSurprise",
+        "label": "分享秘密讓兩人的距離稍微拉近了",
+        "durationMs": 2000
+      }
+    ]
+  },
+  {
+    "id": "social.chat.gossip.playfulFakeout",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "騙你的。",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expression": "laugh",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expression": "mad",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "target",
+        "emoteId": "angry",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipPlayfulFakeout",
+        "label": "惡作劇讓一人很開心",
+        "durationMs": 2000
+      }
+    ]
+  },
+  {
     "id": "social.chat.argument.preference",
     "steps": [
       {

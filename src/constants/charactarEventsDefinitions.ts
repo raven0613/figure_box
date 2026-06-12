@@ -2,7 +2,13 @@ import type {
   CharacterEventBucketId,
   UtilityDrivenMotivation,
 } from '~/stateMachines/gameFlow/context';
-import type { Feeling, Mood, Position, SocialStatus } from '~/constants/character';
+import type {
+  Feeling,
+  MemoryType,
+  Mood,
+  Position,
+  SocialStatus,
+} from '~/constants/character';
 import rawCharacterEventDefinitions from '~/constants/events/characterEvents.json';
 import { loadCharacterEventDefinitions } from '../utils/jsonParser/definitionSchema';
 import type {
@@ -109,6 +115,9 @@ export interface CharacterEventActivity {
   joinRequirements?: CharacterEventJoinRequirement;
   cooldowns: CharacterEventCooldowns;
   effects?: CharacterEventActivityEffects;
+  effectsByRole?: CharacterEventActivityEffectsByRole;
+  dialogueScriptId?: string;
+  dialogueSubjectSelection?: CharacterEventDialogueSubjectSelection;
   rolls?: readonly CharacterEventActivityRoll[];
 }
 
@@ -147,6 +156,29 @@ export interface CharacterEventActivityEffects {
   playNeedDelta?: number;
 }
 
+export interface CharacterEventActivityEffectsByRole {
+  initiator?: CharacterEventActivityEffects;
+  target?: CharacterEventActivityEffects;
+}
+
+export interface CharacterEventDialogueSubjectSelection {
+  sourceRole: CharacterEventParticipantRole;
+  memoryType: MemoryType;
+  minCount: number;
+  count: number;
+  excludeParticipants: boolean;
+}
+
+export type CharacterEventParticipantRole = 'initiator' | 'target';
+
+export interface CharacterEventActivityMemoryEffect {
+  recipientRole: CharacterEventParticipantRole | 'both';
+  target: 'otherParticipant' | 'dialogueSubject';
+  memoryType: MemoryType;
+  countDelta: number;
+  startedByRole?: CharacterEventParticipantRole;
+}
+
 export type CharacterEventActivityRollRulePath =
   | `initiator.${string}`
   | `target.${string}`
@@ -172,6 +204,8 @@ export interface CharacterEventActivityRollBranch {
   weightModifiers?: readonly CharacterEventActivityRollWeightModifier[];
   performanceId?: string;
   effects?: CharacterEventActivityEffects;
+  effectsByRole?: CharacterEventActivityEffectsByRole;
+  memoryEffects?: readonly CharacterEventActivityMemoryEffect[];
   offlineRecap?: OfflineRecapTemplate;
 }
 

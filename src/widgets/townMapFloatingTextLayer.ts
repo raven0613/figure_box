@@ -25,6 +25,7 @@ interface TownMapFloatingTextLayerOptions {
   getZoom: () => number;
   updateCharacterExpression: (characterId: string, expression: Expression) => void;
   startAnimationLoop: () => void;
+  onMapActivityObserve?: (activityId: string) => void;
 }
 
 // bubble、emote、map activity、bubble sequence、timer
@@ -35,6 +36,7 @@ export class TownMapFloatingTextLayer {
   private readonly getZoom: () => number;
   private readonly updateCharacterExpression: (characterId: string, expression: Expression) => void;
   private readonly startAnimationLoop: () => void;
+  private readonly onMapActivityObserve?: (activityId: string) => void;
   private readonly characterBubbles = new Map<string, Text>();
   private readonly characterEmotes = new Map<string, Text>();
   private readonly bubbleTimers = new Map<string, number>();
@@ -51,6 +53,7 @@ export class TownMapFloatingTextLayer {
     this.getZoom = options.getZoom;
     this.updateCharacterExpression = options.updateCharacterExpression;
     this.startAnimationLoop = options.startAnimationLoop;
+    this.onMapActivityObserve = options.onMapActivityObserve;
   }
 
   dispose(): void {
@@ -176,12 +179,14 @@ export class TownMapFloatingTextLayer {
     const center = averagePoints(points);
     const label = this.getOrCreateMapActivityLabel(activity);
 
+    this.configureMapActivityInteraction(label, activity);
     label.set({
       text: activity.label,
       left: center.x,
       top: center.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 1.1,
       ...getMapActivityToneStyle(activity.tone),
     });
+    label.setCoords();
     this.canvas.bringObjectToFront(label);
     this.canvas.requestRenderAll();
 
@@ -217,6 +222,12 @@ export class TownMapFloatingTextLayer {
     this.mapActivityLabels.delete(activityId);
     this.clearTimer(this.mapActivityTimers, activityId);
     this.canvas.requestRenderAll();
+  }
+
+  isMapActivityInteractionTarget(target: unknown): boolean {
+    return Array.from(this.mapActivityLabels.values()).some(label => (
+      label === target && label.evented
+    ));
   }
 
   removeCharacterBubbleById(characterId: string): void {
@@ -383,6 +394,42 @@ export class TownMapFloatingTextLayer {
     this.mapActivityLabels.set(activity.id, label);
     this.canvas.add(label);
     return label;
+  }
+
+  private configureMapActivityInteraction(label: Text, activity: MapActivityView): void {
+    const interaction = activity.interaction;
+
+    label.off('mouseover');
+    label.off('mouseout');
+    label.off('mouseup');
+
+    if (!interaction) {
+      label.set({
+        evented: false,
+        hoverCursor: 'default',
+      });
+      return;
+    }
+
+    label.set({
+      evented: true,
+      hoverCursor: 'pointer',
+    });
+    label.on('mouseover', () => {
+      label.set({
+        text: `${activity.label}\n[ ${interaction.label} ]`,
+      });
+      label.setCoords();
+      this.canvas.requestRenderAll();
+    });
+    label.on('mouseout', () => {
+      label.set({ text: activity.label });
+      label.setCoords();
+      this.canvas.requestRenderAll();
+    });
+    label.on('mouseup', () => {
+      this.onMapActivityObserve?.(interaction.activityId);
+    });
   }
 
   private removeCanvasObject(objects: Map<string, Text>, id: string): void {

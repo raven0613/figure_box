@@ -519,6 +519,9 @@ export function TownMapContainer({
           refreshShopStock();
         }
       },
+      onMapActivityObserve: activityId => {
+        characterControllerRef.current?.observeActivity(activityId);
+      },
       onZoomChange: zoom => {
         setMapZoom(zoom);
         characterControllerRef.current?.syncRequestIndicators(zoom);
@@ -1709,6 +1712,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationship
         <strong>{snapshot.context.lastEventDecision?.selectedBucketId ?? '-'}</strong>
       </div>
       <div className={styles.detailRow}>
+        <span>Motivation picked</span>
+        <strong>{snapshot.context.lastEventDecision?.selectedMotivation ?? '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
         <span>Event picked</span>
         <strong>{snapshot.context.lastEventDecision?.selectedCandidateId ?? '-'}</strong>
       </div>
@@ -1723,6 +1730,14 @@ function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationship
       <div className={styles.detailRow}>
         <span>Candidates</span>
         <strong>{snapshot.context.lastEventDecision?.candidateCount ?? 0}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Motivations</span>
+        <strong>{snapshot.context.lastEventDecision?.motivationCount ?? 0}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Motivation candidates</span>
+        <strong>{snapshot.context.lastEventDecision?.selectedMotivationCandidateCount ?? 0}</strong>
       </div>
       <div className={styles.detailRow}>
         <span>Saturation</span>

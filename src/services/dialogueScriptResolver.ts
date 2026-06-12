@@ -32,12 +32,16 @@ export function createDialogueViewScript(
       return [participant.key, runtimeParticipant.id] as const;
     }),
   );
-  const templateValues = Object.fromEntries(
+  const participantTemplateValues = Object.fromEntries(
     Object.entries(context.participants).map(([key, participant]) => [
       `${key}Name`,
       participant.name,
     ]),
   );
+  const templateValues: Readonly<Record<string, string>> = {
+    ...participantTemplateValues,
+    ...context.templateValues,
+  };
 
   return {
     id: definition.id,
@@ -74,6 +78,8 @@ export function createDialogueViewScript(
       )
       : undefined,
     branchContext: createBranchContext(context, participantIdByKey),
+    resolveActivityRoll: context.resolveActivityRoll,
+    resolveDialogueContent: context.resolveDialogueContent,
   };
 }
 
@@ -144,6 +150,32 @@ function resolveChoiceResult(
     return {
       type: 'branch',
       branchGroupId: result.branchGroupId,
+    };
+  }
+
+  if (result.type === 'activityRoll') {
+    return {
+      type: 'activityRoll',
+      rollId: result.rollId,
+      contentPoolId: result.contentPoolId,
+      subjectKey: result.subjectKey,
+      subjectKeys: result.subjectKeys ? [...result.subjectKeys] : undefined,
+      lines: (result.lines ?? []).map(instruction => (
+        resolveInstruction(instruction, participantIdByKey, templateValues)
+      )),
+      lineVariants: result.lineVariants?.map(lines => (
+        lines.map(instruction => (
+          resolveInstruction(instruction, participantIdByKey, templateValues)
+        ))
+      )),
+      branchLines: Object.fromEntries(
+        Object.entries(result.branchLines).map(([branchId, lines]) => [
+          branchId,
+          lines.map(instruction => (
+            resolveInstruction(instruction, participantIdByKey, templateValues)
+          )),
+        ]),
+      ),
     };
   }
 

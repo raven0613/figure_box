@@ -242,5 +242,165 @@
         ]
       }
     }
+  },
+  {
+    "id": "activity-chat-gossip",
+    "participants": [
+      { "key": "initiator", "slot": "left" },
+      { "key": "target", "slot": "right" }
+    ],
+    "lines": [
+      {
+        "id": "gossip-subject-choice",
+        "type": "CHOICE",
+        "speaker": "initiator",
+        "text": "{initiatorName} 要聊誰的八卦？",
+        "expression": "curious",
+        "idlePrompt": "還在想要說誰嗎？",
+        "idlePromptLines": [
+          {
+            "type": "SAY",
+            "speaker": "target",
+            "text": "怎麼突然不說了？",
+            "expression": "curious"
+          },
+          {
+            "type": "SAY",
+            "speaker": "initiator",
+            "text": "我在想該從哪裡開始說。",
+            "expression": "laugh"
+          }
+        ],
+        "timeoutMs": 10000,
+        "choices": [
+          {
+            "id": "subject-a",
+            "label": "{subjectAName}",
+            "result": {
+              "type": "activityRoll",
+              "rollId": "gossipResult",
+              "contentPoolId": "gossip",
+              "subjectKey": "subjectA",
+              "branchLines": {
+                "sharedSurprise": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "嗯嗯嗯嗯！？原來是這樣。",
+                    "expression": "surprised"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "initiator",
+                    "text": "我也是剛剛才知道。",
+                    "expression": "surprised"
+                  }
+                ],
+                "playfulFakeout": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "嗯嗯嗯嗯！？",
+                    "expression": "surprised"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "initiator",
+                    "text": "騙你的。",
+                    "expression": "laugh"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "這種事情不要說得那麼認真啦。",
+                    "expression": "mad"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "subject-b",
+            "label": "{subjectBName}",
+            "result": {
+              "type": "activityRoll",
+              "rollId": "gossipResult",
+              "contentPoolId": "gossip",
+              "subjectKey": "subjectB",
+              "branchLines": {
+                "sharedSurprise": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "嗯嗯嗯嗯！？還有這種事",
+                    "expression": "surprised"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "initiator",
+                    "text": "對吧，我也嚇了一跳。",
+                    "expression": "surprised"
+                  }
+                ],
+                "playfulFakeout": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "原來還有這件事？",
+                    "expression": "surprised"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "initiator",
+                    "text": "沒有，騙你的。",
+                    "expression": "laugh"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "我剛才真的相信了耶。",
+                    "expression": "mad"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "system-choice",
+            "label": "系統決定",
+            "result": {
+              "type": "activityRoll",
+              "rollId": "gossipResult",
+              "contentPoolId": "gossip",
+              "subjectKeys": ["subjectA", "subjectB"],
+              "branchLines": {
+                "sharedSurprise": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "嗯嗯嗯嗯！？這我真的沒想到。",
+                    "expression": "surprised"
+                  }
+                ],
+                "playfulFakeout": [
+                  {
+                    "type": "SAY",
+                    "speaker": "initiator",
+                    "text": "其實是我亂說的。",
+                    "expression": "laugh"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "害我白白認真聽了。",
+                    "expression": "mad"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
   }
 ]

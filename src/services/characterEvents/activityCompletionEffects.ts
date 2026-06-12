@@ -3,7 +3,11 @@ import {
   getMoodForMoodValue,
   getMoodMinValue,
 } from '~/constants/character';
-import type { CharacterEventActivity } from '~/constants/charactarEventsDefinitions';
+import type {
+  CharacterEventActivity,
+  CharacterEventActivityEffects,
+  CharacterEventActivityEffectsByRole,
+} from '~/constants/charactarEventsDefinitions';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 
 export function applyCompletedActivityStatusEffects(
@@ -24,6 +28,27 @@ export function applyCompletedActivityStatusEffects(
     },
     moodValue,
   );
+}
+
+export function resolveActivityEffectsForRole(
+  sharedEffects: CharacterEventActivityEffects | undefined,
+  effectsByRole: CharacterEventActivityEffectsByRole | undefined,
+  role: keyof CharacterEventActivityEffectsByRole,
+): CharacterEventActivityEffects | undefined {
+  const roleEffects = effectsByRole?.[role];
+
+  if (!sharedEffects) {
+    return roleEffects ? { ...roleEffects } : undefined;
+  }
+
+  if (!roleEffects) {
+    return { ...sharedEffects };
+  }
+
+  return {
+    ...sharedEffects,
+    ...roleEffects,
+  };
 }
 
 function updateCharacterMoodValue(

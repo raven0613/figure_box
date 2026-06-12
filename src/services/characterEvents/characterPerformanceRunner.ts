@@ -12,6 +12,7 @@ import {
 } from './performances';
 import type { MapActivityView } from '~/typing/eventDialoguePresentation';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
+import type { DialogueViewInstruction } from '~/typing/dialogueView';
 
 export interface CharacterPerformanceSelection {
   definitionId?: string;
@@ -41,6 +42,7 @@ export interface CharacterActivityPerformanceInput {
   activityId: string;
   participantIds: readonly string[];
   hostCharacterIds?: readonly string[];
+  templateValues?: Readonly<Record<string, string>>;
 }
 
 export interface CharacterPerformanceActivityRollRequest {
@@ -64,6 +66,13 @@ export interface CharacterPerformanceDialogueRequest {
   participantIds: readonly string[];
   initiatorId: string;
   targetId?: string;
+  templateValues?: Readonly<Record<string, string>>;
+  resolveActivityRoll?: (rollId: string) => string | null;
+  resolveDialogueContent?: (
+    contentPoolId: string,
+    subjectKey: string,
+  ) => readonly DialogueViewInstruction[] | null;
+  onClose?: () => void;
 }
 
 interface CharacterPerformanceRunnerPorts {
@@ -417,12 +426,12 @@ export class CharacterPerformanceRunner {
     }
 
     if (step.type === 'bubble') {
-      const names = this.getActivityPerformanceNames(input);
+      const templateValues = this.getActivityPerformanceTemplateValues(input);
 
       characterIds.forEach(characterId => {
         this.ports.showCharacterBubble(
           characterId,
-          formatInteractionLine(step.text, names.initiatorName, names.targetName),
+          formatTemplate(step.text, templateValues),
           step.durationMs,
         );
       });
@@ -453,12 +462,17 @@ export class CharacterPerformanceRunner {
     }
 
     if (step.type === 'mapEffect') {
+      const label = formatTemplate(
+        step.label ?? step.effectId,
+        this.getActivityPerformanceTemplateValues(input),
+      );
+
       if (input.phase === 'participantLeftGroup') {
         characterIds.forEach(characterId => {
           this.ports.showMapActivity(
             {
               id: createParticipantLeftMapEffectId(step.effectId, input.activityId, characterId),
-              label: step.label ?? step.effectId,
+              label,
               participantIds: [characterId],
             },
             step.durationMs,
@@ -470,8 +484,15 @@ export class CharacterPerformanceRunner {
       this.ports.showMapActivity(
         {
           id: `${step.effectId}-${input.activityId}`,
-          label: step.label ?? step.effectId,
+          label,
           participantIds: characterIds,
+          interaction: input.phase === 'active'
+            && this.getSelectedActivityDialogueScriptId(input.selection)
+            ? {
+              activityId: input.activityId,
+              label: '觀察',
+            }
+            : undefined,
         },
         step.durationMs,
       );
@@ -566,6 +587,19 @@ export class CharacterPerformanceRunner {
     });
   }
 
+  private getSelectedActivityDialogueScriptId(
+    selection: CharacterPerformanceSelection,
+  ): string | undefined {
+    if (!selection.definitionId || !selection.variantId) {
+      return undefined;
+    }
+
+    return CHARACTER_EVENT_DEFINITIONS_BY_ID[selection.definitionId]?.presentationVariants
+      ?.find(variant => variant.id === selection.variantId)
+      ?.activity
+      ?.dialogueScriptId;
+  }
+
   private clearExpressionReset(characterId: string): void {
     const timerId = this.expressionResetTimersByCharacterId.get(characterId);
 
@@ -592,10 +626,9 @@ export class CharacterPerformanceRunner {
     }
   }
 
-  private getActivityPerformanceNames(input: CharacterActivityPerformanceInput): {
-    initiatorName: string;
-    targetName: string;
-  } {
+  private getActivityPerformanceTemplateValues(
+    input: CharacterActivityPerformanceInput,
+  ): Readonly<Record<string, string>> {
     const hostIds = input.hostCharacterIds?.length
       ? input.hostCharacterIds
       : input.participantIds.slice(0, 1);
@@ -603,8 +636,9 @@ export class CharacterPerformanceRunner {
     const targetIds = input.participantIds.filter(characterId => !hostIdSet.has(characterId));
 
     return {
-      initiatorName: formatCharacterNames(hostIds, characterId => this.ports.getCharacterName(characterId)),
-      targetName: formatCharacterNames(targetIds, characterId => this.ports.getCharacterName(characterId)),
+      initiator: formatCharacterNames(hostIds, characterId => this.ports.getCharacterName(characterId)),
+      target: formatCharacterNames(targetIds, characterId => this.ports.getCharacterName(characterId)),
+      ...input.templateValues,
     };
   }
 }
@@ -637,9 +671,19 @@ function formatInteractionLine(
   initiatorName: string,
   targetName: string,
 ): string {
-  return template
-    .replaceAll('{initiator}', initiatorName)
-    .replaceAll('{target}', targetName);
+  return formatTemplate(template, {
+    initiator: initiatorName,
+    target: targetName,
+  });
+}
+
+function formatTemplate(
+  template: string,
+  values: Readonly<Record<string, string>>,
+): string {
+  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key: string) => (
+    values[key] ?? `{${key}}`
+  ));
 }
 
 function formatCharacterNames(

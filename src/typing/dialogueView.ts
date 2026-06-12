@@ -43,6 +43,16 @@ export type DialogueChoiceResult =
     branchGroupId: string;
   }
   | {
+    type: 'activityRoll';
+    rollId: string;
+    contentPoolId?: string;
+    subjectKey?: string;
+    subjectKeys?: string[];
+    lines: DialogueViewInstruction[];
+    lineVariants?: DialogueViewInstruction[][];
+    branchLines: Record<string, DialogueViewInstruction[]>;
+  }
+  | {
     type: 'end';
   };
 
@@ -131,4 +141,9 @@ export interface DialogueViewScript {
   lines: DialogueViewInstruction[];
   branchGroups?: Record<string, DialogueBranchGroup>;
   branchContext?: DialogueBranchContext;
+  resolveActivityRoll?: (rollId: string) => string | null;
+  resolveDialogueContent?: (
+    contentPoolId: string,
+    subjectKey: string,
+  ) => readonly DialogueViewInstruction[] | null;
 }

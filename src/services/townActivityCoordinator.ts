@@ -12,6 +12,7 @@ import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
 import type {
   CharacterPerformanceActivityRollRequest,
+  CharacterPerformanceDialogueRequest,
   CharacterPerformanceRunner,
 } from '~/services/characterEvents/characterPerformanceRunner';
 import {
@@ -27,11 +28,13 @@ import type {
   ResolveActivityOutcomeInput,
   ResolvedActivityOutcome,
 } from '~/services/characterEvents/activityOutcomeResolver';
+import { resolveDialogueContent } from '~/services/dialogueContentResolver';
 
 interface TownActivityCoordinatorOptions {
   activityManager: JoinableActivityManager;
   performanceRunner: CharacterPerformanceRunner;
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
+  getCharacterName: (characterId: string) => string;
   getCharacterPersonality: (characterId: string) => CharacterPersonality;
   getCharacterPosition: (characterId: string) => Position | null;
   getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
@@ -55,9 +58,15 @@ export class TownActivityCoordinator {
     string,
     Readonly<Record<string, ActivityRollSelection>>
   >();
+  private readonly dialogueSubjectIdsByActivityId = new Map<
+    string,
+    Readonly<Record<string, string>>
+  >();
+  private readonly selectedDialogueSubjectIdByActivityId = new Map<string, string>();
   private readonly activityManager: JoinableActivityManager;
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
+  private readonly getCharacterName: (characterId: string) => string;
   private readonly getCharacterPersonality: (characterId: string) => CharacterPersonality;
   private readonly getCharacterPosition: (characterId: string) => Position | null;
   private readonly getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
@@ -75,6 +84,7 @@ export class TownActivityCoordinator {
     this.activityManager = options.activityManager;
     this.performanceRunner = options.performanceRunner;
     this.getCharacterContext = options.getCharacterContext;
+    this.getCharacterName = options.getCharacterName;
     this.getCharacterPersonality = options.getCharacterPersonality;
     this.getCharacterPosition = options.getCharacterPosition;
     this.getRelationshipStatus = options.getRelationshipStatus;
@@ -255,6 +265,8 @@ export class TownActivityCoordinator {
     const nextActivity = this.activityManager.leaveActivity(activity.id, characterId);
 
     this.arrivedCharacterIdsByActivityId.get(activity.id)?.delete(characterId);
+    this.dialogueSubjectIdsByActivityId.delete(activity.id);
+    this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
     this.performanceRunner.cancelActivityPerformance(activity.id);
     this.performanceRunner.clearActivityActiveVisuals(
       this.getActivityPerformanceSelection(activity),
@@ -307,6 +319,8 @@ export class TownActivityCoordinator {
       this.arrivedCharacterIdsByActivityId.clear();
       this.endingActivityIds.clear();
       this.rollSelectionsByActivityId.clear();
+      this.dialogueSubjectIdsByActivityId.clear();
+      this.selectedDialogueSubjectIdByActivityId.clear();
       return;
     }
 
@@ -315,12 +329,16 @@ export class TownActivityCoordinator {
       this.arrivedCharacterIdsByActivityId.delete(activity.id);
       this.endingActivityIds.delete(activity.id);
       this.rollSelectionsByActivityId.delete(activity.id);
+      this.dialogueSubjectIdsByActivityId.delete(activity.id);
+      this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
       this.performanceRunner.cancelActivityPerformance(activity.id);
     });
     this.activityManager.clear();
     this.arrivedCharacterIdsByActivityId.clear();
     this.endingActivityIds.clear();
     this.rollSelectionsByActivityId.clear();
+    this.dialogueSubjectIdsByActivityId.clear();
+    this.selectedDialogueSubjectIdByActivityId.clear();
     this.notifyActivitiesChanged();
   }
 
@@ -348,6 +366,8 @@ export class TownActivityCoordinator {
         activity.hostCharacterIds,
       );
       this.arrivedCharacterIdsByActivityId.get(activity.id)?.delete(characterId);
+      this.dialogueSubjectIdsByActivityId.delete(activity.id);
+      this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
 
       if (!nextActivity) {
         this.rollSelectionsByActivityId.delete(activity.id);
@@ -459,11 +479,11 @@ export class TownActivityCoordinator {
     });
   }
 
-  resolveActivityRoll(request: CharacterPerformanceActivityRollRequest): void {
+  resolveActivityRoll(request: CharacterPerformanceActivityRollRequest): string | null {
     const activity = this.activityManager.getActivity(request.activityId);
 
     if (!activity || activity.phase !== 'active' || this.endingActivityIds.has(activity.id)) {
-      return;
+      return null;
     }
 
     const activityDefinition = this.getActivityDefinition(activity);
@@ -471,7 +491,7 @@ export class TownActivityCoordinator {
     const previousSelections = this.rollSelectionsByActivityId.get(activity.id) ?? {};
 
     if (!roll || previousSelections[roll.id]) {
-      return;
+      return previousSelections[request.rollId]?.selectedBranchId ?? null;
     }
 
     const context = this.createActivityRollRuleContext(activity, previousSelections);
@@ -480,7 +500,7 @@ export class TownActivityCoordinator {
       : null;
 
     if (!selectedBranch) {
-      return;
+      return null;
     }
 
     this.rollSelectionsByActivityId.set(activity.id, {
@@ -492,10 +512,177 @@ export class TownActivityCoordinator {
 
     if (roll.resolvesActivity) {
       this.resolveActivityFromRoll(activity, selectedBranch);
-      return;
+      return selectedBranch.id;
     }
 
     this.playActivityRollBranchPerformance(activity, selectedBranch);
+    return selectedBranch.id;
+  }
+
+  createActivityDialogueRequest(
+    activityId: string,
+  ): CharacterPerformanceDialogueRequest | null {
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (
+      !activity
+      || activity.phase !== 'active'
+      || activity.pausedAt !== undefined
+      || this.endingActivityIds.has(activity.id)
+    ) {
+      return null;
+    }
+
+    const activityDefinition = this.getActivityDefinition(activity);
+    const dialogueScriptId = activityDefinition?.dialogueScriptId;
+    const initiatorId = activity.hostCharacterIds[0] ?? activity.participantIds[0];
+    const targetId = activity.participantIds.find(characterId => characterId !== initiatorId);
+
+    if (!dialogueScriptId || !initiatorId || !targetId) {
+      return null;
+    }
+
+    const dialogueSubjects = this.dialogueSubjectIdsByActivityId.get(activity.id)
+      ?? this.prepareActivityDialogueSubjects(activity, activityDefinition);
+
+    if (
+      activityDefinition.dialogueSubjectSelection
+      && Object.keys(dialogueSubjects).length < activityDefinition.dialogueSubjectSelection.count
+    ) {
+      return null;
+    }
+
+    this.activityManager.pauseActivity(activity.id, Date.now());
+    this.performanceRunner.cancelActivityPerformance(activity.id);
+    this.notifyActivitiesChanged();
+
+    return {
+      scriptId: dialogueScriptId,
+      participantIds: [...activity.participantIds],
+      initiatorId,
+      targetId,
+      templateValues: Object.fromEntries(
+        Object.entries(dialogueSubjects).map(([subjectKey, subjectId]) => [
+          `${subjectKey}Name`,
+          this.getCharacterName(subjectId),
+        ]),
+      ),
+      resolveActivityRoll: rollId => this.resolveActivityRoll({
+        activityId: activity.id,
+        rollId,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+      }),
+      resolveDialogueContent: (contentPoolId, subjectKey) => {
+        const subjectId = dialogueSubjects[subjectKey];
+        const subjectContext = subjectId
+          ? this.getCharacterContext(subjectId)
+          : null;
+
+        if (!subjectId || !subjectContext) {
+          return null;
+        }
+
+        const content = resolveDialogueContent({
+          contentPoolId,
+          subjectId,
+          subjectName: this.getCharacterName(subjectId),
+          relationships: subjectContext.relationships,
+          getCharacterName: this.getCharacterName,
+        });
+
+        if (!content) {
+          return null;
+        }
+
+        this.selectedDialogueSubjectIdByActivityId.set(activity.id, subjectId);
+        return [{
+          type: 'SAY',
+          speakerId: initiatorId,
+          text: content.text,
+          expression: content.expression,
+        }];
+      },
+      onClose: () => {
+        this.resumeActivityAfterDialogue(activity.id);
+      },
+    };
+  }
+
+  private selectDialogueSubjects(
+    activity: JoinableActivity,
+    initiatorId: string,
+    targetId: string,
+    selection: NonNullable<CharacterEventActivity['dialogueSubjectSelection']>,
+  ): Readonly<Record<string, string>> {
+    const sourceId = selection.sourceRole === 'initiator'
+      ? initiatorId
+      : targetId;
+    const sourceContext = this.getCharacterContext(sourceId);
+
+    if (!sourceContext) {
+      return {};
+    }
+
+    const excludedCharacterIds = selection.excludeParticipants
+      ? new Set(activity.participantIds)
+      : new Set<string>();
+    const candidateIds = sourceContext.relationships
+      .filter(relationship => (
+        relationship.charId === sourceId
+        && !excludedCharacterIds.has(relationship.targetCharId)
+        && this.getCharacterContext(relationship.targetCharId) !== null
+        && relationship.memories[selection.memoryType].counts >= selection.minCount
+      ))
+      .map(relationship => relationship.targetCharId);
+    const selectedIds = sampleWithoutReplacement(candidateIds, selection.count);
+
+    return Object.fromEntries(
+      selectedIds.map((characterId, index) => [
+        `subject${String.fromCharCode(65 + index)}`,
+        characterId,
+      ]),
+    );
+  }
+
+  private prepareActivityDialogueSubjects(
+    activity: JoinableActivity,
+    activityDefinition: CharacterEventActivity,
+  ): Readonly<Record<string, string>> {
+    const existingSubjects = this.dialogueSubjectIdsByActivityId.get(activity.id);
+
+    if (existingSubjects) {
+      return existingSubjects;
+    }
+
+    const selection = activityDefinition.dialogueSubjectSelection;
+    const initiatorId = activity.hostCharacterIds[0] ?? activity.participantIds[0];
+    const targetId = activity.participantIds.find(characterId => characterId !== initiatorId);
+
+    if (!selection || !initiatorId || !targetId) {
+      return {};
+    }
+
+    const subjects = this.selectDialogueSubjects(
+      activity,
+      initiatorId,
+      targetId,
+      selection,
+    );
+
+    if (Object.keys(subjects).length < selection.count) {
+      return {};
+    }
+
+    this.dialogueSubjectIdsByActivityId.set(activity.id, subjects);
+    const subjectIds = Object.values(subjects);
+    const defaultSubjectId = subjectIds[Math.floor(Math.random() * subjectIds.length)];
+
+    if (defaultSubjectId) {
+      this.selectedDialogueSubjectIdByActivityId.set(activity.id, defaultSubjectId);
+    }
+
+    return subjects;
   }
 
   private rejectActivityJoin(characterId: string, activityId: string): void {
@@ -503,6 +690,27 @@ export class TownActivityCoordinator {
       type: EventType.JoinActivityRejected,
       activityId,
     });
+  }
+
+  private resumeActivityAfterDialogue(activityId: string): void {
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (
+      !activity
+      || activity.pausedAt === undefined
+      || this.endingActivityIds.has(activity.id)
+    ) {
+      return;
+    }
+
+    const resumedActivity = this.activityManager.resumeActivity(activity.id, Date.now());
+
+    if (!resumedActivity) {
+      return;
+    }
+
+    this.playActivityPerformance(resumedActivity);
+    this.notifyActivitiesChanged();
   }
 
   private getInvitedParticipantIds(hostCharacterId: string, activityDefinition: CharacterEventActivity): string[] {
@@ -783,6 +991,12 @@ export class TownActivityCoordinator {
   }
 
   private playActivityPerformance(activity: JoinableActivity): void {
+    const activityDefinition = this.getActivityDefinition(activity);
+
+    if (activityDefinition) {
+      this.prepareActivityDialogueSubjects(activity, activityDefinition);
+    }
+
     this.performanceRunner.playActivityPerformanceSteps({
       selection: this.getActivityPerformanceSelection(activity),
       phase: 'active',
@@ -800,6 +1014,8 @@ export class TownActivityCoordinator {
       return 0;
     }
 
+    const dialogueSubjectId = this.selectedDialogueSubjectIdByActivityId.get(activity.id);
+
     return this.performanceRunner.playActivityPerformanceStepsById(
       branch.performanceId,
       {
@@ -807,6 +1023,11 @@ export class TownActivityCoordinator {
         activityId: activity.id,
         participantIds: activity.participantIds,
         hostCharacterIds: activity.hostCharacterIds,
+        templateValues: dialogueSubjectId
+          ? {
+            dialogueSubjectName: this.getCharacterName(dialogueSubjectId),
+          }
+          : undefined,
       },
     );
   }
@@ -815,6 +1036,8 @@ export class TownActivityCoordinator {
     activity: JoinableActivity,
     branch: CharacterEventActivityRollBranch,
   ): void {
+    const dialogueSubjectId = this.selectedDialogueSubjectIdByActivityId.get(activity.id);
+
     this.endingActivityIds.add(activity.id);
     this.performanceRunner.cancelActivityPerformance(activity.id);
     this.performanceRunner.clearActivityActiveVisuals(
@@ -834,13 +1057,19 @@ export class TownActivityCoordinator {
       this.resolveActivityOutcome({
         activityId: activity.id,
         participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
         outcome: {
           id: branch.id,
           effects: branch.effects,
+          effectsByRole: branch.effectsByRole,
+          memoryEffects: branch.memoryEffects,
         },
+        dialogueSubjectId,
         resolvedBy: 'characterPerformance',
       });
       this.rollSelectionsByActivityId.delete(activity.id);
+      this.dialogueSubjectIdsByActivityId.delete(activity.id);
+      this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
       this.endingActivityIds.delete(activity.id);
       this.notifyActivitiesChanged();
     }, cleanupDelayMs);
@@ -925,21 +1154,26 @@ export class TownActivityCoordinator {
     });
     const cleanupDelayMs = durationMs || DEFAULT_ACTIVITY_END_DURATION_MS;
     const activityEffects = this.getActivityEffects(activity);
+    const activityEffectsByRole = this.getActivityEffectsByRole(activity);
 
     window.setTimeout(() => {
       this.clearActivityVisuals(activity);
       this.resolveActivityOutcome({
         activityId: activity.id,
         participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
         outcome: {
           id: 'completed',
           effects: activityEffects,
+          effectsByRole: activityEffectsByRole,
         },
         resolvedBy: 'characterPerformance',
         timestamp,
       });
       this.endingActivityIds.delete(activity.id);
       this.rollSelectionsByActivityId.delete(activity.id);
+      this.dialogueSubjectIdsByActivityId.delete(activity.id);
+      this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
       this.notifyActivitiesChanged();
     }, cleanupDelayMs);
   }
@@ -1008,6 +1242,15 @@ export class TownActivityCoordinator {
       ?.effects;
   }
 
+  private getActivityEffectsByRole(
+    activity: JoinableActivity,
+  ): CharacterEventActivity['effectsByRole'] {
+    return CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId]?.presentationVariants
+      ?.find(variant => variant.activity?.key === activity.activityKey)
+      ?.activity
+      ?.effectsByRole;
+  }
+
   private getJoinBubbleText(activity: JoinableActivity): string {
     if (activity.type === 'playWithItem') {
       return '我也有，加入！';
@@ -1015,6 +1258,21 @@ export class TownActivityCoordinator {
 
     return '我也要一起玩！';
   }
+}
+
+function sampleWithoutReplacement<T>(
+  candidates: readonly T[],
+  count: number,
+  random: () => number = Math.random,
+): T[] {
+  const remaining = [...new Set(candidates)];
+
+  for (let index = remaining.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [remaining[index], remaining[swapIndex]] = [remaining[swapIndex], remaining[index]];
+  }
+
+  return remaining.slice(0, count);
 }
 
 function isNearPosition(position: Position, target: Position, range: number): boolean {

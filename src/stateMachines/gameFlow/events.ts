@@ -1,4 +1,4 @@
-import { Expression, Position } from "~/constants/character";
+import { Expression, MemoryType, Position } from "~/constants/character";
 import type { CharacterEventActivityEffects } from "~/constants/charactarEventsDefinitions";
 import type { CharacterRequestSatisfiedEffect } from "~/services/characterRequests/types";
 import type { CharacterRuntimeInput } from "./context";
@@ -69,6 +69,14 @@ export type CharacterEvent =
     timestamp?: number;
   }
   | {
+    type: EventType.RememberRelationshipMemory;
+    targetCharId: string;
+    memoryType: MemoryType;
+    countDelta: number;
+    startedById: string;
+    timestamp?: number;
+  }
+  | {
     type: EventType.ApplyRequestEffects;
     requestEffects: readonly CharacterRequestSatisfiedEffect[];
   }
@@ -116,6 +124,7 @@ export enum EventType {
   JoinActivityRejected = "joinActivityRejected",
   EndJoinedActivity = "endJoinedActivity",
   RecordActivityCooldown = "recordActivityCooldown",
+  RememberRelationshipMemory = "rememberRelationshipMemory",
   ApplyRequestEffects = "applyRequestEffects",
   NormalizeRomanceFeelings = "normalizeRomanceFeelings",
   SetControlState = "setControlState",

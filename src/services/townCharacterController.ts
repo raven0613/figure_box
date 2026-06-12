@@ -288,6 +288,7 @@ export class TownCharacterController {
       activityManager: this.activityManager,
       performanceRunner: this.performanceRunner,
       getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
+      getCharacterName: characterId => this.getCharacterName(characterId),
       getCharacterPersonality: characterId => (
         this.characters.find(character => character.id === characterId)?.personality
         ?? createDefaultCharacterPersonality()
@@ -463,6 +464,14 @@ export class TownCharacterController {
     this.characters.forEach(character => {
       this.sendToCharacter(character.id, { type: EventType.NormalizeRomanceFeelings });
     });
+  }
+
+  observeActivity(activityId: string): void {
+    const request = this.activityCoordinator.createActivityDialogueRequest(activityId);
+
+    if (request) {
+      this.onDialogueRequest?.(request);
+    }
   }
 
   resolveActivityOutcome(input: ResolveActivityOutcomeInput): ResolvedActivityOutcome {

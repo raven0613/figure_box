@@ -110,10 +110,13 @@ export interface CharacterActivityRepeatRecord {
 export type CharacterEventBucketId = 'baseline' | 'need' | 'environment' | 'global';
 
 export interface CharacterEventDecision {
+  selectedMotivation: UtilityDrivenMotivation | null;
   selectedCandidateId: string | null;
   selectedBucketId: CharacterEventBucketId | null;
   selectedPresentationVariantId: string | null;
   selectedPresentationTags: string[];
+  motivationCount: number;
+  selectedMotivationCandidateCount: number;
   candidateCount: number;
   bucketIds: CharacterEventBucketId[];
 }

@@ -6,6 +6,7 @@ import { SaveDebugPanel } from '~/components/debug/SaveDebugPanel';
 import { CHARACTER_SEEDS, Expression } from '~/constants/character';
 import { createCharacterCreationSuccessDialogueScript } from '~/constants/characterCreationDialogue';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
+import { DIALOGUE_SCRIPT_DEFINITIONS_BY_ID } from '~/constants/dialogueScripts';
 import { MAP_DIALOGUE_BOUNCE_DEMO, MAP_DIALOGUE_FADE_DEMO } from '~/constants/mapDialogueDemo';
 import i18n from '~/i18n';
 import {
@@ -18,6 +19,9 @@ import {
   type CreatePlayerCharacterResult,
 } from '~/services/characterCreationService';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
+import { getCharacterAppearance } from '~/services/characterAvatarCatalogService';
+import { createDialogueViewScript } from '~/services/dialogueScriptResolver';
+import { getPlayableCharacters } from '~/services/playableCharacterService';
 import {
   createDefaultRomanceProfiles,
   setRomanceRuleConfig,
@@ -54,6 +58,11 @@ interface CharacterCreationBakeState extends AppLoadingState {
   error: string | null;
 }
 
+interface ActiveDialogueSession {
+  script: DialogueViewScript;
+  onClose?: () => void;
+}
+
 function App() {
   const gameFlowActorRef = useRef<ActorRefFrom<typeof gameFlowMachine> | null>(null);
   const [gameFlowSnapshot, setGameFlowSnapshot] = useState<SnapshotFrom<typeof gameFlowMachine> | null>(null);
@@ -79,7 +88,7 @@ function App() {
     () => createDefaultRomanceProfiles(CHARACTER_SEEDS.map(character => character.id)),
   );
   const [romanceRuleRevision, setRomanceRuleRevision] = useState(0);
-  const [activeDialogueScript, setActiveDialogueScript] = useState<DialogueViewScript | null>(null);
+  const [activeDialogueSession, setActiveDialogueSession] = useState<ActiveDialogueSession | null>(null);
   const [dialogueExpressionByCharacterId, setDialogueExpressionByCharacterId] = useState<Partial<Record<string, Expression>>>({});
   const [characterExpressionById, setCharacterExpressionById] = useState<Partial<Record<string, Expression>>>({});
   const [mapDialoguePresentation, setMapDialoguePresentation] = useState<EventDialoguePresentation | null>(null);
@@ -97,8 +106,24 @@ function App() {
   }, []);
   const handleDialogueRequest = useCallback((request: CharacterPerformanceDialogueRequest) => {
     if (request.scriptId === DIALOGUE_DEMO_SCRIPT.id) {
-      setActiveDialogueScript(DIALOGUE_DEMO_SCRIPT);
+      setActiveDialogueSession({
+        script: DIALOGUE_DEMO_SCRIPT,
+        onClose: request.onClose,
+      });
+      return;
     }
+
+    const script = createActivityDialogueScript(request);
+
+    if (!script) {
+      request.onClose?.();
+      return;
+    }
+
+    setActiveDialogueSession({
+      script,
+      onClose: request.onClose,
+    });
   }, []);
   const handleCharacterExpressionsChange = useCallback((nextExpressionByCharacterId: Partial<Record<string, Expression>>) => {
     setCharacterExpressionById(currentExpressionByCharacterId => {
@@ -122,14 +147,14 @@ function App() {
     });
   }, []);
   const closeActiveDialogue = useCallback(() => {
-    setActiveDialogueScript(currentScript => {
-      if (currentScript) {
-        resetDialogueParticipantExpressions(currentScript);
-      }
+    if (!activeDialogueSession) {
+      return;
+    }
 
-      return null;
-    });
-  }, [resetDialogueParticipantExpressions]);
+    resetDialogueParticipantExpressions(activeDialogueSession.script);
+    activeDialogueSession.onClose?.();
+    setActiveDialogueSession(null);
+  }, [activeDialogueSession, resetDialogueParticipantExpressions]);
   const completeCreatedCharacter = useCallback(async (creationResult: CreatePlayerCharacterResult) => {
     const characterName = creationResult.profileRecord.name;
 
@@ -166,12 +191,14 @@ function App() {
         characterId: creationResult.characterId,
         revision: Date.now(),
       });
-      setActiveDialogueScript(createCharacterCreationSuccessDialogueScript({
-        characterId: creationResult.characterId,
-        name: readyProfileRecord.name,
-        color: characterColor,
-        label: createCharacterDialogueLabel(readyProfileRecord.name),
-      }));
+      setActiveDialogueSession({
+        script: createCharacterCreationSuccessDialogueScript({
+          characterId: creationResult.characterId,
+          name: readyProfileRecord.name,
+          color: characterColor,
+          label: createCharacterDialogueLabel(readyProfileRecord.name),
+        }),
+      });
     } catch (error) {
       console.error('Character creation bake failed.', error);
       await deletePlayerCharacterCreation(creationResult.characterId).catch(cleanupError => {
@@ -371,7 +398,7 @@ function App() {
           <button
             className={styles.demoButton}
             type="button"
-            onClick={() => setActiveDialogueScript(DIALOGUE_DEMO_SCRIPT)}
+            onClick={() => setActiveDialogueSession({ script: DIALOGUE_DEMO_SCRIPT })}
           >
             Test Dialogue
           </button>
@@ -496,9 +523,9 @@ function App() {
             onRomanceRulesChange={updateRomanceRules}
           />
         ) : null}
-        {activeDialogueScript ? (
+        {activeDialogueSession ? (
           <DialogueWindow
-            script={activeDialogueScript}
+            script={activeDialogueSession.script}
             expressionByCharacterId={characterExpressionById}
             onLineChange={handleDialogueLineChange}
             onClose={closeActiveDialogue}
@@ -515,6 +542,45 @@ function getNormalizedPath(): string {
 
 function createCharacterDialogueLabel(name: string): string {
   return (Array.from(name.trim())[0] ?? '?').toUpperCase();
+}
+
+function createActivityDialogueScript(
+  request: CharacterPerformanceDialogueRequest,
+): DialogueViewScript | null {
+  if (!request.scriptId || !request.targetId) {
+    return null;
+  }
+
+  const definition = DIALOGUE_SCRIPT_DEFINITIONS_BY_ID[request.scriptId];
+  const characters = getPlayableCharacters();
+  const initiator = characters.find(character => character.id === request.initiatorId);
+  const target = characters.find(character => character.id === request.targetId);
+
+  if (!definition || !initiator || !target) {
+    return null;
+  }
+
+  return createDialogueViewScript(definition, {
+    participants: {
+      initiator: createDialogueRuntimeParticipant(initiator),
+      target: createDialogueRuntimeParticipant(target),
+    },
+    templateValues: request.templateValues,
+    resolveActivityRoll: request.resolveActivityRoll,
+    resolveDialogueContent: request.resolveDialogueContent,
+  });
+}
+
+function createDialogueRuntimeParticipant(
+  character: ReturnType<typeof getPlayableCharacters>[number],
+) {
+  return {
+    id: character.id,
+    name: character.name,
+    color: character.color,
+    label: character.label,
+    appearance: getCharacterAppearance(character.id) ?? undefined,
+  };
 }
 
 export default App;

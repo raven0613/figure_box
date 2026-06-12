@@ -30,6 +30,7 @@ const VALID_CHOICE_RESULT_TYPES = [
   'replaceRemaining',
   'jumpTo',
   'branch',
+  'activityRoll',
   'end',
 ] as const;
 const VALID_SELECTION_STRATEGIES = ['scoreWeighted', 'rankWeighted'] as const;
@@ -266,7 +267,113 @@ function readChoiceResult(
     };
   }
 
+  if (type === 'activityRoll') {
+    const contentPoolId = readOptionalString(value, 'contentPoolId', definitionIndex);
+    const subjectKey = readOptionalString(value, 'subjectKey', definitionIndex);
+    const subjectKeys = readOptionalStringList(
+      value.subjectKeys,
+      definitionIndex,
+      `${path}.subjectKeys`,
+    );
+
+    if (contentPoolId && !subjectKey && !subjectKeys) {
+      throw new Error(
+        `Dialogue script definition at index ${definitionIndex} requires a subject key for ${path}.`,
+      );
+    }
+
+    return {
+      type,
+      rollId: readRequiredString(value, 'rollId', definitionIndex),
+      contentPoolId,
+      subjectKey,
+      subjectKeys,
+      lines: value.lines === undefined
+        ? undefined
+        : readInstructions(value.lines, definitionIndex, `${path}.lines`, participantKeys),
+      lineVariants: readOptionalInstructionVariants(
+        value.lineVariants,
+        definitionIndex,
+        `${path}.lineVariants`,
+        participantKeys,
+      ),
+      branchLines: readRequiredBranchLines(
+        value.branchLines,
+        definitionIndex,
+        `${path}.branchLines`,
+        participantKeys,
+      ),
+    };
+  }
+
   return { type: 'end' };
+}
+
+function readOptionalStringList(
+  value: unknown,
+  definitionIndex: number,
+  path: string,
+): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (
+    !Array.isArray(value)
+    || value.length === 0
+    || value.some(entry => typeof entry !== 'string' || entry.length === 0)
+  ) {
+    throw new Error(`Dialogue script definition at index ${definitionIndex} has invalid ${path}.`);
+  }
+
+  return [...new Set(value)];
+}
+
+function readOptionalInstructionVariants(
+  value: unknown,
+  definitionIndex: number,
+  path: string,
+  participantKeys: ReadonlySet<string>,
+): DialogueScriptInstructionDefinition[][] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Dialogue script definition at index ${definitionIndex} has invalid ${path}.`);
+  }
+
+  return value.map((instructions, variantIndex) => (
+    readInstructions(
+      instructions,
+      definitionIndex,
+      `${path}[${variantIndex}]`,
+      participantKeys,
+    )
+  ));
+}
+
+function readRequiredBranchLines(
+  value: unknown,
+  definitionIndex: number,
+  path: string,
+  participantKeys: ReadonlySet<string>,
+): Readonly<Record<string, DialogueScriptInstructionDefinition[]>> {
+  if (!isRecord(value) || Object.keys(value).length === 0) {
+    throw new Error(`Dialogue script definition at index ${definitionIndex} has invalid ${path}.`);
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([branchId, instructions]) => [
+      branchId,
+      readInstructions(
+        instructions,
+        definitionIndex,
+        `${path}.${branchId}`,
+        participantKeys,
+      ),
+    ]),
+  );
 }
 
 function readJumpTarget(

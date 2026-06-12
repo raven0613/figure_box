@@ -13,6 +13,10 @@ export interface MapActivityView {
   tone?: 'critical' | 'social' | 'minor';
   visibleAtZoom?: number;
   previewLine?: MapBubbleSequenceLine;
+  interaction?: {
+    activityId: string;
+    label: string;
+  };
 }
 
 export interface MapBubbleSequenceLine {

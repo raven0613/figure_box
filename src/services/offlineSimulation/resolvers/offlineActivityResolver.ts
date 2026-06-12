@@ -16,7 +16,10 @@ import {
   type ActivityRollSelection,
 } from '~/services/characterEvents/activityRolls';
 import { itemService } from '~/services/items/itemService';
-import { applyCompletedActivityStatusEffects } from '~/services/characterEvents/activityCompletionEffects';
+import {
+  applyCompletedActivityStatusEffects,
+  resolveActivityEffectsForRole,
+} from '~/services/characterEvents/activityCompletionEffects';
 import { getPlayableCharacters } from '~/services/playableCharacterService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
 import { EventType } from '~/stateMachines/gameFlow/events';
@@ -143,12 +146,19 @@ function resolveGroupActivity(
   const outcomeEffects = rollResolution.outcomeBranch
     ? rollResolution.outcomeBranch.effects
     : activity.effects;
+  const outcomeEffectsByRole = rollResolution.outcomeBranch
+    ? rollResolution.outcomeBranch.effectsByRole
+    : activity.effectsByRole;
   const participants = participantRoll.participants.map((participant, index) => (
     createParticipantResolution({
       context,
       definition,
       activity,
-      effects: outcomeEffects,
+      effects: resolveActivityEffectsForRole(
+        outcomeEffects,
+        outcomeEffectsByRole,
+        index === 0 ? 'initiator' : 'target',
+      ),
       participant,
       participantIds: participantRoll.participants.map(item => item.id),
       role: index === 0 ? 'initiator' : 'target',

@@ -24,6 +24,7 @@ import {
     changeRelationshipIntimacy,
     decreaseRelationshipIntimacyToFeelingMin,
     normalizeRomanticRelationshipFeelings,
+    rememberRelationshipMemory,
     rememberPassBy,
 } from '../relationships';
 import { decideCharacterEvent } from '~/services/characterEvents/decision';
@@ -112,6 +113,9 @@ export const characterMachine = createMachine(
             [EventType.PassBy]: {
                 guard: 'canReceiveLogicCommand',
                 actions: 'rememberPassBy',
+            },
+            [EventType.RememberRelationshipMemory]: {
+                actions: 'rememberRelationshipMemory',
             },
             [EventType.NormalizeRomanceFeelings]: {
                 actions: 'normalizeRomanceFeelings',
@@ -965,6 +969,21 @@ export const characterMachine = createMachine(
                             context.relationships,
                             context.id,
                             event.targetCharId,
+                            event.timestamp ?? Date.now(),
+                        )
+                        : context.relationships
+                ),
+            }),
+            rememberRelationshipMemory: assign({
+                relationships: ({ context, event }) => (
+                    event.type === EventType.RememberRelationshipMemory
+                        ? rememberRelationshipMemory(
+                            context.relationships,
+                            context.id,
+                            event.targetCharId,
+                            event.memoryType,
+                            event.countDelta,
+                            event.startedById,
                             event.timestamp ?? Date.now(),
                         )
                         : context.relationships

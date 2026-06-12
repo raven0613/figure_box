@@ -1,13 +1,15 @@
 import type {
   CharacterEventActivity,
   CharacterEventActivityEffects,
+  CharacterEventActivityEffectsByRole,
+  CharacterEventActivityMemoryEffect,
   CharacterEventActivityRoll,
   CharacterEventActivityRollBranch,
   CharacterEventActivityRollRuleClause,
   CharacterEventActivityRollRulePath,
 } from '../../constants/charactarEventsDefinitions';
 import type { ComparisonOperator } from '../../constants/event';
-import { Feeling, Mood } from '../../constants/character';
+import { Feeling, MemoryType, Mood } from '../../constants/character';
 import { readOptionalOfflineRecap } from './offlineRecapSchema';
 import {
   includesString,
@@ -29,6 +31,8 @@ const VALID_ACTIVITY_START_PHASES = ['active', 'traveling'] as const;
 const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
 const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
 const VALID_MOODS = Object.values(Mood) as Mood[];
+const VALID_MEMORY_TYPES = Object.values(MemoryType) as MemoryType[];
+const VALID_PARTICIPANT_ROLES = ['initiator', 'target'] as const;
 const VALID_OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'includes'] as const;
 const TIME_TEXT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -61,6 +65,13 @@ export function readOptionalActivity(
     joinRequirements: readOptionalJoinRequirement(value, index),
     cooldowns: readRequiredCooldowns(value, index),
     effects: readOptionalActivityEffects(value, index),
+    effectsByRole: readOptionalActivityEffectsByRole(
+      value,
+      'activity.effectsByRole',
+      index,
+    ),
+    dialogueScriptId: readOptionalString(value, 'dialogueScriptId', index),
+    dialogueSubjectSelection: readOptionalDialogueSubjectSelection(value, index),
     rolls: readOptionalActivityRolls(value, index),
   };
 }
@@ -176,6 +187,77 @@ function readActivityEffects(
   };
 }
 
+function readOptionalActivityEffectsByRole(
+  definition: CharacterEventDefinitionRecord,
+  label: string,
+  index: number,
+): CharacterEventActivityEffectsByRole | undefined {
+  const value = definition.effectsByRole;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid ${label}.`);
+  }
+
+  const effectsByRole = {
+    initiator: value.initiator === undefined
+      ? undefined
+      : readActivityEffects(value.initiator, `${label}.initiator`, index),
+    target: value.target === undefined
+      ? undefined
+      : readActivityEffects(value.target, `${label}.target`, index),
+  };
+
+  if (!effectsByRole.initiator && !effectsByRole.target) {
+    throw new Error(`Character event definition at index ${index} has empty ${label}.`);
+  }
+
+  return effectsByRole;
+}
+
+function readOptionalDialogueSubjectSelection(
+  activity: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivity['dialogueSubjectSelection'] {
+  const value = activity.dialogueSubjectSelection;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(
+      `Character event definition at index ${index} has invalid activity.dialogueSubjectSelection.`,
+    );
+  }
+
+  const sourceRole = readRequiredString(value, 'sourceRole', index);
+  const memoryType = readRequiredString(value, 'memoryType', index);
+
+  if (!includesString(VALID_PARTICIPANT_ROLES, sourceRole)) {
+    throw new Error(
+      `Character event definition at index ${index} has invalid dialogue subject sourceRole.`,
+    );
+  }
+
+  if (!includesString(VALID_MEMORY_TYPES, memoryType)) {
+    throw new Error(
+      `Character event definition at index ${index} has invalid dialogue subject memoryType.`,
+    );
+  }
+
+  return {
+    sourceRole,
+    memoryType,
+    minCount: readRequiredNonNegativeNumber(value, 'minCount', index),
+    count: readRequiredPositiveNumber(value, 'count', index),
+    excludeParticipants: readOptionalBoolean(value, 'excludeParticipants', index) ?? true,
+  };
+}
+
 function readOptionalActivityRolls(
   activity: CharacterEventDefinitionRecord,
   index: number,
@@ -186,7 +268,7 @@ function readOptionalActivityRolls(
     return undefined;
   }
 
-  if (!Array.isArray(value)) {
+  if (!Array.isArray(value) || value.length === 0) {
     throw new Error(`Character event definition at index ${index} has invalid activity.rolls.`);
   }
 
@@ -219,7 +301,14 @@ function readActivityRoll(
   ));
   assertUniqueIds(branches, `activity.rolls[${rollIndex}].branches`, index);
 
-  if (!resolvesActivity && branches.some(branch => branch.effects !== undefined)) {
+  if (
+    !resolvesActivity
+    && branches.some(branch => (
+      branch.effects !== undefined
+      || branch.effectsByRole !== undefined
+      || branch.memoryEffects !== undefined
+    ))
+  ) {
     throw new Error(
       `Character event definition at index ${index} has effects on non-resolving ` +
       `activity.rolls[${rollIndex}].`,
@@ -260,12 +349,102 @@ function readActivityRollBranch(
         `activity.rolls[${rollIndex}].branches[${branchIndex}].effects`,
         index,
       ),
+    effectsByRole: readOptionalActivityEffectsByRole(
+      rawBranch,
+      `activity.rolls[${rollIndex}].branches[${branchIndex}].effectsByRole`,
+      index,
+    ),
+    memoryEffects: readOptionalActivityMemoryEffects(rawBranch, index),
     offlineRecap: readOptionalOfflineRecap(
       rawBranch,
       index,
       `activity.rolls[${rollIndex}].branches[${branchIndex}].offlineRecap`,
     ),
   };
+}
+
+function readOptionalActivityMemoryEffects(
+  branch: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventActivityMemoryEffect[] | undefined {
+  const value = branch.memoryEffects;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(
+      `Character event definition at index ${index} has invalid activity roll memoryEffects.`,
+    );
+  }
+
+  return value.map((effect, effectIndex) => {
+    if (!isRecord(effect)) {
+      throw new Error(
+        `Character event definition at index ${index} has invalid memoryEffects[${effectIndex}].`,
+      );
+    }
+
+    const recipientRole = readRequiredString(effect, 'recipientRole', index);
+    const target = readRequiredString(effect, 'target', index);
+    const memoryType = readRequiredString(effect, 'memoryType', index);
+    const startedByRole = readOptionalString(effect, 'startedByRole', index);
+
+    if (
+      recipientRole !== 'both'
+      && !includesString(VALID_PARTICIPANT_ROLES, recipientRole)
+    ) {
+      throw new Error(
+        `Character event definition at index ${index} has invalid memory effect recipientRole.`,
+      );
+    }
+
+    if (target !== 'otherParticipant' && target !== 'dialogueSubject') {
+      throw new Error(
+        `Character event definition at index ${index} has invalid memory effect target.`,
+      );
+    }
+
+    if (!includesString(VALID_MEMORY_TYPES, memoryType)) {
+      throw new Error(
+        `Character event definition at index ${index} has invalid memory effect memoryType.`,
+      );
+    }
+
+    if (
+      startedByRole !== undefined
+      && !includesString(VALID_PARTICIPANT_ROLES, startedByRole)
+    ) {
+      throw new Error(
+        `Character event definition at index ${index} has invalid memory effect startedByRole.`,
+      );
+    }
+
+    return {
+      recipientRole,
+      target,
+      memoryType,
+      countDelta: readRequiredPositiveNumber(effect, 'countDelta', index),
+      startedByRole,
+    };
+  });
+}
+
+function readRequiredPositiveNumber(
+  definition: CharacterEventDefinitionRecord,
+  key: string,
+  index: number,
+): number {
+  const value = readRequiredNonNegativeNumber(definition, key, index);
+
+  if (value <= 0) {
+    throw new Error(
+      `Character event definition at index ${index} requires positive ${key}.`,
+    );
+  }
+
+  return value;
 }
 
 function readOptionalActivityRollClauses(

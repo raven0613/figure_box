@@ -133,6 +133,7 @@ export class FabricTownMapWidget {
         this.updateCharacterExpression(characterId, expression);
       },
       startAnimationLoop: () => this.startAnimationLoop(),
+      onMapActivityObserve: options.onMapActivityObserve,
     });
     this.walkAnimator = new TownMapWalkAnimator({
       cellSize: this.cellSize,
@@ -157,6 +158,9 @@ export class FabricTownMapWidget {
       cellSize: this.cellSize,
       getCharacterIdFromTarget: target => this.characterLayer.getCharacterIdFromTarget(target),
       getMapObjectIdFromTarget: target => this.getMapObjectIdFromTarget(target),
+      isMapActivityInteractionTarget: target => (
+        this.floatingTextLayer.isMapActivityInteractionTarget(target)
+      ),
       getCharacterTile: characterId => this.getCharacterTile(characterId),
       snapCharacterToGrid: (characterId, tile) => {
         this.snapCharacterToGrid(characterId, tile);

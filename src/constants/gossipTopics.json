@@ -1,0 +1,20 @@
+[
+  {
+    "id": "same-pants",
+    "baseWeight": 1,
+    "text": "聽說 {subjectName} 一週都穿一模一樣的褲子。",
+    "expression": "laugh"
+  },
+  {
+    "id": "hidden-snacks",
+    "baseWeight": 1,
+    "text": "聽說 {subjectName} 把喜歡的零食藏在只有自己知道的地方。",
+    "expression": "laugh"
+  },
+  {
+    "id": "talks-in-sleep",
+    "baseWeight": 1,
+    "text": "聽說 {subjectName} 睡著之後會說一些完全聽不懂的夢話。",
+    "expression": "curious"
+  }
+]

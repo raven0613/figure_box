@@ -12,6 +12,8 @@ playAtLocation：去某地、在某處一起做事
 - 活動有符合 JSON schema 的 group、cooldowns 等必要欄位。
 - 若有 rolls，依順序配置，終局 roll 使用 resolvesActivity: true。
 - 終局 branch 的 effects 會自動套用。
+- 所有參加者共用的結果放 effects；發起者與對象不同的結果放 effectsByRole.initiator / effectsByRole.target。
+- 可由地圖點開觀察的活動在 activity 設定 dialogueScriptId；Dialogue 的 activityRoll 只引用 activity.rolls 的 rollId。
 - variant 或終局 branch 可設定 offlineRecap；沒設定則使用活動類型的通用文案。
 
 仍不會自動處理的是：
