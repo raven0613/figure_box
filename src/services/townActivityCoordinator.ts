@@ -600,7 +600,7 @@ export class TownActivityCoordinator {
           type: 'SAY',
           speakerId: initiatorId,
           text: content.text,
-          expression: content.expression,
+          expressionPresetId: content.expressionPresetId,
         }];
       },
       onClose: () => {

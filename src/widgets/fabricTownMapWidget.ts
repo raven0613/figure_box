@@ -13,7 +13,7 @@ import {
 } from './townMapObjectGlyphFactory';
 import { sortEntityLayer, updateEntitySortMetadata } from './townMapLayerSorter';
 import { DEFAULT_CELL_SIZE } from '../constants/townMapWidgetConstants';
-import type { Expression } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { ItemDefinition, PlacedObject } from '~/typing/item';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
@@ -129,8 +129,8 @@ export class FabricTownMapWidget {
       cellSize: this.cellSize,
       getCharacterCenter: characterId => this.getCharacterCenter(characterId),
       getZoom: () => this.getZoom(),
-      updateCharacterExpression: (characterId, expression) => {
-        this.updateCharacterExpression(characterId, expression);
+      updateCharacterExpressionPreset: (characterId, expressionPresetId) => {
+        this.updateCharacterExpressionPreset(characterId, expressionPresetId);
       },
       startAnimationLoop: () => this.startAnimationLoop(),
       onMapActivityObserve: options.onMapActivityObserve,
@@ -264,8 +264,8 @@ export class FabricTownMapWidget {
     this.characterLayer.updateCharacterStatus(characterId, statusText);
   }
 
-  updateCharacterExpression(characterId: string, expressionText: Expression): void {
-    this.characterLayer.updateCharacterExpression(characterId, expressionText);
+  updateCharacterExpressionPreset(characterId: string, presetId: ExpressionPresetId): void {
+    this.characterLayer.updateCharacterExpressionPreset(characterId, presetId);
   }
 
   setCharacterSpriteSheets(characterId: string, spriteSet: TownMapCharacterSpriteSet): Promise<void> {

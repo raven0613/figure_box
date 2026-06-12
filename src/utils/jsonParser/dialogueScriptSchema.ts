@@ -1,4 +1,5 @@
-import { Expression } from '~/constants/character';
+import { isExpressionPresetId } from '~/constants/expressionCatalog';
+import type { ExpressionPresetId } from '~/typing/expression';
 import type {
   DialogueScriptBranchCandidateDefinition,
   DialogueScriptBranchGroupDefinition,
@@ -23,7 +24,6 @@ import {
 } from './schemaReaders';
 
 const VALID_AVATAR_SLOTS = ['left', 'center-left', 'center-right', 'right'] as const;
-const VALID_EXPRESSIONS = Object.values(Expression);
 const VALID_INSTRUCTION_TYPES = ['SAY', 'CHOICE'] as const;
 const VALID_CHOICE_RESULT_TYPES = [
   'appendLines',
@@ -164,7 +164,7 @@ function readSay(
     type: 'SAY',
     speaker: readParticipantKey(value, 'speaker', definitionIndex, path, participantKeys),
     text: readRequiredString(value, 'text', definitionIndex),
-    expression: readExpression(value, definitionIndex, path),
+    expressionPresetId: readExpressionPresetId(value, definitionIndex, path),
   };
 }
 
@@ -205,7 +205,7 @@ function readChoice(
     type: 'CHOICE',
     speaker: readParticipantKey(value, 'speaker', definitionIndex, path, participantKeys),
     text: readRequiredString(value, 'text', definitionIndex),
-    expression: readExpression(value, definitionIndex, path),
+    expressionPresetId: readExpressionPresetId(value, definitionIndex, path),
     idlePrompt: readOptionalString(value, 'idlePrompt', definitionIndex),
     idlePromptLines: value.idlePromptLines === undefined
       ? undefined
@@ -589,20 +589,20 @@ function readScoreRules(
   });
 }
 
-function readExpression(
+function readExpressionPresetId(
   definition: CharacterEventDefinitionRecord,
   definitionIndex: number,
   path: string,
-): Expression {
-  const expression = readRequiredString(definition, 'expression', definitionIndex);
+): ExpressionPresetId {
+  const expressionPresetId = readRequiredString(definition, 'expressionPresetId', definitionIndex);
 
-  if (!includesString(VALID_EXPRESSIONS, expression)) {
+  if (!isExpressionPresetId(expressionPresetId)) {
     throw new Error(
-      `Dialogue script definition at index ${definitionIndex} has invalid ${path}.expression "${expression}".`,
+      `Dialogue script definition at index ${definitionIndex} has invalid ${path}.expressionPresetId "${expressionPresetId}".`,
     );
   }
 
-  return expression;
+  return expressionPresetId;
 }
 
 function readParticipantKey(

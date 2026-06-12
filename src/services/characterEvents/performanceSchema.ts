@@ -6,7 +6,8 @@ import type {
   CharacterPerformanceStep,
   CharacterPerformanceTarget,
 } from './performances';
-import { Expression } from '~/constants/character';
+import { isExpressionPresetId } from '~/constants/expressionCatalog';
+import type { ExpressionPresetId } from '~/typing/expression';
 import {
   CHARACTER_PERFORMANCE_ANIMATION_IDS,
   type CharacterPerformanceAnimationId,
@@ -34,7 +35,6 @@ const VALID_PERFORMANCE_STEP_TYPES = [
   'dialogue',
   'roll',
 ] as const;
-const VALID_EXPRESSIONS = Object.values(Expression);
 
 type CharacterPerformanceRecord = Record<string, unknown>;
 interface BasePerformanceStep {
@@ -134,7 +134,7 @@ function readPerformanceStep(
     return {
       ...baseStep,
       type,
-      expression: readExpression(rawStep, definitionIndex),
+      expressionPresetId: readExpressionPresetId(rawStep, definitionIndex),
     };
   }
 
@@ -330,17 +330,17 @@ function readOptionalString(
   return value;
 }
 
-function readExpression(
+function readExpressionPresetId(
   step: CharacterPerformanceRecord,
   index: number,
-): Expression {
-  const value = readRequiredString(step, 'expression', index);
+): ExpressionPresetId {
+  const value = readRequiredString(step, 'expressionPresetId', index);
 
-  if (!includesString(VALID_EXPRESSIONS, value)) {
-    throw new Error(`Character performance definition at index ${index} has invalid expression "${value}".`);
+  if (!isExpressionPresetId(value)) {
+    throw new Error(`Character performance definition at index ${index} has invalid expressionPresetId "${value}".`);
   }
 
-  return value as Expression;
+  return value;
 }
 
 function readOptionalNonNegativeNumber(

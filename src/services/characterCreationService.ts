@@ -1,6 +1,7 @@
 import { v4 as createUuid } from 'uuid';
 
-import { Expression, getMoodForMoodValue } from '~/constants/character';
+import { getMoodForMoodValue } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import type { CharacterPersonality } from '~/constants/characterPersonality';
 import { TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import { createEmptyActivityCooldowns } from '~/services/characterEvents/activityCooldowns';
@@ -232,7 +233,7 @@ function createApartmentRuntimeSnapshot(
     seedId: characterId,
     status: {
       mood: getMoodForMoodValue(INITIAL_MOOD_VALUE),
-      expression: Expression.Normal,
+      expressionPresetId: DEFAULT_EXPRESSION_PRESET_ID,
       saturation: INITIAL_SATURATION,
       moodValue: INITIAL_MOOD_VALUE,
       playNeed: INITIAL_PLAY_NEED,

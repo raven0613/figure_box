@@ -1,5 +1,5 @@
 import { Canvas, Text } from 'fabric';
-import type { Expression } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { GridCoordinate } from './townMapGrid';
@@ -23,7 +23,7 @@ interface TownMapFloatingTextLayerOptions {
   cellSize: number;
   getCharacterCenter: (characterId: string) => GridCoordinate | null;
   getZoom: () => number;
-  updateCharacterExpression: (characterId: string, expression: Expression) => void;
+  updateCharacterExpressionPreset: (characterId: string, expressionPresetId: ExpressionPresetId) => void;
   startAnimationLoop: () => void;
   onMapActivityObserve?: (activityId: string) => void;
 }
@@ -34,7 +34,7 @@ export class TownMapFloatingTextLayer {
   private readonly cellSize: number;
   private readonly getCharacterCenter: (characterId: string) => GridCoordinate | null;
   private readonly getZoom: () => number;
-  private readonly updateCharacterExpression: (characterId: string, expression: Expression) => void;
+  private readonly updateCharacterExpressionPreset: (characterId: string, expressionPresetId: ExpressionPresetId) => void;
   private readonly startAnimationLoop: () => void;
   private readonly onMapActivityObserve?: (activityId: string) => void;
   private readonly characterBubbles = new Map<string, Text>();
@@ -51,7 +51,7 @@ export class TownMapFloatingTextLayer {
     this.cellSize = options.cellSize;
     this.getCharacterCenter = options.getCharacterCenter;
     this.getZoom = options.getZoom;
-    this.updateCharacterExpression = options.updateCharacterExpression;
+    this.updateCharacterExpressionPreset = options.updateCharacterExpressionPreset;
     this.startAnimationLoop = options.startAnimationLoop;
     this.onMapActivityObserve = options.onMapActivityObserve;
   }
@@ -269,8 +269,8 @@ export class TownMapFloatingTextLayer {
   }
 
   private showMapBubbleSequenceLine(line: MapBubbleSequenceLine, sequence: MapBubbleSequence): void {
-    if (line.expression) {
-      this.updateCharacterExpression(line.characterId, line.expression);
+    if (line.expressionPresetId) {
+      this.updateCharacterExpressionPreset(line.characterId, line.expressionPresetId);
     }
 
     this.showCharacterBubble(

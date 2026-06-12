@@ -1,4 +1,4 @@
-import { Expression, type Position } from '~/constants/character';
+import { ExpressionPresetId, type Position } from '~/constants/character';
 import {
   CharacterPerformanceRunner,
   type CharacterPerformanceDialogueRequest,
@@ -142,8 +142,8 @@ export class TownCharacterController {
     });
     this.performanceRunner = new CharacterPerformanceRunner({
       getCharacterName: characterId => this.getCharacterName(characterId),
-      setCharacterExpression: (characterId, expression) => {
-        this.setCharacterExpression(characterId, expression);
+      setCharacterExpressionPreset: (characterId, expressionPresetId) => {
+        this.setCharacterExpressionPreset(characterId, expressionPresetId);
       },
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
@@ -407,8 +407,8 @@ export class TownCharacterController {
     }
 
     return this.widget.playMapBubbleSequence(presentation.bubbleSequence, line => {
-      if (line.expression) {
-        this.setCharacterExpression(line.characterId, line.expression);
+      if (line.expressionPresetId) {
+        this.setCharacterExpressionPreset(line.characterId, line.expressionPresetId);
       }
     });
   }
@@ -490,10 +490,10 @@ export class TownCharacterController {
     return this.requestFlowCoordinator.markItemReceived(input, '收到了，謝謝你', input.itemDefinition);
   }
 
-  setCharacterExpression(characterId: string, expression: Expression): void {
+  setCharacterExpressionPreset(characterId: string, expressionPresetId: ExpressionPresetId): void {
     this.sendToCharacter(characterId, {
-      type: EventType.SetExpression,
-      expression,
+      type: EventType.SetExpressionPreset,
+      expressionPresetId,
     });
   }
 

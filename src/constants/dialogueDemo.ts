@@ -1,6 +1,6 @@
 import { CHARACTER_SEEDS } from './character';
 import { DIALOGUE_SCRIPT_DEFINITIONS_BY_ID } from './dialogueScripts';
-import { getCharacterAppearance } from '~/services/characterAvatarCatalogService';
+import { getDialogueAvatarState } from '~/services/dialogueAvatarStateService';
 import { createDialogueViewScript } from '~/services/dialogueScriptResolver';
 
 const DEMO_SCRIPT_ID = 'demo-court-invite';
@@ -49,6 +49,6 @@ function createDemoParticipant(
     name: character.name,
     color: character.color,
     label: character.label,
-    appearance: getCharacterAppearance(character.id) ?? undefined,
+    avatarState: getDialogueAvatarState(character.id),
   };
 }

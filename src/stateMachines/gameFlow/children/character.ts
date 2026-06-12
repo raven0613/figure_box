@@ -1,9 +1,9 @@
 import { assign, createMachine, enqueueActions, StateValue } from 'xstate';
 import {
     clampMoodValue,
-    Expression,
     getMoodForMoodValue,
 } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import {
     CharacterBodyActionState,
     CharacterBodyMoveState,
@@ -75,7 +75,7 @@ export const characterMachine = createMachine(
             ownItems: [...(input.ownItems ?? [])],
             status: input.runtime?.status ?? {
                 mood: getMoodForMoodValue(65),
-                expression: Expression.Normal,
+                expressionPresetId: DEFAULT_EXPRESSION_PRESET_ID,
                 saturation: input.saturation ?? 70,
                 moodValue: 65,
                 playNeed: 35,
@@ -390,8 +390,8 @@ export const characterMachine = createMachine(
                 guard: 'canReceiveLogicCommand',
                 target: '.mind.null',
             },
-            [EventType.SetExpression]: {
-                actions: 'setExpression',
+            [EventType.SetExpressionPreset]: {
+                actions: 'setExpressionPreset',
             },
             [EventType.HoldItem]: {
                 actions: 'setHeldItem',
@@ -555,12 +555,12 @@ export const characterMachine = createMachine(
                     event.type === EventType.SetControlState ? event.controlState : context.controlState
                 ),
             }),
-            setExpression: assign({
+            setExpressionPreset: assign({
                 status: ({ context, event }) => {
-                    if (event.type !== EventType.SetExpression) return context.status;
+                    if (event.type !== EventType.SetExpressionPreset) return context.status;
                     return {
                         ...context.status,
-                        expression: event.expression,
+                        expressionPresetId: event.expressionPresetId,
                     };
                 },
             }),

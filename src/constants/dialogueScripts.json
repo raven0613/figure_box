@@ -13,51 +13,51 @@
         "type": "SAY",
         "speaker": "coach",
         "text": "{responderName}，現在去球場吧。今天的練習菜單已經排好了。",
-        "expression": "normal"
+        "expressionPresetId": "normal"
       },
       {
         "type": "SAY",
         "speaker": "responder",
         "text": "你說「排好了」的時候，通常代表沒有人能逃掉吧？",
-        "expression": "laugh"
+        "expressionPresetId": "smirk_smile"
       },
       {
         "type": "SAY",
         "speaker": "enthusiast",
         "text": "我聽到了！如果是雙打的話，我也要加入。",
-        "expression": "laugh"
+        "expressionPresetId": "laugh"
       },
       {
         "type": "SAY",
         "speaker": "observer",
         "text": "先確認大家的體力。勉強練習反而會影響明天。",
-        "expression": "normal"
+        "expressionPresetId": "normal"
       },
       {
         "id": "practice-choice",
         "type": "CHOICE",
         "speaker": "responder",
         "text": "要接受 {coachName} 的練習邀請嗎？",
-        "expression": "normal",
+        "expressionPresetId": "normal",
         "idlePrompt": "還在嗎？",
         "idlePromptLines": [
           {
             "type": "SAY",
             "speaker": "enthusiast",
             "text": "{responderName} 怎麼突然沉默了？是在想戰術嗎？",
-            "expression": "normal"
+            "expressionPresetId": "normal"
           },
           {
             "type": "SAY",
             "speaker": "observer",
             "text": "也可能只是在觀察我們急起來的樣子。",
-            "expression": "normal"
+            "expressionPresetId": "normal"
           },
           {
             "type": "SAY",
             "speaker": "responder",
             "text": "呵呵，被發現了。那我再想一下。",
-            "expression": "laugh"
+            "expressionPresetId": "laugh"
           }
         ],
         "timeoutMs": 10000,
@@ -80,13 +80,13 @@
                   "type": "SAY",
                   "speaker": "responder",
                   "text": "今天先讓我觀察吧。你們認真的樣子也很有意思。",
-                  "expression": "normal"
+                  "expressionPresetId": "normal"
                 },
                 {
                   "type": "SAY",
                   "speaker": "observer",
                   "text": "這樣也好。休息的人可以幫忙看動作。",
-                  "expression": "normal"
+                  "expressionPresetId": "normal"
                 }
               ]
             }
@@ -115,13 +115,13 @@
         "type": "SAY",
         "speaker": "coach",
         "text": "十分鐘暖身，二十分鐘發球，之後依狀況調整。",
-        "expression": "mad"
+        "expressionPresetId": "mad"
       },
       {
         "type": "SAY",
         "speaker": "responder",
         "text": "看來今天的風向，是認真模式呢。",
-        "expression": "laugh"
+        "expressionPresetId": "laugh"
       }
     ],
     "branchGroups": {
@@ -148,13 +148,13 @@
                 "type": "SAY",
                 "speaker": "responder",
                 "text": "如果是你這麼認真邀請，那我當然會去。",
-                "expression": "laugh"
+                "expressionPresetId": "laugh"
               },
               {
                 "type": "SAY",
                 "speaker": "coach",
                 "text": "那就照最高強度準備。你跟得上。",
-                "expression": "normal"
+                "expressionPresetId": "normal"
               }
             ]
           },
@@ -187,13 +187,13 @@
                 "type": "SAY",
                 "speaker": "responder",
                 "text": "好啊。既然大家都在，就來打一場有趣的。",
-                "expression": "laugh"
+                "expressionPresetId": "laugh"
               },
               {
                 "type": "SAY",
                 "speaker": "enthusiast",
                 "text": "太好了！我就知道會變成這樣！",
-                "expression": "laugh"
+                "expressionPresetId": "laugh"
               }
             ]
           },
@@ -216,13 +216,13 @@
                 "type": "SAY",
                 "speaker": "observer",
                 "text": "可以，但我會控制休息時間。太急會亂掉。",
-                "expression": "normal"
+                "expressionPresetId": "normal"
               },
               {
                 "type": "SAY",
                 "speaker": "coach",
                 "text": "合理。全員先從暖身開始。",
-                "expression": "normal"
+                "expressionPresetId": "normal"
               }
             ]
           },
@@ -235,7 +235,7 @@
                 "type": "SAY",
                 "speaker": "coach",
                 "text": "全員先從暖身開始。不要跳過基本動作。",
-                "expression": "normal"
+                "expressionPresetId": "normal"
               }
             ]
           }
@@ -255,20 +255,20 @@
         "type": "CHOICE",
         "speaker": "initiator",
         "text": "{initiatorName} 要聊誰的八卦？",
-        "expression": "curious",
+        "expressionPresetId": "curious",
         "idlePrompt": "還在想要說誰嗎？",
         "idlePromptLines": [
           {
             "type": "SAY",
             "speaker": "target",
             "text": "怎麼突然不說了？",
-            "expression": "curious"
+            "expressionPresetId": "curious"
           },
           {
             "type": "SAY",
             "speaker": "initiator",
             "text": "我在想該從哪裡開始說。",
-            "expression": "laugh"
+            "expressionPresetId": "laugh"
           }
         ],
         "timeoutMs": 10000,
@@ -287,13 +287,13 @@
                     "type": "SAY",
                     "speaker": "target",
                     "text": "嗯嗯嗯嗯！？原來是這樣。",
-                    "expression": "surprised"
+                    "expressionPresetId": "surprised"
                   },
                   {
                     "type": "SAY",
                     "speaker": "initiator",
                     "text": "我也是剛剛才知道。",
-                    "expression": "surprised"
+                    "expressionPresetId": "surprised"
                   }
                 ],
                 "playfulFakeout": [
@@ -301,19 +301,19 @@
                     "type": "SAY",
                     "speaker": "target",
                     "text": "嗯嗯嗯嗯！？",
-                    "expression": "surprised"
+                    "expressionPresetId": "surprised"
                   },
                   {
                     "type": "SAY",
                     "speaker": "initiator",
                     "text": "騙你的。",
-                    "expression": "laugh"
+                    "expressionPresetId": "laugh"
                   },
                   {
                     "type": "SAY",
                     "speaker": "target",
                     "text": "這種事情不要說得那麼認真啦。",
-                    "expression": "mad"
+                    "expressionPresetId": "mad"
                   }
                 ]
               }
@@ -333,13 +333,13 @@
                     "type": "SAY",
                     "speaker": "target",
                     "text": "嗯嗯嗯嗯！？還有這種事",
-                    "expression": "surprised"
+                    "expressionPresetId": "surprised"
                   },
                   {
                     "type": "SAY",
                     "speaker": "initiator",
                     "text": "對吧，我也嚇了一跳。",
-                    "expression": "surprised"
+                    "expressionPresetId": "surprised"
                   }
                 ],
                 "playfulFakeout": [
@@ -347,19 +347,19 @@
                     "type": "SAY",
                     "speaker": "target",
                     "text": "原來還有這件事？",
-                    "expression": "surprised"
+                    "expressionPresetId": "surprised"
                   },
                   {
                     "type": "SAY",
                     "speaker": "initiator",
                     "text": "沒有，騙你的。",
-                    "expression": "laugh"
+                    "expressionPresetId": "laugh"
                   },
                   {
                     "type": "SAY",
                     "speaker": "target",
                     "text": "我剛才真的相信了耶。",
-                    "expression": "mad"
+                    "expressionPresetId": "mad"
                   }
                 ]
               }
@@ -379,7 +379,7 @@
                     "type": "SAY",
                     "speaker": "target",
                     "text": "嗯嗯嗯嗯！？這我真的沒想到。",
-                    "expression": "surprised"
+                    "expressionPresetId": "surprised"
                   }
                 ],
                 "playfulFakeout": [
@@ -387,13 +387,13 @@
                     "type": "SAY",
                     "speaker": "initiator",
                     "text": "其實是我亂說的。",
-                    "expression": "laugh"
+                    "expressionPresetId": "laugh"
                   },
                   {
                     "type": "SAY",
                     "speaker": "target",
                     "text": "害我白白認真聽了。",
-                    "expression": "mad"
+                    "expressionPresetId": "mad"
                   }
                 ]
               }

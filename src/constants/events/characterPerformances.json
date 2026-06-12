@@ -6,7 +6,7 @@
         "phase": "proposal",
         "type": "expression",
         "target": "initiator",
-        "expression": "normal",
+        "expressionPresetId": "normal",
         "durationMs": 1800
       },
       {
@@ -20,7 +20,7 @@
         "phase": "accepted",
         "type": "expression",
         "target": "target",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 1800
       },
       {
@@ -41,7 +41,7 @@
         "phase": "rejectedBusy",
         "type": "expression",
         "target": "target",
-        "expression": "normal",
+        "expressionPresetId": "normal",
         "durationMs": 1200
       },
       {
@@ -55,7 +55,7 @@
         "phase": "rejectedMood",
         "type": "expression",
         "target": "target",
-        "expression": "normal",
+        "expressionPresetId": "normal",
         "durationMs": 1200
       },
       {
@@ -85,7 +85,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -126,7 +126,7 @@
         "phase": "proposal",
         "type": "expression",
         "target": "initiator",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 1600
       },
       {
@@ -140,7 +140,7 @@
         "phase": "accepted",
         "type": "expression",
         "target": "target",
-        "expression": "curious",
+        "expressionPresetId": "curious",
         "durationMs": 1600
       },
       {
@@ -192,7 +192,7 @@
         "phase": "active",
         "type": "expression",
         "target": "target",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "delayMs": 4200,
         "durationMs": 3000
       },
@@ -209,7 +209,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -243,7 +243,7 @@
         "phase": "active",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 3200
       },
       {
@@ -285,14 +285,14 @@
         "phase": "active",
         "type": "expression",
         "target": "initiator",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 3200
       },
       {
         "phase": "active",
         "type": "expression",
         "target": "target",
-        "expression": "mad",
+        "expressionPresetId": "mad",
         "durationMs": 3200
       },
       {
@@ -319,7 +319,7 @@
         "phase": "proposal",
         "type": "expression",
         "target": "initiator",
-        "expression": "mad",
+        "expressionPresetId": "mad",
         "durationMs": 1800
       },
       {
@@ -333,7 +333,7 @@
         "phase": "accepted",
         "type": "expression",
         "target": "target",
-        "expression": "mad",
+        "expressionPresetId": "mad",
         "durationMs": 1800
       },
       {
@@ -369,7 +369,7 @@
         "phase": "active",
         "type": "expression",
         "target": "both",
-        "expression": "mad",
+        "expressionPresetId": "mad",
         "delayMs": 800,
         "durationMs": 4200
       },
@@ -411,7 +411,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -438,7 +438,7 @@
         "phase": "active",
         "type": "expression",
         "target": "target",
-        "expression": "mad",
+        "expressionPresetId": "mad",
         "durationMs": 2600
       },
       {
@@ -464,7 +464,7 @@
         "phase": "active",
         "type": "expression",
         "target": "target",
-        "expression": "curious",
+        "expressionPresetId": "curious",
         "durationMs": 2400
       },
       {
@@ -483,7 +483,7 @@
         "phase": "active",
         "type": "expression",
         "target": "both",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 3200
       },
       {
@@ -509,7 +509,7 @@
         "phase": "active",
         "type": "expression",
         "target": "both",
-        "expression": "mad",
+        "expressionPresetId": "mad",
         "durationMs": 3200
       },
       {
@@ -535,14 +535,14 @@
         "phase": "active",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 1600
       },
       {
         "phase": "active",
         "type": "expression",
         "target": "both",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "delayMs": 1600,
         "durationMs": 2200
       },
@@ -576,7 +576,7 @@
         "phase": "accepted",
         "type": "expression",
         "target": "both",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 1800
       },
       {
@@ -635,7 +635,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -742,7 +742,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -847,7 +847,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -945,7 +945,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -979,7 +979,7 @@
         "phase": "active",
         "type": "expression",
         "target": "initiator",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 1800
       },
       {
@@ -1006,7 +1006,7 @@
         "phase": "active",
         "type": "expression",
         "target": "initiator",
-        "expression": "curious",
+        "expressionPresetId": "curious",
         "durationMs": 1200
       },
       {
@@ -1025,7 +1025,7 @@
         "phase": "active",
         "type": "expression",
         "target": "initiator",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 1000
       },
       {

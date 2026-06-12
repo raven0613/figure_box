@@ -1,4 +1,5 @@
-import type { CharacterBaseSetting, Expression } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
+import type { AvatarState } from '~/widgets/avatarCanvas';
 
 export type DialogueAvatarSlot = 'left' | 'center-left' | 'center-right' | 'right';
 
@@ -8,7 +9,7 @@ export interface DialogueViewParticipant {
   color: string;
   label: string;
   slot: DialogueAvatarSlot;
-  appearance?: CharacterBaseSetting;
+  avatarState: AvatarState;
 }
 
 export interface DialogueViewLine {
@@ -16,7 +17,7 @@ export interface DialogueViewLine {
   type: 'SAY';
   speakerId: string;
   text: string;
-  expression: Expression;
+  expressionPresetId: ExpressionPresetId;
 }
 
 export interface DialogueViewChoice {
@@ -126,7 +127,7 @@ export interface DialogueViewChoiceLine {
   type: 'CHOICE';
   speakerId: string;
   text: string;
-  expression: Expression;
+  expressionPresetId: ExpressionPresetId;
   idlePrompt?: string;
   idlePromptLines?: DialogueViewLine[];
   timeoutMs: number;

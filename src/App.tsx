@@ -3,10 +3,11 @@ import { I18nextProvider } from 'react-i18next';
 import { createActor, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 import { OfflineRecapDebugWindow } from '~/components/debug/OfflineRecapDebugWindow';
 import { SaveDebugPanel } from '~/components/debug/SaveDebugPanel';
-import { CHARACTER_SEEDS, Expression } from '~/constants/character';
+import { CHARACTER_SEEDS } from '~/constants/character';
 import { createCharacterCreationSuccessDialogueScript } from '~/constants/characterCreationDialogue';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
 import { DIALOGUE_SCRIPT_DEFINITIONS_BY_ID } from '~/constants/dialogueScripts';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import { MAP_DIALOGUE_BOUNCE_DEMO, MAP_DIALOGUE_FADE_DEMO } from '~/constants/mapDialogueDemo';
 import i18n from '~/i18n';
 import {
@@ -19,7 +20,7 @@ import {
   type CreatePlayerCharacterResult,
 } from '~/services/characterCreationService';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
-import { getCharacterAppearance } from '~/services/characterAvatarCatalogService';
+import { getDialogueAvatarState } from '~/services/dialogueAvatarStateService';
 import { createDialogueViewScript } from '~/services/dialogueScriptResolver';
 import { getPlayableCharacters } from '~/services/playableCharacterService';
 import {
@@ -38,6 +39,7 @@ import { gameFlowMachine } from '~/stateMachines/gameFlow';
 import { GameState } from '~/stateMachines/gameFlow/states';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { DialogueViewScript } from '~/typing/dialogueView';
+import type { ExpressionPresetId } from '~/typing/expression';
 import { AvatarEditorContainer } from './components/avatarEditor/AvatarEditorContainer';
 import { CharacterManagementPanel } from './components/character/CharacterManagementPanel';
 import { DialogueWindow } from './components/dialogue/DialogueWindow';
@@ -89,18 +91,20 @@ function App() {
   );
   const [romanceRuleRevision, setRomanceRuleRevision] = useState(0);
   const [activeDialogueSession, setActiveDialogueSession] = useState<ActiveDialogueSession | null>(null);
-  const [dialogueExpressionByCharacterId, setDialogueExpressionByCharacterId] = useState<Partial<Record<string, Expression>>>({});
-  const [characterExpressionById, setCharacterExpressionById] = useState<Partial<Record<string, Expression>>>({});
+  const [
+    dialogueExpressionPresetIdByCharacterId,
+    setDialogueExpressionPresetIdByCharacterId,
+  ] = useState<Partial<Record<string, ExpressionPresetId>>>({});
   const [mapDialoguePresentation, setMapDialoguePresentation] = useState<EventDialoguePresentation | null>(null);
-  const handleDialogueLineChange = useCallback((line: { speakerId: string; expression: Expression }) => {
-    setDialogueExpressionByCharacterId(current => {
-      if (current[line.speakerId] === line.expression) {
+  const handleDialogueLineChange = useCallback((line: { speakerId: string; expressionPresetId: ExpressionPresetId }) => {
+    setDialogueExpressionPresetIdByCharacterId(current => {
+      if (current[line.speakerId] === line.expressionPresetId) {
         return current;
       }
 
       return {
         ...current,
-        [line.speakerId]: line.expression,
+        [line.speakerId]: line.expressionPresetId,
       };
     });
   }, []);
@@ -125,22 +129,12 @@ function App() {
       onClose: request.onClose,
     });
   }, []);
-  const handleCharacterExpressionsChange = useCallback((nextExpressionByCharacterId: Partial<Record<string, Expression>>) => {
-    setCharacterExpressionById(currentExpressionByCharacterId => {
-      const currentEntries = Object.entries(currentExpressionByCharacterId);
-      const nextEntries = Object.entries(nextExpressionByCharacterId);
-      const didChange = currentEntries.length !== nextEntries.length ||
-        nextEntries.some(([characterId, expression]) => currentExpressionByCharacterId[characterId] !== expression);
-
-      return didChange ? nextExpressionByCharacterId : currentExpressionByCharacterId;
-    });
-  }, []);
-  const resetDialogueParticipantExpressions = useCallback((script: DialogueViewScript) => {
-    setDialogueExpressionByCharacterId(current => {
+  const resetDialogueParticipantExpressionPresets = useCallback((script: DialogueViewScript) => {
+    setDialogueExpressionPresetIdByCharacterId(current => {
       const next = { ...current };
 
       script.participants.forEach(participant => {
-        next[participant.id] = Expression.Normal;
+        next[participant.id] = DEFAULT_EXPRESSION_PRESET_ID;
       });
 
       return next;
@@ -151,10 +145,10 @@ function App() {
       return;
     }
 
-    resetDialogueParticipantExpressions(activeDialogueSession.script);
+    resetDialogueParticipantExpressionPresets(activeDialogueSession.script);
     activeDialogueSession.onClose?.();
     setActiveDialogueSession(null);
-  }, [activeDialogueSession, resetDialogueParticipantExpressions]);
+  }, [activeDialogueSession, resetDialogueParticipantExpressionPresets]);
   const completeCreatedCharacter = useCallback(async (creationResult: CreatePlayerCharacterResult) => {
     const characterName = creationResult.profileRecord.name;
 
@@ -197,6 +191,7 @@ function App() {
           name: readyProfileRecord.name,
           color: characterColor,
           label: createCharacterDialogueLabel(readyProfileRecord.name),
+          avatarState: getDialogueAvatarState(creationResult.characterId),
         }),
       });
     } catch (error) {
@@ -491,12 +486,11 @@ function App() {
         {isGameActive ? (
           <TownMapContainer
             key={characterRosterRevision}
-            expressionByCharacterId={dialogueExpressionByCharacterId}
+            expressionPresetIdByCharacterId={dialogueExpressionPresetIdByCharacterId}
             mapDialoguePresentation={mapDialoguePresentation}
             romanceRuleRevision={romanceRuleRevision}
             characterRosterRevision={characterRosterRevision}
             apartmentReveal={apartmentReveal}
-            onCharacterExpressionsChange={handleCharacterExpressionsChange}
             onDialogueRequest={handleDialogueRequest}
           />
         ) : null}
@@ -526,7 +520,6 @@ function App() {
         {activeDialogueSession ? (
           <DialogueWindow
             script={activeDialogueSession.script}
-            expressionByCharacterId={characterExpressionById}
             onLineChange={handleDialogueLineChange}
             onClose={closeActiveDialogue}
           />
@@ -579,7 +572,7 @@ function createDialogueRuntimeParticipant(
     name: character.name,
     color: character.color,
     label: character.label,
-    appearance: getCharacterAppearance(character.id) ?? undefined,
+    avatarState: getDialogueAvatarState(character.id),
   };
 }
 

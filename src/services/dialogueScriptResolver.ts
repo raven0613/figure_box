@@ -96,7 +96,7 @@ function resolveInstruction(
       type: 'SAY',
       speakerId,
       text: formatDialogueText(instruction.text, templateValues),
-      expression: instruction.expression,
+      expressionPresetId: instruction.expressionPresetId,
     };
   }
 
@@ -105,7 +105,7 @@ function resolveInstruction(
     type: 'CHOICE',
     speakerId,
     text: formatDialogueText(instruction.text, templateValues),
-    expression: instruction.expression,
+    expressionPresetId: instruction.expressionPresetId,
     idlePrompt: instruction.idlePrompt
       ? formatDialogueText(instruction.idlePrompt, templateValues)
       : undefined,
@@ -114,7 +114,7 @@ function resolveInstruction(
       type: 'SAY',
       speakerId: getParticipantId(line.speaker, participantIdByKey),
       text: formatDialogueText(line.text, templateValues),
-      expression: line.expression,
+      expressionPresetId: line.expressionPresetId,
     })),
     timeoutMs: instruction.timeoutMs,
     choices: instruction.choices.map(choice => ({

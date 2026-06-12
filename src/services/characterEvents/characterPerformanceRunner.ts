@@ -1,4 +1,4 @@
-import { Expression } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import type { CharacterEventInteractionPresentation } from '../../constants/charactarEventsDefinitions';
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '../../constants/charactarEventsDefinitions';
 import {
@@ -13,6 +13,7 @@ import {
 import type { MapActivityView } from '~/typing/eventDialoguePresentation';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { DialogueViewInstruction } from '~/typing/dialogueView';
+import type { ExpressionPresetId } from '~/typing/expression';
 
 export interface CharacterPerformanceSelection {
   definitionId?: string;
@@ -77,7 +78,7 @@ export interface CharacterPerformanceDialogueRequest {
 
 interface CharacterPerformanceRunnerPorts {
   getCharacterName: (characterId: string) => string;
-  setCharacterExpression: (characterId: string, expression: Expression) => void;
+  setCharacterExpressionPreset: (characterId: string, expressionPresetId: ExpressionPresetId) => void;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   removeCharacterBubble: (characterId: string) => void;
   showCharacterEmote: (characterId: string, text: string, durationMs?: number) => void;
@@ -341,7 +342,7 @@ export class CharacterPerformanceRunner {
     if (step.type === 'expression') {
       characterIds.forEach(characterId => {
         this.clearExpressionReset(characterId);
-        this.ports.setCharacterExpression(characterId, step.expression);
+        this.ports.setCharacterExpressionPreset(characterId, step.expressionPresetId);
 
         if (step.durationMs !== undefined) {
           this.scheduleExpressionReset(characterId, step.durationMs);
@@ -441,7 +442,7 @@ export class CharacterPerformanceRunner {
     if (step.type === 'expression') {
       characterIds.forEach(characterId => {
         this.clearExpressionReset(characterId);
-        this.ports.setCharacterExpression(characterId, step.expression);
+        this.ports.setCharacterExpressionPreset(characterId, step.expressionPresetId);
 
         if (step.durationMs !== undefined) {
           this.scheduleExpressionReset(characterId, step.durationMs);
@@ -530,7 +531,7 @@ export class CharacterPerformanceRunner {
     const timerId = window.setTimeout(() => {
       this.timers.delete(timerId);
       this.expressionResetTimersByCharacterId.delete(characterId);
-      this.ports.setCharacterExpression(characterId, Expression.Normal);
+      this.ports.setCharacterExpressionPreset(characterId, DEFAULT_EXPRESSION_PRESET_ID);
     }, durationMs);
 
     this.timers.add(timerId);
@@ -540,7 +541,7 @@ export class CharacterPerformanceRunner {
   private playFallbackParticipantLeftGroupPerformance(input: CharacterActivityPerformanceInput): void {
     input.participantIds.forEach(characterId => {
       this.clearExpressionReset(characterId);
-      this.ports.setCharacterExpression(characterId, Expression.Surprised);
+      this.ports.setCharacterExpressionPreset(characterId, 'surprised');
       this.ports.showCharacterEmote(characterId, getEmoteLabel('surprised'), PARTICIPANT_LEFT_REACTION_MS);
       this.scheduleExpressionReset(characterId, PARTICIPANT_LEFT_REACTION_MS);
     });

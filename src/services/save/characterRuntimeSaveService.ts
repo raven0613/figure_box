@@ -1,4 +1,5 @@
-import { CHARACTER_SEEDS, Expression, getMoodForMoodValue } from '~/constants/character';
+import { CHARACTER_SEEDS, getMoodForMoodValue } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import { TOWN_WORLD_SPACE_ID } from '~/constants/townMap';
 import {
   createEmptyActivityCooldowns,
@@ -226,7 +227,7 @@ export function createDefaultCharacterRuntimeSnapshot(
     seedId: seed?.id ?? characterId,
     status: {
       mood: getMoodForMoodValue(moodValue),
-      expression: Expression.Normal,
+      expressionPresetId: DEFAULT_EXPRESSION_PRESET_ID,
       saturation: seed?.saturation ?? 70,
       moodValue,
       playNeed: 35,

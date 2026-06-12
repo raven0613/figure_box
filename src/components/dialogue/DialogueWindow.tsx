@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Expression } from '~/constants/character';
 import type {
   DialogueViewChoice,
   DialogueViewLine,
@@ -13,7 +12,6 @@ import styles from './dialogue.module.scss';
 
 interface DialogueWindowProps {
   script: DialogueViewScript;
-  expressionByCharacterId?: Partial<Record<string, Expression>>;
   onClose: () => void;
   onLineChange?: (line: DialogueViewLine) => void;
 }
@@ -27,7 +25,6 @@ const IDLE_DIALOGUE_LINE_DURATION_MS = 2200;
 
 export function DialogueWindow({
   script,
-  expressionByCharacterId = {},
   onClose,
   onLineChange,
 }: DialogueWindowProps) {
@@ -53,7 +50,10 @@ export function DialogueWindow({
     () => isChoiceLine ? script.participants.map(participant => participant.id) : [],
     [isChoiceLine, script.participants],
   );
-  const currentExpression = expressionByCharacterId[activeLine.speakerId] ?? activeLine.expression;
+  const currentExpressionPresetId = activeLine.expressionPresetId;
+  const expressionRunId = currentIdleLine
+    ? `idle:${lineIndex}:${idleDialogueFlow?.lineIndex ?? 0}:${currentIdleLine.id ?? currentIdleLine.text}`
+    : `line:${lineIndex}:${activeLine.id ?? activeLine.text}`;
   const bubbleBySpeakerId = useMemo(() => {
     if (currentIdleLine) {
       return {
@@ -65,10 +65,17 @@ export function DialogueWindow({
   }, [currentIdleLine, idleBubbleBySpeakerId]);
   const avatarState = useMemo(() => ({
     activeSpeakerId: activeLine.speakerId,
-    expression: currentExpression,
+    expressionPresetId: currentExpressionPresetId,
+    expressionRunId,
     thinkingSpeakerIds,
     bubbleBySpeakerId,
-  }), [activeLine.speakerId, bubbleBySpeakerId, currentExpression, thinkingSpeakerIds]);
+  }), [
+    activeLine.speakerId,
+    bubbleBySpeakerId,
+    currentExpressionPresetId,
+    expressionRunId,
+    thinkingSpeakerIds,
+  ]);
 
   useEffect(() => {
     setInstructions(script.lines);
@@ -83,9 +90,9 @@ export function DialogueWindow({
       type: 'SAY',
       speakerId: activeLine.speakerId,
       text: activeLine.text,
-      expression: activeLine.expression,
+      expressionPresetId: activeLine.expressionPresetId,
     });
-  }, [activeLine.expression, activeLine.id, activeLine.speakerId, activeLine.text, onLineChange]);
+  }, [activeLine.expressionPresetId, activeLine.id, activeLine.speakerId, activeLine.text, onLineChange]);
 
   useEffect(() => {
     setIdleDialogueFlow(null);
@@ -177,7 +184,7 @@ export function DialogueWindow({
         <div className={styles.dialogueBox}>
           <div className={styles.speakerBar}>
             <strong>{activeSpeaker?.name ?? 'Unknown'}</strong>
-            <span>{currentExpression}</span>
+            <span>{currentExpressionPresetId}</span>
           </div>
           <p className={styles.lineText}>{currentLine.text}</p>
           {currentChoiceLine ? (

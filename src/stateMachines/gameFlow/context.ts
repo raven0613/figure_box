@@ -1,4 +1,4 @@
-import { DirectedRelationship, Expression, Mood, Position } from "~/constants/character";
+import { DirectedRelationship, ExpressionPresetId, Mood, Position } from "~/constants/character";
 import type { ItemDefinitionId, ItemInstanceId, CharacterSeedItem } from "~/typing/item";
 import type { CharacterControlState } from "./states";
 import type { RelationshipStore } from "./relationships";
@@ -16,7 +16,7 @@ export interface CharacterContext {
   ownItems: CharacterSeedItem[],
   status: {
     mood: Mood;
-    expression: Expression;
+    expressionPresetId: ExpressionPresetId;
     saturation: number; // 飽足度：用長條圖顯示
     moodValue: number;
     playNeed: number;

@@ -1,5 +1,5 @@
 import { Canvas, Group, Text } from 'fabric';
-import { Expression } from '~/constants/character';
+import { ExpressionPresetId } from '~/constants/character';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import { PresentationAnimationService } from '~/services/presentationAnimationService';
@@ -225,17 +225,17 @@ export class TownMapCharacterLayer {
     this.canvas.requestRenderAll();
   }
 
-  updateCharacterExpression(characterId: string, expressionText: Expression): void {
+  updateCharacterExpressionPreset(characterId: string, presetId: ExpressionPresetId): void {
     const token = this.characterTokens.get(characterId);
-    const expression = token?.get('expressionObject') as Text | undefined;
+    const expressionPresetLabel = token?.get('expressionPresetObject') as Text | undefined;
 
-    if (!token || !expression || expression.text === expressionText) {
+    if (!token || !expressionPresetLabel || expressionPresetLabel.text === presetId) {
       return;
     }
 
-    expression.set('text', expressionText);
+    expressionPresetLabel.set('text', presetId);
     this.updateStoredCharacter(characterId, {
-      expression: expressionText,
+      expressionPresetId: presetId,
     });
     this.applyTokenUiZoom(token);
     token.setCoords();

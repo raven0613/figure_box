@@ -1,10 +1,10 @@
-import type { Expression, MemoryType } from '~/constants/character';
+import type { ExpressionPresetId, MemoryType } from '~/constants/character';
 
 export interface GossipTopicDefinition {
   id: string;
   baseWeight: number;
   text: string;
-  expression: Expression;
+  expressionPresetId: ExpressionPresetId;
 }
 
 export interface GossipMemoryTopicDefinition extends GossipTopicDefinition {
@@ -15,7 +15,7 @@ export interface GossipMemoryTopicDefinition extends GossipTopicDefinition {
 export interface ResolvedGossipTopic {
   id: string;
   text: string;
-  expression: Expression;
+  expressionPresetId: ExpressionPresetId;
   subjectId: string;
   memoryTargetId?: string;
 }

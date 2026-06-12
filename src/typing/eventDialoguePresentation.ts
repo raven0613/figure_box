@@ -1,4 +1,4 @@
-import type { Expression } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
 import type { EventDialogueDisplayMode, MapDialogueBubbleAnimation } from '~/constants/event';
 import type { DialogueViewScript } from '~/typing/dialogueView';
 
@@ -22,7 +22,7 @@ export interface MapActivityView {
 export interface MapBubbleSequenceLine {
   characterId: string;
   text: string;
-  expression?: Expression;
+  expressionPresetId?: ExpressionPresetId;
 }
 
 export interface MapBubbleSequence {

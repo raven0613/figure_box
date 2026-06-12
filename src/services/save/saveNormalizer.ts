@@ -1,10 +1,10 @@
 import {
-  Expression,
   Feeling,
   MemoryType,
   Mood,
   SocialStatus,
 } from '~/constants/character';
+import { isExpressionPresetId } from '~/constants/expressionCatalog';
 import {
   createDefaultRomanceRuleConfig,
   type CharacterGender,
@@ -56,7 +56,6 @@ import {
 
 const SOCIAL_STATUSES = new Set<string>(Object.values(SocialStatus));
 const MOODS = new Set<string>(Object.values(Mood));
-const EXPRESSIONS = new Set<string>(Object.values(Expression));
 const FEELINGS = new Set<string>(Object.values(Feeling));
 const GLOBAL_ROMANCE_DEFAULTS = new Set<GlobalRomanceDefault>(['allow', 'deny']);
 const ROMANCE_RULE_TYPES = new Set<RomanceRuleType>(['allow', 'deny', 'onlyAllow']);
@@ -617,8 +616,7 @@ function readCharacterStatus(
   if (
     typeof value.mood !== 'string' ||
     !MOODS.has(value.mood) ||
-    typeof value.expression !== 'string' ||
-    !EXPRESSIONS.has(value.expression) ||
+    !isExpressionPresetId(value.expressionPresetId) ||
     typeof value.saturation !== 'number' ||
     !Number.isFinite(value.saturation) ||
     typeof value.moodValue !== 'number' ||
@@ -633,7 +631,7 @@ function readCharacterStatus(
 
   return {
     mood: value.mood as Mood,
-    expression: value.expression as Expression,
+    expressionPresetId: value.expressionPresetId,
     saturation: value.saturation,
     moodValue: value.moodValue,
     playNeed: value.playNeed,

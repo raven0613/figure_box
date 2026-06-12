@@ -1,4 +1,4 @@
-import { Expression, MemoryType, Position } from "~/constants/character";
+import { ExpressionPresetId, MemoryType, Position } from "~/constants/character";
 import type { CharacterEventActivityEffects } from "~/constants/charactarEventsDefinitions";
 import type { CharacterRequestSatisfiedEffect } from "~/services/characterRequests/types";
 import type { CharacterRuntimeInput } from "./context";
@@ -91,7 +91,7 @@ export type CharacterEvent =
   | { type: EventType.ApplyOfflineRuntime; runtime: CharacterRuntimeInput }
   | { type: EventType.StartThinking }
   | { type: EventType.StopThinking }
-  | { type: EventType.SetExpression; expression: Expression }
+  | { type: EventType.SetExpressionPreset; expressionPresetId: ExpressionPresetId }
   | { type: EventType.HoldItem; itemInstanceId: ItemInstanceId; definitionId: ItemDefinitionId }
   | { type: EventType.ReleaseHeldItem }
   | { type: EventType.AddLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: CharacterControlReason }
@@ -137,7 +137,7 @@ export enum EventType {
   ApplyOfflineRuntime = "applyOfflineRuntime",
   StartThinking = "startThinking",
   StopThinking = "stopThinking",
-  SetExpression = "setExpression",
+  SetExpressionPreset = "setExpressionPreset",
   HoldItem = "holdItem",
   ReleaseHeldItem = "releaseHeldItem",
   AddLock = "addLock",
@@ -163,7 +163,7 @@ export type DialogueManagerEmittedEvent =
     type: 'DIALOGUE_LINE';
     speakerId: string;
     text: string;
-    expression?: Expression;
+    expressionPresetId?: ExpressionPresetId;
   }
   | {
     type: 'DIALOGUE_CHOICE_REQUESTED';

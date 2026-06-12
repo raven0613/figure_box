@@ -28,7 +28,7 @@ export function resolveGossipTopic(
       text: formatGossipText(definition.text, {
         subjectName: input.subjectName,
       }),
-      expression: definition.expression,
+      expressionPresetId: definition.expressionPresetId,
       subjectId: input.subjectId,
     },
     weight: definition.baseWeight,
@@ -53,7 +53,7 @@ export function resolveGossipTopic(
               subjectName: input.subjectName,
               memoryTargetName: input.getCharacterName(relationship.targetCharId),
             }),
-            expression: definition.expression,
+            expressionPresetId: definition.expressionPresetId,
             subjectId: input.subjectId,
             memoryTargetId: relationship.targetCharId,
           },

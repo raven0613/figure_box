@@ -185,7 +185,7 @@ export const dialogueManagerMachine = createMachine(
               type: 'DIALOGUE_LINE',
               speakerId,
               text: line.text,
-              expression: line.expression,
+              expressionPresetId: line.expressionPresetId,
             });
           }
           return;

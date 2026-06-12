@@ -1,4 +1,4 @@
-import { Expression } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import type { DialogueBank } from '~/constants/dialogue';
 import type { EventActor, EventBlackboard, GameEvent } from '~/constants/event';
 import { selectDialogueScript } from '~/constants/dialogueEvents';
@@ -45,7 +45,7 @@ export function resolveEventDialoguePresentationsFromGameEvent(
     const sequenceLines = selectedDialogue.lines.map<MapBubbleSequenceLine>(line => ({
       characterId: line.speaker === 'target' ? target.id : initiator.id,
       text: line.text,
-      expression: line.expression ?? Expression.Normal,
+      expressionPresetId: line.expressionPresetId ?? DEFAULT_EXPRESSION_PRESET_ID,
     }));
     const previewLineCount = Math.max(1, command.mapPreviewLineCount ?? DEFAULT_MAP_PREVIEW_LINE_COUNT);
     const visibleLines = mode === 'ambient'

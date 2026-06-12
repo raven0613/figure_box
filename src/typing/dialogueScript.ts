@@ -1,5 +1,6 @@
-import type { CharacterBaseSetting, Expression } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
 import type { DialogueAvatarSlot, DialogueViewInstruction } from './dialogueView';
+import type { AvatarState } from '~/widgets/avatarCanvas';
 
 export interface DialogueScriptDefinition {
   id: string;
@@ -22,7 +23,7 @@ export interface DialogueScriptSayDefinition {
   type: 'SAY';
   speaker: string;
   text: string;
-  expression: Expression;
+  expressionPresetId: ExpressionPresetId;
 }
 
 export interface DialogueScriptChoiceDefinition {
@@ -30,7 +31,7 @@ export interface DialogueScriptChoiceDefinition {
   type: 'CHOICE';
   speaker: string;
   text: string;
-  expression: Expression;
+  expressionPresetId: ExpressionPresetId;
   idlePrompt?: string;
   idlePromptLines?: readonly DialogueScriptSayDefinition[];
   timeoutMs: number;
@@ -118,7 +119,7 @@ export interface DialogueScriptRuntimeParticipant {
   name: string;
   color: string;
   label: string;
-  appearance?: CharacterBaseSetting;
+  avatarState: AvatarState;
 }
 
 export interface DialogueScriptRuntimeContext {

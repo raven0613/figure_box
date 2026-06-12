@@ -1,11 +1,13 @@
-import { Expression } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import type { DialogueViewScript } from '~/typing/dialogueView';
+import type { AvatarState } from '~/widgets/avatarCanvas';
 
 interface CreateCharacterCreationSuccessDialogueScriptInput {
   characterId: string;
   name: string;
   color: string;
   label: string;
+  avatarState: AvatarState;
 }
 
 export function createCharacterCreationSuccessDialogueScript({
@@ -13,6 +15,7 @@ export function createCharacterCreationSuccessDialogueScript({
   name,
   color,
   label,
+  avatarState,
 }: CreateCharacterCreationSuccessDialogueScriptInput): DialogueViewScript {
   return {
     id: `character-creation-success-${characterId}`,
@@ -23,6 +26,7 @@ export function createCharacterCreationSuccessDialogueScript({
         color,
         label,
         slot: 'left',
+        avatarState,
       },
     ],
     lines: [
@@ -31,7 +35,7 @@ export function createCharacterCreationSuccessDialogueScript({
         type: 'SAY',
         speakerId: characterId,
         text: '創建成功！',
-        expression: Expression.Normal,
+        expressionPresetId: DEFAULT_EXPRESSION_PRESET_ID,
       },
     ],
   };

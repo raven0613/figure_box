@@ -1,5 +1,5 @@
 import { Circle, Group, Rect, Text, type FabricObject } from 'fabric';
-import { Expression } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import type { GridCoordinate } from './townMapGrid';
 import type { TownMapCharacter } from './townMapWidgetTypes';
@@ -63,7 +63,7 @@ export class CharacterTokenFactory {
       selectable: false,
       evented: false,
     });
-    const expression = new Text(character.expression ?? Expression.Normal, {
+    const expressionPresetId = new Text(character.expressionPresetId ?? DEFAULT_EXPRESSION_PRESET_ID, {
       top: CHARACTER_UI_EXPRESSION_TOP,
       fontSize: 10,
       fontFamily: 'Arial, sans-serif',
@@ -134,7 +134,7 @@ export class CharacterTokenFactory {
       evented: false,
       objectCaching: false,
     });
-    const uiGroup = new Group([requestMarker, expression, status], {
+    const uiGroup = new Group([requestMarker, expressionPresetId, status], {
       left: 0,
       top: getCharacterUiGroupTop(renderSize, 1),
       originX: 'center',
@@ -177,7 +177,7 @@ export class CharacterTokenFactory {
 
     group.set('characterId', character.id);
     group.set('statusObject', status);
-    group.set('expressionObject', expression);
+    group.set('expressionPresetObject', expressionPresetId);
     group.set('requestMarkerObject', requestMarker);
     group.set('uiGroupObject', uiGroup);
     group.set('spriteBodyObject', spriteBody);

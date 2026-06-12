@@ -1,4 +1,5 @@
-import { CHARACTER_SEEDS, Expression } from '~/constants/character';
+import { CHARACTER_SEEDS } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 
 const demoSeeds = CHARACTER_SEEDS.slice(0, 3);
@@ -12,7 +13,7 @@ export const MAP_DIALOGUE_FADE_DEMO: EventDialoguePresentation = {
     previewLine: {
       characterId: demoSeeds[0].id,
       text: '先從暖身開始。',
-      expression: Expression.Normal,
+      expressionPresetId: DEFAULT_EXPRESSION_PRESET_ID,
     },
   },
   bubbleSequence: {
@@ -24,12 +25,12 @@ export const MAP_DIALOGUE_FADE_DEMO: EventDialoguePresentation = {
       {
         characterId: demoSeeds[0].id,
         text: '先從暖身開始。',
-        expression: Expression.Normal,
+        expressionPresetId: DEFAULT_EXPRESSION_PRESET_ID,
       },
       {
         characterId: demoSeeds[1].id,
         text: '你果然很認真呢。',
-        expression: Expression.Laugh,
+        expressionPresetId: 'laugh',
       },
     ],
   },
@@ -44,7 +45,7 @@ export const MAP_DIALOGUE_BOUNCE_DEMO: EventDialoguePresentation = {
     previewLine: {
       characterId: demoSeeds[2].id,
       text: '我也要加入！',
-      expression: Expression.Laugh,
+      expressionPresetId: 'laugh',
     },
   },
   bubbleSequence: {
@@ -56,17 +57,17 @@ export const MAP_DIALOGUE_BOUNCE_DEMO: EventDialoguePresentation = {
       {
         characterId: demoSeeds[2].id,
         text: '我也要加入！',
-        expression: Expression.Laugh,
+        expressionPresetId: 'laugh',
       },
       {
         characterId: demoSeeds[1].id,
         text: '等一下，球拍只有兩支。',
-        expression: Expression.Normal,
+        expressionPresetId: DEFAULT_EXPRESSION_PRESET_ID,
       },
       {
         characterId: demoSeeds[2].id,
         text: '那我負責加油！',
-        expression: Expression.Laugh,
+        expressionPresetId: 'laugh',
       },
     ],
   },

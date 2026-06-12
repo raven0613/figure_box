@@ -27,7 +27,7 @@ import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDe
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
 import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
-import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
+import { CHARACTER_SEEDS, ExpressionPresetId, MemoryType, SocialStatus } from '~/constants/character';
 import { loadTownCharacterSpriteSet } from '~/services/townSpritePreloadService';
 import {
   TOWN_APARTMENT_OBJECT_ID,
@@ -74,7 +74,7 @@ const GIFT_DROP_CHARACTER_RADIUS = 1;
 const ALLOW_DIAGONAL_MOVEMENT = false; // 斜走
 
 interface TownMapContainerProps {
-  expressionByCharacterId?: Partial<Record<string, Expression>>;
+  expressionPresetIdByCharacterId?: Partial<Record<string, ExpressionPresetId>>;
   mapDialoguePresentation?: EventDialoguePresentation | null;
   romanceRuleRevision?: number;
   characterRosterRevision?: number;
@@ -82,7 +82,6 @@ interface TownMapContainerProps {
     characterId: string;
     revision: number;
   } | null;
-  onCharacterExpressionsChange?: (expressionByCharacterId: Partial<Record<string, Expression>>) => void;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
 }
 
@@ -130,12 +129,11 @@ interface PickupChainState {
 }
 
 export function TownMapContainer({
-  expressionByCharacterId = {},
+  expressionPresetIdByCharacterId = {},
   mapDialoguePresentation = null,
   romanceRuleRevision = 0,
   characterRosterRevision = 0,
   apartmentReveal = null,
-  onCharacterExpressionsChange,
   onDialogueRequest,
 }: TownMapContainerProps) {
   const { t } = useTranslation();
@@ -208,16 +206,6 @@ export function TownMapContainer({
   const placedItemMenuName = placedItemMenuView
     ? t(placedItemMenuView.definition.nameKey)
     : '';
-  const snapshotExpressionByCharacterId = useMemo(
-    () => Object.fromEntries(
-      Object.entries(characterSnapshots).map(([characterId, snapshot]) => [
-        characterId,
-        snapshot.context.status.expression,
-      ]),
-    ) as Partial<Record<string, Expression>>,
-    [characterSnapshots],
-  );
-
   const refreshPlayerInventory = useCallback(() => {
     setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID, { states: ['stored'] }));
     saveService.scheduleSaveItems();
@@ -675,16 +663,12 @@ export function TownMapContainer({
   }, [giftDragState, giftItemToCharacter]);
 
   useEffect(() => {
-    Object.entries(expressionByCharacterId).forEach(([characterId, expression]) => {
-      if (expression) {
-        characterControllerRef.current?.setCharacterExpression(characterId, expression);
+    Object.entries(expressionPresetIdByCharacterId).forEach(([characterId, expressionPresetId]) => {
+      if (expressionPresetId) {
+        characterControllerRef.current?.setCharacterExpressionPreset(characterId, expressionPresetId);
       }
     });
-  }, [expressionByCharacterId]);
-
-  useEffect(() => {
-    onCharacterExpressionsChange?.(snapshotExpressionByCharacterId);
-  }, [onCharacterExpressionsChange, snapshotExpressionByCharacterId]);
+  }, [expressionPresetIdByCharacterId]);
 
   useEffect(() => {
     const characterController = characterControllerRef.current;

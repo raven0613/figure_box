@@ -1,4 +1,5 @@
-import { Expression, type Position } from '~/constants/character';
+import type { Position } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import { TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
 import { EventType } from '~/stateMachines/gameFlow/events';
@@ -85,7 +86,7 @@ export class TownMovementCoordinator {
       y: previousContext?.position.y ?? character.position.y,
       color: character.color,
       label: character.label,
-      expression: previousContext?.status.expression ?? Expression.Normal,
+      expressionPresetId: previousContext?.status.expressionPresetId ?? DEFAULT_EXPRESSION_PRESET_ID,
     });
 
     if (placed) {
@@ -104,7 +105,7 @@ export class TownMovementCoordinator {
     this.ensurePositionedCharacterVisible(characterId, snapshot);
 
     this.widget.updateCharacterStatus(characterId, snapshot.context.currentMotivation);
-    this.widget.updateCharacterExpression(characterId, snapshot.context.status.expression);
+    this.widget.updateCharacterExpressionPreset(characterId, snapshot.context.status.expressionPresetId);
 
     const summary = getCharacterStateSummary(snapshot.value);
     const target = snapshot.context.target;
@@ -161,7 +162,7 @@ export class TownMovementCoordinator {
     }
 
     this.widget.updateCharacterStatus(snapshot.id, 'idle');
-    this.widget.updateCharacterExpression(snapshot.id, snapshot.status.expression);
+    this.widget.updateCharacterExpressionPreset(snapshot.id, snapshot.status.expressionPresetId);
   }
 
   private placePositionedRuntimeSnapshot(snapshot: CharacterRuntimeSnapshot): void {
@@ -172,7 +173,7 @@ export class TownMovementCoordinator {
       y: snapshot.position.y,
       color: renderData?.color ?? '#f0cc5f',
       label: renderData?.label ?? snapshot.id,
-      expression: snapshot.status.expression,
+      expressionPresetId: snapshot.status.expressionPresetId,
     });
 
     if (placed) {
@@ -210,7 +211,7 @@ export class TownMovementCoordinator {
       y: snapshot.context.position.y,
       color: renderData?.color ?? '#f0cc5f',
       label: renderData?.label ?? snapshot.context.name,
-      expression: snapshot.context.status.expression,
+      expressionPresetId: snapshot.context.status.expressionPresetId,
     });
 
     if (placed) {

@@ -125,7 +125,27 @@ export interface AvatarCanvasOptions {
   width?: number;
   height?: number;
   initialState?: Partial<AvatarState>;
+  backgroundColor?: string;
   onChange?: (state: AvatarState) => void;
+  onRender?: () => void;
+}
+
+export interface AvatarPartStatePatch {
+  key: AvatarPartKey;
+  patch: Partial<AvatarPartState>;
+}
+
+export interface AvatarPartRuntimeTransform {
+  offsetX?: number;
+  offsetY?: number;
+  rotate?: number;
+  scale?: number;
+  opacity?: number;
+}
+
+export interface AvatarPartRuntimeTransformPatch {
+  key: AvatarPartKey;
+  transform: AvatarPartRuntimeTransform;
 }
 
 interface AvatarPartContext {
@@ -807,6 +827,7 @@ abstract class AvatarPart {
   protected readonly context: AvatarPartContext;
   protected state: AvatarPartState;
   protected object: Group | null = null;
+  private runtimeTransform: AvatarPartRuntimeTransform = {};
 
   constructor(definition: AvatarPartDefinition, context: AvatarPartContext, state: AvatarPartState) {
     this.definition = definition;
@@ -831,6 +852,7 @@ abstract class AvatarPart {
       objectCaching: false,
     });
     this.applyTransform();
+    this.applyVisibility();
     return this.object;
   }
 
@@ -838,6 +860,7 @@ abstract class AvatarPart {
     this.state = { ...this.state, ...nextState };
     this.updateArtworkColor();
     this.applyTransform();
+    this.applyVisibility();
   }
 
   refreshParentTransform(): void {
@@ -846,6 +869,36 @@ abstract class AvatarPart {
 
   refreshArtwork(): void {
     // Non-image parts do not need artwork refreshes.
+  }
+
+  setRuntimeTransform(transform: AvatarPartRuntimeTransform): void {
+    this.runtimeTransform = { ...transform };
+    this.applyTransform();
+    this.applyStoredRuntimeTransform();
+  }
+
+  protected applyStoredRuntimeTransform(): void {
+    if (!this.object) {
+      return;
+    }
+
+    const scale = this.runtimeTransform.scale ?? 1;
+
+    this.object.set({
+      left: (this.object.left ?? 0) + (this.runtimeTransform.offsetX ?? 0),
+      top: (this.object.top ?? 0) + (this.runtimeTransform.offsetY ?? 0),
+      angle: (this.object.angle ?? 0) + (this.runtimeTransform.rotate ?? 0),
+      scaleX: (this.object.scaleX ?? 1) * scale,
+      scaleY: (this.object.scaleY ?? 1) * scale,
+      opacity: this.runtimeTransform.opacity ?? 1,
+    });
+    this.object.setCoords();
+  }
+
+  private applyVisibility(): void {
+    this.object?.set({
+      visible: this.state.isVisible !== false,
+    });
   }
 
   protected abstract get baseX(): number;
@@ -1145,6 +1198,7 @@ abstract class ImageAvatarPart extends AvatarPart {
       .reverse()
       .forEach(image => this.object?.sendObjectToBack(image));
     this.applyTransform();
+    this.applyStoredRuntimeTransform();
     this.object.setCoords();
     this.object.canvas?.requestRenderAll();
   }
@@ -2144,6 +2198,7 @@ export class AvatarCanvas {
   private readonly parts = new Map<AvatarPartKey, AvatarPart>();
   private readonly accessoryParts = new Map<string, AvatarPart>();
   private readonly onChange?: (state: AvatarState) => void;
+  private readonly onRender?: () => void;
   private readonly faceRenderKeys: readonly AvatarPartKey[] = ['face.color', 'face.line'];
   private readonly width: number;
   private readonly height: number;
@@ -2154,15 +2209,19 @@ export class AvatarCanvas {
     this.width = width;
     this.height = height;
     this.onChange = options.onChange;
+    this.onRender = options.onRender;
     this.stateStore = new AvatarStateStore(options.initialState);
     this.canvas = new Canvas(canvasElement, {
       width,
       height,
-      backgroundColor: AVATAR_RIG_COLORS.canvasBackground,
+      backgroundColor: options.backgroundColor ?? AVATAR_RIG_COLORS.canvasBackground,
       imageSmoothingEnabled: false,
       allowTouchScrolling: true,
       selection: false,
       preserveObjectStacking: true,
+    });
+    this.canvas.on('after:render', () => {
+      this.onRender?.();
     });
 
     this.canvas.wrapperEl.style.touchAction = 'pan-y';
@@ -2182,6 +2241,10 @@ export class AvatarCanvas {
 
   getState(): AvatarState {
     return this.stateStore.getSnapshot();
+  }
+
+  getCanvasElement(): HTMLCanvasElement {
+    return this.canvas.lowerCanvasEl;
   }
 
   setState(state: Partial<AvatarState>): void {
@@ -2248,6 +2311,23 @@ export class AvatarCanvas {
 
   setVisible(key: AvatarPartKey, isVisible: boolean): void {
     this.updatePart(key, { isVisible });
+  }
+
+  setPartStates(patches: readonly AvatarPartStatePatch[]): void {
+    patches.forEach(({ key, patch }) => {
+      this.applyPartPatch(key, patch);
+    });
+    this.canvas.requestRenderAll();
+    this.emitChange();
+  }
+
+  setPartRuntimeTransforms(
+    patches: readonly AvatarPartRuntimeTransformPatch[],
+  ): void {
+    patches.forEach(({ key, transform }) => {
+      this.parts.get(key)?.setRuntimeTransform(transform);
+    });
+    this.canvas.requestRenderAll();
   }
 
   setClothingLayerOrder(key: AvatarPartKey, layerOrder: number): void {
@@ -2606,6 +2686,12 @@ export class AvatarCanvas {
   }
 
   private updatePart(key: AvatarPartKey, patch: Partial<AvatarPartState>): void {
+    this.applyPartPatch(key, patch);
+    this.canvas.requestRenderAll();
+    this.emitChange();
+  }
+
+  private applyPartPatch(key: AvatarPartKey, patch: Partial<AvatarPartState>): void {
     const nextState = this.stateStore.updatePart(key, patch);
     const part = this.parts.get(key);
     part?.update(nextState);
@@ -2620,9 +2706,6 @@ export class AvatarCanvas {
       this.parts.get('eyes.upperEyelid')?.refreshArtwork();
       this.parts.get('eyes.lowerEyelid')?.refreshArtwork();
     }
-
-    this.canvas.requestRenderAll();
-    this.emitChange();
   }
 
   private refreshGroupChildren(groupKey: AvatarGroupKey): void {

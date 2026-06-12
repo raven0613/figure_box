@@ -1,4 +1,5 @@
-import { Expression, MemoryType } from '~/constants/character';
+import { MemoryType } from '~/constants/character';
+import { isExpressionPresetId } from '~/constants/expressionCatalog';
 import type {
   GossipMemoryTopicDefinition,
   GossipTopicDefinition,
@@ -10,7 +11,6 @@ import {
   readRequiredString,
 } from './schemaReaders';
 
-const VALID_EXPRESSIONS = Object.values(Expression);
 const VALID_MEMORY_TYPES = Object.values(MemoryType);
 
 export function loadGossipTopicDefinitions(rawDefinitions: unknown): GossipTopicDefinition[] {
@@ -89,16 +89,16 @@ function readBaseDefinition(
     throw new Error(`${label} definition at index ${index} must be an object.`);
   }
 
-  const expression = readRequiredString(value, 'expression', index);
+  const expressionPresetId = readRequiredString(value, 'expressionPresetId', index);
 
-  if (!includesString(VALID_EXPRESSIONS, expression)) {
-    throw new Error(`${label} definition at index ${index} has invalid expression.`);
+  if (!isExpressionPresetId(expressionPresetId)) {
+    throw new Error(`${label} definition at index ${index} has invalid expressionPresetId.`);
   }
 
   return {
     id: readRequiredString(value, 'id', index),
     baseWeight: readRequiredNonNegativeNumber(value, 'baseWeight', index),
     text: readRequiredString(value, 'text', index),
-    expression,
+    expressionPresetId,
   };
 }

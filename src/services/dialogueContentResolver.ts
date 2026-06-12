@@ -1,4 +1,4 @@
-import type { DirectedRelationship, Expression } from '~/constants/character';
+import type { DirectedRelationship, ExpressionPresetId } from '~/constants/character';
 import { resolveGossipTopic } from '~/services/gossipTopicResolver';
 
 export interface ResolveDialogueContentInput {
@@ -13,7 +13,7 @@ export interface ResolveDialogueContentInput {
 
 export interface ResolvedDialogueContent {
   text: string;
-  expression: Expression;
+  expressionPresetId: ExpressionPresetId;
 }
 
 type DialogueContentPoolResolver = (
@@ -45,7 +45,7 @@ function resolveGossipDialogueContent(
   return topic
     ? {
       text: topic.text,
-      expression: topic.expression,
+      expressionPresetId: topic.expressionPresetId,
     }
     : null;
 }

@@ -36,7 +36,7 @@ export function DialogueAvatarStage({
 
   useEffect(() => {
     rendererRef.current?.setDialogueState(avatarState);
-  }, [avatarState]);
+  }, [avatarState, participants]);
 
   return (
     <div className={styles.avatarStage} aria-hidden="true">
