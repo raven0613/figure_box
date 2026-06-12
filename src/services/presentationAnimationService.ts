@@ -29,12 +29,15 @@ const DEFAULT_CHARACTER_JUMP_DURATION_MS = 760;
 const DEFAULT_CHARACTER_JUMP_COUNT = 2;
 
 interface ActiveAnimation {
-  frameId: number;
+  frameId: number | null;
   finish: () => void;
+  pausedAt: number | null;
+  resume: (pausedDurationMs: number) => void;
 }
 
 export class PresentationAnimationService {
   private readonly activeAnimationsByKey = new Map<string, ActiveAnimation>();
+  private isPaused = false;
 
   cancel(key: string): void {
     const activeAnimation = this.activeAnimationsByKey.get(key);
@@ -43,7 +46,10 @@ export class PresentationAnimationService {
       return;
     }
 
-    window.cancelAnimationFrame(activeAnimation.frameId);
+    if (activeAnimation.frameId !== null) {
+      window.cancelAnimationFrame(activeAnimation.frameId);
+    }
+
     this.activeAnimationsByKey.delete(key);
     activeAnimation.finish();
   }
@@ -51,6 +57,42 @@ export class PresentationAnimationService {
   cancelAll(): void {
     Array.from(this.activeAnimationsByKey.keys()).forEach(key => {
       this.cancel(key);
+    });
+  }
+
+  pauseAll(): void {
+    if (this.isPaused) {
+      return;
+    }
+
+    this.isPaused = true;
+    const pausedAt = performance.now();
+
+    this.activeAnimationsByKey.forEach(activeAnimation => {
+      if (activeAnimation.frameId !== null) {
+        window.cancelAnimationFrame(activeAnimation.frameId);
+      }
+
+      activeAnimation.frameId = null;
+      activeAnimation.pausedAt = pausedAt;
+    });
+  }
+
+  resumeAll(): void {
+    if (!this.isPaused) {
+      return;
+    }
+
+    this.isPaused = false;
+    const resumedAt = performance.now();
+
+    this.activeAnimationsByKey.forEach(activeAnimation => {
+      const pausedDurationMs = activeAnimation.pausedAt === null
+        ? 0
+        : Math.max(0, resumedAt - activeAnimation.pausedAt);
+
+      activeAnimation.pausedAt = null;
+      activeAnimation.resume(pausedDurationMs);
     });
   }
 
@@ -62,7 +104,7 @@ export class PresentationAnimationService {
       top: input.target.top ?? 0,
       angle: input.target.angle ?? 0,
     };
-    const startedAt = performance.now();
+    let startedAt = performance.now();
 
     this.cancel(input.key);
 
@@ -86,7 +128,7 @@ export class PresentationAnimationService {
       input.canvas.requestRenderAll();
 
       if (elapsedRatio < 1 && this.activeAnimationsByKey.has(input.key)) {
-        this.setAnimationFrame(input.key, window.requestAnimationFrame(animate), finishAnimation);
+        this.scheduleAnimationFrame(input.key, animate);
         return;
       }
 
@@ -96,7 +138,10 @@ export class PresentationAnimationService {
       finishAnimation();
     };
 
-    this.setAnimationFrame(input.key, window.requestAnimationFrame(animate), finishAnimation);
+    this.startAnimation(input.key, finishAnimation, pausedDurationMs => {
+      startedAt += pausedDurationMs;
+      this.scheduleAnimationFrame(input.key, animate);
+    }, animate);
 
     return {
       cancel: () => {
@@ -116,7 +161,7 @@ export class PresentationAnimationService {
       scaleX: input.target.scaleX ?? 1,
       scaleY: input.target.scaleY ?? 1,
     };
-    const startedAt = performance.now();
+    let startedAt = performance.now();
 
     this.cancel(input.key);
 
@@ -142,7 +187,7 @@ export class PresentationAnimationService {
       input.canvas.requestRenderAll();
 
       if (elapsedRatio < 1 && this.activeAnimationsByKey.has(input.key)) {
-        this.setAnimationFrame(input.key, window.requestAnimationFrame(animate), finishAnimation);
+        this.scheduleAnimationFrame(input.key, animate);
         return;
       }
 
@@ -152,7 +197,10 @@ export class PresentationAnimationService {
       finishAnimation();
     };
 
-    this.setAnimationFrame(input.key, window.requestAnimationFrame(animate), finishAnimation);
+    this.startAnimation(input.key, finishAnimation, pausedDurationMs => {
+      startedAt += pausedDurationMs;
+      this.scheduleAnimationFrame(input.key, animate);
+    }, animate);
 
     return {
       cancel: () => {
@@ -190,11 +238,30 @@ export class PresentationAnimationService {
     target.setCoords();
   }
 
-  private setAnimationFrame(key: string, frameId: number, finish: () => void): void {
+  private startAnimation(
+    key: string,
+    finish: () => void,
+    resume: (pausedDurationMs: number) => void,
+    animate: FrameRequestCallback,
+  ): void {
     this.activeAnimationsByKey.set(key, {
-      frameId,
+      frameId: null,
       finish,
+      pausedAt: this.isPaused ? performance.now() : null,
+      resume,
     });
+
+    this.scheduleAnimationFrame(key, animate);
+  }
+
+  private scheduleAnimationFrame(key: string, animate: FrameRequestCallback): void {
+    const activeAnimation = this.activeAnimationsByKey.get(key);
+
+    if (!activeAnimation || this.isPaused) {
+      return;
+    }
+
+    activeAnimation.frameId = window.requestAnimationFrame(animate);
   }
 }
 

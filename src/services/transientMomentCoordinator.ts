@@ -3,6 +3,7 @@ import type { CharacterControlReason } from '~/stateMachines/gameFlow/controlRea
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { SendCharacterEvent } from '~/services/townCharacterTypes';
 import type { MapActivityView } from '~/typing/eventDialoguePresentation';
+import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
 
 type CharacterLockPart = 'bodyAction' | 'bodyMove' | 'mind' | 'communication';
 
@@ -64,6 +65,7 @@ export class TransientMomentCoordinator {
   private readonly activeMomentsById = new Map<string, ActiveTransientMoment>();
   private readonly momentIdsByCharacterId = new Map<string, string>();
   private readonly timerIdsByMomentId = new Map<string, number>();
+  private readonly timerScheduler = new PausableTimeoutScheduler();
   private readonly sendToCharacter: SendCharacterEvent;
   private readonly showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   private readonly pauseActivity: (activityId: string, timestamp: number) => void;
@@ -72,6 +74,7 @@ export class TransientMomentCoordinator {
   private readonly restoreActiveVisualsForCharacters?: (characterIds: readonly string[]) => void;
   private readonly pauseCharacterWalk?: (characterId: string, durationMs: number) => void;
   private readonly resumeCharacterWalk?: (characterId: string) => void;
+  private pausedAt: number | null = null;
 
   constructor(options: TransientMomentCoordinatorOptions) {
     this.sendToCharacter = options.sendToCharacter;
@@ -127,7 +130,7 @@ export class TransientMomentCoordinator {
       this.pauseCharacterWalks(momentCharacterIds, durationMs);
     }
 
-    const timerId = window.setTimeout(() => {
+    const timerId = this.timerScheduler.schedule(() => {
       this.finish(moment.id);
     }, durationMs);
     this.timerIdsByMomentId.set(moment.id, timerId);
@@ -137,6 +140,32 @@ export class TransientMomentCoordinator {
 
   isCharacterInMoment(characterId: string): boolean {
     return this.momentIdsByCharacterId.has(characterId);
+  }
+
+  pauseWorld(): void {
+    if (this.pausedAt !== null) {
+      return;
+    }
+
+    this.pausedAt = Date.now();
+    this.timerScheduler.pause();
+  }
+
+  resumeWorld(): void {
+    if (this.pausedAt === null) {
+      return;
+    }
+
+    const pausedDurationMs = Math.max(0, Date.now() - this.pausedAt);
+
+    this.activeMomentsById.forEach((moment, momentId) => {
+      this.activeMomentsById.set(momentId, {
+        ...moment,
+        endsAt: moment.endsAt + pausedDurationMs,
+      });
+    });
+    this.pausedAt = null;
+    this.timerScheduler.resume();
   }
 
   finish(momentId: string): void {
@@ -150,7 +179,7 @@ export class TransientMomentCoordinator {
     const timerId = this.timerIdsByMomentId.get(momentId);
 
     if (timerId !== undefined) {
-      window.clearTimeout(timerId);
+      this.timerScheduler.cancel(timerId);
       this.timerIdsByMomentId.delete(momentId);
     }
 
@@ -182,6 +211,7 @@ export class TransientMomentCoordinator {
     Array.from(this.activeMomentsById.keys()).forEach(momentId => {
       this.finish(momentId);
     });
+    this.timerScheduler.clear();
   }
 
   private createMoment(input: StartTransientMomentInput): ActiveTransientMoment {
@@ -236,7 +266,7 @@ export class TransientMomentCoordinator {
       return;
     }
 
-    window.setTimeout(() => {
+    this.timerScheduler.schedule(() => {
       this.restoreActiveVisualsForCharacters?.(characterIds);
     }, 0);
   }

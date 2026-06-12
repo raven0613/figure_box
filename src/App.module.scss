@@ -16,13 +16,27 @@
   left: 18px;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: calc(100% - 180px);
 }
 
 .demoButton {
+  padding: 0.5rem;
+  font-size: 0.8rem;
   color: #1f2428;
   background: #ffd36a;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.demoButton:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
+.demoButtonActive {
+  color: #ffffff;
+  background: #28766b;
 }
 
 .characterMenuButton {

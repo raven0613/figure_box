@@ -38,6 +38,7 @@ import {
 import {
   CharacterBodyActionState,
   CharacterBodyMoveState,
+  GameSimWorldState,
   type CharacterStateSummary,
 } from '~/stateMachines/gameFlow/states';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
@@ -74,6 +75,7 @@ const GIFT_DROP_CHARACTER_RADIUS = 1;
 const ALLOW_DIAGONAL_MOVEMENT = false; // 斜走
 
 interface TownMapContainerProps {
+  simWorldState?: GameSimWorldState;
   expressionPresetIdByCharacterId?: Partial<Record<string, ExpressionPresetId>>;
   mapDialoguePresentation?: EventDialoguePresentation | null;
   romanceRuleRevision?: number;
@@ -83,6 +85,8 @@ interface TownMapContainerProps {
     revision: number;
   } | null;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
+  onActivitySettled?: (activityId: string) => void;
+  observedActivityId?: string | null;
 }
 
 interface GiftDragState {
@@ -129,12 +133,15 @@ interface PickupChainState {
 }
 
 export function TownMapContainer({
+  simWorldState = GameSimWorldState.Running,
   expressionPresetIdByCharacterId = {},
   mapDialoguePresentation = null,
   romanceRuleRevision = 0,
   characterRosterRevision = 0,
   apartmentReveal = null,
   onDialogueRequest,
+  onActivitySettled,
+  observedActivityId = null,
 }: TownMapContainerProps) {
   const { t } = useTranslation();
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -259,7 +266,6 @@ export function TownMapContainer({
   const cancelPlacementDraft = useCallback(() => {
     placementDraftRef.current = null;
     setPlacementDraft(null);
-    widgetRef.current?.setCharacterDraggingEnabled(true);
   }, []);
 
   const cancelPickupChain = useCallback(() => {
@@ -364,8 +370,10 @@ export function TownMapContainer({
 
   useEffect(() => {
     placementDraftRef.current = placementDraft;
-    widgetRef.current?.setCharacterDraggingEnabled(!placementDraft);
-  }, [placementDraft]);
+    widgetRef.current?.setCharacterDraggingEnabled(
+      simWorldState === GameSimWorldState.Running && !placementDraft,
+    );
+  }, [placementDraft, simWorldState]);
 
   useEffect(() => {
     pickupChainRef.current = pickupChain;
@@ -544,6 +552,7 @@ export function TownMapContainer({
       characters: playableCharacters,
       initialRelationshipStore: relationshipStoreService.getSnapshot(),
       onDialogueRequest,
+      onActivitySettled,
       onCharacterSnapshot: (characterId, snapshot) => {
         setCharacterSnapshots(current => ({
           ...current,
@@ -578,7 +587,7 @@ export function TownMapContainer({
       void widget.destroy();
       canvasHost.replaceChildren();
     };
-  }, [cancelPickupChain, cancelPlacementDraft, handleRelationshipStoreChange, onDialogueRequest, pickupPlacedItem, playableCharacters, refreshPlayerInventory, refreshShopStock]);
+  }, [cancelPickupChain, cancelPlacementDraft, handleRelationshipStoreChange, onActivitySettled, onDialogueRequest, pickupPlacedItem, playableCharacters, refreshPlayerInventory, refreshShopStock]);
 
   useEffect(() => {
     if (!apartmentReveal) {
@@ -661,6 +670,10 @@ export function TownMapContainer({
       window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [giftDragState, giftItemToCharacter]);
+
+  useEffect(() => {
+    characterControllerRef.current?.setSimWorldState(simWorldState, observedActivityId);
+  }, [observedActivityId, simWorldState]);
 
   useEffect(() => {
     Object.entries(expressionPresetIdByCharacterId).forEach(([characterId, expressionPresetId]) => {

@@ -24,6 +24,8 @@ export class TownMovementCoordinator {
     color: string;
     label: string;
   }>();
+  private readonly pendingSyncCharacterIds = new Set<string>();
+  private isWorldPaused = false;
 
   constructor(options: TownMovementCoordinatorOptions) {
     this.widget = options.widget;
@@ -36,6 +38,36 @@ export class TownMovementCoordinator {
     this.walkingCharacterIds.clear();
     this.visibleCharacterIds.clear();
     this.characterRenderDataById.clear();
+    this.pendingSyncCharacterIds.clear();
+  }
+
+  pauseWorld(): void {
+    if (this.isWorldPaused) {
+      return;
+    }
+
+    this.isWorldPaused = true;
+    this.widget.setWalkAnimationsPaused(true);
+  }
+
+  resumeWorld(): void {
+    if (!this.isWorldPaused) {
+      return;
+    }
+
+    this.isWorldPaused = false;
+    this.widget.setWalkAnimationsPaused(false);
+
+    const pendingCharacterIds = [...this.pendingSyncCharacterIds];
+
+    this.pendingSyncCharacterIds.clear();
+    pendingCharacterIds.forEach(characterId => {
+      const snapshot = this.getCharacterSnapshot(characterId);
+
+      if (snapshot) {
+        this.syncCharacterWithWidget(characterId, snapshot);
+      }
+    });
   }
 
   pauseCharacterWalk(characterId: string, durationMs: number): void {
@@ -111,9 +143,17 @@ export class TownMovementCoordinator {
     const target = snapshot.context.target;
 
     if (summary.bodyMove !== 'walking' || !target) {
+      this.pendingSyncCharacterIds.delete(characterId);
       this.cancelWalkIfNeeded(characterId);
       return;
     }
+
+    if (this.isWorldPaused) {
+      this.pendingSyncCharacterIds.add(characterId);
+      return;
+    }
+
+    this.pendingSyncCharacterIds.delete(characterId);
 
     if (this.walkingCharacterIds.has(characterId) && this.widget.isWalking(characterId)) {
       return;

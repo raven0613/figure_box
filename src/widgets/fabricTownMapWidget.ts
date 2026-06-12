@@ -303,6 +303,10 @@ export class FabricTownMapWidget {
     this.characterLayer.playCharacterAnimation(characterId, animationId, durationMs);
   }
 
+  cancelCharacterAnimation(characterId: string): void {
+    this.characterLayer.cancelCharacterAnimation(characterId);
+  }
+
   showCharacterBubble(
     characterId: string,
     text: string,
@@ -314,6 +318,10 @@ export class FabricTownMapWidget {
 
   showCharacterEmote(characterId: string, text: string, durationMs = 1200): void {
     this.floatingTextLayer.showCharacterEmote(characterId, text, durationMs);
+  }
+
+  removeCharacterEmote(characterId: string): void {
+    this.floatingTextLayer.removeCharacterEmote(characterId);
   }
 
   removeCharacterBubble(characterId: string): void {
@@ -378,6 +386,31 @@ export class FabricTownMapWidget {
 
   pauseWalk(characterId: string, durationMs: number): boolean {
     return this.walkAnimator.pauseWalk(characterId, durationMs);
+  }
+
+  setWalkAnimationsPaused(isPaused: boolean): void {
+    this.walkAnimator.setPaused(isPaused);
+  }
+
+  setPresentationPaused(
+    isPaused: boolean,
+    activeCharacterIds: readonly string[] = [],
+  ): void {
+    this.floatingTextLayer.setPaused(isPaused);
+    this.characterLayer.setPresentationPaused(isPaused, activeCharacterIds);
+
+    if (isPaused) {
+      if (this.hasActiveAnimations()) {
+        this.startAnimationLoop();
+      } else {
+        this.stopAnimationLoopIfIdle();
+      }
+      return;
+    }
+
+    if (this.hasActiveAnimations()) {
+      this.startAnimationLoop();
+    }
   }
 
   isWalking(characterId: string): boolean {
@@ -579,7 +612,9 @@ export class FabricTownMapWidget {
   }
 
   private hasActiveAnimations(): boolean {
-    return this.walkAnimator.hasActiveAnimations() || this.floatingTextLayer.hasActiveAnimations();
+    return this.walkAnimator.hasActiveAnimations()
+      || this.floatingTextLayer.hasActiveAnimations()
+      || this.characterLayer.hasActiveDialogueSpriteAnimations();
   }
 
   private getCharacterPosition(characterId: string, coordinate: GridCoordinate): GridCoordinate {

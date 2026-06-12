@@ -27,7 +27,16 @@ export type GameFlowEvents =
   | { type: 'END_INTERACTION' }
   | { type: 'PICK_CHARACTER'; characterId: string }
   | { type: 'RELEASE_CHARACTER'; characterId: string }
+  | SimWorldEvent
   | DialogueManagerEvent;
+
+export type SimWorldEvent =
+  | { type: 'PAUSE_SIM_WORLD' }
+  | { type: 'RESUME_SIM_WORLD' }
+  | { type: 'START_ACTIVITY_OBSERVATION'; activityId: string }
+  | { type: 'ACTIVITY_OBSERVATION_DIALOGUE_CLOSED'; activityId: string }
+  | { type: 'ACTIVITY_OBSERVATION_SETTLED'; activityId: string }
+  | { type: 'CANCEL_ACTIVITY_OBSERVATION'; activityId: string };
 
 export type CharacterEvent =
   | {
@@ -101,7 +110,7 @@ export type CharacterEventOld =
   | { type: EventType.Tick } // 自動：時間流逝
   | { type: EventType.SenseObject; objectId: string; gridType: string } // 自動：感應到物品
   | { type: EventType.SocialProximity; targetActorId: string } // 自動：感知到附近有人
-  | { type: EventType.RequestAction; actionType: 'WANT_FRIEND' | 'HUNGRY'; payload: any } // 主動：需要玩家點擊
+  | { type: EventType.RequestAction; actionType: 'WANT_FRIEND' | 'HUNGRY'; payload: unknown } // 主動：需要玩家點擊
   | { type: EventType.UserClick; actionId: string } // 主動：玩家點擊核准
 
 

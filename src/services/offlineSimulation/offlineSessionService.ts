@@ -16,6 +16,7 @@ class OfflineSessionService {
     startedAt: null,
   };
   private isListening = false;
+  private isOfflineProgressionPaused = false;
   private readonly handleVisibilityChange = (): void => {
     void this.recordVisibilityChange();
   };
@@ -44,6 +45,10 @@ class OfflineSessionService {
 
   getSnapshot(): OfflineSessionSnapshot {
     return { ...this.snapshot };
+  }
+
+  setOfflineProgressionPaused(isPaused: boolean): void {
+    this.isOfflineProgressionPaused = isPaused;
   }
 
   async recordOfflineSimulation(timestamp: number = Date.now()): Promise<void> {
@@ -79,7 +84,7 @@ class OfflineSessionService {
     }
 
     const saveMeta = normalizeSaveMetaRecord(await saveDb.saveMeta.get('current'));
-    const lastObservedAwayMs = saveMeta.lastActiveAt === null
+    const lastObservedAwayMs = this.isOfflineProgressionPaused || saveMeta.lastActiveAt === null
       ? null
       : Math.max(0, timestamp - saveMeta.lastActiveAt);
 

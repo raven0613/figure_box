@@ -33,10 +33,11 @@ import {
 } from '~/services/romanceRules/romanceRuleService';
 import { saveService } from '~/services/save/saveService';
 import { settingsService } from '~/services/save/settingsService';
+import { offlineSessionService } from '~/services/offlineSimulation/offlineSessionService';
 import { preloadTownRequiredSpriteSheets } from '~/services/townSpritePreloadService';
 import { startTownSpriteBackgroundBake } from '~/services/townSpriteBackgroundBakeService';
 import { gameFlowMachine } from '~/stateMachines/gameFlow';
-import { GameState } from '~/stateMachines/gameFlow/states';
+import { GameSimWorldState, GameState } from '~/stateMachines/gameFlow/states';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { DialogueViewScript } from '~/typing/dialogueView';
 import type { ExpressionPresetId } from '~/typing/expression';
@@ -62,6 +63,7 @@ interface CharacterCreationBakeState extends AppLoadingState {
 
 interface ActiveDialogueSession {
   script: DialogueViewScript;
+  activityId?: string;
   onClose?: () => void;
 }
 
@@ -96,6 +98,16 @@ function App() {
     setDialogueExpressionPresetIdByCharacterId,
   ] = useState<Partial<Record<string, ExpressionPresetId>>>({});
   const [mapDialoguePresentation, setMapDialoguePresentation] = useState<EventDialoguePresentation | null>(null);
+  const cancelActivityObservation = useCallback((
+    activityId: string,
+    onCancel?: () => void,
+  ) => {
+    onCancel?.();
+    gameFlowActorRef.current?.send({
+      type: 'CANCEL_ACTIVITY_OBSERVATION',
+      activityId,
+    });
+  }, []);
   const handleDialogueLineChange = useCallback((line: { speakerId: string; expressionPresetId: ExpressionPresetId }) => {
     setDialogueExpressionPresetIdByCharacterId(current => {
       if (current[line.speakerId] === line.expressionPresetId) {
@@ -109,26 +121,34 @@ function App() {
     });
   }, []);
   const handleDialogueRequest = useCallback((request: CharacterPerformanceDialogueRequest) => {
-    if (request.scriptId === DIALOGUE_DEMO_SCRIPT.id) {
-      setActiveDialogueSession({
-        script: DIALOGUE_DEMO_SCRIPT,
-        onClose: request.onClose,
-      });
+    const script = request.scriptId === DIALOGUE_DEMO_SCRIPT.id
+      ? DIALOGUE_DEMO_SCRIPT
+      : createActivityDialogueScript(request);
+
+    if (!script) {
+      const handleCancel = request.onCancel ?? request.onClose;
+
+      if (request.activityId) {
+        cancelActivityObservation(request.activityId, handleCancel);
+      } else {
+        handleCancel?.();
+      }
       return;
     }
 
-    const script = createActivityDialogueScript(request);
-
-    if (!script) {
-      request.onClose?.();
-      return;
+    if (request.activityId) {
+      gameFlowActorRef.current?.send({
+        type: 'START_ACTIVITY_OBSERVATION',
+        activityId: request.activityId,
+      });
     }
 
     setActiveDialogueSession({
       script,
+      activityId: request.activityId,
       onClose: request.onClose,
     });
-  }, []);
+  }, [cancelActivityObservation]);
   const resetDialogueParticipantExpressionPresets = useCallback((script: DialogueViewScript) => {
     setDialogueExpressionPresetIdByCharacterId(current => {
       const next = { ...current };
@@ -146,9 +166,22 @@ function App() {
     }
 
     resetDialogueParticipantExpressionPresets(activeDialogueSession.script);
-    activeDialogueSession.onClose?.();
     setActiveDialogueSession(null);
+    activeDialogueSession.onClose?.();
+
+    if (activeDialogueSession.activityId) {
+      gameFlowActorRef.current?.send({
+        type: 'ACTIVITY_OBSERVATION_DIALOGUE_CLOSED',
+        activityId: activeDialogueSession.activityId,
+      });
+    }
   }, [activeDialogueSession, resetDialogueParticipantExpressionPresets]);
+  const handleActivitySettled = useCallback((activityId: string) => {
+    gameFlowActorRef.current?.send({
+      type: 'ACTIVITY_OBSERVATION_SETTLED',
+      activityId,
+    });
+  }, []);
   const completeCreatedCharacter = useCallback(async (creationResult: CreatePlayerCharacterResult) => {
     const characterName = creationResult.profileRecord.name;
 
@@ -357,6 +390,33 @@ function App() {
 
   const isGameActive = gameFlowSnapshot?.matches(GameState.Active) ?? false;
   const isGameLoading = gameFlowSnapshot?.matches(GameState.Loading) ?? !gameFlowSnapshot;
+  const isActivityObservationPaused = gameFlowSnapshot?.matches({
+    [GameState.Active]: {
+      world: GameSimWorldState.ActivityObservationPaused,
+    },
+  }) ?? false;
+  const isWorldManuallyPaused = gameFlowSnapshot?.matches({
+    [GameState.Active]: {
+      world: GameSimWorldState.ManuallyPaused,
+    },
+  }) ?? false;
+  const simWorldState = isActivityObservationPaused
+    ? GameSimWorldState.ActivityObservationPaused
+    : isWorldManuallyPaused
+      ? GameSimWorldState.ManuallyPaused
+      : GameSimWorldState.Running;
+  const observedActivityId = gameFlowSnapshot?.context.activityObservation?.activityId ?? null;
+  const toggleManualWorldPause = () => {
+    gameFlowActorRef.current?.send({
+      type: isWorldManuallyPaused ? 'RESUME_SIM_WORLD' : 'PAUSE_SIM_WORLD',
+    });
+  };
+
+  useEffect(() => {
+    offlineSessionService.setOfflineProgressionPaused(
+      simWorldState !== GameSimWorldState.Running,
+    );
+  }, [simWorldState]);
 
   useEffect(() => {
     if (isAvatarEditorPage || !isGameActive) {
@@ -390,6 +450,15 @@ function App() {
     <I18nextProvider i18n={i18n}>
       <div className={styles.app}>
         <div className={styles.demoControls}>
+          <button
+            className={`${styles.demoButton} ${isWorldManuallyPaused ? styles.demoButtonActive : ''}`}
+            type="button"
+            disabled={!isGameActive || isActivityObservationPaused}
+            aria-pressed={isWorldManuallyPaused}
+            onClick={toggleManualWorldPause}
+          >
+            {isWorldManuallyPaused ? 'Resume World' : 'Pause World'}
+          </button>
           <button
             className={styles.demoButton}
             type="button"
@@ -486,12 +555,15 @@ function App() {
         {isGameActive ? (
           <TownMapContainer
             key={characterRosterRevision}
+            simWorldState={simWorldState}
+            observedActivityId={observedActivityId}
             expressionPresetIdByCharacterId={dialogueExpressionPresetIdByCharacterId}
             mapDialoguePresentation={mapDialoguePresentation}
             romanceRuleRevision={romanceRuleRevision}
             characterRosterRevision={characterRosterRevision}
             apartmentReveal={apartmentReveal}
             onDialogueRequest={handleDialogueRequest}
+            onActivitySettled={handleActivitySettled}
           />
         ) : null}
         {isSaveDebugOpen ? (

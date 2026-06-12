@@ -51,12 +51,14 @@ import { CharacterHeldItemCoordinator } from '~/services/characterHeldItemCoordi
 import { RelationshipMomentFlowCoordinator } from '~/services/relationshipMomentFlowCoordinator';
 import { TownRelationshipCoordinator } from '~/services/townRelationshipCoordinator';
 import { TownCharacterTickCoordinator } from '~/services/townCharacterTickCoordinator';
+import { TownSimWorldPauseCoordinator } from '~/services/townSimWorldPauseCoordinator';
 import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSaveService';
 import { saveService } from '~/services/save/saveService';
 import { offlineRuntimeSyncService } from '~/services/offlineSimulation/offlineRuntimeSyncService';
 import type { CharacterRuntimeSnapshot } from '~/services/save/saveTypes';
 import { getSeedPlayableCharacters } from '~/services/playableCharacterService';
 import { createDefaultCharacterPersonality } from '~/constants/characterPersonality';
+import { GameSimWorldState } from '~/stateMachines/gameFlow/states';
 
 export type { CharacterSnapshot } from '~/services/townCharacterTypes';
 
@@ -72,6 +74,7 @@ interface TownCharacterControllerOptions {
   characters?: readonly CharacterSeed[];
   initialRelationshipStore?: RelationshipStore;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
+  onActivitySettled?: (activityId: string) => void;
   onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
   onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
@@ -99,10 +102,12 @@ export class TownCharacterController {
   private readonly godDropCoordinator: GodDropCoordinator;
   private readonly heldItemCoordinator: CharacterHeldItemCoordinator;
   private readonly tickCoordinator: TownCharacterTickCoordinator;
+  private readonly simWorldPauseCoordinator: TownSimWorldPauseCoordinator;
   private readonly characterRequestService = new CharacterRequestService({
     definitions: CHARACTER_REQUEST_DEFINITIONS,
   });
   private readonly onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
+  private readonly onActivitySettled?: (activityId: string) => void;
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
   private readonly onCharacterRequestsChange?: (requests: readonly CharacterRequest[]) => void;
@@ -112,6 +117,7 @@ export class TownCharacterController {
     this.widget = options.widget;
     this.characters = options.characters ?? getSeedPlayableCharacters();
     this.onDialogueRequest = options.onDialogueRequest;
+    this.onActivitySettled = options.onActivitySettled;
     this.spatialQueries = new TownSpatialQueryService({
       widget: this.widget,
       characterIds: this.characters.map(character => character.id),
@@ -154,6 +160,9 @@ export class TownCharacterController {
       showCharacterEmote: (characterId, text, durationMs) => {
         this.widget.showCharacterEmote(characterId, text, durationMs);
       },
+      removeCharacterEmote: characterId => {
+        this.widget.removeCharacterEmote(characterId);
+      },
       showMapActivity: (activity, durationMs) => {
         this.widget.showMapActivity(activity, durationMs);
       },
@@ -162,6 +171,9 @@ export class TownCharacterController {
       },
       playCharacterAnimation: (characterId, animationId, durationMs) => {
         this.widget.playCharacterAnimation(characterId, animationId, durationMs);
+      },
+      cancelCharacterAnimation: characterId => {
+        this.widget.cancelCharacterAnimation(characterId);
       },
       playDialogue: request => {
         this.onDialogueRequest?.(request);
@@ -382,6 +394,16 @@ export class TownCharacterController {
       },
       notifyRequestsChanged: () => this.notifyCharacterRequestsChanged(),
     });
+    this.simWorldPauseCoordinator = new TownSimWorldPauseCoordinator({
+      activityManager: this.activityManager,
+      tickCoordinator: this.tickCoordinator,
+      movementCoordinator: this.movementCoordinator,
+      activityCoordinator: this.activityCoordinator,
+      performanceRunner: this.performanceRunner,
+      transientMomentCoordinator: this.transientMomentCoordinator,
+      widget: this.widget,
+      notifyActivitiesChanged: () => this.notifyJoinableActivitiesChanged(),
+    });
     this.onCharacterSnapshot = options.onCharacterSnapshot;
     this.onJoinableActivitiesChange = options.onJoinableActivitiesChange;
     this.onCharacterRequestsChange = options.onCharacterRequestsChange;
@@ -395,6 +417,14 @@ export class TownCharacterController {
       this.seedCharacterItems(character);
     });
     this.tickCoordinator.start();
+  }
+
+  setSimWorldState(state: GameSimWorldState, observedActivityId: string | null): void {
+    if (state !== GameSimWorldState.Running) {
+      this.godDropCoordinator.clear();
+    }
+
+    this.simWorldPauseCoordinator.syncState(state, observedActivityId);
   }
 
   showMapDialoguePresentation(presentation: EventDialoguePresentation): (() => void) | undefined {
@@ -414,6 +444,10 @@ export class TownCharacterController {
   }
 
   pickUpCharacter(characterId: string): void {
+    if (this.simWorldPauseCoordinator.isPaused()) {
+      return;
+    }
+
     if (this.isCharacterBodyFrozen(characterId)) {
       this.widget.showCharacterBubble(characterId, '對話中...');
       return;
@@ -426,6 +460,10 @@ export class TownCharacterController {
 
   dropCharacter(characterId: string, tile: GridCoordinate | null): void {
     if (!this.actorRegistry.getActor(characterId)) {
+      return;
+    }
+
+    if (this.simWorldPauseCoordinator.isPaused()) {
       return;
     }
 
@@ -449,6 +487,10 @@ export class TownCharacterController {
   }
 
   leaveApartment(characterId: string): void {
+    if (this.simWorldPauseCoordinator.isPaused()) {
+      return;
+    }
+
     this.leaveApartmentWithFollowUp(characterId);
   }
 
@@ -467,6 +509,10 @@ export class TownCharacterController {
   }
 
   observeActivity(activityId: string): void {
+    if (this.simWorldPauseCoordinator.isPaused()) {
+      return;
+    }
+
     const request = this.activityCoordinator.createActivityDialogueRequest(activityId);
 
     if (request) {
@@ -475,18 +521,33 @@ export class TownCharacterController {
   }
 
   resolveActivityOutcome(input: ResolveActivityOutcomeInput): ResolvedActivityOutcome {
-    return this.activityOutcomeResolver.resolveActivityOutcome(input);
+    const resolution = this.activityOutcomeResolver.resolveActivityOutcome(input);
+
+    this.onActivitySettled?.(resolution.activityId);
+    return resolution;
   }
 
   chooseGodDropCandidate(candidateId: string): void {
+    if (this.simWorldPauseCoordinator.isPaused()) {
+      return;
+    }
+
     this.godDropCoordinator.chooseCandidate(candidateId);
   }
 
   completeCharacterRequest(requestId: string): void {
+    if (this.simWorldPauseCoordinator.isPaused()) {
+      return;
+    }
+
     this.requestFlowCoordinator.completeRequest(requestId);
   }
 
   markCharacterRequestItemReceived(input: CharacterRequestItemMatchInput): CharacterRequest | null {
+    if (this.simWorldPauseCoordinator.isPaused()) {
+      return null;
+    }
+
     return this.requestFlowCoordinator.markItemReceived(input, '收到了，謝謝你', input.itemDefinition);
   }
 
@@ -498,16 +559,22 @@ export class TownCharacterController {
   }
 
   dispatchEventOccurrence(occurrence: EventOccurrence): void {
+    if (this.simWorldPauseCoordinator.isPaused()) {
+      return;
+    }
+
     this.eventOccurrenceCoordinator.dispatchEventOccurrence(occurrence);
   }
 
   dispose(): void {
     this.unregisterOfflineRuntimeSync();
     this.tickCoordinator.clear();
+    this.simWorldPauseCoordinator.clear();
 
     this.movementCoordinator.dispose();
     this.relationshipMomentFlowCoordinator.dispose();
     this.transientMomentCoordinator.dispose();
+    this.activityCoordinator.dispose();
     this.performanceRunner.dispose();
     this.heldItemCoordinator.clear();
     this.activityManager.clear();
@@ -677,6 +744,10 @@ export class TownCharacterController {
   private applyOfflineRuntimeSnapshots(
     snapshots: readonly CharacterRuntimeSnapshot[],
   ): number {
+    if (this.simWorldPauseCoordinator.isPaused()) {
+      return 0;
+    }
+
     this.activityCoordinator.clearLiveActivitiesForOfflineApply();
 
     const syncedCharacterIds = snapshots.flatMap(snapshot => {

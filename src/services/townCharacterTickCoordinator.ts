@@ -92,6 +92,27 @@ export class TownCharacterTickCoordinator {
     this.characterSeeds.forEach(character => {
       this.spawnCharacterIfNeeded(character, timestamp);
     });
+    this.startTimer();
+  }
+
+  pause(): void {
+    this.stop();
+  }
+
+  resumeAfterPause(pausedDurationMs: number): void {
+    if (pausedDurationMs > 0) {
+      this.nextDecisionAtByCharacterId.forEach((nextDecisionAt, characterId) => {
+        this.nextDecisionAtByCharacterId.set(
+          characterId,
+          nextDecisionAt + pausedDurationMs,
+        );
+      });
+    }
+
+    this.startTimer();
+  }
+
+  private startTimer(): void {
     this.stop();
     this.tickTimer = window.setInterval(() => {
       this.tick();

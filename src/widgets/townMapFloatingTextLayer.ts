@@ -1,6 +1,7 @@
 import { Canvas, Text } from 'fabric';
 import type { ExpressionPresetId } from '~/constants/character';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
+import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { GridCoordinate } from './townMapGrid';
 import {
@@ -37,6 +38,7 @@ export class TownMapFloatingTextLayer {
   private readonly updateCharacterExpressionPreset: (characterId: string, expressionPresetId: ExpressionPresetId) => void;
   private readonly startAnimationLoop: () => void;
   private readonly onMapActivityObserve?: (activityId: string) => void;
+  private readonly timerScheduler = new PausableTimeoutScheduler();
   private readonly characterBubbles = new Map<string, Text>();
   private readonly characterEmotes = new Map<string, Text>();
   private readonly bubbleTimers = new Map<string, number>();
@@ -44,6 +46,7 @@ export class TownMapFloatingTextLayer {
   private readonly bubbleAnimations = new Map<string, BubbleAnimationState>();
   private readonly mapActivityLabels = new Map<string, Text>();
   private readonly mapActivityTimers = new Map<string, number>();
+  private pausedAt: number | null = null;
   private viewportZoom = 1;
 
   constructor(options: TownMapFloatingTextLayerOptions) {
@@ -57,9 +60,10 @@ export class TownMapFloatingTextLayer {
   }
 
   dispose(): void {
-    this.clearTimerMap(this.bubbleTimers);
-    this.clearTimerMap(this.emoteTimers);
-    this.clearTimerMap(this.mapActivityTimers);
+    this.timerScheduler.clear();
+    this.bubbleTimers.clear();
+    this.emoteTimers.clear();
+    this.mapActivityTimers.clear();
     this.characterBubbles.clear();
     this.characterEmotes.clear();
     this.mapActivityLabels.clear();
@@ -67,7 +71,37 @@ export class TownMapFloatingTextLayer {
   }
 
   hasActiveAnimations(): boolean {
-    return this.bubbleAnimations.size > 0;
+    return this.pausedAt === null && this.bubbleAnimations.size > 0;
+  }
+
+  setPaused(isPaused: boolean): void {
+    if (isPaused) {
+      if (this.pausedAt !== null) {
+        return;
+      }
+
+      this.pausedAt = performance.now();
+      this.timerScheduler.pause();
+      return;
+    }
+
+    if (this.pausedAt === null) {
+      return;
+    }
+
+    const pausedDurationMs = Math.max(0, performance.now() - this.pausedAt);
+
+    this.bubbleAnimations.forEach(state => {
+      if (state.startedAt !== null) {
+        state.startedAt += pausedDurationMs;
+      }
+    });
+    this.pausedAt = null;
+    this.timerScheduler.resume();
+
+    if (this.bubbleAnimations.size > 0) {
+      this.startAnimationLoop();
+    }
   }
 
   showCharacterBubble(
@@ -107,7 +141,7 @@ export class TownMapFloatingTextLayer {
     this.startAnimationLoop();
     this.canvas.requestRenderAll();
 
-    this.bubbleTimers.set(characterId, window.setTimeout(() => {
+    this.bubbleTimers.set(characterId, this.timerScheduler.schedule(() => {
       this.removeCharacterBubble(characterId);
     }, durationMs));
   }
@@ -132,16 +166,8 @@ export class TownMapFloatingTextLayer {
     this.canvas.bringObjectToFront(emote);
     this.canvas.requestRenderAll();
 
-    this.emoteTimers.set(characterId, window.setTimeout(() => {
-      const currentEmote = this.characterEmotes.get(characterId);
-
-      if (currentEmote) {
-        this.canvas.remove(currentEmote);
-        this.characterEmotes.delete(characterId);
-        this.canvas.requestRenderAll();
-      }
-
-      this.emoteTimers.delete(characterId);
+    this.emoteTimers.set(characterId, this.timerScheduler.schedule(() => {
+      this.removeCharacterEmote(characterId);
     }, durationMs));
   }
 
@@ -153,13 +179,13 @@ export class TownMapFloatingTextLayer {
       return () => undefined;
     }
 
-    const timers = sequence.lines.map((line, index) => window.setTimeout(() => {
+    const timers = sequence.lines.map((line, index) => this.timerScheduler.schedule(() => {
       onLine?.(line);
       this.showMapBubbleSequenceLine(line, sequence);
     }, index * sequence.intervalMs));
 
     return () => {
-      timers.forEach(timer => window.clearTimeout(timer));
+      timers.forEach(timer => this.timerScheduler.cancel(timer));
     };
   }
 
@@ -191,9 +217,8 @@ export class TownMapFloatingTextLayer {
     this.canvas.requestRenderAll();
 
     if (durationMs !== null) {
-      this.mapActivityTimers.set(activity.id, window.setTimeout(() => {
+      this.mapActivityTimers.set(activity.id, this.timerScheduler.schedule(() => {
         this.removeMapActivity(activity.id);
-        this.mapActivityTimers.delete(activity.id);
       }, durationMs));
     }
   }
@@ -234,6 +259,20 @@ export class TownMapFloatingTextLayer {
     this.removeCharacterBubble(characterId);
   }
 
+  removeCharacterEmote(characterId: string): void {
+    this.clearTimer(this.emoteTimers, characterId);
+
+    const currentEmote = this.characterEmotes.get(characterId);
+
+    if (!currentEmote) {
+      return;
+    }
+
+    this.canvas.remove(currentEmote);
+    this.characterEmotes.delete(characterId);
+    this.canvas.requestRenderAll();
+  }
+
   removeCharacterUi(characterId: string): void {
     this.removeCanvasObject(this.characterBubbles, characterId);
     this.removeCanvasObject(this.characterEmotes, characterId);
@@ -243,6 +282,10 @@ export class TownMapFloatingTextLayer {
   }
 
   advanceBubbleAnimations(timestamp: number): void {
+    if (this.pausedAt !== null) {
+      return;
+    }
+
     const completedCharacterIds: string[] = [];
 
     this.bubbleAnimations.forEach((state, characterId) => {
@@ -453,11 +496,6 @@ export class TownMapFloatingTextLayer {
     text.setCoords();
   }
 
-  private clearTimerMap(timerMap: Map<string, number>): void {
-    timerMap.forEach(timer => window.clearTimeout(timer));
-    timerMap.clear();
-  }
-
   private clearTimer(timerMap: Map<string, number>, timerKey: string): void {
     const timer = timerMap.get(timerKey);
 
@@ -465,7 +503,7 @@ export class TownMapFloatingTextLayer {
       return;
     }
 
-    window.clearTimeout(timer);
+    this.timerScheduler.cancel(timer);
     timerMap.delete(timerKey);
   }
 }

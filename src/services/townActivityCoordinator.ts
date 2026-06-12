@@ -29,6 +29,7 @@ import type {
   ResolvedActivityOutcome,
 } from '~/services/characterEvents/activityOutcomeResolver';
 import { resolveDialogueContent } from '~/services/dialogueContentResolver';
+import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
 
 interface TownActivityCoordinatorOptions {
   activityManager: JoinableActivityManager;
@@ -47,6 +48,11 @@ interface TownActivityCoordinatorOptions {
   notifyActivitiesChanged: () => void;
 }
 
+interface ObservedActivitySession {
+  activity: JoinableActivity;
+  pendingResolutionBranch?: CharacterEventActivityRollBranch;
+}
+
 const DEFAULT_ACTIVITY_RESPONSE_DELAY_MS = 1200;
 const DEFAULT_ACTIVITY_END_DURATION_MS = 1000;
 
@@ -63,6 +69,11 @@ export class TownActivityCoordinator {
     Readonly<Record<string, string>>
   >();
   private readonly selectedDialogueSubjectIdByActivityId = new Map<string, string>();
+  private readonly timeoutSchedulersByActivityId = new Map<string, PausableTimeoutScheduler>();
+  private readonly observedActivitySessionsByActivityId = new Map<
+    string,
+    ObservedActivitySession
+  >();
   private readonly activityManager: JoinableActivityManager;
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
@@ -79,6 +90,8 @@ export class TownActivityCoordinator {
     input: ResolveActivityOutcomeInput,
   ) => ResolvedActivityOutcome;
   private readonly notifyActivitiesChanged: () => void;
+  private observedActivityId: string | null = null;
+  private isWorldPaused = false;
 
   constructor(options: TownActivityCoordinatorOptions) {
     this.activityManager = options.activityManager;
@@ -95,6 +108,32 @@ export class TownActivityCoordinator {
     this.showCharacterBubble = options.showCharacterBubble;
     this.resolveActivityOutcome = options.resolveActivityOutcome;
     this.notifyActivitiesChanged = options.notifyActivitiesChanged;
+  }
+
+  pauseWorld(observedActivityId: string | null): void {
+    this.isWorldPaused = true;
+    this.observedActivityId = observedActivityId;
+    this.timeoutSchedulersByActivityId.forEach((scheduler, activityId) => {
+      if (activityId !== observedActivityId) {
+        scheduler.pause();
+      }
+    });
+  }
+
+  resumeWorld(): void {
+    if (!this.isWorldPaused) {
+      return;
+    }
+
+    this.isWorldPaused = false;
+    this.observedActivityId = null;
+    this.timeoutSchedulersByActivityId.forEach(scheduler => scheduler.resume());
+  }
+
+  dispose(): void {
+    this.timeoutSchedulersByActivityId.forEach(scheduler => scheduler.clear());
+    this.timeoutSchedulersByActivityId.clear();
+    this.observedActivitySessionsByActivityId.clear();
   }
 
   handleCurrentActivity(characterId: string, snapshot: CharacterSnapshot): void {
@@ -321,6 +360,8 @@ export class TownActivityCoordinator {
       this.rollSelectionsByActivityId.clear();
       this.dialogueSubjectIdsByActivityId.clear();
       this.selectedDialogueSubjectIdByActivityId.clear();
+      this.observedActivitySessionsByActivityId.clear();
+      this.dispose();
       return;
     }
 
@@ -339,6 +380,8 @@ export class TownActivityCoordinator {
     this.rollSelectionsByActivityId.clear();
     this.dialogueSubjectIdsByActivityId.clear();
     this.selectedDialogueSubjectIdByActivityId.clear();
+    this.observedActivitySessionsByActivityId.clear();
+    this.dispose();
     this.notifyActivitiesChanged();
   }
 
@@ -511,6 +554,17 @@ export class TownActivityCoordinator {
     });
 
     if (roll.resolvesActivity) {
+      const observedActivitySession = this.observedActivitySessionsByActivityId.get(activity.id);
+
+      if (observedActivitySession) {
+        this.observedActivitySessionsByActivityId.set(activity.id, {
+          ...observedActivitySession,
+          activity,
+          pendingResolutionBranch: selectedBranch,
+        });
+        return selectedBranch.id;
+      }
+
       this.resolveActivityFromRoll(activity, selectedBranch);
       return selectedBranch.id;
     }
@@ -552,11 +606,25 @@ export class TownActivityCoordinator {
       return null;
     }
 
-    this.activityManager.pauseActivity(activity.id, Date.now());
-    this.performanceRunner.cancelActivityPerformance(activity.id);
+    const pausedActivity = this.activityManager.pauseActivity(activity.id, Date.now());
+
+    if (!pausedActivity || pausedActivity.pausedAt === undefined) {
+      return null;
+    }
+
+    this.observedActivitySessionsByActivityId.set(activity.id, {
+      activity: pausedActivity,
+    });
+    this.performanceRunner.clearActivityPresentationForObservation(
+      this.getActivityPerformanceSelection(activity),
+      activity.id,
+      activity.participantIds,
+      activity.hostCharacterIds,
+    );
     this.notifyActivitiesChanged();
 
     return {
+      activityId: activity.id,
       scriptId: dialogueScriptId,
       participantIds: [...activity.participantIds],
       initiatorId,
@@ -604,7 +672,10 @@ export class TownActivityCoordinator {
         }];
       },
       onClose: () => {
-        this.resumeActivityAfterDialogue(activity.id);
+        this.settleObservedActivityAfterDialogue(activity.id);
+      },
+      onCancel: () => {
+        this.resumeActivityAfterObservationCancel(activity.id);
       },
     };
   }
@@ -692,7 +763,8 @@ export class TownActivityCoordinator {
     });
   }
 
-  private resumeActivityAfterDialogue(activityId: string): void {
+  private resumeActivityAfterObservationCancel(activityId: string): void {
+    this.observedActivitySessionsByActivityId.delete(activityId);
     const activity = this.activityManager.getActivity(activityId);
 
     if (
@@ -703,13 +775,35 @@ export class TownActivityCoordinator {
       return;
     }
 
-    const resumedActivity = this.activityManager.resumeActivity(activity.id, Date.now());
-
-    if (!resumedActivity) {
+    if (!this.activityManager.resumeActivity(activity.id, Date.now())) {
       return;
     }
 
-    this.playActivityPerformance(resumedActivity);
+    this.notifyActivitiesChanged();
+  }
+
+  private settleObservedActivityAfterDialogue(activityId: string): void {
+    const observedActivitySession = this.observedActivitySessionsByActivityId.get(activityId);
+
+    if (!observedActivitySession) {
+      return;
+    }
+
+    this.observedActivitySessionsByActivityId.delete(activityId);
+    const activity = this.activityManager.getActivity(activityId)
+      ?? observedActivitySession.activity;
+
+    if (observedActivitySession.pendingResolutionBranch) {
+      this.resolveActivityFromRoll(
+        activity,
+        observedActivitySession.pendingResolutionBranch,
+      );
+      return;
+    }
+
+    const endedActivity = this.activityManager.endActivity(activityId) ?? activity;
+
+    this.playActivityEndPerformance(endedActivity, Date.now());
     this.notifyActivitiesChanged();
   }
 
@@ -787,7 +881,7 @@ export class TownActivityCoordinator {
         participantIds: activity.participantIds,
         hostCharacterIds: activity.hostCharacterIds,
       });
-      window.setTimeout(() => {
+      this.scheduleActivityTimeout(activity.id, () => {
         const endedActivity = this.activityManager.endActivity(activity.id);
 
         if (endedActivity) {
@@ -832,7 +926,7 @@ export class TownActivityCoordinator {
       });
     }
 
-    window.setTimeout(() => {
+    this.scheduleActivityTimeout(acceptedActivity.id, () => {
       const nextPhase = getPostInviteActivityPhase(activityDefinition);
       const activeActivity = this.activityManager.updateActivityPhase(
         acceptedActivity.id,
@@ -1052,8 +1146,13 @@ export class TownActivityCoordinator {
     const cleanupDelayMs = durationMs || DEFAULT_ACTIVITY_END_DURATION_MS;
 
     this.notifyActivitiesChanged();
-    window.setTimeout(() => {
-      this.clearActivityVisuals(activity);
+    this.scheduleActivityTimeout(activity.id, () => {
+      this.performanceRunner.clearActivitySettlementVisuals(
+        this.getActivityPerformanceSelection(activity),
+        activity.id,
+        activity.participantIds,
+        activity.hostCharacterIds,
+      );
       this.resolveActivityOutcome({
         activityId: activity.id,
         participantIds: activity.participantIds,
@@ -1156,7 +1255,7 @@ export class TownActivityCoordinator {
     const activityEffects = this.getActivityEffects(activity);
     const activityEffectsByRole = this.getActivityEffectsByRole(activity);
 
-    window.setTimeout(() => {
+    this.scheduleActivityTimeout(activity.id, () => {
       this.clearActivityVisuals(activity);
       this.resolveActivityOutcome({
         activityId: activity.id,
@@ -1198,10 +1297,14 @@ export class TownActivityCoordinator {
       return;
     }
 
-    window.setTimeout(() => {
+    this.scheduleActivityTimeout(activity.id, () => {
       const currentActivity = this.activityManager.getActivity(activity.id);
 
-      if (!currentActivity || currentActivity.phase !== 'active') {
+      if (
+        !currentActivity
+        || currentActivity.phase !== 'active'
+        || currentActivity.pausedAt !== undefined
+      ) {
         return;
       }
 
@@ -1218,6 +1321,39 @@ export class TownActivityCoordinator {
 
       this.playActivityPerformance(currentActivity);
     }, 5000);
+  }
+
+  private scheduleActivityTimeout(
+    activityId: string,
+    callback: () => void,
+    delayMs: number,
+  ): void {
+    const scheduler = this.getActivityTimeoutScheduler(activityId);
+
+    scheduler.schedule(() => {
+      callback();
+
+      if (!scheduler.hasScheduledTimeouts()) {
+        this.timeoutSchedulersByActivityId.delete(activityId);
+      }
+    }, delayMs);
+  }
+
+  private getActivityTimeoutScheduler(activityId: string): PausableTimeoutScheduler {
+    const existingScheduler = this.timeoutSchedulersByActivityId.get(activityId);
+
+    if (existingScheduler) {
+      return existingScheduler;
+    }
+
+    const scheduler = new PausableTimeoutScheduler();
+
+    if (this.isWorldPaused && activityId !== this.observedActivityId) {
+      scheduler.pause();
+    }
+
+    this.timeoutSchedulersByActivityId.set(activityId, scheduler);
+    return scheduler;
   }
 
   private getActivityDefinition(activity: JoinableActivity): CharacterEventActivity | undefined {

@@ -7,6 +7,13 @@ import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument 
 // 放要存的資料
 export interface GameFlowContext {
   relationships: RelationshipStore;
+  activityObservation: GameActivityObservation | null;
+}
+
+export interface GameActivityObservation {
+  activityId: string;
+  isDialogueClosed: boolean;
+  isActivitySettled: boolean;
 }
 
 // 遊戲中需讀取的必要資料

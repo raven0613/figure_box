@@ -14,6 +14,7 @@ import type { MapActivityView } from '~/typing/eventDialoguePresentation';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { DialogueViewInstruction } from '~/typing/dialogueView';
 import type { ExpressionPresetId } from '~/typing/expression';
+import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
 
 export interface CharacterPerformanceSelection {
   definitionId?: string;
@@ -61,6 +62,7 @@ interface CharacterPerformanceByIdInput {
 }
 
 export interface CharacterPerformanceDialogueRequest {
+  activityId?: string;
   dialogueGroupId?: string;
   scriptId?: string;
   displayMode?: CharacterPerformanceDialogueStep['displayMode'];
@@ -74,6 +76,7 @@ export interface CharacterPerformanceDialogueRequest {
     subjectKey: string,
   ) => readonly DialogueViewInstruction[] | null;
   onClose?: () => void;
+  onCancel?: () => void;
 }
 
 interface CharacterPerformanceRunnerPorts {
@@ -82,6 +85,7 @@ interface CharacterPerformanceRunnerPorts {
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   removeCharacterBubble: (characterId: string) => void;
   showCharacterEmote: (characterId: string, text: string, durationMs?: number) => void;
+  removeCharacterEmote: (characterId: string) => void;
   showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   removeMapActivity: (activityId: string) => void;
   playCharacterAnimation?: (
@@ -89,28 +93,57 @@ interface CharacterPerformanceRunnerPorts {
     animationId: CharacterPerformanceAnimationId,
     durationMs?: number,
   ) => void;
+  cancelCharacterAnimation?: (characterId: string) => void;
   playDialogue?: (request: CharacterPerformanceDialogueRequest) => void;
   rollActivity?: (request: CharacterPerformanceActivityRollRequest) => void;
+}
+
+interface ExpressionResetTimer {
+  scheduler: PausableTimeoutScheduler;
+  timerId: number;
 }
 
 const PARTICIPANT_LEFT_REACTION_MS = 5000;
 
 export class CharacterPerformanceRunner {
-  private readonly timers = new Set<number>();
-  private readonly activityTimersByActivityId = new Map<string, Set<number>>();
-  private readonly expressionResetTimersByCharacterId = new Map<string, number>();
+  private readonly generalScheduler = new PausableTimeoutScheduler();
+  private readonly activitySchedulersByActivityId = new Map<string, PausableTimeoutScheduler>();
+  private readonly expressionResetTimersByCharacterId = new Map<string, ExpressionResetTimer>();
   private readonly ports: CharacterPerformanceRunnerPorts;
+  private observedActivityId: string | null = null;
+  private isWorldPaused = false;
 
   constructor(ports: CharacterPerformanceRunnerPorts) {
     this.ports = ports;
   }
 
   dispose(): void {
-    this.timers.forEach(timerId => window.clearTimeout(timerId));
-    this.timers.clear();
-    this.activityTimersByActivityId.clear();
-    this.expressionResetTimersByCharacterId.forEach(timerId => window.clearTimeout(timerId));
+    this.generalScheduler.clear();
+    this.activitySchedulersByActivityId.forEach(scheduler => scheduler.clear());
+    this.activitySchedulersByActivityId.clear();
     this.expressionResetTimersByCharacterId.clear();
+  }
+
+  pauseWorld(observedActivityId: string | null): void {
+    this.isWorldPaused = true;
+    this.observedActivityId = observedActivityId;
+    this.generalScheduler.pause();
+    this.activitySchedulersByActivityId.forEach((scheduler, activityId) => {
+      if (activityId !== observedActivityId) {
+        scheduler.pause();
+      }
+    });
+  }
+
+  resumeWorld(): void {
+    if (!this.isWorldPaused) {
+      return;
+    }
+
+    this.isWorldPaused = false;
+    this.observedActivityId = null;
+    this.generalScheduler.resume();
+    this.activitySchedulersByActivityId.forEach(scheduler => scheduler.resume());
   }
 
   getInteractionBubble(input: CharacterPerformanceBubbleInput): CharacterPerformanceBubble {
@@ -188,13 +221,42 @@ export class CharacterPerformanceRunner {
   }
 
   cancelActivityPerformance(activityId: string): void {
-    const timerIds = this.activityTimersByActivityId.get(activityId);
+    const scheduler = this.activitySchedulersByActivityId.get(activityId);
 
-    timerIds?.forEach(timerId => {
-      window.clearTimeout(timerId);
-      this.timers.delete(timerId);
+    if (!scheduler) {
+      return;
+    }
+
+    scheduler.clear();
+    this.activitySchedulersByActivityId.delete(activityId);
+    this.expressionResetTimersByCharacterId.forEach((expressionResetTimer, characterId) => {
+      if (expressionResetTimer.scheduler === scheduler) {
+        this.expressionResetTimersByCharacterId.delete(characterId);
+      }
     });
-    this.activityTimersByActivityId.delete(activityId);
+  }
+
+  clearActivityPresentationForObservation(
+    selection: CharacterPerformanceSelection,
+    activityId: string,
+    participantIds: readonly string[],
+    hostCharacterIds: readonly string[] = [],
+  ): void {
+    this.cancelActivityPerformance(activityId);
+    this.clearActivityVisuals(
+      selection,
+      activityId,
+      participantIds,
+      hostCharacterIds,
+    );
+
+    new Set([...participantIds, ...hostCharacterIds]).forEach(characterId => {
+      this.clearExpressionReset(characterId);
+      this.ports.removeCharacterBubble(characterId);
+      this.ports.removeCharacterEmote(characterId);
+      this.ports.cancelCharacterAnimation?.(characterId);
+      this.ports.setCharacterExpressionPreset(characterId, DEFAULT_EXPRESSION_PRESET_ID);
+    });
   }
 
   clearActivityActiveVisuals(
@@ -243,6 +305,25 @@ export class CharacterPerformanceRunner {
     this.clearParticipantLeftFallbackMapEffects(activityId, participantIds);
   }
 
+  clearActivitySettlementVisuals(
+    selection: CharacterPerformanceSelection,
+    activityId: string,
+    participantIds: readonly string[],
+    hostCharacterIds: readonly string[] = [],
+  ): void {
+    this.clearActivityVisuals(
+      selection,
+      activityId,
+      participantIds,
+      hostCharacterIds,
+    );
+
+    new Set([...participantIds, ...hostCharacterIds]).forEach(characterId => {
+      this.ports.removeCharacterEmote(characterId);
+      this.ports.cancelCharacterAnimation?.(characterId);
+    });
+  }
+
   clearInteractionActiveVisuals(
     selection: CharacterPerformanceSelection,
     initiatorId: string,
@@ -279,32 +360,18 @@ export class CharacterPerformanceRunner {
     initiatorId: string,
     targetId: string,
   ): void {
-    const runStep = () => {
-      this.timers.delete(timerId);
+    this.generalScheduler.schedule(() => {
       this.playPerformanceStep(step, initiatorId, targetId);
-    };
-    const timerId = window.setTimeout(runStep, step.delayMs ?? 0);
-    this.timers.add(timerId);
+    }, step.delayMs ?? 0);
   }
 
   private scheduleActivityPerformanceStep(
     step: CharacterPerformanceStep,
     input: CharacterActivityPerformanceInput,
   ): void {
-    const runStep = () => {
-      this.timers.delete(timerId);
-      this.removeActivityTimer(input.activityId, timerId);
+    this.getActivityScheduler(input.activityId).schedule(() => {
       this.playActivityPerformanceStep(step, input);
-    };
-    const timerId = window.setTimeout(runStep, step.delayMs ?? 0);
-    this.timers.add(timerId);
-    this.activityTimersByActivityId.set(
-      input.activityId,
-      new Set([
-        ...(this.activityTimersByActivityId.get(input.activityId) ?? []),
-        timerId,
-      ]),
-    );
+    }, step.delayMs ?? 0);
   }
 
   private playPerformanceStep(
@@ -345,7 +412,7 @@ export class CharacterPerformanceRunner {
         this.ports.setCharacterExpressionPreset(characterId, step.expressionPresetId);
 
         if (step.durationMs !== undefined) {
-          this.scheduleExpressionReset(characterId, step.durationMs);
+          this.scheduleExpressionReset(characterId, step.durationMs, this.generalScheduler);
         }
       });
       return;
@@ -445,7 +512,11 @@ export class CharacterPerformanceRunner {
         this.ports.setCharacterExpressionPreset(characterId, step.expressionPresetId);
 
         if (step.durationMs !== undefined) {
-          this.scheduleExpressionReset(characterId, step.durationMs);
+          this.scheduleExpressionReset(
+            characterId,
+            step.durationMs,
+            this.getActivityScheduler(input.activityId),
+          );
         }
       });
       return;
@@ -525,17 +596,22 @@ export class CharacterPerformanceRunner {
     }
   }
 
-  private scheduleExpressionReset(characterId: string, durationMs: number): void {
+  private scheduleExpressionReset(
+    characterId: string,
+    durationMs: number,
+    scheduler: PausableTimeoutScheduler,
+  ): void {
     this.clearExpressionReset(characterId);
 
-    const timerId = window.setTimeout(() => {
-      this.timers.delete(timerId);
+    const timerId = scheduler.schedule(() => {
       this.expressionResetTimersByCharacterId.delete(characterId);
       this.ports.setCharacterExpressionPreset(characterId, DEFAULT_EXPRESSION_PRESET_ID);
     }, durationMs);
 
-    this.timers.add(timerId);
-    this.expressionResetTimersByCharacterId.set(characterId, timerId);
+    this.expressionResetTimersByCharacterId.set(characterId, {
+      scheduler,
+      timerId,
+    });
   }
 
   private playFallbackParticipantLeftGroupPerformance(input: CharacterActivityPerformanceInput): void {
@@ -543,7 +619,11 @@ export class CharacterPerformanceRunner {
       this.clearExpressionReset(characterId);
       this.ports.setCharacterExpressionPreset(characterId, 'surprised');
       this.ports.showCharacterEmote(characterId, getEmoteLabel('surprised'), PARTICIPANT_LEFT_REACTION_MS);
-      this.scheduleExpressionReset(characterId, PARTICIPANT_LEFT_REACTION_MS);
+      this.scheduleExpressionReset(
+        characterId,
+        PARTICIPANT_LEFT_REACTION_MS,
+        this.getActivityScheduler(input.activityId),
+      );
     });
 
     input.participantIds.forEach(characterId => {
@@ -602,29 +682,31 @@ export class CharacterPerformanceRunner {
   }
 
   private clearExpressionReset(characterId: string): void {
-    const timerId = this.expressionResetTimersByCharacterId.get(characterId);
+    const expressionResetTimer = this.expressionResetTimersByCharacterId.get(characterId);
 
-    if (!timerId) {
+    if (!expressionResetTimer) {
       return;
     }
 
-    window.clearTimeout(timerId);
+    expressionResetTimer.scheduler.cancel(expressionResetTimer.timerId);
     this.expressionResetTimersByCharacterId.delete(characterId);
-    this.timers.delete(timerId);
   }
 
-  private removeActivityTimer(activityId: string, timerId: number): void {
-    const timerIds = this.activityTimersByActivityId.get(activityId);
+  private getActivityScheduler(activityId: string): PausableTimeoutScheduler {
+    const existingScheduler = this.activitySchedulersByActivityId.get(activityId);
 
-    if (!timerIds) {
-      return;
+    if (existingScheduler) {
+      return existingScheduler;
     }
 
-    timerIds.delete(timerId);
+    const scheduler = new PausableTimeoutScheduler();
 
-    if (timerIds.size === 0) {
-      this.activityTimersByActivityId.delete(activityId);
+    if (this.isWorldPaused && activityId !== this.observedActivityId) {
+      scheduler.pause();
     }
+
+    this.activitySchedulersByActivityId.set(activityId, scheduler);
+    return scheduler;
   }
 
   private getActivityPerformanceTemplateValues(
