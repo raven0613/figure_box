@@ -26,7 +26,10 @@ import {
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDefinitions';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
-import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
+import {
+  FabricTownMapWidget,
+  type TownMapCameraView,
+} from '~/widgets/fabricTownMapWidget';
 import { CHARACTER_SEEDS, ExpressionPresetId, MemoryType, SocialStatus } from '~/constants/character';
 import { loadTownCharacterSpriteSet } from '~/services/townSpritePreloadService';
 import {
@@ -73,6 +76,8 @@ const PLAYER_DEMO_ITEM_IDS: readonly ItemDefinitionId[] = [
 ];
 const GIFT_DROP_CHARACTER_RADIUS = 1;
 const ALLOW_DIAGONAL_MOVEMENT = false; // 斜走
+const ACTIVITY_OBSERVATION_CAMERA_ZOOM = 3;
+const ACTIVITY_OBSERVATION_CAMERA_TRANSITION_MS = 600;
 
 interface TownMapContainerProps {
   simWorldState?: GameSimWorldState;
@@ -176,6 +181,9 @@ export function TownMapContainer({
   );
   const placementDraftRef = useRef<ItemInstance | null>(null);
   const pickupChainRef = useRef<PickupChainState | null>(null);
+  const activityObservationCameraViewRef = useRef<TownMapCameraView | null>(null);
+  const focusedActivityObservationIdRef = useRef<string | null>(null);
+  const isCameraRestoreTransitionActiveRef = useRef(false);
   const lastAppliedRomanceRuleRevisionRef = useRef(romanceRuleRevision);
   const requestListItems = useMemo(
     () => getRequestListItems({
@@ -674,6 +682,61 @@ export function TownMapContainer({
   useEffect(() => {
     characterControllerRef.current?.setSimWorldState(simWorldState, observedActivityId);
   }, [observedActivityId, simWorldState]);
+
+  useEffect(() => {
+    const widget = widgetRef.current;
+
+    if (!widget) {
+      return;
+    }
+
+    if (observedActivityId) {
+      isCameraRestoreTransitionActiveRef.current = false;
+      activityObservationCameraViewRef.current ??= widget.captureCameraView();
+      widget.setCameraInteractionLocked(true);
+      const observedActivity = joinableActivities.find(
+        activity => activity.id === observedActivityId,
+      );
+
+      if (
+        observedActivity
+        && focusedActivityObservationIdRef.current !== observedActivityId
+      ) {
+        widget.focusCameraOnCharacters(
+          observedActivity.participantIds,
+          ACTIVITY_OBSERVATION_CAMERA_ZOOM,
+          {
+            durationMs: ACTIVITY_OBSERVATION_CAMERA_TRANSITION_MS,
+          },
+        );
+        focusedActivityObservationIdRef.current = observedActivityId;
+      }
+
+      return;
+    }
+
+    const previousCameraView = activityObservationCameraViewRef.current;
+
+    if (previousCameraView) {
+      activityObservationCameraViewRef.current = null;
+      focusedActivityObservationIdRef.current = null;
+      isCameraRestoreTransitionActiveRef.current = true;
+      widget.restoreCameraView(previousCameraView, {
+        durationMs: ACTIVITY_OBSERVATION_CAMERA_TRANSITION_MS,
+        onComplete: () => {
+          isCameraRestoreTransitionActiveRef.current = false;
+          widget.setCameraInteractionLocked(false);
+        },
+      });
+      return;
+    }
+
+    if (isCameraRestoreTransitionActiveRef.current) {
+      return;
+    }
+
+    widget.setCameraInteractionLocked(false);
+  }, [joinableActivities, observedActivityId]);
 
   useEffect(() => {
     Object.entries(expressionPresetIdByCharacterId).forEach(([characterId, expressionPresetId]) => {

@@ -1,6 +1,10 @@
 import { Canvas, type Group } from 'fabric';
 import { TownMapGrid, type GridCoordinate, type TownMapTile } from './townMapGrid';
-import { TownMapCamera } from './townMapCamera';
+import {
+  TownMapCamera,
+  type TownMapCameraTransitionOptions,
+  type TownMapCameraView,
+} from './townMapCamera';
 import { TownMapCharacterTracker } from './townMapCharacterTracker';
 import { TownMapCharacterLayer } from './townMapCharacterLayer';
 import { TownMapFloatingTextLayer } from './townMapFloatingTextLayer';
@@ -40,6 +44,7 @@ export type {
   FabricTownMapOptions,
   TownMapCharacter,
 } from './townMapWidgetTypes';
+export type { TownMapCameraView } from './townMapCamera';
 
 interface MoveCharacterToTileResult {
   moved: boolean;
@@ -345,6 +350,49 @@ export class FabricTownMapWidget {
 
   getZoom(): number {
     return this.camera.getZoom();
+  }
+
+  captureCameraView(): TownMapCameraView {
+    return this.camera.captureView();
+  }
+
+  restoreCameraView(
+    view: TownMapCameraView,
+    transition?: TownMapCameraTransitionOptions,
+  ): void {
+    this.camera.restoreView(view, transition);
+  }
+
+  focusCameraOnCharacters(
+    characterIds: readonly string[],
+    zoom: number,
+    transition?: TownMapCameraTransitionOptions,
+  ): boolean {
+    const characterCenters = characterIds
+      .map(characterId => this.getCharacterCenter(characterId))
+      .filter((center): center is GridCoordinate => center !== null);
+
+    if (characterCenters.length === 0) {
+      return false;
+    }
+
+    const center = characterCenters.reduce<GridCoordinate>(
+      (sum, characterCenter) => ({
+        x: sum.x + characterCenter.x,
+        y: sum.y + characterCenter.y,
+      }),
+      { x: 0, y: 0 },
+    );
+
+    this.camera.focusOn({
+      x: center.x / characterCenters.length,
+      y: center.y / characterCenters.length,
+    }, zoom, transition);
+    return true;
+  }
+
+  setCameraInteractionLocked(isLocked: boolean): void {
+    this.camera.setInteractionLocked(isLocked);
   }
 
   getCharacterTile(characterId: string): GridCoordinate | null {

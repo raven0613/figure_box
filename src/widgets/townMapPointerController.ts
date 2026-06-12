@@ -114,7 +114,10 @@ export class TownMapPointerController {
       return;
     }
 
-    if (this.characterTracker.handlePointerTarget(event.target)) {
+    if (
+      !this.camera.getInteractionLocked()
+      && this.characterTracker.handlePointerTarget(event.target)
+    ) {
       this.pendingTileClick = null;
       return;
     }
