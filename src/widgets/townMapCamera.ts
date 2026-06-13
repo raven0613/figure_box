@@ -25,6 +25,15 @@ export interface TownMapCameraPoint {
   y: number;
 }
 
+export interface TownMapCameraView {
+  viewport: ViewportTransform;
+}
+
+export interface TownMapCameraTransitionOptions {
+  durationMs: number;
+  onComplete?: () => void;
+}
+
 interface PinchGestureState {
   startCenter: PointerPosition;
   startDistance: number;
@@ -57,6 +66,8 @@ export class TownMapCamera {
   private viewportStart: ViewportTransform | null = null;
   private hasPannedSincePointerDown = false;
   private pinchGesture: PinchGestureState | null = null;
+  private isInteractionLocked = false;
+  private transitionAnimationFrameId: number | null = null;
 
   constructor(options: TownMapCameraOptions) {
     this.canvas = options.canvas;
@@ -78,7 +89,55 @@ export class TownMapCamera {
     return this.zoom;
   }
 
+  captureView(): TownMapCameraView {
+    return {
+      viewport: this.getViewportTransform(),
+    };
+  }
+
+  restoreView(
+    view: TownMapCameraView,
+    transition?: TownMapCameraTransitionOptions,
+  ): void {
+    this.applyTargetViewport(this.clampViewport(view.viewport), transition);
+  }
+
+  focusOn(
+    point: TownMapCameraPoint,
+    zoom: number,
+    transition?: TownMapCameraTransitionOptions,
+  ): void {
+    const nextZoom = this.clampZoom(zoom);
+
+    this.applyTargetViewport(this.clampViewport([
+      nextZoom,
+      0,
+      0,
+      nextZoom,
+      this.viewportWidth / 2 - point.x * nextZoom,
+      this.viewportHeight / 2 - point.y * nextZoom,
+    ]), transition);
+  }
+
+  setInteractionLocked(isLocked: boolean): void {
+    this.isInteractionLocked = isLocked;
+
+    if (isLocked) {
+      this.endPan();
+      this.pinchGesture = null;
+    }
+  }
+
+  getInteractionLocked(): boolean {
+    return this.isInteractionLocked;
+  }
+
   centerOn(point: TownMapCameraPoint): void {
+    if (this.isInteractionLocked) {
+      return;
+    }
+
+    this.cancelTransition();
     this.applyViewport(this.clampViewport([
       this.zoom,
       0,
@@ -105,6 +164,10 @@ export class TownMapCamera {
       return false;
     }
 
+    if (this.isInteractionLocked) {
+      return true;
+    }
+
     const nextZoom = action === 'zoom-in'
       ? Math.min(this.maxZoom, Math.floor(this.zoom) + 1)
       : Math.max(this.minZoom, Math.ceil(this.zoom) - 1);
@@ -117,13 +180,17 @@ export class TownMapCamera {
     event.preventDefault();
     event.stopPropagation();
 
+    if (this.isInteractionLocked) {
+      return;
+    }
+
     const nextZoom = this.clampZoom(this.zoom * (1 - event.deltaY * WHEEL_ZOOM_FACTOR));
     const pointer = this.getViewportPointer(event);
     this.zoomToPoint(pointer, nextZoom);
   }
 
   startPan(event: MouseEvent | TouchEvent | PointerEvent, target: unknown): boolean {
-    if (this.zoom <= this.minZoom || target) {
+    if (this.isInteractionLocked || this.zoom <= this.minZoom || target) {
       return false;
     }
 
@@ -135,7 +202,7 @@ export class TownMapCamera {
   }
 
   pan(event: MouseEvent | TouchEvent | PointerEvent): boolean {
-    if (!this.panStart || !this.viewportStart) {
+    if (this.isInteractionLocked || !this.panStart || !this.viewportStart) {
       return false;
     }
 
@@ -170,6 +237,7 @@ export class TownMapCamera {
   }
 
   dispose(): void {
+    this.cancelTransition();
     this.canvas.upperCanvasEl.removeEventListener('touchstart', this.handleTouchStart);
     this.canvas.upperCanvasEl.removeEventListener('touchmove', this.handleTouchMove);
     this.canvas.upperCanvasEl.removeEventListener('touchend', this.handleTouchEnd);
@@ -184,7 +252,7 @@ export class TownMapCamera {
   }
 
   private handleTouchStart = (event: TouchEvent): void => {
-    if (event.touches.length !== 2) {
+    if (this.isInteractionLocked || event.touches.length !== 2) {
       return;
     }
 
@@ -205,7 +273,7 @@ export class TownMapCamera {
   };
 
   private handleTouchMove = (event: TouchEvent): void => {
-    if (event.touches.length !== 2 || !this.pinchGesture) {
+    if (this.isInteractionLocked || event.touches.length !== 2 || !this.pinchGesture) {
       return;
     }
 
@@ -252,6 +320,7 @@ export class TownMapCamera {
   }
 
   private zoomToPoint(point: PointerPosition, nextZoom: number): void {
+    this.cancelTransition();
     const clampedZoom = this.clampZoom(nextZoom);
     const viewport = this.getViewportTransform();
     const sceneX = (point.x - viewport[4]) / this.zoom;
@@ -267,6 +336,58 @@ export class TownMapCamera {
 
     this.zoom = clampedZoom;
     this.applyViewport(nextViewport);
+  }
+
+  private applyTargetViewport(
+    targetViewport: ViewportTransform,
+    transition?: TownMapCameraTransitionOptions,
+  ): void {
+    this.cancelTransition();
+
+    if (!transition || transition.durationMs <= 0) {
+      this.zoom = targetViewport[0];
+      this.applyViewport(targetViewport);
+      transition?.onComplete?.();
+      return;
+    }
+
+    const startViewport = this.getViewportTransform();
+    const startedAt = performance.now();
+    const animate = (timestamp: number): void => {
+      const progress = Math.min(1, Math.max(0, (timestamp - startedAt) / transition.durationMs));
+      const easedProgress = easeInOutCubic(progress);
+      const zoom = interpolate(startViewport[0], targetViewport[0], easedProgress);
+      const viewport = this.clampViewport([
+        zoom,
+        0,
+        0,
+        zoom,
+        interpolate(startViewport[4], targetViewport[4], easedProgress),
+        interpolate(startViewport[5], targetViewport[5], easedProgress),
+      ]);
+
+      this.zoom = viewport[0];
+      this.applyViewport(viewport);
+
+      if (progress < 1) {
+        this.transitionAnimationFrameId = window.requestAnimationFrame(animate);
+        return;
+      }
+
+      this.transitionAnimationFrameId = null;
+      transition.onComplete?.();
+    };
+
+    this.transitionAnimationFrameId = window.requestAnimationFrame(animate);
+  }
+
+  private cancelTransition(): void {
+    if (this.transitionAnimationFrameId === null) {
+      return;
+    }
+
+    window.cancelAnimationFrame(this.transitionAnimationFrameId);
+    this.transitionAnimationFrameId = null;
   }
 
   private applyViewport(viewport: ViewportTransform): void {
@@ -439,4 +560,14 @@ export class TownMapCamera {
   private clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
   }
+}
+
+function interpolate(start: number, end: number, progress: number): number {
+  return start + (end - start) * progress;
+}
+
+function easeInOutCubic(progress: number): number {
+  return progress < 0.5
+    ? 4 * progress * progress * progress
+    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 }

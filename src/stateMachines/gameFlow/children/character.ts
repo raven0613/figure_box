@@ -1,9 +1,9 @@
 import { assign, createMachine, enqueueActions, StateValue } from 'xstate';
 import {
     clampMoodValue,
-    Expression,
     getMoodForMoodValue,
 } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import {
     CharacterBodyActionState,
     CharacterBodyMoveState,
@@ -24,6 +24,7 @@ import {
     changeRelationshipIntimacy,
     decreaseRelationshipIntimacyToFeelingMin,
     normalizeRomanticRelationshipFeelings,
+    rememberRelationshipMemory,
     rememberPassBy,
 } from '../relationships';
 import { decideCharacterEvent } from '~/services/characterEvents/decision';
@@ -74,7 +75,7 @@ export const characterMachine = createMachine(
             ownItems: [...(input.ownItems ?? [])],
             status: input.runtime?.status ?? {
                 mood: getMoodForMoodValue(65),
-                expression: Expression.Normal,
+                expressionPresetId: DEFAULT_EXPRESSION_PRESET_ID,
                 saturation: input.saturation ?? 70,
                 moodValue: 65,
                 playNeed: 35,
@@ -106,12 +107,15 @@ export const characterMachine = createMachine(
         type: 'parallel',
         on: {
             [EventType.Tick]: {
-                guard: 'canReceiveLogicCommand',
+                guard: 'canReceiveTick',
                 actions: ['tickStatus', 'clearIdleTarget', 'updateUtilityScores', 'decideAndRaiseEvent'],
             },
             [EventType.PassBy]: {
                 guard: 'canReceiveLogicCommand',
                 actions: 'rememberPassBy',
+            },
+            [EventType.RememberRelationshipMemory]: {
+                actions: 'rememberRelationshipMemory',
             },
             [EventType.NormalizeRomanceFeelings]: {
                 actions: 'normalizeRomanceFeelings',
@@ -232,7 +236,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setActivityMotivation', 'acceptActivityJoin'],
+                    actions: ['setActivityMotivation', 'acceptActivityJoin', 'clearTarget'],
                 },
                 {
                     guard: 'shouldAcceptActivityJoin',
@@ -242,7 +246,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setActivityMotivation', 'acceptActivityJoin'],
+                    actions: ['setActivityMotivation', 'acceptActivityJoin', 'clearTarget'],
                 },
             ],
             [EventType.JoinActivityRejected]: {
@@ -386,8 +390,8 @@ export const characterMachine = createMachine(
                 guard: 'canReceiveLogicCommand',
                 target: '.mind.null',
             },
-            [EventType.SetExpression]: {
-                actions: 'setExpression',
+            [EventType.SetExpressionPreset]: {
+                actions: 'setExpressionPreset',
             },
             [EventType.HoldItem]: {
                 actions: 'setHeldItem',
@@ -453,22 +457,23 @@ export const characterMachine = createMachine(
     {
         guards: {
             canReceiveLogicCommand: ({ context }) => canReceiveNormalLogicCommand(context),
+            canReceiveTick: ({ context }) => canReceiveNormalLogicCommand(context),
             shouldChangeToFindFood: ({ context }) => (
-                canReceiveNormalLogicCommand(context) &&
+                canReceiveActivityIdleLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
                 (context.currentMotivation !== 'findFood' || context.target === null)
             ),
             shouldChangeToRest: ({ context }) => (
-                canReceiveNormalLogicCommand(context) &&
+                canReceiveActivityIdleLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'rest'
             ),
             shouldChangeToPlay: ({ context }) => (
-                canReceiveNormalLogicCommand(context) &&
+                canReceiveActivityIdleLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
                 (context.currentMotivation !== 'play' || context.target === null)
             ),
             shouldGoHome: ({ context }) => (
-                canReceiveNormalLogicCommand(context) &&
+                canReceiveActivityIdleLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
                 context.presence.kind === 'positioned'
             ),
@@ -499,12 +504,12 @@ export const characterMachine = createMachine(
             shouldAcceptActivityJoin: ({ context, event }) => (
                 canReceiveNormalLogicCommand(context) &&
                 event.type === EventType.JoinActivityAccepted &&
-                context.pendingActivityJoin?.activityId === event.activityId
+                canAcceptActivityJoin(context, event.activityId)
             ),
             shouldAcceptPlayWithItemActivityJoin: ({ context, event }) => (
                 event.type === EventType.JoinActivityAccepted &&
                 canReceiveNormalLogicCommand(context) &&
-                context.pendingActivityJoin?.activityId === event.activityId &&
+                canAcceptActivityJoin(context, event.activityId) &&
                 isPlayWithItemActivityEvent(context, event)
             ),
             shouldRejectActivityJoin: ({ context, event }) => (
@@ -520,7 +525,7 @@ export const characterMachine = createMachine(
                 )
             ),
             shouldChangeToIdle: ({ context }) => (
-                canReceiveNormalLogicCommand(context) &&
+                canReceiveActivityIdleLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'idle'
             ),
             shouldSetRequestFulfillmentControl: ({ event }) => (
@@ -550,12 +555,12 @@ export const characterMachine = createMachine(
                     event.type === EventType.SetControlState ? event.controlState : context.controlState
                 ),
             }),
-            setExpression: assign({
+            setExpressionPreset: assign({
                 status: ({ context, event }) => {
-                    if (event.type !== EventType.SetExpression) return context.status;
+                    if (event.type !== EventType.SetExpressionPreset) return context.status;
                     return {
                         ...context.status,
-                        expression: event.expression,
+                        expressionPresetId: event.expressionPresetId,
                     };
                 },
             }),
@@ -969,6 +974,21 @@ export const characterMachine = createMachine(
                         : context.relationships
                 ),
             }),
+            rememberRelationshipMemory: assign({
+                relationships: ({ context, event }) => (
+                    event.type === EventType.RememberRelationshipMemory
+                        ? rememberRelationshipMemory(
+                            context.relationships,
+                            context.id,
+                            event.targetCharId,
+                            event.memoryType,
+                            event.countDelta,
+                            event.startedById,
+                            event.timestamp ?? Date.now(),
+                        )
+                        : context.relationships
+                ),
+            }),
         },
     }
 );
@@ -1038,6 +1058,21 @@ function canStartOrJoinActivity(context: CharacterContext): boolean {
     );
 }
 
+function canAcceptActivityJoin(
+    context: CharacterContext,
+    activityId: string,
+): boolean {
+    if (context.pendingActivityJoin?.activityId === activityId) {
+        return true;
+    }
+
+    return (
+        context.pendingActivityJoin === null &&
+        context.currentActivity === null &&
+        context.currentMotivation !== 'controllingByGod'
+    );
+}
+
 function isPlayWithItemActivityEvent(context: CharacterContext, event: CharacterEvent): boolean {
     if (
         event.type !== EventType.StartActivity &&
@@ -1071,6 +1106,14 @@ function isLocked(context: CharacterContext, part: keyof CharacterContext['locks
 
 function canReceiveNormalLogicCommand(context: CharacterContext): boolean {
     return context.controlState === CharacterControlState.Normal;
+}
+
+function canReceiveActivityIdleLogicCommand(context: CharacterContext): boolean {
+    return (
+        canReceiveNormalLogicCommand(context) &&
+        context.currentActivity === null &&
+        context.pendingActivityJoin === null
+    );
 }
 
 function chooseRandomApartmentEntranceTile(): CharacterContext['position'] {

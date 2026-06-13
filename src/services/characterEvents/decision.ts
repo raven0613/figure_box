@@ -1,5 +1,9 @@
 import { EventType } from '~/stateMachines/gameFlow/events';
-import type { CharacterContext, CharacterEventBucketId } from '~/stateMachines/gameFlow/context';
+import type {
+  CharacterContext,
+  CharacterEventBucketId,
+  UtilityDrivenMotivation,
+} from '~/stateMachines/gameFlow/context';
 import { calculateCharacterUtilityScores } from './utility';
 import { collectCharacterEventCandidates } from './buckets';
 import type {
@@ -20,22 +24,39 @@ export function decideCharacterEvent(
 ): CharacterEventDecisionResult {
   const utilityScores = calculateCharacterUtilityScores(context);
   const candidates = collectCharacterEventCandidates(context, utilityScores, input);
-  const selectedCandidate = weightedDecisionSelector.select(
-    candidates.map(candidate => ({ item: candidate, weight: candidate.weight })),
-    input.random ?? Math.random,
+  const random = input.random ?? Math.random;
+  const candidateGroups = groupCandidatesByMotivation(candidates);
+  const selectedGroup = weightedDecisionSelector.select(
+    candidateGroups.map(group => ({
+      item: group,
+      weight: utilityScores[group.motivation],
+    })),
+    random,
   );
+  const selectedCandidate = selectedGroup
+    ? weightedDecisionSelector.select(
+      selectedGroup.candidates.map(candidate => ({
+        item: candidate,
+        weight: candidate.weight,
+      })),
+      random,
+    )
+    : null;
   const selectedPresentationVariant = selectedCandidate
-    ? selectPresentationVariant(context, utilityScores, input, selectedCandidate)
+    ? selectPresentationVariant(context, utilityScores, input, selectedCandidate, random)
     : null;
 
   return {
     event: selectedCandidate?.event ?? { type: EventType.GoIdle },
     utilityScores,
     decision: {
+      selectedMotivation: selectedGroup?.motivation ?? null,
       selectedCandidateId: selectedCandidate?.id ?? null,
       selectedBucketId: selectedCandidate?.bucketId ?? null,
       selectedPresentationVariantId: selectedPresentationVariant?.variant.id ?? null,
       selectedPresentationTags: [...(selectedPresentationVariant?.variant.presentationTags ?? [])],
+      motivationCount: candidateGroups.length,
+      selectedMotivationCandidateCount: selectedGroup?.candidates.length ?? 0,
       candidateCount: candidates.length,
       bucketIds: getCandidateBucketIds(candidates),
     },
@@ -47,6 +68,7 @@ function selectPresentationVariant(
   utilityScores: CharacterEventDecisionResult['utilityScores'],
   input: CharacterEventDecisionInput,
   selectedCandidate: CharacterEventCandidate,
+  random: () => number,
 ) {
   const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[selectedCandidate.id];
 
@@ -57,8 +79,31 @@ function selectPresentationVariant(
   return selectCharacterEventPresentationVariant(
     definition.presentationVariants,
     createCharacterEventRuleContext(context, utilityScores, input),
-    input.random ?? Math.random,
+    random,
   );
+}
+
+interface CharacterEventMotivationGroup {
+  motivation: UtilityDrivenMotivation;
+  candidates: CharacterEventCandidate[];
+}
+
+function groupCandidatesByMotivation(
+  candidates: readonly CharacterEventCandidate[],
+): CharacterEventMotivationGroup[] {
+  const candidatesByMotivation = candidates.reduce<
+    Map<UtilityDrivenMotivation, CharacterEventCandidate[]>
+  >((groups, candidate) => {
+    const groupCandidates = groups.get(candidate.motivation) ?? [];
+
+    groups.set(candidate.motivation, [...groupCandidates, candidate]);
+    return groups;
+  }, new Map());
+
+  return Array.from(candidatesByMotivation, ([motivation, groupCandidates]) => ({
+    motivation,
+    candidates: groupCandidates,
+  }));
 }
 
 function getCandidateBucketIds(candidates: CharacterEventCandidate[]): CharacterEventBucketId[] {

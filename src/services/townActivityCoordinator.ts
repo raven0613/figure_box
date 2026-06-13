@@ -2,22 +2,41 @@ import { Feeling, SocialStatus, type Position } from '~/constants/character';
 import {
   CHARACTER_EVENT_DEFINITIONS_BY_ID,
   type CharacterEventActivity,
+  type CharacterEventActivityRollBranch,
   type CharacterEventActivityEffects,
 } from '~/constants/charactarEventsDefinitions';
+import type { CharacterPersonality } from '~/constants/characterPersonality';
 import { resolveActivityDestination } from '~/services/characterEvents/targets';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
-import type { CharacterPerformanceRunner } from '~/services/characterEvents/characterPerformanceRunner';
+import type {
+  CharacterPerformanceActivityRollRequest,
+  CharacterPerformanceDialogueRequest,
+  CharacterPerformanceRunner,
+} from '~/services/characterEvents/characterPerformanceRunner';
+import {
+  selectActivityRollBranch,
+  type ActivityRollRuleContext,
+  type ActivityRollSelection,
+} from '~/services/characterEvents/activityRolls';
 import type {
   JoinableActivity,
   JoinableActivityManager,
 } from '~/services/characterEvents/joinableActivities';
+import type {
+  ResolveActivityOutcomeInput,
+  ResolvedActivityOutcome,
+} from '~/services/characterEvents/activityOutcomeResolver';
+import { resolveDialogueContent } from '~/services/dialogueContentResolver';
+import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
 
 interface TownActivityCoordinatorOptions {
   activityManager: JoinableActivityManager;
   performanceRunner: CharacterPerformanceRunner;
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
+  getCharacterName: (characterId: string) => string;
+  getCharacterPersonality: (characterId: string) => CharacterPersonality;
   getCharacterPosition: (characterId: string) => Position | null;
   getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
   getNearbyCharacterIds: (characterId: string, range: number) => string[];
@@ -25,7 +44,13 @@ interface TownActivityCoordinatorOptions {
   actorHasItem: (characterId: string, itemId: string) => boolean;
   sendToCharacter: SendCharacterEvent;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
+  resolveActivityOutcome: (input: ResolveActivityOutcomeInput) => ResolvedActivityOutcome;
   notifyActivitiesChanged: () => void;
+}
+
+interface ObservedActivitySession {
+  activity: JoinableActivity;
+  pendingResolutionBranch?: CharacterEventActivityRollBranch;
 }
 
 const DEFAULT_ACTIVITY_RESPONSE_DELAY_MS = 1200;
@@ -35,9 +60,25 @@ const DEFAULT_ACTIVITY_END_DURATION_MS = 1000;
 export class TownActivityCoordinator {
   private readonly arrivedCharacterIdsByActivityId = new Map<string, Set<string>>();
   private readonly endingActivityIds = new Set<string>();
+  private readonly rollSelectionsByActivityId = new Map<
+    string,
+    Readonly<Record<string, ActivityRollSelection>>
+  >();
+  private readonly dialogueSubjectIdsByActivityId = new Map<
+    string,
+    Readonly<Record<string, string>>
+  >();
+  private readonly selectedDialogueSubjectIdByActivityId = new Map<string, string>();
+  private readonly timeoutSchedulersByActivityId = new Map<string, PausableTimeoutScheduler>();
+  private readonly observedActivitySessionsByActivityId = new Map<
+    string,
+    ObservedActivitySession
+  >();
   private readonly activityManager: JoinableActivityManager;
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
+  private readonly getCharacterName: (characterId: string) => string;
+  private readonly getCharacterPersonality: (characterId: string) => CharacterPersonality;
   private readonly getCharacterPosition: (characterId: string) => Position | null;
   private readonly getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
   private readonly getNearbyCharacterIds: (characterId: string, range: number) => string[];
@@ -45,12 +86,19 @@ export class TownActivityCoordinator {
   private readonly actorHasItem: (characterId: string, itemId: string) => boolean;
   private readonly sendToCharacter: SendCharacterEvent;
   private readonly showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
+  private readonly resolveActivityOutcome: (
+    input: ResolveActivityOutcomeInput,
+  ) => ResolvedActivityOutcome;
   private readonly notifyActivitiesChanged: () => void;
+  private observedActivityId: string | null = null;
+  private isWorldPaused = false;
 
   constructor(options: TownActivityCoordinatorOptions) {
     this.activityManager = options.activityManager;
     this.performanceRunner = options.performanceRunner;
     this.getCharacterContext = options.getCharacterContext;
+    this.getCharacterName = options.getCharacterName;
+    this.getCharacterPersonality = options.getCharacterPersonality;
     this.getCharacterPosition = options.getCharacterPosition;
     this.getRelationshipStatus = options.getRelationshipStatus;
     this.getNearbyCharacterIds = options.getNearbyCharacterIds;
@@ -58,7 +106,34 @@ export class TownActivityCoordinator {
     this.actorHasItem = options.actorHasItem;
     this.sendToCharacter = options.sendToCharacter;
     this.showCharacterBubble = options.showCharacterBubble;
+    this.resolveActivityOutcome = options.resolveActivityOutcome;
     this.notifyActivitiesChanged = options.notifyActivitiesChanged;
+  }
+
+  pauseWorld(observedActivityId: string | null): void {
+    this.isWorldPaused = true;
+    this.observedActivityId = observedActivityId;
+    this.timeoutSchedulersByActivityId.forEach((scheduler, activityId) => {
+      if (activityId !== observedActivityId) {
+        scheduler.pause();
+      }
+    });
+  }
+
+  resumeWorld(): void {
+    if (!this.isWorldPaused) {
+      return;
+    }
+
+    this.isWorldPaused = false;
+    this.observedActivityId = null;
+    this.timeoutSchedulersByActivityId.forEach(scheduler => scheduler.resume());
+  }
+
+  dispose(): void {
+    this.timeoutSchedulersByActivityId.forEach(scheduler => scheduler.clear());
+    this.timeoutSchedulersByActivityId.clear();
+    this.observedActivitySessionsByActivityId.clear();
   }
 
   handleCurrentActivity(characterId: string, snapshot: CharacterSnapshot): void {
@@ -229,6 +304,9 @@ export class TownActivityCoordinator {
     const nextActivity = this.activityManager.leaveActivity(activity.id, characterId);
 
     this.arrivedCharacterIdsByActivityId.get(activity.id)?.delete(characterId);
+    this.dialogueSubjectIdsByActivityId.delete(activity.id);
+    this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
+    this.performanceRunner.cancelActivityPerformance(activity.id);
     this.performanceRunner.clearActivityActiveVisuals(
       this.getActivityPerformanceSelection(activity),
       activity.id,
@@ -240,6 +318,7 @@ export class TownActivityCoordinator {
       const endedActivity = this.activityManager.endActivity(activity.id) ?? activity;
 
       this.clearActivityVisuals(endedActivity);
+      this.rollSelectionsByActivityId.delete(activity.id);
       endedActivity.participantIds
         .filter(participantId => participantId !== characterId)
         .forEach(participantId => {
@@ -255,6 +334,7 @@ export class TownActivityCoordinator {
 
     if (!nextActivity) {
       this.clearActivityVisuals(activity);
+      this.rollSelectionsByActivityId.delete(activity.id);
       this.notifyActivitiesChanged();
       return true;
     }
@@ -277,6 +357,11 @@ export class TownActivityCoordinator {
     if (activities.length === 0) {
       this.arrivedCharacterIdsByActivityId.clear();
       this.endingActivityIds.clear();
+      this.rollSelectionsByActivityId.clear();
+      this.dialogueSubjectIdsByActivityId.clear();
+      this.selectedDialogueSubjectIdByActivityId.clear();
+      this.observedActivitySessionsByActivityId.clear();
+      this.dispose();
       return;
     }
 
@@ -284,10 +369,19 @@ export class TownActivityCoordinator {
       this.clearActivityVisuals(activity);
       this.arrivedCharacterIdsByActivityId.delete(activity.id);
       this.endingActivityIds.delete(activity.id);
+      this.rollSelectionsByActivityId.delete(activity.id);
+      this.dialogueSubjectIdsByActivityId.delete(activity.id);
+      this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
+      this.performanceRunner.cancelActivityPerformance(activity.id);
     });
     this.activityManager.clear();
     this.arrivedCharacterIdsByActivityId.clear();
     this.endingActivityIds.clear();
+    this.rollSelectionsByActivityId.clear();
+    this.dialogueSubjectIdsByActivityId.clear();
+    this.selectedDialogueSubjectIdByActivityId.clear();
+    this.observedActivitySessionsByActivityId.clear();
+    this.dispose();
     this.notifyActivitiesChanged();
   }
 
@@ -305,8 +399,22 @@ export class TownActivityCoordinator {
     }
 
     staleActivities.forEach(activity => {
-      this.activityManager.leaveActivity(activity.id, characterId);
+      const nextActivity = this.activityManager.leaveActivity(activity.id, characterId);
+
+      this.performanceRunner.cancelActivityPerformance(activity.id);
+      this.performanceRunner.clearActivityActiveVisuals(
+        this.getActivityPerformanceSelection(activity),
+        activity.id,
+        activity.participantIds,
+        activity.hostCharacterIds,
+      );
       this.arrivedCharacterIdsByActivityId.get(activity.id)?.delete(characterId);
+      this.dialogueSubjectIdsByActivityId.delete(activity.id);
+      this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
+
+      if (!nextActivity) {
+        this.rollSelectionsByActivityId.delete(activity.id);
+      }
     });
     this.notifyActivitiesChanged();
   }
@@ -414,11 +522,289 @@ export class TownActivityCoordinator {
     });
   }
 
+  resolveActivityRoll(request: CharacterPerformanceActivityRollRequest): string | null {
+    const activity = this.activityManager.getActivity(request.activityId);
+
+    if (!activity || activity.phase !== 'active' || this.endingActivityIds.has(activity.id)) {
+      return null;
+    }
+
+    const activityDefinition = this.getActivityDefinition(activity);
+    const roll = activityDefinition?.rolls?.find(candidate => candidate.id === request.rollId);
+    const previousSelections = this.rollSelectionsByActivityId.get(activity.id) ?? {};
+
+    if (!roll || previousSelections[roll.id]) {
+      return previousSelections[request.rollId]?.selectedBranchId ?? null;
+    }
+
+    const context = this.createActivityRollRuleContext(activity, previousSelections);
+    const selectedBranch = context
+      ? selectActivityRollBranch(roll, context)
+      : null;
+
+    if (!selectedBranch) {
+      return null;
+    }
+
+    this.rollSelectionsByActivityId.set(activity.id, {
+      ...previousSelections,
+      [roll.id]: {
+        selectedBranchId: selectedBranch.id,
+      },
+    });
+
+    if (roll.resolvesActivity) {
+      const observedActivitySession = this.observedActivitySessionsByActivityId.get(activity.id);
+
+      if (observedActivitySession) {
+        this.observedActivitySessionsByActivityId.set(activity.id, {
+          ...observedActivitySession,
+          activity,
+          pendingResolutionBranch: selectedBranch,
+        });
+        return selectedBranch.id;
+      }
+
+      this.resolveActivityFromRoll(activity, selectedBranch);
+      return selectedBranch.id;
+    }
+
+    this.playActivityRollBranchPerformance(activity, selectedBranch);
+    return selectedBranch.id;
+  }
+
+  createActivityDialogueRequest(
+    activityId: string,
+  ): CharacterPerformanceDialogueRequest | null {
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (
+      !activity
+      || activity.phase !== 'active'
+      || activity.pausedAt !== undefined
+      || this.endingActivityIds.has(activity.id)
+    ) {
+      return null;
+    }
+
+    const activityDefinition = this.getActivityDefinition(activity);
+    const dialogueScriptId = activityDefinition?.dialogueScriptId;
+    const initiatorId = activity.hostCharacterIds[0] ?? activity.participantIds[0];
+    const targetId = activity.participantIds.find(characterId => characterId !== initiatorId);
+
+    if (!dialogueScriptId || !initiatorId || !targetId) {
+      return null;
+    }
+
+    const dialogueSubjects = this.dialogueSubjectIdsByActivityId.get(activity.id)
+      ?? this.prepareActivityDialogueSubjects(activity, activityDefinition);
+
+    if (
+      activityDefinition.dialogueSubjectSelection
+      && Object.keys(dialogueSubjects).length < activityDefinition.dialogueSubjectSelection.count
+    ) {
+      return null;
+    }
+
+    const pausedActivity = this.activityManager.pauseActivity(activity.id, Date.now());
+
+    if (!pausedActivity || pausedActivity.pausedAt === undefined) {
+      return null;
+    }
+
+    this.observedActivitySessionsByActivityId.set(activity.id, {
+      activity: pausedActivity,
+    });
+    this.performanceRunner.clearActivityPresentationForObservation(
+      this.getActivityPerformanceSelection(activity),
+      activity.id,
+      activity.participantIds,
+      activity.hostCharacterIds,
+    );
+    this.notifyActivitiesChanged();
+
+    return {
+      activityId: activity.id,
+      scriptId: dialogueScriptId,
+      participantIds: [...activity.participantIds],
+      initiatorId,
+      targetId,
+      templateValues: Object.fromEntries(
+        Object.entries(dialogueSubjects).map(([subjectKey, subjectId]) => [
+          `${subjectKey}Name`,
+          this.getCharacterName(subjectId),
+        ]),
+      ),
+      resolveActivityRoll: rollId => this.resolveActivityRoll({
+        activityId: activity.id,
+        rollId,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+      }),
+      resolveDialogueContent: (contentPoolId, subjectKey) => {
+        const subjectId = dialogueSubjects[subjectKey];
+        const subjectContext = subjectId
+          ? this.getCharacterContext(subjectId)
+          : null;
+
+        if (!subjectId || !subjectContext) {
+          return null;
+        }
+
+        const content = resolveDialogueContent({
+          contentPoolId,
+          subjectId,
+          subjectName: this.getCharacterName(subjectId),
+          relationships: subjectContext.relationships,
+          getCharacterName: this.getCharacterName,
+        });
+
+        if (!content) {
+          return null;
+        }
+
+        this.selectedDialogueSubjectIdByActivityId.set(activity.id, subjectId);
+        return [{
+          type: 'SAY',
+          speakerId: initiatorId,
+          text: content.text,
+          expressionPresetId: content.expressionPresetId,
+        }];
+      },
+      onClose: () => {
+        this.settleObservedActivityAfterDialogue(activity.id);
+      },
+      onCancel: () => {
+        this.resumeActivityAfterObservationCancel(activity.id);
+      },
+    };
+  }
+
+  private selectDialogueSubjects(
+    activity: JoinableActivity,
+    initiatorId: string,
+    targetId: string,
+    selection: NonNullable<CharacterEventActivity['dialogueSubjectSelection']>,
+  ): Readonly<Record<string, string>> {
+    const sourceId = selection.sourceRole === 'initiator'
+      ? initiatorId
+      : targetId;
+    const sourceContext = this.getCharacterContext(sourceId);
+
+    if (!sourceContext) {
+      return {};
+    }
+
+    const excludedCharacterIds = selection.excludeParticipants
+      ? new Set(activity.participantIds)
+      : new Set<string>();
+    const candidateIds = sourceContext.relationships
+      .filter(relationship => (
+        relationship.charId === sourceId
+        && !excludedCharacterIds.has(relationship.targetCharId)
+        && this.getCharacterContext(relationship.targetCharId) !== null
+        && relationship.memories[selection.memoryType].counts >= selection.minCount
+      ))
+      .map(relationship => relationship.targetCharId);
+    const selectedIds = sampleWithoutReplacement(candidateIds, selection.count);
+
+    return Object.fromEntries(
+      selectedIds.map((characterId, index) => [
+        `subject${String.fromCharCode(65 + index)}`,
+        characterId,
+      ]),
+    );
+  }
+
+  private prepareActivityDialogueSubjects(
+    activity: JoinableActivity,
+    activityDefinition: CharacterEventActivity,
+  ): Readonly<Record<string, string>> {
+    const existingSubjects = this.dialogueSubjectIdsByActivityId.get(activity.id);
+
+    if (existingSubjects) {
+      return existingSubjects;
+    }
+
+    const selection = activityDefinition.dialogueSubjectSelection;
+    const initiatorId = activity.hostCharacterIds[0] ?? activity.participantIds[0];
+    const targetId = activity.participantIds.find(characterId => characterId !== initiatorId);
+
+    if (!selection || !initiatorId || !targetId) {
+      return {};
+    }
+
+    const subjects = this.selectDialogueSubjects(
+      activity,
+      initiatorId,
+      targetId,
+      selection,
+    );
+
+    if (Object.keys(subjects).length < selection.count) {
+      return {};
+    }
+
+    this.dialogueSubjectIdsByActivityId.set(activity.id, subjects);
+    const subjectIds = Object.values(subjects);
+    const defaultSubjectId = subjectIds[Math.floor(Math.random() * subjectIds.length)];
+
+    if (defaultSubjectId) {
+      this.selectedDialogueSubjectIdByActivityId.set(activity.id, defaultSubjectId);
+    }
+
+    return subjects;
+  }
+
   private rejectActivityJoin(characterId: string, activityId: string): void {
     this.sendToCharacter(characterId, {
       type: EventType.JoinActivityRejected,
       activityId,
     });
+  }
+
+  private resumeActivityAfterObservationCancel(activityId: string): void {
+    this.observedActivitySessionsByActivityId.delete(activityId);
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (
+      !activity
+      || activity.pausedAt === undefined
+      || this.endingActivityIds.has(activity.id)
+    ) {
+      return;
+    }
+
+    if (!this.activityManager.resumeActivity(activity.id, Date.now())) {
+      return;
+    }
+
+    this.notifyActivitiesChanged();
+  }
+
+  private settleObservedActivityAfterDialogue(activityId: string): void {
+    const observedActivitySession = this.observedActivitySessionsByActivityId.get(activityId);
+
+    if (!observedActivitySession) {
+      return;
+    }
+
+    this.observedActivitySessionsByActivityId.delete(activityId);
+    const activity = this.activityManager.getActivity(activityId)
+      ?? observedActivitySession.activity;
+
+    if (observedActivitySession.pendingResolutionBranch) {
+      this.resolveActivityFromRoll(
+        activity,
+        observedActivitySession.pendingResolutionBranch,
+      );
+      return;
+    }
+
+    const endedActivity = this.activityManager.endActivity(activityId) ?? activity;
+
+    this.playActivityEndPerformance(endedActivity, Date.now());
+    this.notifyActivitiesChanged();
   }
 
   private getInvitedParticipantIds(hostCharacterId: string, activityDefinition: CharacterEventActivity): string[] {
@@ -495,7 +881,7 @@ export class TownActivityCoordinator {
         participantIds: activity.participantIds,
         hostCharacterIds: activity.hostCharacterIds,
       });
-      window.setTimeout(() => {
+      this.scheduleActivityTimeout(activity.id, () => {
         const endedActivity = this.activityManager.endActivity(activity.id);
 
         if (endedActivity) {
@@ -522,6 +908,14 @@ export class TownActivityCoordinator {
         activity,
       );
 
+    acceptedInviteeIds.forEach(inviteeId => {
+      this.sendToCharacter(inviteeId, {
+        type: EventType.JoinActivityAccepted,
+        activityId: acceptedActivity.id,
+        sourceEventId: acceptedActivity.sourceEventId,
+      });
+    });
+
     if (acceptedInviteeIds.length > 0) {
       this.performanceRunner.playActivityPerformanceSteps({
         selection: this.getActivityPerformanceSelection(acceptedActivity),
@@ -532,7 +926,7 @@ export class TownActivityCoordinator {
       });
     }
 
-    window.setTimeout(() => {
+    this.scheduleActivityTimeout(acceptedActivity.id, () => {
       const nextPhase = getPostInviteActivityPhase(activityDefinition);
       const activeActivity = this.activityManager.updateActivityPhase(
         acceptedActivity.id,
@@ -547,13 +941,6 @@ export class TownActivityCoordinator {
         return;
       }
 
-      refreshedActivity.participantIds.forEach(participantId => {
-        this.sendToCharacter(participantId, {
-          type: EventType.JoinActivityAccepted,
-          activityId: refreshedActivity.id,
-          sourceEventId: refreshedActivity.sourceEventId,
-        });
-      });
       if (nextPhase === 'traveling') {
         this.sendParticipantsToActivityLocation(refreshedActivity);
       } else {
@@ -698,6 +1085,12 @@ export class TownActivityCoordinator {
   }
 
   private playActivityPerformance(activity: JoinableActivity): void {
+    const activityDefinition = this.getActivityDefinition(activity);
+
+    if (activityDefinition) {
+      this.prepareActivityDialogueSubjects(activity, activityDefinition);
+    }
+
     this.performanceRunner.playActivityPerformanceSteps({
       selection: this.getActivityPerformanceSelection(activity),
       phase: 'active',
@@ -705,6 +1098,131 @@ export class TownActivityCoordinator {
       participantIds: activity.participantIds,
       hostCharacterIds: activity.hostCharacterIds,
     });
+  }
+
+  private playActivityRollBranchPerformance(
+    activity: JoinableActivity,
+    branch: CharacterEventActivityRollBranch,
+  ): number {
+    if (!branch.performanceId) {
+      return 0;
+    }
+
+    const dialogueSubjectId = this.selectedDialogueSubjectIdByActivityId.get(activity.id);
+
+    return this.performanceRunner.playActivityPerformanceStepsById(
+      branch.performanceId,
+      {
+        phase: 'active',
+        activityId: activity.id,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+        templateValues: dialogueSubjectId
+          ? {
+            dialogueSubjectName: this.getCharacterName(dialogueSubjectId),
+          }
+          : undefined,
+      },
+    );
+  }
+
+  private resolveActivityFromRoll(
+    activity: JoinableActivity,
+    branch: CharacterEventActivityRollBranch,
+  ): void {
+    const dialogueSubjectId = this.selectedDialogueSubjectIdByActivityId.get(activity.id);
+
+    this.endingActivityIds.add(activity.id);
+    this.performanceRunner.cancelActivityPerformance(activity.id);
+    this.performanceRunner.clearActivityActiveVisuals(
+      this.getActivityPerformanceSelection(activity),
+      activity.id,
+      activity.participantIds,
+      activity.hostCharacterIds,
+    );
+    this.activityManager.endActivity(activity.id);
+
+    const durationMs = this.playActivityRollBranchPerformance(activity, branch);
+    const cleanupDelayMs = durationMs || DEFAULT_ACTIVITY_END_DURATION_MS;
+
+    this.notifyActivitiesChanged();
+    this.scheduleActivityTimeout(activity.id, () => {
+      this.performanceRunner.clearActivitySettlementVisuals(
+        this.getActivityPerformanceSelection(activity),
+        activity.id,
+        activity.participantIds,
+        activity.hostCharacterIds,
+      );
+      this.resolveActivityOutcome({
+        activityId: activity.id,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+        outcome: {
+          id: branch.id,
+          effects: branch.effects,
+          effectsByRole: branch.effectsByRole,
+          memoryEffects: branch.memoryEffects,
+        },
+        dialogueSubjectId,
+        resolvedBy: 'characterPerformance',
+      });
+      this.rollSelectionsByActivityId.delete(activity.id);
+      this.dialogueSubjectIdsByActivityId.delete(activity.id);
+      this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
+      this.endingActivityIds.delete(activity.id);
+      this.notifyActivitiesChanged();
+    }, cleanupDelayMs);
+  }
+
+  private createActivityRollRuleContext(
+    activity: JoinableActivity,
+    rolls: Readonly<Record<string, ActivityRollSelection>>,
+  ): ActivityRollRuleContext | null {
+    const initiatorId = activity.hostCharacterIds[0] ?? activity.participantIds[0];
+    const targetId = activity.participantIds.find(characterId => characterId !== initiatorId);
+
+    if (!initiatorId || !targetId) {
+      return null;
+    }
+
+    const initiatorContext = this.getCharacterContext(initiatorId);
+    const targetContext = this.getCharacterContext(targetId);
+
+    if (!initiatorContext || !targetContext) {
+      return null;
+    }
+
+    const initiatorRelationship = initiatorContext.relationships
+      .find(relationship => relationship.targetCharId === targetId);
+    const targetRelationship = targetContext.relationships
+      .find(relationship => relationship.targetCharId === initiatorId);
+    const relationshipToTarget = {
+      feeling: initiatorRelationship?.feeling ?? Feeling.Neutral,
+      intimacy: initiatorRelationship?.intimacy ?? 0,
+    };
+    const relationshipToInitiator = {
+      feeling: targetRelationship?.feeling ?? Feeling.Neutral,
+      intimacy: targetRelationship?.intimacy ?? 0,
+    };
+
+    return {
+      initiator: {
+        status: initiatorContext.status,
+        personality: this.getCharacterPersonality(initiatorId),
+        relationshipToOther: relationshipToTarget,
+        relationshipToTarget,
+      },
+      target: {
+        status: targetContext.status,
+        personality: this.getCharacterPersonality(targetId),
+        relationshipToOther: relationshipToInitiator,
+        relationshipToInitiator,
+      },
+      activity: {
+        participantCount: activity.participantIds.length,
+        rolls,
+      },
+    };
   }
 
   private clearActivityVisuals(activity: JoinableActivity): void {
@@ -718,6 +1236,7 @@ export class TownActivityCoordinator {
 
   private playActivityEndPerformance(activity: JoinableActivity, timestamp: number): void {
     this.endingActivityIds.add(activity.id);
+    this.performanceRunner.cancelActivityPerformance(activity.id);
     this.performanceRunner.clearActivityActiveVisuals(
       this.getActivityPerformanceSelection(activity),
       activity.id,
@@ -734,19 +1253,26 @@ export class TownActivityCoordinator {
     });
     const cleanupDelayMs = durationMs || DEFAULT_ACTIVITY_END_DURATION_MS;
     const activityEffects = this.getActivityEffects(activity);
+    const activityEffectsByRole = this.getActivityEffectsByRole(activity);
 
-    window.setTimeout(() => {
+    this.scheduleActivityTimeout(activity.id, () => {
       this.clearActivityVisuals(activity);
-      activity.participantIds.forEach(participantId => {
-        this.sendToCharacter(participantId, {
-          type: EventType.EndJoinedActivity,
-          activityId: activity.id,
-          participantIds: activity.participantIds,
-          activityEffects,
-          timestamp,
-        });
+      this.resolveActivityOutcome({
+        activityId: activity.id,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+        outcome: {
+          id: 'completed',
+          effects: activityEffects,
+          effectsByRole: activityEffectsByRole,
+        },
+        resolvedBy: 'characterPerformance',
+        timestamp,
       });
       this.endingActivityIds.delete(activity.id);
+      this.rollSelectionsByActivityId.delete(activity.id);
+      this.dialogueSubjectIdsByActivityId.delete(activity.id);
+      this.selectedDialogueSubjectIdByActivityId.delete(activity.id);
       this.notifyActivitiesChanged();
     }, cleanupDelayMs);
   }
@@ -771,10 +1297,14 @@ export class TownActivityCoordinator {
       return;
     }
 
-    window.setTimeout(() => {
+    this.scheduleActivityTimeout(activity.id, () => {
       const currentActivity = this.activityManager.getActivity(activity.id);
 
-      if (!currentActivity || currentActivity.phase !== 'active') {
+      if (
+        !currentActivity
+        || currentActivity.phase !== 'active'
+        || currentActivity.pausedAt !== undefined
+      ) {
         return;
       }
 
@@ -791,6 +1321,39 @@ export class TownActivityCoordinator {
 
       this.playActivityPerformance(currentActivity);
     }, 5000);
+  }
+
+  private scheduleActivityTimeout(
+    activityId: string,
+    callback: () => void,
+    delayMs: number,
+  ): void {
+    const scheduler = this.getActivityTimeoutScheduler(activityId);
+
+    scheduler.schedule(() => {
+      callback();
+
+      if (!scheduler.hasScheduledTimeouts()) {
+        this.timeoutSchedulersByActivityId.delete(activityId);
+      }
+    }, delayMs);
+  }
+
+  private getActivityTimeoutScheduler(activityId: string): PausableTimeoutScheduler {
+    const existingScheduler = this.timeoutSchedulersByActivityId.get(activityId);
+
+    if (existingScheduler) {
+      return existingScheduler;
+    }
+
+    const scheduler = new PausableTimeoutScheduler();
+
+    if (this.isWorldPaused && activityId !== this.observedActivityId) {
+      scheduler.pause();
+    }
+
+    this.timeoutSchedulersByActivityId.set(activityId, scheduler);
+    return scheduler;
   }
 
   private getActivityDefinition(activity: JoinableActivity): CharacterEventActivity | undefined {
@@ -815,6 +1378,15 @@ export class TownActivityCoordinator {
       ?.effects;
   }
 
+  private getActivityEffectsByRole(
+    activity: JoinableActivity,
+  ): CharacterEventActivity['effectsByRole'] {
+    return CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId]?.presentationVariants
+      ?.find(variant => variant.activity?.key === activity.activityKey)
+      ?.activity
+      ?.effectsByRole;
+  }
+
   private getJoinBubbleText(activity: JoinableActivity): string {
     if (activity.type === 'playWithItem') {
       return '我也有，加入！';
@@ -822,6 +1394,21 @@ export class TownActivityCoordinator {
 
     return '我也要一起玩！';
   }
+}
+
+function sampleWithoutReplacement<T>(
+  candidates: readonly T[],
+  count: number,
+  random: () => number = Math.random,
+): T[] {
+  const remaining = [...new Set(candidates)];
+
+  for (let index = remaining.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [remaining[index], remaining[swapIndex]] = [remaining[swapIndex], remaining[index]];
+  }
+
+  return remaining.slice(0, count);
 }
 
 function isNearPosition(position: Position, target: Position, range: number): boolean {

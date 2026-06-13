@@ -11,6 +11,7 @@ interface TownMapPointerControllerOptions {
   cellSize: number;
   getCharacterIdFromTarget: (target: unknown) => string | null;
   getMapObjectIdFromTarget: (target: unknown) => string | null;
+  isMapActivityInteractionTarget: (target: unknown) => boolean;
   getCharacterTile: (characterId: string) => GridCoordinate | null;
   snapCharacterToGrid: (characterId: string, tile: GridCoordinate | null) => void;
   onTileClick?: (tile: TownMapTile) => void;
@@ -33,6 +34,7 @@ export class TownMapPointerController {
   private readonly cellSize: number;
   private readonly getCharacterIdFromTarget: (target: unknown) => string | null;
   private readonly getMapObjectIdFromTarget: (target: unknown) => string | null;
+  private readonly isMapActivityInteractionTarget: (target: unknown) => boolean;
   private readonly getCharacterTile: (characterId: string) => GridCoordinate | null;
   private readonly snapCharacterToGrid: (characterId: string, tile: GridCoordinate | null) => void;
   private readonly onTileClick?: (tile: TownMapTile) => void;
@@ -50,6 +52,7 @@ export class TownMapPointerController {
     this.cellSize = options.cellSize;
     this.getCharacterIdFromTarget = options.getCharacterIdFromTarget;
     this.getMapObjectIdFromTarget = options.getMapObjectIdFromTarget;
+    this.isMapActivityInteractionTarget = options.isMapActivityInteractionTarget;
     this.getCharacterTile = options.getCharacterTile;
     this.snapCharacterToGrid = options.snapCharacterToGrid;
     this.onTileClick = options.onTileClick;
@@ -84,6 +87,10 @@ export class TownMapPointerController {
       return;
     }
 
+    if (this.isMapActivityInteractionTarget(event.target)) {
+      return;
+    }
+
     const characterId = this.getCharacterIdFromTarget(event.target);
 
     if (characterId) {
@@ -102,7 +109,15 @@ export class TownMapPointerController {
   }
 
   private handleMouseUp(event: TownMapPointerEvent): void {
-    if (this.characterTracker.handlePointerTarget(event.target)) {
+    if (this.isMapActivityInteractionTarget(event.target)) {
+      this.pendingTileClick = null;
+      return;
+    }
+
+    if (
+      !this.camera.getInteractionLocked()
+      && this.characterTracker.handlePointerTarget(event.target)
+    ) {
       this.pendingTileClick = null;
       return;
     }

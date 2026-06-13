@@ -9,6 +9,7 @@ import type { CharacterEventCandidate } from '~/services/characterEvents/types';
 import type {
   OfflineRecapTemplate,
   OfflineRecapTemplates,
+  OfflineResolutionPreview,
   ResolvedOfflineRecapTemplate,
 } from './types';
 
@@ -17,9 +18,19 @@ export const OFFLINE_RECAP_TEMPLATES: OfflineRecapTemplates =
 
 export function resolveOfflineRecapTemplate(
   candidate: Pick<CharacterEventCandidate, 'id' | 'motivation' | 'event'>,
+  resolutionPreview?: OfflineResolutionPreview,
 ): ResolvedOfflineRecapTemplate {
   const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[candidate.id];
-  const activity = findPrimaryActivity(definition);
+  const selectedVariant = resolutionPreview?.kind === 'group'
+    ? definition?.presentationVariants
+      ?.find(variant => variant.id === resolutionPreview.presentationVariantId)
+    : undefined;
+  const activity = selectedVariant?.activity ?? findPrimaryActivity(definition);
+  const outcomeBranch = resolutionPreview?.kind === 'group' && resolutionPreview.outcomeId
+    ? selectedVariant?.activity?.rolls
+      ?.flatMap(roll => roll.branches)
+      .find(branch => branch.id === resolutionPreview.outcomeId)
+    : undefined;
   const templateLayers: readonly { source: string; template?: OfflineRecapTemplate }[] = [
     { source: 'fallback', template: OFFLINE_RECAP_TEMPLATES.fallback },
     {
@@ -41,6 +52,14 @@ export function resolveOfflineRecapTemplate(
     {
       source: `characterEvents.${candidate.id}.offlineRecap`,
       template: definition?.offlineRecap,
+    },
+    {
+      source: `characterEvents.${candidate.id}.presentationVariants.${selectedVariant?.id}.offlineRecap`,
+      template: selectedVariant?.offlineRecap,
+    },
+    {
+      source: `characterEvents.${candidate.id}.outcomes.${outcomeBranch?.id}.offlineRecap`,
+      template: outcomeBranch?.offlineRecap,
     },
   ];
 
@@ -70,12 +89,6 @@ export function getOfflineCandidateActivityType(
   candidate: Pick<CharacterEventCandidate, 'id'>,
 ): CharacterEventActivity['type'] | undefined {
   return findPrimaryActivity(CHARACTER_EVENT_DEFINITIONS_BY_ID[candidate.id])?.type;
-}
-
-export function getOfflineCandidateRecapPriority(
-  candidate: Pick<CharacterEventCandidate, 'id'>,
-): number {
-  return CHARACTER_EVENT_DEFINITIONS_BY_ID[candidate.id]?.offlineRecap?.priority ?? 0;
 }
 
 function findPrimaryActivity(

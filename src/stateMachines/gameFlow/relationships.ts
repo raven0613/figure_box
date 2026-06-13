@@ -62,6 +62,57 @@ export function rememberPassBy(
   );
 }
 
+export function rememberRelationshipMemory(
+  relationships: DirectedRelationship[],
+  charId: string,
+  targetCharId: string,
+  memoryType: MemoryType,
+  countDelta: number,
+  startedById: string,
+  timestamp: number = Date.now(),
+): DirectedRelationship[] {
+  if (countDelta <= 0 || charId === targetCharId) {
+    return relationships;
+  }
+
+  return upsertDirectedRelationship(
+    relationships,
+    charId,
+    targetCharId,
+    relationship => {
+      if (memoryType === MemoryType.Impression) {
+        const memory = relationship.memories[MemoryType.Impression];
+
+        return {
+          ...relationship,
+          memories: {
+            ...relationship.memories,
+            [MemoryType.Impression]: {
+              counts: memory.counts + countDelta,
+              lastUpdate: timestamp,
+            },
+          },
+        };
+      }
+
+      const memory = relationship.memories[memoryType];
+
+      return {
+        ...relationship,
+        memories: {
+          ...relationship.memories,
+          [memoryType]: {
+            counts: memory.counts + countDelta,
+            lastUpdate: timestamp,
+            startedById,
+          },
+        },
+      };
+    },
+    timestamp,
+  );
+}
+
 export function changeRelationshipIntimacy(
   relationships: DirectedRelationship[],
   charId: string,

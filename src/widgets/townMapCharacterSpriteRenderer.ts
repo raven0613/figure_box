@@ -18,6 +18,7 @@ export interface TownMapCharacterSpriteSet {
 export interface TownMapCharacterSpriteBody extends FabricImage {
   setTownMapSpriteDirection: (direction: TownMapCharacterSpriteDirection) => void;
   getTownMapSpriteDirection: () => TownMapCharacterSpriteDirection;
+  setTownMapSpriteAnimationPaused: (isPaused: boolean) => void;
 }
 
 interface LoadedSpriteAnimation extends TownMapCharacterSpriteAnimation {
@@ -48,6 +49,8 @@ export class TownMapCharacterSpriteRenderer {
     let direction = initialDirection;
     const desyncOffsetMs = Math.random() * this.front.spriteSheet.frameCount * this.front.frameDurationMs;
     const animationStartedAt = performance.now() - desyncOffsetMs;
+    let pausedAt: number | null = null;
+    let totalPausedDurationMs = 0;
     const spriteBody = new FabricImage(this.front.image, {
       width: this.renderSize,
       height: this.renderSize,
@@ -61,7 +64,12 @@ export class TownMapCharacterSpriteRenderer {
     spriteBody._render = (context: CanvasRenderingContext2D) => {
       const animation = this.getAnimation(direction);
       const spriteSheet = animation.spriteSheet;
-      const frameIndex = getSpriteFrameIndex(animation, animationStartedAt);
+      const animationTimestamp = pausedAt ?? performance.now();
+      const frameIndex = getSpriteFrameIndex(
+        animation,
+        animationStartedAt,
+        animationTimestamp - totalPausedDurationMs,
+      );
       const column = frameIndex % spriteSheet.columns;
       const row = Math.floor(frameIndex / spriteSheet.columns);
       const isMirrored = direction === 'side-right';
@@ -99,6 +107,20 @@ export class TownMapCharacterSpriteRenderer {
       },
       getTownMapSpriteDirection() {
         return direction;
+      },
+      setTownMapSpriteAnimationPaused(isPaused: boolean) {
+        if (isPaused) {
+          pausedAt ??= performance.now();
+          return;
+        }
+
+        if (pausedAt === null) {
+          return;
+        }
+
+        totalPausedDurationMs += performance.now() - pausedAt;
+        pausedAt = null;
+        spriteBody.dirty = true;
       },
     });
   }
@@ -143,8 +165,12 @@ export async function createTownMapCharacterSpriteRenderer(
   });
 }
 
-function getSpriteFrameIndex(animation: LoadedSpriteAnimation, animationStartedAt: number): number {
-  const elapsedMs = Math.max(0, performance.now() - animationStartedAt);
+function getSpriteFrameIndex(
+  animation: LoadedSpriteAnimation,
+  animationStartedAt: number,
+  animationTimestamp: number,
+): number {
+  const elapsedMs = Math.max(0, animationTimestamp - animationStartedAt);
   const frameIndex = Math.floor(elapsedMs / animation.frameDurationMs);
 
   return frameIndex % animation.spriteSheet.frameCount;

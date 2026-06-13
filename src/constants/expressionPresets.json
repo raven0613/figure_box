@@ -1,0 +1,299 @@
+[
+  {
+    "id": "normal",
+    "label": "normal",
+    "portrait": {
+      "mouth": {
+        "poseId": "default"
+      }
+    },
+    "mini": {
+      "front": {
+        "mouth": {
+          "poseId": "default"
+        }
+      },
+      "side": {
+        "mouth": {
+          "poseId": "default_side"
+        }
+      },
+      "back": {}
+    }
+  },
+  {
+    "id": "laugh",
+    "label": "laugh",
+    "portrait": {
+      "eyes": {
+        "poseId": "laugh",
+        "transform": {
+          "offsetY": -2,
+          "scale": 0.86
+        }
+      },
+      "mouth": {
+        "poseId": "open_smile",
+        "transform": {
+          "offsetY": 4,
+          "rotate": 0,
+          "scale": 1.35
+        }
+      }
+    },
+    "mini": {
+      "front": {
+        "upperEyelids": {
+          "poseId": "smile_closed"
+        },
+        "mouth": {
+          "poseId": "open_smile"
+        }
+      },
+      "side": {
+        "upperEyelids": {
+          "poseId": "smile_closed_side"
+        },
+        "mouth": {
+          "poseId": "open_smile_side"
+        }
+      },
+      "back": {
+        "emoteId": "laugh"
+      }
+    }
+  },
+  {
+    "id": "cry",
+    "label": "cry",
+    "portrait": {
+      "eyes": {
+        "poseId": "cry",
+        "transform": {
+          "offsetY": 5,
+          "scale": 0.9
+        }
+      },
+      "mouth": {
+        "poseId": "flat_down",
+        "transform": {
+          "offsetY": 7,
+          "rotate": 180,
+          "scale": 0.9
+        }
+      },
+      "effectId": "tear"
+    },
+    "mini": {
+      "front": {
+        "upperEyelids": {
+          "poseId": "sad"
+        },
+        "mouth": {
+          "poseId": "flat_down"
+        },
+        "effectId": "tear"
+      },
+      "side": {
+        "upperEyelids": {
+          "poseId": "sad_side"
+        },
+        "mouth": {
+          "poseId": "flat_down_side"
+        },
+        "effectId": "tear"
+      },
+      "back": {
+        "emoteId": "sad"
+      }
+    }
+  },
+  {
+    "id": "mad",
+    "label": "mad",
+    "portrait": {
+      "eyes": {
+        "poseId": "mad",
+        "transform": {
+          "offsetY": -5,
+          "rotate": -8,
+          "scale": 0.92
+        }
+      },
+      "mouth": {
+        "poseId": "flat_down",
+        "transform": {
+          "offsetY": 2,
+          "rotate": -5,
+          "scale": 1.05
+        }
+      }
+    },
+    "mini": {
+      "front": {
+        "eyebrows": {
+          "poseId": "mad"
+        },
+        "mouth": {
+          "poseId": "flat_down"
+        }
+      },
+      "side": {
+        "eyebrows": {
+          "poseId": "mad_side"
+        },
+        "mouth": {
+          "poseId": "flat_down_side"
+        }
+      },
+      "back": {
+        "emoteId": "angry"
+      }
+    }
+  },
+  {
+    "id": "surprised",
+    "label": "surprised",
+    "portrait": {
+      "eyes": {
+        "poseId": "wide",
+        "transform": {
+          "offsetY": -4,
+          "scale": 1.08
+        }
+      },
+      "mouth": {
+        "poseId": "small_open",
+        "transform": {
+          "offsetY": 5,
+          "scale": 0.82
+        }
+      }
+    },
+    "mini": {
+      "front": {
+        "eyes": {
+          "poseId": "wide"
+        },
+        "mouth": {
+          "poseId": "small_open"
+        }
+      },
+      "side": {
+        "eyes": {
+          "poseId": "wide_side"
+        },
+        "mouth": {
+          "poseId": "small_open_side"
+        }
+      },
+      "back": {
+        "emoteId": "surprised"
+      }
+    }
+  },
+  {
+    "id": "curious",
+    "label": "curious",
+    "portrait": {
+      "eyes": {
+        "poseId": "curious",
+        "transform": {
+          "offsetY": -3,
+          "rotate": -6,
+          "scale": 1.02
+        }
+      },
+      "mouth": {
+        "poseId": "small_smile",
+        "transform": {
+          "offsetY": 4,
+          "rotate": -8,
+          "scale": 0.9
+        }
+      }
+    },
+    "mini": {
+      "front": {
+        "eyebrows": {
+          "poseId": "curious"
+        },
+        "mouth": {
+          "poseId": "small_smile"
+        }
+      },
+      "side": {
+        "eyebrows": {
+          "poseId": "curious_side"
+        },
+        "mouth": {
+          "poseId": "small_smile_side"
+        }
+      },
+      "back": {
+        "emoteId": "question"
+      }
+    }
+  },
+  {
+    "id": "smirk_smile",
+    "label": "smirk smile",
+    "portrait": {
+      "upperEyelids": {
+        "poseId": "look_up",
+        "motionId": "look_up"
+      },
+      "eyeballs": {
+        "motionId": "look_around"
+      },
+      "mouth": {
+        "poseId": "smile_up",
+        "transform": {
+          "offsetY": -1,
+          "rotate": -6,
+          "scale": 1.08
+        }
+      },
+      "effectId": "sparkle_light"
+    },
+    "mini": {
+      "front": {
+        "upperEyelids": {
+          "poseId": "look_up",
+          "motionId": "look_up"
+        },
+        "eyeballs": {
+          "motionId": "look_around_tiny"
+        },
+        "mouth": {
+          "poseId": "smile_up",
+          "transform": {
+            "offsetY": -0.5,
+            "rotate": -4
+          }
+        },
+        "effectId": "sparkle_light"
+      },
+      "side": {
+        "upperEyelids": {
+          "poseId": "look_up_side",
+          "motionId": "look_up_side"
+        },
+        "eyeballs": {
+          "motionId": "look_around_side_tiny"
+        },
+        "mouth": {
+          "poseId": "smile_up_side",
+          "transform": {
+            "offsetY": -0.5,
+            "rotate": -3
+          }
+        },
+        "effectId": "sparkle_light"
+      },
+      "back": {
+        "emoteId": "sparkle_light"
+      }
+    }
+  }
+]

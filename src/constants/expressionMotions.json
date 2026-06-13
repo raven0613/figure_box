@@ -1,0 +1,150 @@
+[
+  {
+    "id": "look_up",
+    "durationMs": 180,
+    "keyframes": [
+      {
+        "atMs": 0,
+        "offsetY": 0
+      },
+      {
+        "atMs": 180,
+        "offsetY": -3,
+        "easing": "easeInOutSine"
+      }
+    ]
+  },
+  {
+    "id": "look_up_side",
+    "durationMs": 180,
+    "keyframes": [
+      {
+        "atMs": 0,
+        "offsetY": 0
+      },
+      {
+        "atMs": 180,
+        "offsetY": -2,
+        "easing": "easeInOutSine"
+      }
+    ]
+  },
+  {
+    "id": "look_at_player",
+    "durationMs": 160,
+    "keyframes": [
+      {
+        "atMs": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      {
+        "atMs": 160,
+        "offsetX": 0,
+        "offsetY": 0,
+        "easing": "easeInOutSine"
+      }
+    ]
+  },
+  {
+    "id": "look_at_player_side",
+    "durationMs": 160,
+    "keyframes": [
+      {
+        "atMs": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      {
+        "atMs": 160,
+        "offsetX": 2,
+        "offsetY": 0,
+        "easing": "easeInOutSine"
+      }
+    ]
+  },
+  {
+    "id": "look_around",
+    "durationMs": 1400,
+    "keyframes": [
+      {
+        "atMs": 0,
+        "offsetX": 0
+      },
+      {
+        "atMs": 200,
+        "offsetX": -3,
+        "easing": "easeInOutSine"
+      },
+      {
+        "atMs": 700,
+        "offsetX": -3
+      },
+      {
+        "atMs": 1000,
+        "offsetX": 3,
+        "easing": "easeInOutSine"
+      },
+      {
+        "atMs": 1400,
+        "offsetX": 3
+      }
+    ]
+  },
+  {
+    "id": "look_around_tiny",
+    "durationMs": 1400,
+    "keyframes": [
+      {
+        "atMs": 0,
+        "offsetX": 0
+      },
+      {
+        "atMs": 200,
+        "offsetX": -1,
+        "easing": "easeInOutSine"
+      },
+      {
+        "atMs": 700,
+        "offsetX": -1
+      },
+      {
+        "atMs": 1000,
+        "offsetX": 1,
+        "easing": "easeInOutSine"
+      },
+      {
+        "atMs": 1400,
+        "offsetX": 1
+      }
+    ]
+  },
+  {
+    "id": "look_around_side_tiny",
+    "durationMs": 1400,
+    "keyframes": [
+      {
+        "atMs": 0,
+        "offsetX": 0
+      },
+      {
+        "atMs": 200,
+        "offsetX": -0.5,
+        "easing": "easeInOutSine"
+      },
+      {
+        "atMs": 700,
+        "offsetX": -0.5
+      },
+      {
+        "atMs": 1000,
+        "offsetX": 0.5,
+        "easing": "easeInOutSine"
+      },
+      {
+        "atMs": 1400,
+        "offsetX": 0.5
+      }
+    ]
+  }
+]

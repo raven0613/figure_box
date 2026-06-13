@@ -1,5 +1,5 @@
 import rawCharacterPerformanceDefinitions from '~/constants/events/characterPerformances.json';
-import type { Expression } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import { loadCharacterPerformanceDefinitions } from './performanceSchema';
 
@@ -23,12 +23,13 @@ export interface CharacterPerformanceDefinition {
 
 export type CharacterPerformanceStep =
   | CharacterPerformanceBubbleStep
-  | CharacterPerformanceExpressionStep
+  | CharacterPerformanceExpressionPresetStep
   | CharacterPerformanceEmoteStep
   | CharacterPerformanceMapEffectStep
   | CharacterPerformanceMotionStep
   | CharacterPerformanceAnimationStep
-  | CharacterPerformanceDialogueStep;
+  | CharacterPerformanceDialogueStep
+  | CharacterPerformanceRollStep;
 
 export interface CharacterPerformanceBubbleStep {
   type: 'bubble';
@@ -40,12 +41,12 @@ export interface CharacterPerformanceBubbleStep {
   durationMs?: number;
 }
 
-export interface CharacterPerformanceExpressionStep {
+export interface CharacterPerformanceExpressionPresetStep {
   type: 'expression';
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
   participantCount?: CharacterPerformanceParticipantCountCondition;
-  expression: Expression;
+  expressionPresetId: ExpressionPresetId;
   delayMs?: number;
   durationMs?: number;
 }
@@ -101,6 +102,14 @@ export interface CharacterPerformanceDialogueStep {
   displayMode?: 'preview' | 'ambient';
   delayMs?: number;
   durationMs?: number;
+}
+
+export interface CharacterPerformanceRollStep {
+  type: 'roll';
+  phase: CharacterPerformancePhase;
+  participantCount?: CharacterPerformanceParticipantCountCondition;
+  rollId: string;
+  delayMs?: number;
 }
 
 export interface CharacterPerformanceParticipantCountCondition {

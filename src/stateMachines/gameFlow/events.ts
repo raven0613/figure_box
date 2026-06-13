@@ -1,4 +1,4 @@
-import { Expression, Position } from "~/constants/character";
+import { ExpressionPresetId, MemoryType, Position } from "~/constants/character";
 import type { CharacterEventActivityEffects } from "~/constants/charactarEventsDefinitions";
 import type { CharacterRequestSatisfiedEffect } from "~/services/characterRequests/types";
 import type { CharacterRuntimeInput } from "./context";
@@ -10,6 +10,7 @@ import type {
   CharacterEventNearbyVisibleItem,
 } from "~/services/characterEvents/types";
 import type { JoinableActivity } from "~/services/characterEvents/joinableActivities";
+import type { ActivityOutcomeResolvedBy } from "~/services/characterEvents/activityOutcomeResolver";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
 
 export enum WidgetEventType {
@@ -26,7 +27,16 @@ export type GameFlowEvents =
   | { type: 'END_INTERACTION' }
   | { type: 'PICK_CHARACTER'; characterId: string }
   | { type: 'RELEASE_CHARACTER'; characterId: string }
+  | SimWorldEvent
   | DialogueManagerEvent;
+
+export type SimWorldEvent =
+  | { type: 'PAUSE_SIM_WORLD' }
+  | { type: 'RESUME_SIM_WORLD' }
+  | { type: 'START_ACTIVITY_OBSERVATION'; activityId: string }
+  | { type: 'ACTIVITY_OBSERVATION_DIALOGUE_CLOSED'; activityId: string }
+  | { type: 'ACTIVITY_OBSERVATION_SETTLED'; activityId: string }
+  | { type: 'CANCEL_ACTIVITY_OBSERVATION'; activityId: string };
 
 export type CharacterEvent =
   | {
@@ -56,6 +66,8 @@ export type CharacterEvent =
     activityId: string;
     participantIds?: readonly string[];
     activityEffects?: CharacterEventActivityEffects;
+    outcomeId?: string;
+    resolvedBy?: ActivityOutcomeResolvedBy;
     timestamp?: number;
   }
   | {
@@ -63,6 +75,14 @@ export type CharacterEvent =
     partnerCharIds: string[];
     role: 'initiator' | 'target';
     sourceEventId: string;
+    timestamp?: number;
+  }
+  | {
+    type: EventType.RememberRelationshipMemory;
+    targetCharId: string;
+    memoryType: MemoryType;
+    countDelta: number;
+    startedById: string;
     timestamp?: number;
   }
   | {
@@ -80,7 +100,7 @@ export type CharacterEvent =
   | { type: EventType.ApplyOfflineRuntime; runtime: CharacterRuntimeInput }
   | { type: EventType.StartThinking }
   | { type: EventType.StopThinking }
-  | { type: EventType.SetExpression; expression: Expression }
+  | { type: EventType.SetExpressionPreset; expressionPresetId: ExpressionPresetId }
   | { type: EventType.HoldItem; itemInstanceId: ItemInstanceId; definitionId: ItemDefinitionId }
   | { type: EventType.ReleaseHeldItem }
   | { type: EventType.AddLock; parts: ('bodyAction' | 'bodyMove' | 'mind' | 'communication')[]; reason: CharacterControlReason }
@@ -90,7 +110,7 @@ export type CharacterEventOld =
   | { type: EventType.Tick } // 自動：時間流逝
   | { type: EventType.SenseObject; objectId: string; gridType: string } // 自動：感應到物品
   | { type: EventType.SocialProximity; targetActorId: string } // 自動：感知到附近有人
-  | { type: EventType.RequestAction; actionType: 'WANT_FRIEND' | 'HUNGRY'; payload: any } // 主動：需要玩家點擊
+  | { type: EventType.RequestAction; actionType: 'WANT_FRIEND' | 'HUNGRY'; payload: unknown } // 主動：需要玩家點擊
   | { type: EventType.UserClick; actionId: string } // 主動：玩家點擊核准
 
 
@@ -113,6 +133,7 @@ export enum EventType {
   JoinActivityRejected = "joinActivityRejected",
   EndJoinedActivity = "endJoinedActivity",
   RecordActivityCooldown = "recordActivityCooldown",
+  RememberRelationshipMemory = "rememberRelationshipMemory",
   ApplyRequestEffects = "applyRequestEffects",
   NormalizeRomanceFeelings = "normalizeRomanceFeelings",
   SetControlState = "setControlState",
@@ -125,7 +146,7 @@ export enum EventType {
   ApplyOfflineRuntime = "applyOfflineRuntime",
   StartThinking = "startThinking",
   StopThinking = "stopThinking",
-  SetExpression = "setExpression",
+  SetExpressionPreset = "setExpressionPreset",
   HoldItem = "holdItem",
   ReleaseHeldItem = "releaseHeldItem",
   AddLock = "addLock",
@@ -151,7 +172,7 @@ export type DialogueManagerEmittedEvent =
     type: 'DIALOGUE_LINE';
     speakerId: string;
     text: string;
-    expression?: Expression;
+    expressionPresetId?: ExpressionPresetId;
   }
   | {
     type: 'DIALOGUE_CHOICE_REQUESTED';

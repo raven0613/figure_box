@@ -1,8 +1,11 @@
 import { Canvas, Group, Text } from 'fabric';
-import { Expression } from '~/constants/character';
+import { ExpressionPresetId } from '~/constants/character';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
-import { PresentationAnimationService } from '~/services/presentationAnimationService';
+import {
+  PresentationAnimationService,
+  type AnimationHandle,
+} from '~/services/presentationAnimationService';
 import type { ItemDefinition } from '~/typing/item';
 import { TOWN_MAP_CHARACTER_RENDER_SCALE } from '~/constants/townMapWidgetConstants';
 import {
@@ -41,11 +44,14 @@ export class TownMapCharacterLayer {
   private readonly heldItems = new Map<string, Group>();
   private readonly heldItemDefinitions = new Map<string, ItemDefinition>();
   private readonly characters = new Map<string, TownMapCharacter>();
+  private readonly presentationAnimationHandles = new Map<string, AnimationHandle>();
   private readonly spriteRenderers = new Map<string, TownMapCharacterSpriteRenderer>();
   private readonly spriteLoadVersions = new Map<string, number>();
   private readonly spriteDirections = new Map<string, TownMapCharacterSpriteDirection>();
+  private readonly activePresentationCharacterIds = new Set<string>();
   private isCharacterDraggingEnabled = true;
   private isDisposed = false;
+  private isPresentationPaused = false;
   private viewportZoom = 1;
 
   constructor(options: TownMapCharacterLayerOptions) {
@@ -56,6 +62,9 @@ export class TownMapCharacterLayer {
 
   dispose(): void {
     this.isDisposed = true;
+    Array.from(this.presentationAnimationHandles.keys()).forEach(key => {
+      this.cancelPresentationAnimation(key);
+    });
     this.presentationAnimations.cancelAll();
     Array.from(this.heldItems.keys()).forEach(characterId => {
       this.releaseHeldItem(characterId);
@@ -225,17 +234,17 @@ export class TownMapCharacterLayer {
     this.canvas.requestRenderAll();
   }
 
-  updateCharacterExpression(characterId: string, expressionText: Expression): void {
+  updateCharacterExpressionPreset(characterId: string, presetId: ExpressionPresetId): void {
     const token = this.characterTokens.get(characterId);
-    const expression = token?.get('expressionObject') as Text | undefined;
+    const expressionPresetLabel = token?.get('expressionPresetObject') as Text | undefined;
 
-    if (!token || !expression || expression.text === expressionText) {
+    if (!token || !expressionPresetLabel || expressionPresetLabel.text === presetId) {
       return;
     }
 
-    expression.set('text', expressionText);
+    expressionPresetLabel.set('text', presetId);
     this.updateStoredCharacter(characterId, {
-      expression: expressionText,
+      expressionPresetId: presetId,
     });
     this.applyTokenUiZoom(token);
     token.setCoords();
@@ -300,8 +309,7 @@ export class TownMapCharacterLayer {
 
     this.heldItems.delete(characterId);
     this.heldItemDefinitions.delete(characterId);
-    this.presentationAnimations.cancel(this.getHeldItemAnimationKey(characterId));
-    this.presentationAnimations.cancel(this.getCharacterJumpAnimationKey(characterId));
+    this.cancelCharacterAnimation(characterId);
     this.rebuildCharacterToken(characterId);
   }
 
@@ -314,8 +322,7 @@ export class TownMapCharacterLayer {
 
     this.heldItems.delete(characterId);
     this.heldItemDefinitions.delete(characterId);
-    this.presentationAnimations.cancel(this.getHeldItemAnimationKey(characterId));
-    this.presentationAnimations.cancel(this.getCharacterJumpAnimationKey(characterId));
+    this.cancelCharacterAnimation(characterId);
     this.canvas.remove(token);
     this.characterTokens.delete(characterId);
     this.characters.delete(characterId);
@@ -340,25 +347,76 @@ export class TownMapCharacterLayer {
         return;
       }
 
-      this.presentationAnimations.heldItemCelebrationAnim({
-        key: this.getHeldItemAnimationKey(characterId),
+      const animationKey = this.getHeldItemAnimationKey(characterId);
+
+      this.cancelPresentationAnimation(animationKey);
+      this.trackPresentationAnimation(animationKey, this.presentationAnimations.heldItemCelebrationAnim({
+        key: animationKey,
         target: heldItem,
         canvas: this.canvas,
         radius: this.cellSize * 0.38,
         durationMs,
-      });
+      }));
       return;
     }
 
     if (animationId === 'characterJumpAnim') {
-      this.presentationAnimations.characterJumpAnim({
-        key: this.getCharacterJumpAnimationKey(characterId),
+      const animationKey = this.getCharacterJumpAnimationKey(characterId);
+
+      this.cancelPresentationAnimation(animationKey);
+      this.trackPresentationAnimation(animationKey, this.presentationAnimations.characterJumpAnim({
+        key: animationKey,
         target: token,
         canvas: this.canvas,
         jumpHeight: this.cellSize * 0.64,
         durationMs,
-      });
+      }));
     }
+  }
+
+  cancelCharacterAnimation(characterId: string): void {
+    this.cancelPresentationAnimation(this.getHeldItemAnimationKey(characterId));
+    this.cancelPresentationAnimation(this.getCharacterJumpAnimationKey(characterId));
+  }
+
+  hasActiveDialogueSpriteAnimations(): boolean {
+    return this.isPresentationPaused && this.activePresentationCharacterIds.size > 0;
+  }
+
+  setPresentationPaused(
+    isPaused: boolean,
+    activeCharacterIds: readonly string[] = [],
+  ): void {
+    const nextActiveCharacterIds = new Set(activeCharacterIds);
+    const hasSameActiveCharacters = this.activePresentationCharacterIds.size === nextActiveCharacterIds.size
+      && [...this.activePresentationCharacterIds].every(characterId => (
+        nextActiveCharacterIds.has(characterId)
+      ));
+
+    if (this.isPresentationPaused === isPaused && hasSameActiveCharacters) {
+      return;
+    }
+
+    this.isPresentationPaused = isPaused;
+    this.activePresentationCharacterIds.clear();
+    nextActiveCharacterIds.forEach(characterId => {
+      this.activePresentationCharacterIds.add(characterId);
+    });
+
+    if (isPaused) {
+      this.presentationAnimations.pauseAll();
+    } else {
+      this.presentationAnimations.resumeAll();
+    }
+
+    this.characterTokens.forEach((token, characterId) => {
+      const spriteBody = token.get('spriteBodyObject') as TownMapCharacterSpriteBody | undefined;
+
+      spriteBody?.setTownMapSpriteAnimationPaused(
+        isPaused && !this.activePresentationCharacterIds.has(characterId),
+      );
+    });
+    this.canvas.requestRenderAll();
   }
 
   snapCharacterToGrid(characterId: string, currentTile: GridCoordinate | null): void {
@@ -432,7 +490,12 @@ export class TownMapCharacterLayer {
       return undefined;
     }
 
-    return renderer.createBody(this.spriteDirections.get(characterId) ?? 'front');
+    const spriteBody = renderer.createBody(this.spriteDirections.get(characterId) ?? 'front');
+
+    spriteBody.setTownMapSpriteAnimationPaused(
+      this.isPresentationPaused && !this.activePresentationCharacterIds.has(characterId),
+    );
+    return spriteBody;
   }
 
   private createHeldItemGlyph(characterId: string): Group | undefined {
@@ -501,6 +564,27 @@ export class TownMapCharacterLayer {
       ...character,
       ...patch,
     });
+  }
+
+  private trackPresentationAnimation(key: string, handle: AnimationHandle): void {
+    this.presentationAnimationHandles.set(key, handle);
+    void handle.finished.then(() => {
+      if (this.presentationAnimationHandles.get(key) === handle) {
+        this.presentationAnimationHandles.delete(key);
+      }
+    });
+  }
+
+  private cancelPresentationAnimation(key: string): void {
+    const handle = this.presentationAnimationHandles.get(key);
+
+    if (!handle) {
+      this.presentationAnimations.cancel(key);
+      return;
+    }
+
+    this.presentationAnimationHandles.delete(key);
+    handle.cancel();
   }
 
   private getHeldItemAnimationKey(characterId: string): string {

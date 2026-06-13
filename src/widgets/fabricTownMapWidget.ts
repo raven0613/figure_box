@@ -1,6 +1,10 @@
 import { Canvas, type Group } from 'fabric';
 import { TownMapGrid, type GridCoordinate, type TownMapTile } from './townMapGrid';
-import { TownMapCamera } from './townMapCamera';
+import {
+  TownMapCamera,
+  type TownMapCameraTransitionOptions,
+  type TownMapCameraView,
+} from './townMapCamera';
 import { TownMapCharacterTracker } from './townMapCharacterTracker';
 import { TownMapCharacterLayer } from './townMapCharacterLayer';
 import { TownMapFloatingTextLayer } from './townMapFloatingTextLayer';
@@ -13,7 +17,7 @@ import {
 } from './townMapObjectGlyphFactory';
 import { sortEntityLayer, updateEntitySortMetadata } from './townMapLayerSorter';
 import { DEFAULT_CELL_SIZE } from '../constants/townMapWidgetConstants';
-import type { Expression } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { ItemDefinition, PlacedObject } from '~/typing/item';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
@@ -40,6 +44,7 @@ export type {
   FabricTownMapOptions,
   TownMapCharacter,
 } from './townMapWidgetTypes';
+export type { TownMapCameraView } from './townMapCamera';
 
 interface MoveCharacterToTileResult {
   moved: boolean;
@@ -129,10 +134,11 @@ export class FabricTownMapWidget {
       cellSize: this.cellSize,
       getCharacterCenter: characterId => this.getCharacterCenter(characterId),
       getZoom: () => this.getZoom(),
-      updateCharacterExpression: (characterId, expression) => {
-        this.updateCharacterExpression(characterId, expression);
+      updateCharacterExpressionPreset: (characterId, expressionPresetId) => {
+        this.updateCharacterExpressionPreset(characterId, expressionPresetId);
       },
       startAnimationLoop: () => this.startAnimationLoop(),
+      onMapActivityObserve: options.onMapActivityObserve,
     });
     this.walkAnimator = new TownMapWalkAnimator({
       cellSize: this.cellSize,
@@ -157,6 +163,9 @@ export class FabricTownMapWidget {
       cellSize: this.cellSize,
       getCharacterIdFromTarget: target => this.characterLayer.getCharacterIdFromTarget(target),
       getMapObjectIdFromTarget: target => this.getMapObjectIdFromTarget(target),
+      isMapActivityInteractionTarget: target => (
+        this.floatingTextLayer.isMapActivityInteractionTarget(target)
+      ),
       getCharacterTile: characterId => this.getCharacterTile(characterId),
       snapCharacterToGrid: (characterId, tile) => {
         this.snapCharacterToGrid(characterId, tile);
@@ -260,8 +269,8 @@ export class FabricTownMapWidget {
     this.characterLayer.updateCharacterStatus(characterId, statusText);
   }
 
-  updateCharacterExpression(characterId: string, expressionText: Expression): void {
-    this.characterLayer.updateCharacterExpression(characterId, expressionText);
+  updateCharacterExpressionPreset(characterId: string, presetId: ExpressionPresetId): void {
+    this.characterLayer.updateCharacterExpressionPreset(characterId, presetId);
   }
 
   setCharacterSpriteSheets(characterId: string, spriteSet: TownMapCharacterSpriteSet): Promise<void> {
@@ -299,6 +308,10 @@ export class FabricTownMapWidget {
     this.characterLayer.playCharacterAnimation(characterId, animationId, durationMs);
   }
 
+  cancelCharacterAnimation(characterId: string): void {
+    this.characterLayer.cancelCharacterAnimation(characterId);
+  }
+
   showCharacterBubble(
     characterId: string,
     text: string,
@@ -310,6 +323,10 @@ export class FabricTownMapWidget {
 
   showCharacterEmote(characterId: string, text: string, durationMs = 1200): void {
     this.floatingTextLayer.showCharacterEmote(characterId, text, durationMs);
+  }
+
+  removeCharacterEmote(characterId: string): void {
+    this.floatingTextLayer.removeCharacterEmote(characterId);
   }
 
   removeCharacterBubble(characterId: string): void {
@@ -333,6 +350,49 @@ export class FabricTownMapWidget {
 
   getZoom(): number {
     return this.camera.getZoom();
+  }
+
+  captureCameraView(): TownMapCameraView {
+    return this.camera.captureView();
+  }
+
+  restoreCameraView(
+    view: TownMapCameraView,
+    transition?: TownMapCameraTransitionOptions,
+  ): void {
+    this.camera.restoreView(view, transition);
+  }
+
+  focusCameraOnCharacters(
+    characterIds: readonly string[],
+    zoom: number,
+    transition?: TownMapCameraTransitionOptions,
+  ): boolean {
+    const characterCenters = characterIds
+      .map(characterId => this.getCharacterCenter(characterId))
+      .filter((center): center is GridCoordinate => center !== null);
+
+    if (characterCenters.length === 0) {
+      return false;
+    }
+
+    const center = characterCenters.reduce<GridCoordinate>(
+      (sum, characterCenter) => ({
+        x: sum.x + characterCenter.x,
+        y: sum.y + characterCenter.y,
+      }),
+      { x: 0, y: 0 },
+    );
+
+    this.camera.focusOn({
+      x: center.x / characterCenters.length,
+      y: center.y / characterCenters.length,
+    }, zoom, transition);
+    return true;
+  }
+
+  setCameraInteractionLocked(isLocked: boolean): void {
+    this.camera.setInteractionLocked(isLocked);
   }
 
   getCharacterTile(characterId: string): GridCoordinate | null {
@@ -374,6 +434,31 @@ export class FabricTownMapWidget {
 
   pauseWalk(characterId: string, durationMs: number): boolean {
     return this.walkAnimator.pauseWalk(characterId, durationMs);
+  }
+
+  setWalkAnimationsPaused(isPaused: boolean): void {
+    this.walkAnimator.setPaused(isPaused);
+  }
+
+  setPresentationPaused(
+    isPaused: boolean,
+    activeCharacterIds: readonly string[] = [],
+  ): void {
+    this.floatingTextLayer.setPaused(isPaused);
+    this.characterLayer.setPresentationPaused(isPaused, activeCharacterIds);
+
+    if (isPaused) {
+      if (this.hasActiveAnimations()) {
+        this.startAnimationLoop();
+      } else {
+        this.stopAnimationLoopIfIdle();
+      }
+      return;
+    }
+
+    if (this.hasActiveAnimations()) {
+      this.startAnimationLoop();
+    }
   }
 
   isWalking(characterId: string): boolean {
@@ -575,7 +660,9 @@ export class FabricTownMapWidget {
   }
 
   private hasActiveAnimations(): boolean {
-    return this.walkAnimator.hasActiveAnimations() || this.floatingTextLayer.hasActiveAnimations();
+    return this.walkAnimator.hasActiveAnimations()
+      || this.floatingTextLayer.hasActiveAnimations()
+      || this.characterLayer.hasActiveDialogueSpriteAnimations();
   }
 
   private getCharacterPosition(characterId: string, coordinate: GridCoordinate): GridCoordinate {

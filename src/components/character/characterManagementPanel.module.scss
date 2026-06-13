@@ -1,0 +1,420 @@
+.panel {
+  width: min(520px, calc(100vw - 32px));
+  height: min(620px, calc(100vh - 88px));
+}
+
+.creationPanel {
+  width: min(1528px, calc(100vw - 32px));
+  height: min(820px, calc(100vh - 88px));
+}
+
+.panelContent {
+  overflow: hidden;
+}
+
+.creationPanelContent {
+  overflow: auto;
+}
+
+.rosterView {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.rosterHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(28, 31, 35, 0.1);
+  color: #4f5d65;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rosterHeader strong {
+  color: #24313a;
+  font-size: 14px;
+}
+
+.characterList {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.characterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 70px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(28, 31, 35, 0.08);
+  background: #ffffff;
+}
+
+.characterRow:last-child {
+  border-bottom: 0;
+}
+
+.characterIdentity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.characterMiniSprite {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border: 1px solid rgba(59, 119, 110, 0.3);
+  border-radius: 6px;
+  background: #edf7f2;
+  overflow: hidden;
+}
+
+.characterMiniSpriteFrame {
+  position: absolute;
+  display: block;
+  image-rendering: auto;
+  background-repeat: no-repeat;
+}
+
+.characterMiniSpriteFallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #dceee9;
+  color: #2d665e;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.characterText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.characterText strong,
+.characterText span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.characterText strong {
+  color: #24313a;
+  font-size: 14px;
+}
+
+.characterText span {
+  color: #6b777e;
+  font-size: 12px;
+}
+
+.roomNumber {
+  flex: 0 0 auto;
+  color: #4f5d65;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(28, 31, 35, 0.1);
+  background: #f7f3ea;
+}
+
+.createButton {
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid #3b776e;
+  border-radius: 6px;
+  background: #3b776e;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.createButton:hover {
+  background: #2f665e;
+}
+
+.createButton:focus-visible {
+  outline: 2px solid #3b776e;
+  outline-offset: 2px;
+}
+
+.appearanceStep {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #ffffff;
+}
+
+.creationStepToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 760px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(28, 31, 35, 0.1);
+  background: #ffffff;
+}
+
+.creationStepToolbar h3,
+.profileFormHeader h3 {
+  margin: 6px 0 0;
+  color: #24313a;
+  font-size: 18px;
+}
+
+.avatarEditorHost {
+  min-width: 1528px;
+  padding: 12px;
+}
+
+.stepIndex {
+  color: #6b777e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nextButton,
+.secondaryButton,
+.finishButton {
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid #3b776e;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.nextButton {
+  color: #ffffff;
+  background: #3b776e;
+}
+
+.nextButton:hover,
+.finishButton:hover:not(:disabled) {
+  background: #2f665e;
+}
+
+.finishButton {
+  color: #ffffff;
+  background: #3b776e;
+}
+
+.finishButton:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.secondaryButton {
+  width: fit-content;
+  color: #2d665e;
+  background: #edf7f2;
+}
+
+.secondaryButton:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.nextButton:focus-visible,
+.secondaryButton:focus-visible,
+.finishButton:focus-visible {
+  outline: 2px solid #3b776e;
+  outline-offset: 2px;
+}
+
+.profileStep {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #ffffff;
+}
+
+.profileFormHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(28, 31, 35, 0.1);
+}
+
+.profileActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profileForm {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(420px, 1fr);
+  gap: 18px;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.profileBasics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.nameField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nameField span {
+  color: #4f5d65;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.nameField input {
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid rgba(28, 31, 35, 0.18);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #24313a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.nameField input:disabled {
+  color: #6b777e;
+  background: #f2f4f3;
+}
+
+.nameField input:focus {
+  border-color: #3b776e;
+  outline: 2px solid rgba(59, 119, 110, 0.18);
+  outline-offset: 1px;
+}
+
+.creationError {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(175, 68, 55, 0.28);
+  border-radius: 6px;
+  background: #fff1ee;
+  color: #9b3d32;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.personalityList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.personalityTrait {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(28, 31, 35, 0.12);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.personalityTraitHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.personalityTraitHeader span {
+  color: #24313a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.personalityTraitHeader strong {
+  color: #2d665e;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.personalitySliderRow {
+  display: grid;
+  grid-template-columns: 86px minmax(160px, 1fr) 86px;
+  gap: 10px;
+  align-items: center;
+}
+
+.personalitySliderRow span {
+  overflow: hidden;
+  color: #6b777e;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personalitySliderRow span:last-child {
+  text-align: right;
+}
+
+.personalitySliderRow input {
+  width: 100%;
+  accent-color: #3b776e;
+}
+
+.personalitySliderRow input:disabled {
+  opacity: 0.5;
+}
+
+.personalityTicks {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 0 96px;
+  color: #8b969c;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.activePersonalityTick {
+  color: #2d665e;
+}

@@ -11,6 +11,7 @@ import {
   TownCharacterController,
   type CharacterSnapshot,
 } from '~/services/townCharacterController';
+import type { CharacterSeed } from '~/services/townCharacterTypes';
 import { saveService } from '~/services/save/saveService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
 import type { GodDropOpportunity } from '~/services/godDropOpportunityService';
@@ -25,8 +26,11 @@ import {
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '~/constants/charactarEventsDefinitions';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
-import { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
-import { CHARACTER_SEEDS, Expression, MemoryType, SocialStatus } from '~/constants/character';
+import {
+  FabricTownMapWidget,
+  type TownMapCameraView,
+} from '~/widgets/fabricTownMapWidget';
+import { CHARACTER_SEEDS, ExpressionPresetId, MemoryType, SocialStatus } from '~/constants/character';
 import { loadTownCharacterSpriteSet } from '~/services/townSpritePreloadService';
 import {
   TOWN_APARTMENT_OBJECT_ID,
@@ -37,6 +41,7 @@ import {
 import {
   CharacterBodyActionState,
   CharacterBodyMoveState,
+  GameSimWorldState,
   type CharacterStateSummary,
 } from '~/stateMachines/gameFlow/states';
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
@@ -45,6 +50,7 @@ import { itemService, type InventoryGroup } from '~/services/items/itemService';
 import { itemPlacementService } from '~/services/items/itemPlacementService';
 import { itemTransferService } from '~/services/items/itemTransferService';
 import { DEFAULT_ITEM_SHOP_ID, shopService } from '~/services/items/shopService';
+import { getPlayableCharacters } from '~/services/playableCharacterService';
 import { TOWN_MAP_CELL_SIZE } from '~/constants/townMapWidgetConstants';
 import type {
   ItemDefinition,
@@ -70,13 +76,22 @@ const PLAYER_DEMO_ITEM_IDS: readonly ItemDefinitionId[] = [
 ];
 const GIFT_DROP_CHARACTER_RADIUS = 1;
 const ALLOW_DIAGONAL_MOVEMENT = false; // 斜走
+const ACTIVITY_OBSERVATION_CAMERA_ZOOM = 3;
+const ACTIVITY_OBSERVATION_CAMERA_TRANSITION_MS = 600;
 
 interface TownMapContainerProps {
-  expressionByCharacterId?: Partial<Record<string, Expression>>;
+  simWorldState?: GameSimWorldState;
+  expressionPresetIdByCharacterId?: Partial<Record<string, ExpressionPresetId>>;
   mapDialoguePresentation?: EventDialoguePresentation | null;
   romanceRuleRevision?: number;
-  onCharacterExpressionsChange?: (expressionByCharacterId: Partial<Record<string, Expression>>) => void;
+  characterRosterRevision?: number;
+  apartmentReveal?: {
+    characterId: string;
+    revision: number;
+  } | null;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
+  onActivitySettled?: (activityId: string) => void;
+  observedActivityId?: string | null;
 }
 
 interface GiftDragState {
@@ -123,11 +138,15 @@ interface PickupChainState {
 }
 
 export function TownMapContainer({
-  expressionByCharacterId = {},
+  simWorldState = GameSimWorldState.Running,
+  expressionPresetIdByCharacterId = {},
   mapDialoguePresentation = null,
   romanceRuleRevision = 0,
-  onCharacterExpressionsChange,
+  characterRosterRevision = 0,
+  apartmentReveal = null,
   onDialogueRequest,
+  onActivitySettled,
+  observedActivityId = null,
 }: TownMapContainerProps) {
   const { t } = useTranslation();
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -156,8 +175,15 @@ export function TownMapContainer({
   const [pickupChain, setPickupChain] = useState<PickupChainState | null>(null);
   const [characterInventoryWindow, setCharacterInventoryWindow] = useState<CharacterInventoryWindowState | null>(null);
   const [mapZoom, setMapZoom] = useState(1);
+  const playableCharacters = useMemo(
+    () => getPlayableCharacters(),
+    [characterRosterRevision],
+  );
   const placementDraftRef = useRef<ItemInstance | null>(null);
   const pickupChainRef = useRef<PickupChainState | null>(null);
+  const activityObservationCameraViewRef = useRef<TownMapCameraView | null>(null);
+  const focusedActivityObservationIdRef = useRef<string | null>(null);
+  const isCameraRestoreTransitionActiveRef = useRef(false);
   const lastAppliedRomanceRuleRevisionRef = useRef(romanceRuleRevision);
   const requestListItems = useMemo(
     () => getRequestListItems({
@@ -175,10 +201,15 @@ export function TownMapContainer({
     [characterRequests, characterSnapshots],
   );
   const apartmentResidents = useMemo(
-    () => getApartmentResidents(characterSnapshots, TOWN_APARTMENT_SPACE_ID, apartmentRequestItems),
-    [apartmentRequestItems, characterSnapshots],
+    () => getApartmentResidents(
+      characterSnapshots,
+      TOWN_APARTMENT_SPACE_ID,
+      apartmentRequestItems,
+      apartmentReveal?.characterId ?? null,
+    ),
+    [apartmentRequestItems, apartmentReveal?.characterId, characterSnapshots],
   );
-  const selectedCharacterName = CHARACTER_SEEDS.find(character => character.id === selectedCharacterId)?.name ?? selectedCharacterId;
+  const selectedCharacterName = playableCharacters.find(character => character.id === selectedCharacterId)?.name ?? selectedCharacterId;
   const transferHistoryDefinition = transferHistoryItem ? itemService.getDefinition(transferHistoryItem.definitionId) : null;
   const placementDraftDefinition = placementDraft ? itemService.getDefinition(placementDraft.definitionId) : null;
   const placementDraftName = placementDraftDefinition
@@ -190,16 +221,6 @@ export function TownMapContainer({
   const placedItemMenuName = placedItemMenuView
     ? t(placedItemMenuView.definition.nameKey)
     : '';
-  const snapshotExpressionByCharacterId = useMemo(
-    () => Object.fromEntries(
-      Object.entries(characterSnapshots).map(([characterId, snapshot]) => [
-        characterId,
-        snapshot.context.status.expression,
-      ]),
-    ) as Partial<Record<string, Expression>>,
-    [characterSnapshots],
-  );
-
   const refreshPlayerInventory = useCallback(() => {
     setPlayerInventoryGroups(itemService.getActorInventoryGroups(PLAYER_ACTOR_ID, { states: ['stored'] }));
     saveService.scheduleSaveItems();
@@ -253,7 +274,6 @@ export function TownMapContainer({
   const cancelPlacementDraft = useCallback(() => {
     placementDraftRef.current = null;
     setPlacementDraft(null);
-    widgetRef.current?.setCharacterDraggingEnabled(true);
   }, []);
 
   const cancelPickupChain = useCallback(() => {
@@ -358,8 +378,10 @@ export function TownMapContainer({
 
   useEffect(() => {
     placementDraftRef.current = placementDraft;
-    widgetRef.current?.setCharacterDraggingEnabled(!placementDraft);
-  }, [placementDraft]);
+    widgetRef.current?.setCharacterDraggingEnabled(
+      simWorldState === GameSimWorldState.Running && !placementDraft,
+    );
+  }, [placementDraft, simWorldState]);
 
   useEffect(() => {
     pickupChainRef.current = pickupChain;
@@ -501,6 +523,9 @@ export function TownMapContainer({
           refreshShopStock();
         }
       },
+      onMapActivityObserve: activityId => {
+        characterControllerRef.current?.observeActivity(activityId);
+      },
       onZoomChange: zoom => {
         setMapZoom(zoom);
         characterControllerRef.current?.syncRequestIndicators(zoom);
@@ -528,12 +553,14 @@ export function TownMapContainer({
     widgetRef.current = widget;
     let isWidgetDisposed = false;
 
-    void syncCharacterSpriteRenderers(widget, () => isWidgetDisposed);
+    void syncCharacterSpriteRenderers(widget, playableCharacters, () => isWidgetDisposed);
 
     const characterController = new TownCharacterController({
       widget,
+      characters: playableCharacters,
       initialRelationshipStore: relationshipStoreService.getSnapshot(),
       onDialogueRequest,
+      onActivitySettled,
       onCharacterSnapshot: (characterId, snapshot) => {
         setCharacterSnapshots(current => ({
           ...current,
@@ -568,7 +595,15 @@ export function TownMapContainer({
       void widget.destroy();
       canvasHost.replaceChildren();
     };
-  }, [cancelPickupChain, cancelPlacementDraft, handleRelationshipStoreChange, onDialogueRequest, pickupPlacedItem, refreshPlayerInventory, refreshShopStock]);
+  }, [cancelPickupChain, cancelPlacementDraft, handleRelationshipStoreChange, onActivitySettled, onDialogueRequest, pickupPlacedItem, playableCharacters, refreshPlayerInventory, refreshShopStock]);
+
+  useEffect(() => {
+    if (!apartmentReveal) {
+      return;
+    }
+
+    setIsApartmentPanelOpen(true);
+  }, [apartmentReveal]);
 
   useEffect(() => {
     seedDemoPlayerInventory();
@@ -645,16 +680,71 @@ export function TownMapContainer({
   }, [giftDragState, giftItemToCharacter]);
 
   useEffect(() => {
-    Object.entries(expressionByCharacterId).forEach(([characterId, expression]) => {
-      if (expression) {
-        characterControllerRef.current?.setCharacterExpression(characterId, expression);
-      }
-    });
-  }, [expressionByCharacterId]);
+    characterControllerRef.current?.setSimWorldState(simWorldState, observedActivityId);
+  }, [observedActivityId, simWorldState]);
 
   useEffect(() => {
-    onCharacterExpressionsChange?.(snapshotExpressionByCharacterId);
-  }, [onCharacterExpressionsChange, snapshotExpressionByCharacterId]);
+    const widget = widgetRef.current;
+
+    if (!widget) {
+      return;
+    }
+
+    if (observedActivityId) {
+      isCameraRestoreTransitionActiveRef.current = false;
+      activityObservationCameraViewRef.current ??= widget.captureCameraView();
+      widget.setCameraInteractionLocked(true);
+      const observedActivity = joinableActivities.find(
+        activity => activity.id === observedActivityId,
+      );
+
+      if (
+        observedActivity
+        && focusedActivityObservationIdRef.current !== observedActivityId
+      ) {
+        widget.focusCameraOnCharacters(
+          observedActivity.participantIds,
+          ACTIVITY_OBSERVATION_CAMERA_ZOOM,
+          {
+            durationMs: ACTIVITY_OBSERVATION_CAMERA_TRANSITION_MS,
+          },
+        );
+        focusedActivityObservationIdRef.current = observedActivityId;
+      }
+
+      return;
+    }
+
+    const previousCameraView = activityObservationCameraViewRef.current;
+
+    if (previousCameraView) {
+      activityObservationCameraViewRef.current = null;
+      focusedActivityObservationIdRef.current = null;
+      isCameraRestoreTransitionActiveRef.current = true;
+      widget.restoreCameraView(previousCameraView, {
+        durationMs: ACTIVITY_OBSERVATION_CAMERA_TRANSITION_MS,
+        onComplete: () => {
+          isCameraRestoreTransitionActiveRef.current = false;
+          widget.setCameraInteractionLocked(false);
+        },
+      });
+      return;
+    }
+
+    if (isCameraRestoreTransitionActiveRef.current) {
+      return;
+    }
+
+    widget.setCameraInteractionLocked(false);
+  }, [joinableActivities, observedActivityId]);
+
+  useEffect(() => {
+    Object.entries(expressionPresetIdByCharacterId).forEach(([characterId, expressionPresetId]) => {
+      if (expressionPresetId) {
+        characterControllerRef.current?.setCharacterExpressionPreset(characterId, expressionPresetId);
+      }
+    });
+  }, [expressionPresetIdByCharacterId]);
 
   useEffect(() => {
     const characterController = characterControllerRef.current;
@@ -862,6 +952,7 @@ export function TownMapContainer({
       {giftTargetPicker ? (
         <GiftTargetPicker
           state={giftTargetPicker}
+          characters={playableCharacters}
           onSelectTarget={characterId => {
             giftItemToCharacter(giftTargetPicker.itemInstance, characterId);
             setGiftTargetPicker(null);
@@ -925,7 +1016,7 @@ export function TownMapContainer({
           </div> */}
 
           <div className={styles.characterList}>
-            {CHARACTER_SEEDS.map(character => {
+            {playableCharacters.map(character => {
               const snapshot = characterSnapshots[character.id];
               const summary = snapshot ? getCharacterStateSummary(snapshot.value) : null;
               const isSelected = selectedCharacterId === character.id;
@@ -1022,10 +1113,11 @@ function showGiftPreview(characterIds: readonly string[], widget: FabricTownMapW
 
 async function syncCharacterSpriteRenderers(
   widget: FabricTownMapWidget,
+  characters: readonly CharacterSeed[],
   isWidgetDisposed: () => boolean,
 ): Promise<void> {
   await Promise.all(
-    CHARACTER_SEEDS.map(async character => {
+    characters.map(async character => {
       try {
         const spriteSet = await loadTownCharacterSpriteSet(character);
 
@@ -1187,10 +1279,12 @@ function GiftDragPreview({
 
 function GiftTargetPicker({
   state,
+  characters,
   onSelectTarget,
   onCancel,
 }: {
   state: GiftTargetPickerState;
+  characters: readonly CharacterSeed[];
   onSelectTarget: (characterId: string) => void;
   onCancel: () => void;
 }) {
@@ -1210,7 +1304,7 @@ function GiftTargetPicker({
           type="button"
           onClick={() => onSelectTarget(characterId)}
         >
-          {CHARACTER_SEEDS.find(character => character.id === characterId)?.name ?? characterId}
+          {characters.find(character => character.id === characterId)?.name ?? characterId}
         </button>
       ))}
       <button
@@ -1373,6 +1467,7 @@ function getApartmentResidents(
   snapshots: Record<string, CharacterSnapshot>,
   apartmentSpaceId: string,
   apartmentRequests: readonly ApartmentRequestItem[],
+  featuredCharacterId: string | null = null,
 ): ApartmentResident[] {
   return Object.values(snapshots)
     .filter(snapshot => (
@@ -1392,7 +1487,18 @@ function getApartmentResidents(
           levelLabel: item.levelLabel,
           status: item.request.status,
         })),
-    }));
+    }))
+    .sort((leftResident, rightResident) => {
+      if (leftResident.id === featuredCharacterId) {
+        return -1;
+      }
+
+      if (rightResident.id === featuredCharacterId) {
+        return 1;
+      }
+
+      return 0;
+    });
 }
 
 function CharacterRequestDebugPanel({
@@ -1666,6 +1772,10 @@ function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationship
         <strong>{snapshot.context.lastEventDecision?.selectedBucketId ?? '-'}</strong>
       </div>
       <div className={styles.detailRow}>
+        <span>Motivation picked</span>
+        <strong>{snapshot.context.lastEventDecision?.selectedMotivation ?? '-'}</strong>
+      </div>
+      <div className={styles.detailRow}>
         <span>Event picked</span>
         <strong>{snapshot.context.lastEventDecision?.selectedCandidateId ?? '-'}</strong>
       </div>
@@ -1680,6 +1790,14 @@ function CharacterStatusPanel({ snapshot, allSnapshots, activities, relationship
       <div className={styles.detailRow}>
         <span>Candidates</span>
         <strong>{snapshot.context.lastEventDecision?.candidateCount ?? 0}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Motivations</span>
+        <strong>{snapshot.context.lastEventDecision?.motivationCount ?? 0}</strong>
+      </div>
+      <div className={styles.detailRow}>
+        <span>Motivation candidates</span>
+        <strong>{snapshot.context.lastEventDecision?.selectedMotivationCandidateCount ?? 0}</strong>
       </div>
       <div className={styles.detailRow}>
         <span>Saturation</span>

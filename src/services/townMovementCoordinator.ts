@@ -1,4 +1,5 @@
-import { Expression, type Position } from '~/constants/character';
+import type { Position } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import { TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
 import { EventType } from '~/stateMachines/gameFlow/events';
@@ -23,6 +24,8 @@ export class TownMovementCoordinator {
     color: string;
     label: string;
   }>();
+  private readonly pendingSyncCharacterIds = new Set<string>();
+  private isWorldPaused = false;
 
   constructor(options: TownMovementCoordinatorOptions) {
     this.widget = options.widget;
@@ -35,6 +38,36 @@ export class TownMovementCoordinator {
     this.walkingCharacterIds.clear();
     this.visibleCharacterIds.clear();
     this.characterRenderDataById.clear();
+    this.pendingSyncCharacterIds.clear();
+  }
+
+  pauseWorld(): void {
+    if (this.isWorldPaused) {
+      return;
+    }
+
+    this.isWorldPaused = true;
+    this.widget.setWalkAnimationsPaused(true);
+  }
+
+  resumeWorld(): void {
+    if (!this.isWorldPaused) {
+      return;
+    }
+
+    this.isWorldPaused = false;
+    this.widget.setWalkAnimationsPaused(false);
+
+    const pendingCharacterIds = [...this.pendingSyncCharacterIds];
+
+    this.pendingSyncCharacterIds.clear();
+    pendingCharacterIds.forEach(characterId => {
+      const snapshot = this.getCharacterSnapshot(characterId);
+
+      if (snapshot) {
+        this.syncCharacterWithWidget(characterId, snapshot);
+      }
+    });
   }
 
   pauseCharacterWalk(characterId: string, durationMs: number): void {
@@ -62,15 +95,22 @@ export class TownMovementCoordinator {
     this.syncCharacterWithWidget(characterId, snapshot);
   }
 
+  registerCharacterRenderData(characterId: string, character: {
+    color: string;
+    label: string;
+  }): void {
+    this.characterRenderDataById.set(characterId, {
+      color: character.color,
+      label: character.label,
+    });
+  }
+
   placeCharacter(characterId: string, character: {
     position: Position;
     color: string;
     label: string;
   }, previousContext?: Pick<CharacterSnapshot['context'], 'position' | 'status'>): void {
-    this.characterRenderDataById.set(characterId, {
-      color: character.color,
-      label: character.label,
-    });
+    this.registerCharacterRenderData(characterId, character);
 
     const placed = this.widget.placeCharacter({
       id: characterId,
@@ -78,7 +118,7 @@ export class TownMovementCoordinator {
       y: previousContext?.position.y ?? character.position.y,
       color: character.color,
       label: character.label,
-      expression: previousContext?.status.expression ?? Expression.Normal,
+      expressionPresetId: previousContext?.status.expressionPresetId ?? DEFAULT_EXPRESSION_PRESET_ID,
     });
 
     if (placed) {
@@ -97,15 +137,23 @@ export class TownMovementCoordinator {
     this.ensurePositionedCharacterVisible(characterId, snapshot);
 
     this.widget.updateCharacterStatus(characterId, snapshot.context.currentMotivation);
-    this.widget.updateCharacterExpression(characterId, snapshot.context.status.expression);
+    this.widget.updateCharacterExpressionPreset(characterId, snapshot.context.status.expressionPresetId);
 
     const summary = getCharacterStateSummary(snapshot.value);
     const target = snapshot.context.target;
 
     if (summary.bodyMove !== 'walking' || !target) {
+      this.pendingSyncCharacterIds.delete(characterId);
       this.cancelWalkIfNeeded(characterId);
       return;
     }
+
+    if (this.isWorldPaused) {
+      this.pendingSyncCharacterIds.add(characterId);
+      return;
+    }
+
+    this.pendingSyncCharacterIds.delete(characterId);
 
     if (this.walkingCharacterIds.has(characterId) && this.widget.isWalking(characterId)) {
       return;
@@ -154,7 +202,7 @@ export class TownMovementCoordinator {
     }
 
     this.widget.updateCharacterStatus(snapshot.id, 'idle');
-    this.widget.updateCharacterExpression(snapshot.id, snapshot.status.expression);
+    this.widget.updateCharacterExpressionPreset(snapshot.id, snapshot.status.expressionPresetId);
   }
 
   private placePositionedRuntimeSnapshot(snapshot: CharacterRuntimeSnapshot): void {
@@ -165,7 +213,7 @@ export class TownMovementCoordinator {
       y: snapshot.position.y,
       color: renderData?.color ?? '#f0cc5f',
       label: renderData?.label ?? snapshot.id,
-      expression: snapshot.status.expression,
+      expressionPresetId: snapshot.status.expressionPresetId,
     });
 
     if (placed) {
@@ -203,7 +251,7 @@ export class TownMovementCoordinator {
       y: snapshot.context.position.y,
       color: renderData?.color ?? '#f0cc5f',
       label: renderData?.label ?? snapshot.context.name,
-      expression: snapshot.context.status.expression,
+      expressionPresetId: snapshot.context.status.expressionPresetId,
     });
 
     if (placed) {

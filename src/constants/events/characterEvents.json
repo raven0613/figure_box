@@ -407,7 +407,7 @@
     "presentationVariants": [
       {
         "id": "chat.casual_approach",
-        "baseWeight": 10,
+        "baseWeight": 0,
         "presentationTags": ["emote.talk", "motion.turn"],
         "performanceId": "social.chat.casual",
         "activity": {
@@ -438,6 +438,361 @@
             "relationshipIntimacyDelta": 1,
             "moodValueDelta": 6
           },
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
+      },
+      {
+        "id": "chat.gossip",
+        "baseWeight": 8,
+        "presentationTags": ["emote.talk", "motion.turn"],
+        "performanceId": "social.chat.gossip",
+        "offlineRecap": {
+          "summary": "{participantNameList} 湊在一起聊起了八卦。",
+          "detail": "話題讓兩人越聊越投入。"
+        },
+        "activity": {
+          "key": "chat.gossip",
+          "type": "chat",
+          "startPhase": "active",
+          "group": {
+            "inviteNearbyRange": 2,
+            "minParticipants": 2,
+            "maxParticipants": 2
+          },
+          "joinable": true,
+          "durationMs": 16000,
+          "refreshDurationOnJoin": false,
+          "joinWindowMs": 6000,
+          "dialogueScriptId": "activity-chat-gossip",
+          "dialogueSubjectSelection": {
+            "sourceRole": "initiator",
+            "memoryType": "impression",
+            "minCount": 1,
+            "count": 2,
+            "excludeParticipants": true
+          },
+          "cooldowns": {
+            "selfMs": 12000,
+            "targetMs": 10000,
+            "pairMs": 36000,
+            "category": "social_gossip",
+            "repeatPenalty": {
+              "windowMs": 150000,
+              "weightMultiplierPerRepeat": 0.4,
+              "maxRepeats": 3
+            }
+          },
+          "rolls": [
+            {
+              "id": "gossipResult",
+              "resolvesActivity": true,
+              "branches": [
+                {
+                  "id": "sharedSurprise",
+                  "baseWeight": 60,
+                  "performanceId": "social.chat.gossip.sharedSurprise",
+                  "weightModifiers": [
+                    {
+                      "path": "target.personality.interpersonalAttitude",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 15
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["warm", "like", "fond", "secret_crush", "open_crush", "love"],
+                      "add": 15
+                    }
+                  ],
+                  "effects": {
+                    "relationshipIntimacyDelta": 1,
+                    "moodValueDelta": 1
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "target",
+                      "target": "dialogueSubject",
+                      "memoryType": "impression",
+                      "countDelta": 1,
+                      "startedByRole": "initiator"
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 聊完八卦後，一起為內容感到驚訝。",
+                    "detail": "分享秘密讓兩人的距離稍微拉近了。"
+                  }
+                },
+                {
+                  "id": "playfulFakeout",
+                  "baseWeight": 40,
+                  "performanceId": "social.chat.gossip.playfulFakeout",
+                  "weightModifiers": [
+                    {
+                      "path": "initiator.personality.noveltyPreference",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 20
+                    },
+                    {
+                      "path": "initiator.personality.emotionalExpression",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 10
+                    }
+                  ],
+                  "effects": {
+                    "relationshipIntimacyDelta": 1
+                  },
+                  "effectsByRole": {
+                    "initiator": {
+                      "moodValueDelta": 1
+                    },
+                    "target": {
+                      "moodValueDelta": -1
+                    }
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "target",
+                      "target": "dialogueSubject",
+                      "memoryType": "impression",
+                      "countDelta": 1,
+                      "startedByRole": "initiator"
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 聊著聊著，才發現其中一人只是在開玩笑。",
+                    "detail": "惡作劇讓一人很開心，另一人卻有點不高興。"
+                  }
+                }
+              ]
+            }
+          ],
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
+      },
+      {
+        "id": "chat.argument.preference",
+        "baseWeight": 8,
+        "presentationTags": ["emote.angry", "motion.turn"],
+        "performanceId": "social.chat.argument.preference",
+        "offlineRecap": {
+          "summary": "{participantNameList} 為了彼此的喜好爭論了起來。",
+          "detail": "兩人各自堅持自己的看法。"
+        },
+        "activity": {
+          "key": "chat.argument.preference",
+          "type": "chat",
+          "startPhase": "active",
+          "group": {
+            "inviteNearbyRange": 2,
+            "minParticipants": 2,
+            "maxParticipants": 2
+          },
+          "joinable": true,
+          "durationMs": 20000,
+          "refreshDurationOnJoin": false,
+          "joinWindowMs": 8000,
+          "cooldowns": {
+            "selfMs": 14000,
+            "targetMs": 12000,
+            "pairMs": 42000,
+            "category": "social_argument",
+            "repeatPenalty": {
+              "windowMs": 180000,
+              "weightMultiplierPerRepeat": 0.35,
+              "maxRepeats": 2
+            }
+          },
+          "rolls": [
+            {
+              "id": "argumentReaction",
+              "branches": [
+                {
+                  "id": "defendPreference",
+                  "baseWeight": 50,
+                  "performanceId": "social.chat.argument.preference.defend",
+                  "weightModifiers": [
+                    {
+                      "path": "target.personality.emotionalExpression",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 20
+                    },
+                    {
+                      "path": "target.status.mood",
+                      "operator": "in",
+                      "value": ["nervous", "upset", "angry"],
+                      "add": 10
+                    }
+                  ]
+                },
+                {
+                  "id": "considerOtherSide",
+                  "baseWeight": 50,
+                  "performanceId": "social.chat.argument.preference.consider",
+                  "weightModifiers": [
+                    {
+                      "path": "target.personality.interpersonalAttitude",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 20
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["warm", "like", "fond", "secret_crush", "open_crush", "love"],
+                      "add": 25
+                    },
+                    {
+                      "path": "target.status.mood",
+                      "operator": "in",
+                      "value": ["relaxed", "happy"],
+                      "multiplier": 1.25
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "argumentResult",
+              "resolvesActivity": true,
+              "branches": [
+                {
+                  "id": "agreed",
+                  "baseWeight": 50,
+                  "performanceId": "social.chat.argument.preference.agreed",
+                  "weightModifiers": [
+                    {
+                      "path": "target.personality.interpersonalAttitude",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 20
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["warm", "like", "fond", "secret_crush", "open_crush", "love"],
+                      "add": 30
+                    },
+                    {
+                      "path": "target.status.mood",
+                      "operator": "in",
+                      "value": ["relaxed", "happy"],
+                      "multiplier": 1.25
+                    }
+                  ],
+                  "effects": {
+                    "relationshipIntimacyDelta": 1,
+                    "moodValueDelta": 4
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "both",
+                      "target": "otherParticipant",
+                      "memoryType": "argument",
+                      "countDelta": 1,
+                      "startedByRole": "initiator"
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 爭論了一番，最後接受了彼此的看法。",
+                    "detail": "這次爭論反而讓他們更了解對方。"
+                  }
+                },
+                {
+                  "id": "fellApart",
+                  "baseWeight": 50,
+                  "performanceId": "social.chat.argument.preference.fellApart",
+                  "weightModifiers": [
+                    {
+                      "path": "target.personality.emotionalExpression",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 20
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["hate", "dislike", "wary"],
+                      "add": 30
+                    },
+                    {
+                      "path": "target.status.mood",
+                      "operator": "in",
+                      "value": ["nervous", "upset", "angry"],
+                      "multiplier": 1.25
+                    }
+                  ],
+                  "effects": {
+                    "relationshipIntimacyDelta": -1,
+                    "moodValueDelta": -5
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "both",
+                      "target": "otherParticipant",
+                      "memoryType": "argument",
+                      "countDelta": 1,
+                      "startedByRole": "initiator"
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 因為喜好不同而不歡而散。",
+                    "detail": "兩人的氣氛比爭論前更僵了。"
+                  }
+                },
+                {
+                  "id": "unexpectedAgreement",
+                  "baseWeight": 15,
+                  "conditions": [
+                    {
+                      "path": "activity.rolls.argumentReaction.selectedBranchId",
+                      "operator": "==",
+                      "value": "considerOtherSide"
+                    }
+                  ],
+                  "performanceId": "social.chat.argument.preference.unexpectedAgreement",
+                  "weightModifiers": [
+                    {
+                      "path": "initiator.personality.interpersonalAttitude",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 20
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["warm", "like", "fond"],
+                      "multiplier": 1.5
+                    }
+                  ],
+                  "effects": {
+                    "relationshipIntimacyDelta": 2,
+                    "moodValueDelta": 6
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "both",
+                      "target": "otherParticipant",
+                      "memoryType": "argument",
+                      "countDelta": 1,
+                      "startedByRole": "initiator"
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 原本爭論不休，最後卻意外達成共識。",
+                    "detail": "意外的共同點讓他們親近了不少。"
+                  }
+                }
+              ]
+            }
+          ],
           "joinRequirements": {
             "type": "none"
           }

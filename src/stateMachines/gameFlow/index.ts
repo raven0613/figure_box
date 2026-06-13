@@ -1,6 +1,11 @@
 import { assign, createMachine, forwardTo, fromCallback } from 'xstate';
 import { GameFlowEvents } from './events';
-import { GameGodState, GameState, GameSystemState } from './states';
+import {
+  GameGodState,
+  GameState,
+  GameSystemState,
+  GameSimWorldState,
+} from './states';
 import type { GameFlowContext } from './context';
 import { createRelationshipStore } from './relationships';
 import { dialogueManagerMachine } from './children/dialogue';
@@ -17,6 +22,7 @@ export const gameFlowMachine = createMachine(
     initial: GameState.Loading,
     context: {
       relationships: createRelationshipStore(),
+      activityObservation: null,
     },
     states: {
       [GameState.Loading]: {
@@ -88,17 +94,59 @@ export const gameFlowMachine = createMachine(
             },
           },
           world: {
-            initial: 'join',
+            invoke: [
+              {
+                src: 'heartbeat',
+              },
+              {
+                src: 'gameFlowSocket',
+              },
+            ],
+            initial: GameSimWorldState.Running,
             states: {
-              join: {
-                invoke: [
-                  {
-                    src: 'heartbeat',
+              [GameSimWorldState.Running]: {
+                on: {
+                  PAUSE_SIM_WORLD: {
+                    target: GameSimWorldState.ManuallyPaused,
                   },
-                  {
-                    src: 'gameFlowSocket',
+                  START_ACTIVITY_OBSERVATION: {
+                    target: GameSimWorldState.ActivityObservationPaused,
+                    actions: 'startActivityObservation',
                   },
-                ],
+                  ACTIVITY_OBSERVATION_SETTLED: {
+                    guard: 'isCurrentActivityObservationEvent',
+                    actions: 'clearActivityObservation',
+                  },
+                },
+              },
+              [GameSimWorldState.ManuallyPaused]: {
+                on: {
+                  RESUME_SIM_WORLD: {
+                    target: GameSimWorldState.Running,
+                  },
+                  ACTIVITY_OBSERVATION_SETTLED: {
+                    guard: 'isCurrentActivityObservationEvent',
+                    actions: 'clearActivityObservation',
+                  },
+                },
+              },
+              [GameSimWorldState.ActivityObservationPaused]: {
+                on: {
+                  ACTIVITY_OBSERVATION_DIALOGUE_CLOSED: {
+                    guard: 'isCurrentActivityObservationEvent',
+                    target: GameSimWorldState.Running,
+                    actions: 'markActivityObservationDialogueClosed',
+                  },
+                  ACTIVITY_OBSERVATION_SETTLED: {
+                    guard: 'isCurrentActivityObservationEvent',
+                    actions: 'markActivityObservationSettled',
+                  },
+                  CANCEL_ACTIVITY_OBSERVATION: {
+                    guard: 'isCurrentActivityObservationEvent',
+                    target: GameSimWorldState.Running,
+                    actions: 'clearActivityObservation',
+                  },
+                },
               },
             },
           },
@@ -148,9 +196,57 @@ export const gameFlowMachine = createMachine(
     },
   },
   {
+    guards: {
+      isCurrentActivityObservationEvent: ({ context, event }) => (
+        (
+          event.type === 'ACTIVITY_OBSERVATION_DIALOGUE_CLOSED'
+          || event.type === 'ACTIVITY_OBSERVATION_SETTLED'
+          || event.type === 'CANCEL_ACTIVITY_OBSERVATION'
+        )
+        && context.activityObservation?.activityId === event.activityId
+      ),
+    },
     actions: {
       toNextStage: assign(({ context }) => {
         return context;
+      }),
+      startActivityObservation: assign({
+        activityObservation: ({ context, event }) => (
+          event.type === 'START_ACTIVITY_OBSERVATION'
+            ? {
+              activityId: event.activityId,
+              isDialogueClosed: false,
+              isActivitySettled: false,
+            }
+            : context.activityObservation
+        ),
+      }),
+      markActivityObservationDialogueClosed: assign({
+        activityObservation: ({ context }) => {
+          const activityObservation = context.activityObservation;
+
+          if (!activityObservation || activityObservation.isActivitySettled) {
+            return null;
+          }
+
+          return {
+            ...activityObservation,
+            isDialogueClosed: true,
+          };
+        },
+      }),
+      markActivityObservationSettled: assign({
+        activityObservation: ({ context }) => (
+          context.activityObservation
+            ? {
+              ...context.activityObservation,
+              isActivitySettled: true,
+            }
+            : null
+        ),
+      }),
+      clearActivityObservation: assign({
+        activityObservation: () => null,
       }),
     },
     actors: {

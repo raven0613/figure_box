@@ -204,6 +204,11 @@ export type OfflineResolutionPreview =
   | {
     kind: 'group';
     resolverSource: OfflineResolverSource;
+    activityType: CharacterEventActivityType;
+    activityKey: string;
+    presentationVariantId: string;
+    outcomeId?: string;
+    rollSelections: Readonly<Record<string, string>>;
     participantIds: readonly string[];
     participants: readonly OfflineParticipantResolutionPreview[];
     variables: Record<string, string>;

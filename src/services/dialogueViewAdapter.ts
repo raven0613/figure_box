@@ -1,8 +1,8 @@
-import { Expression } from '~/constants/character';
+import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import type { DialogueBank, DialogueLine, SelectedDialogue } from '~/constants/dialogue';
 import { selectDialogueScript } from '~/constants/dialogueEvents';
 import type { EventActor, EventBlackboard, ParticipantRole, PlayDialogueCommand } from '~/constants/event';
-import { getCharacterAppearance } from '~/services/characterAvatarCatalogService';
+import { getDialogueAvatarState } from '~/services/dialogueAvatarStateService';
 import type {
   DialogueChoiceInstruction,
   DialogueInstruction,
@@ -81,7 +81,7 @@ function createDialogueViewParticipant(
     color: getFallbackColor(index),
     label: participant.name.slice(0, 1).toUpperCase(),
     slot: index % 2 === 0 ? 'left' : 'right',
-    appearance: getCharacterAppearance(participant.id) ?? undefined,
+    avatarState: getDialogueAvatarState(participant.id),
   };
 }
 
@@ -102,7 +102,7 @@ function convertInstruction(
       type: 'CHOICE',
       speakerId,
       text: instruction.text ?? '',
-      expression: instruction.expression ?? Expression.Normal,
+      expressionPresetId: instruction.expressionPresetId ?? DEFAULT_EXPRESSION_PRESET_ID,
       idlePrompt: '還在嗎？',
       timeoutMs: 10000,
       choices: instruction.choices.map(choice => convertChoice(choice, participants)),
@@ -122,7 +122,7 @@ function convertSayInstruction(
     type: 'SAY',
     speakerId: resolveSpeakerId(instruction.speaker, participants),
     text: instruction.text,
-    expression: instruction.expression ?? Expression.Normal,
+    expressionPresetId: instruction.expressionPresetId ?? DEFAULT_EXPRESSION_PRESET_ID,
   };
 }
 
@@ -136,7 +136,7 @@ function convertDialogueLine(
     type: 'SAY',
     speakerId: resolveSpeakerId(line.speaker, participants),
     text: line.text,
-    expression: line.expression ?? Expression.Normal,
+    expressionPresetId: line.expressionPresetId ?? DEFAULT_EXPRESSION_PRESET_ID,
   };
 }
 

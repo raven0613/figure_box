@@ -48,6 +48,8 @@ export function resolveDialogueChoiceResult(
       };
     case 'branch':
       return resolveBranchChoice(script, instructions, lineIndex, result.branchGroupId);
+    case 'activityRoll':
+      return resolveActivityRollChoice(script, instructions, lineIndex, result);
     case 'end':
       return {
         instructions,
@@ -61,6 +63,43 @@ export function resolveDialogueChoiceResult(
         shouldClose: false,
       };
   }
+}
+
+function resolveActivityRollChoice(
+  script: DialogueViewScript,
+  instructions: DialogueViewInstruction[],
+  lineIndex: number,
+  result: Extract<DialogueChoiceResult, { type: 'activityRoll' }>,
+): DialogueChoiceResolution {
+  const random = script.branchContext?.random ?? Math.random;
+  const subjectKey = result.subjectKey
+    ?? (
+      result.subjectKeys?.length
+        ? result.subjectKeys[Math.floor(random() * result.subjectKeys.length)]
+        : undefined
+    );
+  const resolvedContent = result.contentPoolId && subjectKey
+    ? script.resolveDialogueContent?.(result.contentPoolId, subjectKey)
+    : null;
+  const selectedBranchId = script.resolveActivityRoll?.(result.rollId) ?? null;
+  const selectedVariant = result.lineVariants?.length
+    ? result.lineVariants[Math.floor(random() * result.lineVariants.length)]
+    : undefined;
+  const preludeLines = resolvedContent ?? selectedVariant ?? result.lines ?? [];
+  const branchLines = selectedBranchId
+    ? result.branchLines[selectedBranchId] ?? []
+    : [];
+
+  return {
+    instructions: [
+      ...instructions.slice(0, lineIndex + 1),
+      ...preludeLines,
+      ...branchLines,
+      ...instructions.slice(lineIndex + 1),
+    ],
+    nextLineIndex: lineIndex + 1,
+    shouldClose: false,
+  };
 }
 
 function resolveBranchChoice(

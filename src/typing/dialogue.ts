@@ -1,5 +1,5 @@
 import type { CharacterEvent } from '../stateMachines/gameFlow/events';
-import type { Expression } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
 
 export type DialogueParticipantRole = 'initiator' | 'target';
 
@@ -18,7 +18,7 @@ export interface DialogueSayInstruction {
   type: 'SAY';
   speaker: DialogueParticipantRole;
   text: string;
-  expression?: Expression;
+  expressionPresetId?: ExpressionPresetId;
 }
 
 export interface DialogueCharacterInstruction {
@@ -32,7 +32,7 @@ export interface DialogueChoiceInstruction {
   type: 'CHOICE';
   speaker?: DialogueParticipantRole;
   text?: string;
-  expression?: Expression;
+  expressionPresetId?: ExpressionPresetId;
   choices: DialogueChoiceOption[];
 }
 

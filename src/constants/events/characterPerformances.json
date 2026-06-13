@@ -6,7 +6,7 @@
         "phase": "proposal",
         "type": "expression",
         "target": "initiator",
-        "expression": "normal",
+        "expressionPresetId": "normal",
         "durationMs": 1800
       },
       {
@@ -20,7 +20,7 @@
         "phase": "accepted",
         "type": "expression",
         "target": "target",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 1800
       },
       {
@@ -41,7 +41,7 @@
         "phase": "rejectedBusy",
         "type": "expression",
         "target": "target",
-        "expression": "normal",
+        "expressionPresetId": "normal",
         "durationMs": 1200
       },
       {
@@ -55,7 +55,7 @@
         "phase": "rejectedMood",
         "type": "expression",
         "target": "target",
-        "expression": "normal",
+        "expressionPresetId": "normal",
         "durationMs": 1200
       },
       {
@@ -85,7 +85,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -120,6 +120,442 @@
     ]
   },
   {
+    "id": "social.chat.gossip",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "laugh",
+        "durationMs": 1600
+      },
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "{initiator}：我跟你說......",
+        "durationMs": 2800
+      },
+      {
+        "phase": "accepted",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "curious",
+        "durationMs": 1600
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：嗯嗯，然後呢？",
+        "durationMs": 2600
+      },
+      {
+        "phase": "rejectedBusy",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：等等再跟我說，我現在有事。",
+        "durationMs": 2800
+      },
+      {
+        "phase": "rejectedMood",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：我現在不太想聽別人的事。",
+        "durationMs": 2800
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipTogether",
+        "label": "聊八卦中",
+        "durationMs": 16000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "我跟你說......",
+        "delayMs": 1000,
+        "durationMs": 2600
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "target",
+        "text": "嗯嗯嗯嗯！？",
+        "delayMs": 4200,
+        "durationMs": 2400
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "surprised",
+        "delayMs": 4200,
+        "durationMs": 3000
+      },
+      {
+        "phase": "active",
+        "type": "roll",
+        "participantCount": {
+          "min": 2
+        },
+        "rollId": "gossipResult",
+        "delayMs": 7600
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipTogether",
+        "label": "八卦被打斷了",
+        "durationMs": 5000
+      }
+    ]
+  },
+  {
+    "id": "social.chat.gossip.sharedSurprise",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "嗯嗯嗯嗯....",
+        "durationMs": 2800
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "surprised",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipSharedSurprise",
+        "label": "討論了{dialogueSubjectName}的八卦",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipSharedSurprise",
+        "label": "分享秘密讓兩人的距離稍微拉近了",
+        "durationMs": 2000
+      }
+    ]
+  },
+  {
+    "id": "social.chat.gossip.playfulFakeout",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "騙你的。",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "laugh",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "mad",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "target",
+        "emoteId": "angry",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "gossipPlayfulFakeout",
+        "label": "惡作劇讓一人很開心",
+        "durationMs": 2000
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "mad",
+        "durationMs": 1800
+      },
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "{initiator}：你怎麼會覺得那個比較好？",
+        "durationMs": 3200
+      },
+      {
+        "phase": "accepted",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "mad",
+        "durationMs": 1800
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：明明就是我說的比較好！",
+        "durationMs": 3200
+      },
+      {
+        "phase": "rejectedMood",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target}：我現在不想跟你爭。",
+        "durationMs": 2800
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "argumentPreference",
+        "label": "爭論喜好中",
+        "durationMs": 20000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "{initiator} 和 {target} 正在爭執哪個比較好",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "mad",
+        "delayMs": 800,
+        "durationMs": 4200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "angry",
+        "delayMs": 1000,
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "roll",
+        "participantCount": {
+          "min": 2
+        },
+        "rollId": "argumentReaction",
+        "delayMs": 5000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "雙方都重新想了一下自己的說法",
+        "delayMs": 8500,
+        "durationMs": 2200
+      },
+      {
+        "phase": "active",
+        "type": "roll",
+        "participantCount": {
+          "min": 2
+        },
+        "rollId": "argumentResult",
+        "delayMs": 11000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "argumentPreference",
+        "label": "爭論被打斷了",
+        "durationMs": 5000
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.defend",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "mad",
+        "durationMs": 2600
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "target",
+        "emoteId": "angry",
+        "durationMs": 1600
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target} 完全不打算退讓",
+        "durationMs": 2800
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.consider",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "curious",
+        "durationMs": 2400
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "target",
+        "text": "{target} 開始認真考慮對方的說法",
+        "durationMs": 2800
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.agreed",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "laugh",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "laugh",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "兩人最後接受了彼此的喜好",
+        "durationMs": 3500
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.fellApart",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "mad",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "emote",
+        "target": "both",
+        "emoteId": "sigh",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "兩人不歡而散",
+        "durationMs": 3500
+      }
+    ]
+  },
+  {
+    "id": "social.chat.argument.preference.unexpectedAgreement",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "surprised",
+        "durationMs": 1600
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "laugh",
+        "delayMs": 1600,
+        "durationMs": 2200
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "沒想到兩人找到了意外的共同點",
+        "durationMs": 3800
+      }
+    ]
+  },
+  {
     "id": "social.playTogether.active",
     "steps": [
       {
@@ -140,7 +576,7 @@
         "phase": "accepted",
         "type": "expression",
         "target": "both",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 1800
       },
       {
@@ -199,7 +635,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -306,7 +742,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -411,7 +847,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -509,7 +945,7 @@
         "phase": "participantLeftGroup",
         "type": "expression",
         "target": "both",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 5000
       },
       {
@@ -543,7 +979,7 @@
         "phase": "active",
         "type": "expression",
         "target": "initiator",
-        "expression": "laugh",
+        "expressionPresetId": "laugh",
         "durationMs": 1800
       },
       {
@@ -570,7 +1006,7 @@
         "phase": "active",
         "type": "expression",
         "target": "initiator",
-        "expression": "curious",
+        "expressionPresetId": "curious",
         "durationMs": 1200
       },
       {
@@ -589,7 +1025,7 @@
         "phase": "active",
         "type": "expression",
         "target": "initiator",
-        "expression": "surprised",
+        "expressionPresetId": "surprised",
         "durationMs": 1000
       },
       {

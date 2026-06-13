@@ -3,6 +3,10 @@ import type { RomanceRuleConfig } from '~/services/romanceRules/romanceRuleServi
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import type { RelationshipStore } from '~/stateMachines/gameFlow/relationships';
 import type { ShopStockItem } from '~/typing/item';
+import type {
+  CharacterProfileData,
+  PlayerCreatedCharacterProfileData,
+} from '~/typing/characterProfile';
 
 export const SAVE_DATABASE_NAME = 'figureBoxSaveDb';
 export const SAVE_DATABASE_VERSION = 5;
@@ -89,15 +93,19 @@ export interface CharacterRuntimeSaveRecord {
   updatedAt: number;
 }
 
-export interface CharacterProfileRecord {
+export interface CharacterProfileRecord<TProfile extends CharacterProfileData = CharacterProfileData> {
   id: string;
   source: 'playerCreated' | 'imported' | 'debug';
   templateId?: string;
   name: string;
   createdAt: number;
   updatedAt: number;
-  profile: Record<string, unknown>;
+  profile: TProfile;
 }
+
+export type PlayerCreatedCharacterProfileRecord = CharacterProfileRecord<PlayerCreatedCharacterProfileData> & {
+  source: 'playerCreated';
+};
 
 export interface CharacterAvatarRecord {
   id: string;

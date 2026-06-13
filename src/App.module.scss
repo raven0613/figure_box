@@ -16,13 +16,50 @@
   left: 18px;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: calc(100% - 180px);
 }
 
 .demoButton {
+  padding: 0.5rem;
+  font-size: 0.8rem;
   color: #1f2428;
   background: #ffd36a;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.demoButton:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
+.demoButtonActive {
+  color: #ffffff;
+  background: #28766b;
+}
+
+.characterMenuButton {
+  position: absolute;
+  top: 18px;
+  right: 70px;
+  z-index: 10;
+  min-width: 58px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(31, 36, 40, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1f2428;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.characterMenuButton:disabled {
+  cursor: default;
+  opacity: 0.52;
 }
 
 .menuButton {
@@ -79,6 +116,51 @@
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.creationBakeStatus {
+  position: absolute;
+  top: 72px;
+  right: 18px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(280px, calc(100vw - 36px));
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid rgba(59, 119, 110, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #1f2428;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
+}
+
+.creationBakeStatus strong {
+  color: #2f665e;
+  font-size: 13px;
+}
+
+.creationBakeStatus span {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creationBakeDismissButton {
+  align-self: flex-end;
+  min-height: 30px;
+  padding: 5px 12px;
+  border: 1px solid #3b776e;
+  border-radius: 6px;
+  background: #3b776e;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .avatarEditorPage {

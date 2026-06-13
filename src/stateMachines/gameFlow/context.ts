@@ -1,4 +1,4 @@
-import { DirectedRelationship, Expression, Mood, Position } from "~/constants/character";
+import { DirectedRelationship, ExpressionPresetId, Mood, Position } from "~/constants/character";
 import type { ItemDefinitionId, ItemInstanceId, CharacterSeedItem } from "~/typing/item";
 import type { CharacterControlState } from "./states";
 import type { RelationshipStore } from "./relationships";
@@ -7,6 +7,13 @@ import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument 
 // 放要存的資料
 export interface GameFlowContext {
   relationships: RelationshipStore;
+  activityObservation: GameActivityObservation | null;
+}
+
+export interface GameActivityObservation {
+  activityId: string;
+  isDialogueClosed: boolean;
+  isActivitySettled: boolean;
 }
 
 // 遊戲中需讀取的必要資料
@@ -16,7 +23,7 @@ export interface CharacterContext {
   ownItems: CharacterSeedItem[],
   status: {
     mood: Mood;
-    expression: Expression;
+    expressionPresetId: ExpressionPresetId;
     saturation: number; // 飽足度：用長條圖顯示
     moodValue: number;
     playNeed: number;
@@ -110,10 +117,13 @@ export interface CharacterActivityRepeatRecord {
 export type CharacterEventBucketId = 'baseline' | 'need' | 'environment' | 'global';
 
 export interface CharacterEventDecision {
+  selectedMotivation: UtilityDrivenMotivation | null;
   selectedCandidateId: string | null;
   selectedBucketId: CharacterEventBucketId | null;
   selectedPresentationVariantId: string | null;
   selectedPresentationTags: string[];
+  motivationCount: number;
+  selectedMotivationCandidateCount: number;
   candidateCount: number;
   bucketIds: CharacterEventBucketId[];
 }

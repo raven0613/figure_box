@@ -2,14 +2,22 @@ import type {
   CharacterEventBucketId,
   UtilityDrivenMotivation,
 } from '~/stateMachines/gameFlow/context';
-import type { Feeling, Mood, Position, SocialStatus } from '~/constants/character';
+import type {
+  Feeling,
+  MemoryType,
+  Mood,
+  Position,
+  SocialStatus,
+} from '~/constants/character';
 import rawCharacterEventDefinitions from '~/constants/events/characterEvents.json';
 import { loadCharacterEventDefinitions } from '../utils/jsonParser/definitionSchema';
 import type {
   CharacterEventClauseMode,
   CharacterEventRuleClause,
+  CharacterEventRuleValue,
   CharacterEventWeightModifier,
 } from '../services/characterEvents/rules';
+import type { ComparisonOperator } from '~/constants/event';
 import type { OfflineRecapTemplate } from '~/services/offlineSimulation/types';
 
 export interface CharacterEventDefinition {
@@ -64,6 +72,7 @@ export interface CharacterEventPresentationVariant {
   weightModifiers?: readonly CharacterEventWeightModifier[];
   presentationTags?: readonly string[];
   performanceId?: string;
+  offlineRecap?: OfflineRecapTemplate;
   activity?: CharacterEventActivity;
 }
 
@@ -106,6 +115,10 @@ export interface CharacterEventActivity {
   joinRequirements?: CharacterEventJoinRequirement;
   cooldowns: CharacterEventCooldowns;
   effects?: CharacterEventActivityEffects;
+  effectsByRole?: CharacterEventActivityEffectsByRole;
+  dialogueScriptId?: string;
+  dialogueSubjectSelection?: CharacterEventDialogueSubjectSelection;
+  rolls?: readonly CharacterEventActivityRoll[];
 }
 
 export type CharacterEventActivityType = 'chat' | 'playWithItem' | 'playAtLocation';
@@ -141,6 +154,65 @@ export interface CharacterEventActivityEffects {
   moodValueDelta?: number;
   moodStageTarget?: Mood;
   playNeedDelta?: number;
+}
+
+export interface CharacterEventActivityEffectsByRole {
+  initiator?: CharacterEventActivityEffects;
+  target?: CharacterEventActivityEffects;
+}
+
+export interface CharacterEventDialogueSubjectSelection {
+  sourceRole: CharacterEventParticipantRole;
+  memoryType: MemoryType;
+  minCount: number;
+  count: number;
+  excludeParticipants: boolean;
+}
+
+export type CharacterEventParticipantRole = 'initiator' | 'target';
+
+export interface CharacterEventActivityMemoryEffect {
+  recipientRole: CharacterEventParticipantRole | 'both';
+  target: 'otherParticipant' | 'dialogueSubject';
+  memoryType: MemoryType;
+  countDelta: number;
+  startedByRole?: CharacterEventParticipantRole;
+}
+
+export type CharacterEventActivityRollRulePath =
+  | `initiator.${string}`
+  | `target.${string}`
+  | `activity.${string}`;
+
+export interface CharacterEventActivityRollRuleClause {
+  path: CharacterEventActivityRollRulePath;
+  operator: ComparisonOperator;
+  value: CharacterEventRuleValue;
+}
+
+export interface CharacterEventActivityRollWeightModifier
+  extends CharacterEventActivityRollRuleClause {
+  add?: number;
+  multiplier?: number;
+}
+
+export interface CharacterEventActivityRollBranch {
+  id: string;
+  baseWeight: number;
+  conditionMode?: CharacterEventClauseMode;
+  conditions?: readonly CharacterEventActivityRollRuleClause[];
+  weightModifiers?: readonly CharacterEventActivityRollWeightModifier[];
+  performanceId?: string;
+  effects?: CharacterEventActivityEffects;
+  effectsByRole?: CharacterEventActivityEffectsByRole;
+  memoryEffects?: readonly CharacterEventActivityMemoryEffect[];
+  offlineRecap?: OfflineRecapTemplate;
+}
+
+export interface CharacterEventActivityRoll {
+  id: string;
+  resolvesActivity?: boolean;
+  branches: readonly CharacterEventActivityRollBranch[];
 }
 
 export interface CharacterEventCooldowns {

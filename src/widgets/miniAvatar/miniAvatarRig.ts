@@ -35,7 +35,7 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
   bodyCenter: { x: 0, y: 135 }, // 影響整個身體的位置
   face: { x: 0, y: 0 },
   earDistance: 39,
-  ear: { x: -7.5, y: 7 },
+  ear: { x: -6.5, y: 6 },
   mouth: { x: 0, y: 9 },
   bodyByType: {
     1: {
@@ -111,22 +111,25 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
   hair: {
     backHairTop: { x: 0, y: -6 },
     backHairBottom: { x: 0, y: 8.5 },
-    bangs: { x: 0, y: -3.5 },
+    bangs: { x: 0, y: -4.5 },
     hairLight: { x: 0, y: -10 },
     backHairBottomByOption: {
       1: { x: 0, y: 0 },
       2: { x: 0, y: 0 },
       3: { x: 0, y: -1 },
+      7: { x: 0.5, y: -1 },
     },
     backHairTopByOption: {
       1: { x: 0, y: 0 },
       2: { x: 0, y: -1 },
       3: { x: -0.5, y: -4 },
+      7: { x: -0.5, y: -2.5 },
     },
     bangsByOption: {
       1: { x: 0, y: 0 },
       2: { x: 0, y: -1.5 },
       3: { x: 0, y: -1 },
+      7: { x: -1, y: 2 },
     },
   },
   clothing: {
@@ -145,6 +148,7 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
         3: { x: 2, y: -4 },
         4: { x: 0, y: 0 },
         5: { x: 0, y: 0 },
+        6: { x: 2.5, y: -7.5 },
       },
       ponytail: {
         1: { x: 0, y: 0 },
@@ -159,6 +163,9 @@ export const MINI_FRONT_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
         3: { x: 0, y: 0 },
         4: { x: 0, y: 0 },
         5: { x: 0, y: 0 },
+      },
+      skinMarking: {
+        1: { x: -2.5, y: 11 },
       },
     },
   },
@@ -172,7 +179,7 @@ export const MINI_BACK_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
   bodyCenter: { x: 0, y: 135 },
   face: { x: 0, y: 0 },
   earDistance: 39,
-  ear: { x: -7.5, y: 7 },
+  ear: { x: -6.5, y: 6 },
   mouth: { x: 0, y: 9 },
   bodyByType: {
     1: {
@@ -254,11 +261,13 @@ export const MINI_BACK_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
       1: { x: 0, y: 0 },
       2: { x: 0, y: 0 },
       3: { x: 0, y: -1 },
+      7: { x: 0.5, y: -1 },
     },
     backHairTopByOption: {
       1: { x: 0, y: 0 },
       2: { x: 0, y: -1 },
       3: { x: -0.5, y: -4 },
+      7: { x: -0.5, y: -2.5 },
     },
     bangsByOption: {
       1: { x: 0, y: 0 },
@@ -282,6 +291,7 @@ export const MINI_BACK_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
         3: { x: 2, y: -4 },
         4: { x: 0, y: 0 },
         5: { x: 0, y: 0 },
+        6: { x: 2.5, y: -7.5 },
       },
       ponytail: {
         1: { x: 0, y: 0 },
@@ -296,6 +306,9 @@ export const MINI_BACK_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
         3: { x: 0, y: 0 },
         4: { x: 0, y: 0 },
         5: { x: 0, y: 0 },
+      },
+      skinMarking: {
+        1: { x: 0, y: 0 },
       },
     },
   },
@@ -387,16 +400,19 @@ export const MINI_SIDE_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
       1: { x: 0, y: 0 },
       2: { x: 0.5, y: 1.5 },
       3: { x: 0.5, y: 1 },
+      7: { x: 1.5, y: 0 },
     },
     backHairTopByOption: {
       1: { x: 0, y: 0 },
       2: { x: 1, y: 0.5 },
       3: { x: -1, y: -2 },
+      7: { x: 0, y: -2 },
     },
     bangsByOption: {
       1: { x: 0, y: 0 },
       2: { x: -0.5, y: -3 },
       3: { x: -2.5, y: 1 },
+      7: { x: -2, y: 0 },
     },
   },
   clothing: {
@@ -415,6 +431,7 @@ export const MINI_SIDE_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
         3: { x: 3, y: -3 },
         4: { x: 0, y: 0 },
         5: { x: 0, y: 0 },
+        6: { x: 5, y: -3.5 },
       },
       ponytail: {
         1: { x: 0, y: 0 },
@@ -429,6 +446,9 @@ export const MINI_SIDE_IDLE_RIG_LAYOUT: MiniIdleRigLayout = {
         3: { x: 0, y: 0 },
         4: { x: 0, y: 0 },
         5: { x: 0, y: 0 },
+      },
+      skinMarking: {
+        1: { x: -7, y: 10.5 },
       },
     },
   },

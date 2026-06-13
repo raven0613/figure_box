@@ -1,4 +1,4 @@
-import { Mood, DirectedRelationship, Expression } from "./character";
+import { Mood, DirectedRelationship, ExpressionPresetId } from "./character";
 import { ClauseMode, RuleClause, EventActor, EventBlackboard, ParticipantRole } from "./event";
 
 export interface DialogueBank {
@@ -40,7 +40,7 @@ export interface WeightModifier extends RuleClause {
 export interface DialogueLine {
     speaker: ParticipantRole;
     text: string;
-    expression?: Expression;
+    expressionPresetId?: ExpressionPresetId;
 }
 
 export interface SelectedDialogue {

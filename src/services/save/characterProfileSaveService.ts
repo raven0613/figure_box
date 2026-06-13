@@ -76,7 +76,7 @@ class CharacterProfileSaveService {
 function cloneCharacterProfileRecord(record: CharacterProfileRecord): CharacterProfileRecord {
   return {
     ...record,
-    profile: { ...record.profile },
+    profile: structuredClone(record.profile),
   };
 }
 

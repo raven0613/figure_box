@@ -6,7 +6,8 @@ import type {
   CharacterPerformanceStep,
   CharacterPerformanceTarget,
 } from './performances';
-import { Expression } from '~/constants/character';
+import { isExpressionPresetId } from '~/constants/expressionCatalog';
+import type { ExpressionPresetId } from '~/typing/expression';
 import {
   CHARACTER_PERFORMANCE_ANIMATION_IDS,
   type CharacterPerformanceAnimationId,
@@ -24,8 +25,16 @@ const VALID_PERFORMANCE_PHASES = [
   'end',
 ] as const;
 const VALID_PERFORMANCE_TARGETS = ['initiator', 'target', 'both'] as const;
-const VALID_PERFORMANCE_STEP_TYPES = ['bubble', 'expression', 'emote', 'mapEffect', 'motion', 'animation', 'dialogue'] as const;
-const VALID_EXPRESSIONS = Object.values(Expression);
+const VALID_PERFORMANCE_STEP_TYPES = [
+  'bubble',
+  'expression',
+  'emote',
+  'mapEffect',
+  'motion',
+  'animation',
+  'dialogue',
+  'roll',
+] as const;
 
 type CharacterPerformanceRecord = Record<string, unknown>;
 interface BasePerformanceStep {
@@ -101,6 +110,16 @@ function readPerformanceStep(
     };
   }
 
+  if (type === 'roll') {
+    return {
+      phase: readPerformancePhase(rawStep, definitionIndex),
+      participantCount: readOptionalParticipantCount(rawStep, definitionIndex),
+      delayMs: readOptionalNonNegativeNumber(rawStep, 'delayMs', definitionIndex),
+      type,
+      rollId: readRequiredString(rawStep, 'rollId', definitionIndex),
+    };
+  }
+
   const baseStep = readBasePerformanceStep(rawStep, definitionIndex);
 
   if (type === 'bubble') {
@@ -115,7 +134,7 @@ function readPerformanceStep(
     return {
       ...baseStep,
       type,
-      expression: readExpression(rawStep, definitionIndex),
+      expressionPresetId: readExpressionPresetId(rawStep, definitionIndex),
     };
   }
 
@@ -311,17 +330,17 @@ function readOptionalString(
   return value;
 }
 
-function readExpression(
+function readExpressionPresetId(
   step: CharacterPerformanceRecord,
   index: number,
-): Expression {
-  const value = readRequiredString(step, 'expression', index);
+): ExpressionPresetId {
+  const value = readRequiredString(step, 'expressionPresetId', index);
 
-  if (!includesString(VALID_EXPRESSIONS, value)) {
-    throw new Error(`Character performance definition at index ${index} has invalid expression "${value}".`);
+  if (!isExpressionPresetId(value)) {
+    throw new Error(`Character performance definition at index ${index} has invalid expressionPresetId "${value}".`);
   }
 
-  return value as Expression;
+  return value;
 }
 
 function readOptionalNonNegativeNumber(

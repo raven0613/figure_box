@@ -43,6 +43,7 @@ export class TownMapWalkAnimator {
   private readonly stopAnimationLoopIfIdle: () => void;
   private readonly setCharacterDirection: (characterId: string, direction: TownMapCharacterSpriteDirection) => void;
   private readonly walkers = new Map<string, WalkState>();
+  private isPaused = false;
 
   constructor(options: TownMapWalkAnimatorOptions) {
     this.cellSize = options.cellSize;
@@ -61,11 +62,31 @@ export class TownMapWalkAnimator {
   }
 
   hasActiveAnimations(): boolean {
-    return this.walkers.size > 0;
+    return !this.isPaused && this.walkers.size > 0;
   }
 
   isWalking(characterId: string): boolean {
     return this.walkers.has(characterId);
+  }
+
+  setPaused(isPaused: boolean): void {
+    if (this.isPaused === isPaused) {
+      return;
+    }
+
+    this.isPaused = isPaused;
+    this.walkers.forEach(walker => {
+      walker.lastTimestamp = null;
+    });
+
+    if (isPaused) {
+      this.stopAnimationLoopIfIdle();
+      return;
+    }
+
+    if (this.walkers.size > 0) {
+      this.startAnimationLoop();
+    }
   }
 
   walkCharacterAlongPath(
@@ -133,6 +154,10 @@ export class TownMapWalkAnimator {
   }
 
   advanceWalkers(timestamp: number): void {
+    if (this.isPaused) {
+      return;
+    }
+
     const completedWalkers: { id: string; walker: WalkState }[] = [];
 
     this.walkers.forEach((walker, id) => {

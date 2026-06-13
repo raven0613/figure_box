@@ -15,6 +15,12 @@ export enum GameGodState {
   Interaction = "interaction", // 上帝干預中，例如抓著某人、跳出選項中
 }
 
+export enum GameSimWorldState {
+  Running = "running",
+  ManuallyPaused = "manuallyPaused",
+  ActivityObservationPaused = "activityObservationPaused",
+}
+
 // 以下四個人物狀態平行，因為希望能做出組合動作，動畫系統可以直接根據這兩個軌道做混合。例如，身體拿躺著的圖，手上改成拿手機
 // 角色動作 state
 export enum CharacterBodyActionState {

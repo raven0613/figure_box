@@ -5,12 +5,11 @@ import {
   type CharacterEventPresentationVariant,
 } from '~/constants/charactarEventsDefinitions';
 import type { CharacterEventCandidate, CharacterEventDecisionInput } from '~/services/characterEvents/types';
-import {
-  createCharacterEventRuleContext,
-  matchesCharacterEventClauses,
-} from '~/services/characterEvents/rules';
+import { createCharacterEventRuleContext } from '~/services/characterEvents/rules';
+import { selectCharacterEventPresentationVariant } from '~/services/characterEvents/variants';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import type { OfflineNumericPatchPreview, OfflineStatusPatchPreview } from '../types';
+import { createSeededRandom } from '../offlineRandom';
 import { OFFLINE_SIMULATION_POLICY } from '../offlineSimulationPolicy';
 import { isOfflineActivityAvailableAt } from '../offlineTimeOfDay';
 
@@ -37,17 +36,35 @@ export function resolveOfflineActivity(
   context: OfflineResolverContext,
 ): ResolvedOfflineActivity | null {
   const definition = getCandidateDefinition(context.candidate);
-  const variant = definition?.presentationVariants
+  const availableVariants = definition?.presentationVariants
     ?.filter(hasActivity)
-    .filter(candidateVariant => matchesVariantConditions(candidateVariant, context))
     .filter(candidateVariant => isOfflineActivityAvailableAt(
       candidateVariant.activity,
       context.input.timestamp ?? Date.now(),
       OFFLINE_SIMULATION_POLICY,
-    ))
-    .sort((left, right) => right.baseWeight - left.baseWeight)[0];
+    ));
 
-  if (!definition || !variant?.activity) {
+  if (!definition || !availableVariants?.length) {
+    return null;
+  }
+
+  const selection = selectCharacterEventPresentationVariant(
+    availableVariants,
+    createCharacterEventRuleContext(
+      context.character,
+      context.character.utilityScores,
+      context.input,
+    ),
+    createSeededRandom([
+      'offline-activity-variant',
+      String(context.input.timestamp ?? 0),
+      context.candidate.id,
+      context.character.id,
+    ].join(':')),
+  );
+  const variant = selection?.variant;
+
+  if (!variant?.activity) {
     return null;
   }
 
@@ -92,19 +109,4 @@ function hasActivity(
   variant: CharacterEventPresentationVariant,
 ): variant is CharacterEventPresentationVariant & { activity: CharacterEventActivity } {
   return Boolean(variant.activity);
-}
-
-function matchesVariantConditions(
-  variant: CharacterEventPresentationVariant,
-  context: OfflineResolverContext,
-): boolean {
-  return matchesCharacterEventClauses(
-    variant.conditions,
-    variant.conditionMode,
-    createCharacterEventRuleContext(
-      context.character,
-      context.character.utilityScores,
-      context.input,
-    ),
-  );
 }

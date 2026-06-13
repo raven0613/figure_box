@@ -1,0 +1,10 @@
+[
+  {
+    "id": "recent-argument",
+    "memoryType": "argument",
+    "maxAgeMs": 604800000,
+    "baseWeight": 1,
+    "text": "聽說 {subjectName} 上次跟 {memoryTargetName} 吵架，到今天還沒和好。",
+    "expressionPresetId": "normal"
+  }
+]

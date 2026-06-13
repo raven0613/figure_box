@@ -2,10 +2,25 @@ import { Feeling, SocialStatus, type Position } from '~/constants/character';
 import type {
   CharacterEventAcceptance,
   CharacterEventActivity,
+  CharacterEventActivityEffects,
+  CharacterEventActivityRollBranch,
   CharacterEventDefinition,
 } from '~/constants/charactarEventsDefinitions';
+import {
+  createDefaultCharacterPersonality,
+  type CharacterPersonality,
+} from '~/constants/characterPersonality';
+import {
+  selectActivityRollBranch,
+  type ActivityRollRuleContext,
+  type ActivityRollSelection,
+} from '~/services/characterEvents/activityRolls';
 import { itemService } from '~/services/items/itemService';
-import { applyCompletedActivityStatusEffects } from '~/services/characterEvents/activityCompletionEffects';
+import {
+  applyCompletedActivityStatusEffects,
+  resolveActivityEffectsForRole,
+} from '~/services/characterEvents/activityCompletionEffects';
+import { getPlayableCharacters } from '~/services/playableCharacterService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
@@ -66,11 +81,26 @@ export function resolveOfflineActivityPreview(
 
   switch (resolvedActivity.activity.type) {
     case 'playWithItem':
-      return resolveGroupActivity(context, resolvedActivity.definition, resolvedActivity.activity);
+      return resolveGroupActivity(
+        context,
+        resolvedActivity.definition,
+        resolvedActivity.variant.id,
+        resolvedActivity.activity,
+      );
     case 'playAtLocation':
-      return resolveGroupActivity(context, resolvedActivity.definition, resolvedActivity.activity);
+      return resolveGroupActivity(
+        context,
+        resolvedActivity.definition,
+        resolvedActivity.variant.id,
+        resolvedActivity.activity,
+      );
     case 'chat':
-      return resolveGroupActivity(context, resolvedActivity.definition, resolvedActivity.activity);
+      return resolveGroupActivity(
+        context,
+        resolvedActivity.definition,
+        resolvedActivity.variant.id,
+        resolvedActivity.activity,
+      );
     default:
       return {
         kind: 'unsupported',
@@ -84,6 +114,7 @@ export function resolveOfflineActivityPreview(
 function resolveGroupActivity(
   context: OfflineResolverContext,
   definition: CharacterEventDefinition,
+  presentationVariantId: string,
   activity: CharacterEventActivity,
 ): OfflineResolutionPreview {
   const participantRoll = resolveActivityParticipants(context, definition, activity);
@@ -97,11 +128,37 @@ function resolveGroupActivity(
     };
   }
 
+  const rollResolution = resolveOfflineActivityRolls(
+    context,
+    activity,
+    participantRoll.participants,
+  );
+
+  if (!rollResolution.success) {
+    return {
+      kind: 'unsupported',
+      resolverSource: `activity.${activity.type}`,
+      reason: rollResolution.reason,
+      variables: createActivityVariables(context, activity, participantRoll.participants),
+    };
+  }
+
+  const outcomeEffects = rollResolution.outcomeBranch
+    ? rollResolution.outcomeBranch.effects
+    : activity.effects;
+  const outcomeEffectsByRole = rollResolution.outcomeBranch
+    ? rollResolution.outcomeBranch.effectsByRole
+    : activity.effectsByRole;
   const participants = participantRoll.participants.map((participant, index) => (
     createParticipantResolution({
       context,
       definition,
       activity,
+      effects: resolveActivityEffectsForRole(
+        outcomeEffects,
+        outcomeEffectsByRole,
+        index === 0 ? 'initiator' : 'target',
+      ),
       participant,
       participantIds: participantRoll.participants.map(item => item.id),
       role: index === 0 ? 'initiator' : 'target',
@@ -111,12 +168,30 @@ function resolveGroupActivity(
   return {
     kind: 'group',
     resolverSource: `activity.${activity.type}`,
+    activityType: activity.type,
+    activityKey: activity.key,
+    presentationVariantId,
+    ...(rollResolution.outcomeBranch
+      ? { outcomeId: rollResolution.outcomeBranch.id }
+      : {}),
+    rollSelections: Object.fromEntries(
+      Object.entries(rollResolution.selections).map(([rollId, selection]) => [
+        rollId,
+        selection.selectedBranchId,
+      ]),
+    ),
     participantIds: participantRoll.participants.map(participant => participant.id),
     participants,
-    variables: createActivityVariables(context, activity, participantRoll.participants),
+    variables: {
+      ...createActivityVariables(context, activity, participantRoll.participants),
+      activityOutcomeId: rollResolution.outcomeBranch?.id ?? 'completed',
+    },
     notes: [
       '使用 activity.group 的通用離線參加者抽選。',
       '離線只套用完成後結果，不重跑 inviting/active/traveling 表演階段。',
+      ...(activity.rolls?.length
+        ? ['依照 activity.rolls 順序執行離線分支抽選。']
+        : []),
     ],
   };
 }
@@ -191,6 +266,7 @@ function createParticipantResolution(input: {
   context: OfflineResolverContext;
   definition: CharacterEventDefinition;
   activity: CharacterEventActivity;
+  effects: CharacterEventActivityEffects | undefined;
   participant: CharacterContext;
   participantIds: readonly string[];
   role: 'initiator' | 'target';
@@ -200,11 +276,11 @@ function createParticipantResolution(input: {
   return {
     characterId: input.participant.id,
     characterName: input.participant.name,
-    statusPatch: createActivityStatusPatch(input.participant, input.activity),
+    statusPatch: createActivityStatusPatch(input.participant, input.effects),
     positionPatch: createActivityPositionPatch(input.participant, input.activity),
     currentMotivation: 'idle',
     relationshipPatches: createActivityRelationshipPatches(
-      input.activity,
+      input.effects,
       input.context.contexts.filter(candidate => partnerCharacterIds.includes(candidate.id)),
       input.context.input.timestamp ?? Date.now(),
     ),
@@ -216,6 +292,138 @@ function createParticipantResolution(input: {
         timestamp: input.context.input.timestamp ?? Date.now(),
       }
       : null,
+  };
+}
+
+type OfflineActivityRollResolution =
+  | {
+    success: true;
+    selections: Readonly<Record<string, ActivityRollSelection>>;
+    outcomeBranch: CharacterEventActivityRollBranch | null;
+  }
+  | {
+    success: false;
+    reason: string;
+  };
+
+function resolveOfflineActivityRolls(
+  context: OfflineResolverContext,
+  activity: CharacterEventActivity,
+  participants: readonly CharacterContext[],
+): OfflineActivityRollResolution {
+  const rolls = activity.rolls ?? [];
+
+  if (rolls.length === 0) {
+    return {
+      success: true,
+      selections: {},
+      outcomeBranch: null,
+    };
+  }
+
+  const ruleContext = createOfflineActivityRollRuleContext(participants);
+
+  if (!ruleContext) {
+    return {
+      success: false,
+      reason: 'missingActivityRollParticipants',
+    };
+  }
+
+  let selections: Readonly<Record<string, ActivityRollSelection>> = {};
+
+  for (const roll of rolls) {
+    const selectedBranch = selectActivityRollBranch(
+      roll,
+      {
+        ...ruleContext,
+        activity: {
+          participantCount: participants.length,
+          rolls: selections,
+        },
+      },
+      createSeededRandom([
+        'offline-activity-roll',
+        String(context.input.timestamp ?? 0),
+        context.candidate.id,
+        context.character.id,
+        activity.key,
+        roll.id,
+      ].join(':')),
+    );
+
+    if (!selectedBranch) {
+      return {
+        success: false,
+        reason: `missingActivityRollBranch:${roll.id}`,
+      };
+    }
+
+    selections = {
+      ...selections,
+      [roll.id]: {
+        selectedBranchId: selectedBranch.id,
+      },
+    };
+
+    if (roll.resolvesActivity) {
+      return {
+        success: true,
+        selections,
+        outcomeBranch: selectedBranch,
+      };
+    }
+  }
+
+  return {
+    success: true,
+    selections,
+    outcomeBranch: null,
+  };
+}
+
+function createOfflineActivityRollRuleContext(
+  participants: readonly CharacterContext[],
+): Omit<ActivityRollRuleContext, 'activity'> | null {
+  const initiator = participants[0];
+  const target = participants[1] ?? initiator;
+
+  if (!initiator || !target) {
+    return null;
+  }
+
+  const personalitiesById = new Map<string, CharacterPersonality>(
+    getPlayableCharacters().map(character => [
+      character.id,
+      character.personality ?? createDefaultCharacterPersonality(),
+    ] as const),
+  );
+  const initiatorRelationship = initiator.relationships
+    .find(relationship => relationship.targetCharId === target.id);
+  const targetRelationship = target.relationships
+    .find(relationship => relationship.targetCharId === initiator.id);
+  const relationshipToTarget = {
+    feeling: initiatorRelationship?.feeling ?? Feeling.Neutral,
+    intimacy: initiatorRelationship?.intimacy ?? 0,
+  };
+  const relationshipToInitiator = {
+    feeling: targetRelationship?.feeling ?? Feeling.Neutral,
+    intimacy: targetRelationship?.intimacy ?? 0,
+  };
+
+  return {
+    initiator: {
+      status: initiator.status,
+      personality: personalitiesById.get(initiator.id) ?? createDefaultCharacterPersonality(),
+      relationshipToOther: relationshipToTarget,
+      relationshipToTarget,
+    },
+    target: {
+      status: target.status,
+      personality: personalitiesById.get(target.id) ?? createDefaultCharacterPersonality(),
+      relationshipToOther: relationshipToInitiator,
+      relationshipToInitiator,
+    },
   };
 }
 
@@ -360,9 +568,9 @@ function canAcceptOfflineActivity(
 
 function createActivityStatusPatch(
   participant: CharacterContext,
-  activity: CharacterEventActivity,
+  effects: CharacterEventActivityEffects | undefined,
 ): OfflineStatusPatchPreview | null {
-  const nextStatus = applyCompletedActivityStatusEffects(participant.status, activity.effects);
+  const nextStatus = applyCompletedActivityStatusEffects(participant.status, effects);
 
   return createStatusPatch({
     ...(nextStatus.moodValue !== participant.status.moodValue
@@ -402,12 +610,10 @@ function createActivityPositionPatch(
 }
 
 function createActivityRelationshipPatches(
-  activity: CharacterEventActivity,
+  effects: CharacterEventActivityEffects | undefined,
   partnerContexts: readonly CharacterContext[],
   timestamp: number,
 ): OfflineRelationshipPatchPreview[] {
-  const effects = activity.effects;
-
   if (!effects?.relationshipIntimacyDelta && !effects?.relationshipFeelingTarget) {
     return [];
   }

@@ -1,4 +1,5 @@
 import type { CharacterSeedItem } from '~/typing/item';
+export type { ExpressionPresetId } from '~/typing/expression';
 
 // 想要有性格&容易遇到的事的權重，但這樣會不會變無聊？
 export interface CharacterBaseSetting {
@@ -129,17 +130,6 @@ export interface Position {
     x: number;
     y: number;
 }
-
-// 表情（顯示在臉上的）
-export enum Expression {
-    Normal = "normal", // 玩家設定好的
-    Laugh = "laugh", // 系統大笑臉
-    Cry = "cry", // 系統哭臉
-    Mad = "mad", // 系統生氣臉
-    Surprised = "surprised", // 系統驚訝臉
-    Curious = "curious"
-}
-
 
 export enum Mood {
     Ecstatic = "ecstatic",
