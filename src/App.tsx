@@ -85,6 +85,10 @@ function App() {
     characterId: string;
     revision: number;
   } | null>(null);
+  const [trackCharacterRequest, setTrackCharacterRequest] = useState<{
+    characterId: string;
+    revision: number;
+  } | null>(null);
   const [characterCreationBakeState, setCharacterCreationBakeState] = useState<CharacterCreationBakeState | null>(null);
   const [globalRomanceDefault, setGlobalRomanceDefault] = useState<GlobalRomanceDefault>('allow');
   const [romanceRules, setRomanceRules] = useState<RomanceRule[]>([]);
@@ -245,6 +249,12 @@ function App() {
     setIsCharacterPanelOpen(false);
     void completeCreatedCharacter(creationResult);
   }, [completeCreatedCharacter]);
+  const requestCharacterTracking = useCallback((characterId: string) => {
+    setTrackCharacterRequest({
+      characterId,
+      revision: Date.now(),
+    });
+  }, []);
   const setSaveDebugOpen = useCallback((isOpen: boolean) => {
     setIsSaveDebugOpen(isOpen);
     settingsService.setSaveDebugPanelOpen(isOpen);
@@ -562,6 +572,7 @@ function App() {
             romanceRuleRevision={romanceRuleRevision}
             characterRosterRevision={characterRosterRevision}
             apartmentReveal={apartmentReveal}
+            trackCharacterRequest={trackCharacterRequest}
             onDialogueRequest={handleDialogueRequest}
             onActivitySettled={handleActivitySettled}
           />
@@ -576,6 +587,7 @@ function App() {
           <CharacterManagementPanel
             onClose={() => setIsCharacterPanelOpen(false)}
             onCharacterCreated={handleCharacterCreated}
+            onTrackCharacter={requestCharacterTracking}
           />
         ) : null}
         {isSettingsOpen ? (

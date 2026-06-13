@@ -89,6 +89,10 @@ interface TownMapContainerProps {
     characterId: string;
     revision: number;
   } | null;
+  trackCharacterRequest?: {
+    characterId: string;
+    revision: number;
+  } | null;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
   onActivitySettled?: (activityId: string) => void;
   observedActivityId?: string | null;
@@ -144,6 +148,7 @@ export function TownMapContainer({
   romanceRuleRevision = 0,
   characterRosterRevision = 0,
   apartmentReveal = null,
+  trackCharacterRequest = null,
   onDialogueRequest,
   onActivitySettled,
   observedActivityId = null,
@@ -542,8 +547,7 @@ export function TownMapContainer({
         }
 
         setSelectedCharacterId(characterId);
-        characterControllerRef.current?.pickUpCharacter(characterId);
-        return true;
+        return characterControllerRef.current?.pickUpCharacter(characterId) ?? false;
       },
       onCharacterDrop: (characterId, tile) => {
         characterControllerRef.current?.dropCharacter(characterId, tile);
@@ -604,6 +608,20 @@ export function TownMapContainer({
 
     setIsApartmentPanelOpen(true);
   }, [apartmentReveal]);
+
+  useEffect(() => {
+    if (!trackCharacterRequest) {
+      return;
+    }
+
+    const didSelectCharacter = widgetRef.current?.selectCharacterForTracking(
+      trackCharacterRequest.characterId,
+    ) ?? false;
+
+    if (didSelectCharacter) {
+      setSelectedCharacterId(trackCharacterRequest.characterId);
+    }
+  }, [trackCharacterRequest]);
 
   useEffect(() => {
     seedDemoPlayerInventory();

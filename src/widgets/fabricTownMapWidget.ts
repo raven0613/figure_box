@@ -189,6 +189,10 @@ export class FabricTownMapWidget {
     return new FabricTownMapWidget(canvasElement, { ...options, baseCanvasElement });
   }
 
+  selectCharacterForTracking(characterId: string): boolean {
+    return this.characterTracker.selectCharacterForTracking(characterId);
+  }
+
   getNeighbors(x: number, y: number, radius: number): TownMapTile[] {
     return this.grid.getNeighbors(x, y, radius);
   }
@@ -495,6 +499,7 @@ export class FabricTownMapWidget {
     this.camera.dispose();
     this.walkAnimator.dispose();
     this.floatingTextLayer.dispose();
+    this.characterTracker.dispose();
     this.characterLayer.dispose();
     this.mapObjectShapes.clear();
     this.placedItemShapes.clear();

@@ -131,9 +131,15 @@ export class TownMapPointerController {
     const targetCharacterId = this.getCharacterIdFromTarget(event.target ?? this.canvas.getActiveObject());
     const mapObjectId = this.getMapObjectIdFromTarget(event.target);
 
-    if (!this.pickedUpCharacterId && !targetCharacterId && mapObjectId && !didPan) {
+    const shouldClearCharacterSelection = !this.pickedUpCharacterId && !targetCharacterId && !didPan;
+
+    if (shouldClearCharacterSelection) {
+      this.characterTracker.clearSelection();
+    }
+
+    if (shouldClearCharacterSelection && mapObjectId) {
       this.onMapObjectClick?.(mapObjectId);
-    } else if (!this.pickedUpCharacterId && !targetCharacterId && this.pendingTileClick && !didPan) {
+    } else if (shouldClearCharacterSelection && this.pendingTileClick) {
       this.onTileClick?.(this.pendingTileClick);
     }
 

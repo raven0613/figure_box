@@ -443,19 +443,23 @@ export class TownCharacterController {
     });
   }
 
-  pickUpCharacter(characterId: string): void {
+  pickUpCharacter(characterId: string): boolean {
     if (this.simWorldPauseCoordinator.isPaused()) {
-      return;
+      return false;
     }
 
     if (this.isCharacterBodyFrozen(characterId)) {
       this.widget.showCharacterBubble(characterId, '對話中...');
-      return;
+      return false;
     }
 
     this.activityCoordinator.handleCharacterPickedUp(characterId);
 
-    this.sendToCharacter(characterId, { type: EventType.PickUp });
+    if (!this.sendToCharacter(characterId, { type: EventType.PickUp })) {
+      return false;
+    }
+
+    return this.actorRegistry.getSnapshot(characterId)?.context.currentMotivation === 'controllingByGod';
   }
 
   dropCharacter(characterId: string, tile: GridCoordinate | null): void {

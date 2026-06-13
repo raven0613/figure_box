@@ -313,24 +313,26 @@ export const characterMachine = createMachine(
                 actions: ['setIdleMotivation', 'clearTarget'],
             },
             [EventType.PickUp]: {
-                guard: 'canReceiveLogicCommand',
+                guard: 'canReceivePickUpCommand',
                 target: [
                     '.bodyAction.pickedUp',
                     '.bodyMove.stand',
                     '.mind.thinking',
                     '.communication.null',
+                    '.control.normal',
                 ],
-                actions: ['setPickedUpMotivation', 'clearTarget', 'clearActivity'],
+                actions: ['setPickedUpMotivation', 'clearTarget', 'clearActivity', 'setNormalControl'],
             },
             [EventType.Drop]: {
-                guard: 'canReceiveLogicCommand',
+                guard: 'canReceiveDropCommand',
                 target: [
                     '.bodyAction.idle',
                     '.bodyMove.stand',
                     '.mind.null',
                     '.communication.null',
+                    '.control.normal',
                 ],
-                actions: ['dropAtPosition', 'setIdleMotivation', 'clearTarget'],
+                actions: ['dropAtPosition', 'setIdleMotivation', 'clearTarget', 'setNormalControl'],
             },
             [EventType.MoveTo]: {
                 guard: 'canReceiveLogicCommand',
@@ -457,6 +459,8 @@ export const characterMachine = createMachine(
     {
         guards: {
             canReceiveLogicCommand: ({ context }) => canReceiveNormalLogicCommand(context),
+            canReceivePickUpCommand: ({ context }) => canReceivePickUpCommand(context),
+            canReceiveDropCommand: ({ context }) => canReceiveDropCommand(context),
             canReceiveTick: ({ context }) => canReceiveNormalLogicCommand(context),
             shouldChangeToFindFood: ({ context }) => (
                 canReceiveActivityIdleLogicCommand(context) &&
@@ -1106,6 +1110,33 @@ function isLocked(context: CharacterContext, part: keyof CharacterContext['locks
 
 function canReceiveNormalLogicCommand(context: CharacterContext): boolean {
     return context.controlState === CharacterControlState.Normal;
+}
+
+function canReceivePickUpCommand(context: CharacterContext): boolean {
+    if (canReceiveNormalLogicCommand(context)) {
+        return true;
+    }
+
+    return (
+        context.controlState === CharacterControlState.SpaceTransition &&
+        context.currentMotivation === 'goHome' &&
+        context.presence.kind === 'positioned' &&
+        !isLocked(context, 'bodyAction') &&
+        !isLocked(context, 'bodyMove')
+    );
+}
+
+function canReceiveDropCommand(context: CharacterContext): boolean {
+    if (canReceiveNormalLogicCommand(context)) {
+        return true;
+    }
+
+    return (
+        context.currentMotivation === 'controllingByGod' &&
+        context.presence.kind === 'positioned' &&
+        !isLocked(context, 'bodyAction') &&
+        !isLocked(context, 'bodyMove')
+    );
 }
 
 function canReceiveActivityIdleLogicCommand(context: CharacterContext): boolean {

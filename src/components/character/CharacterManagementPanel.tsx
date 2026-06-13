@@ -53,11 +53,13 @@ interface CharacterCreationDraft {
 interface CharacterManagementPanelProps {
   onClose: () => void;
   onCharacterCreated?: (result: CreatePlayerCharacterResult) => void;
+  onTrackCharacter?: (characterId: string) => void;
 }
 
 export function CharacterManagementPanel({
   onClose,
   onCharacterCreated,
+  onTrackCharacter,
 }: CharacterManagementPanelProps) {
   const [step, setStep] = useState<CharacterPanelStep>('roster');
   const [characters, setCharacters] = useState<readonly CharacterRosterEntry[]>(() => getCharacterRoster());
@@ -116,6 +118,7 @@ export function CharacterManagementPanel({
       {isRosterStep ? (
         <CharacterRosterView
           characters={characters}
+          onTrackCharacter={onTrackCharacter}
           onCreateCharacter={() => {
             setCreationError(null);
             setStep('createAppearance');
@@ -168,11 +171,13 @@ export function CharacterManagementPanel({
 
 interface CharacterRosterViewProps {
   characters: readonly CharacterRosterEntry[];
+  onTrackCharacter?: (characterId: string) => void;
   onCreateCharacter: () => void;
 }
 
 function CharacterRosterView({
   characters,
+  onTrackCharacter,
   onCreateCharacter,
 }: CharacterRosterViewProps) {
   return (
@@ -187,6 +192,7 @@ function CharacterRosterView({
           <CharacterRosterRow
             key={character.id}
             character={character}
+            onTrackCharacter={onTrackCharacter}
           />
         ))}
       </div>
@@ -206,15 +212,20 @@ function CharacterRosterView({
 
 interface CharacterRosterRowProps {
   character: CharacterRosterEntry;
+  onTrackCharacter?: (characterId: string) => void;
 }
 
 function CharacterRosterRow({
   character,
+  onTrackCharacter,
 }: CharacterRosterRowProps) {
   return (
     <div className={styles.characterRow}>
       <div className={styles.characterIdentity}>
-        <CharacterMiniSprite character={character} />
+        <CharacterMiniSprite
+          character={character}
+          onTrackCharacter={onTrackCharacter}
+        />
         <div className={styles.characterText}>
           <strong>{character.name}</strong>
           <span>{getCharacterSourceLabel(character.source)}</span>
@@ -229,10 +240,12 @@ function CharacterRosterRow({
 
 interface CharacterMiniSpriteProps {
   character: CharacterRosterEntry;
+  onTrackCharacter?: (characterId: string) => void;
 }
 
 function CharacterMiniSprite({
   character,
+  onTrackCharacter,
 }: CharacterMiniSpriteProps) {
   const [spritePreview, setSpritePreview] = useState<CharacterMiniSpritePreview | null>(null);
   const preloadCharacter = useMemo<TownSpritePreloadCharacter>(() => ({
@@ -291,9 +304,11 @@ function CharacterMiniSprite({
   }, [preloadCharacter]);
 
   return (
-    <span
+    <button
       className={styles.characterMiniSprite}
-      aria-hidden="true"
+      type="button"
+      aria-label={`在地圖上追蹤${character.name}`}
+      onClick={() => onTrackCharacter?.(character.id)}
     >
       {frameStyle ? (
         <span
@@ -305,7 +320,7 @@ function CharacterMiniSprite({
           {getCharacterInitial(character.name)}
         </span>
       )}
-    </span>
+    </button>
   );
 }
 
