@@ -1,3 +1,5 @@
+import type { ExpressionBubbleId } from './expressionBubble';
+
 export type ExpressionPresetId = string;
 export type ExpressionMotionId = string;
 export type ExpressionChannelKey =
@@ -47,10 +49,10 @@ export interface ExpressionRenderProfile {
   eyebrows?: ExpressionChannelDefinition;
   mouth?: ExpressionChannelDefinition;
   effectId?: string;
-  emoteId?: string;
 }
 
 export interface MiniExpressionProfiles {
+  expressionBubbleId?: ExpressionBubbleId;
   front?: ExpressionRenderProfile;
   side?: ExpressionRenderProfile;
   back?: ExpressionRenderProfile;

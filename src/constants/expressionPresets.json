@@ -42,6 +42,7 @@
       }
     },
     "mini": {
+      "expressionBubbleId": "laugh",
       "front": {
         "upperEyelids": {
           "poseId": "smile_closed"
@@ -58,9 +59,7 @@
           "poseId": "open_smile_side"
         }
       },
-      "back": {
-        "emoteId": "laugh"
-      }
+      "back": {}
     }
   },
   {
@@ -85,6 +84,7 @@
       "effectId": "tear"
     },
     "mini": {
+      "expressionBubbleId": "sad",
       "front": {
         "upperEyelids": {
           "poseId": "sad"
@@ -103,9 +103,7 @@
         },
         "effectId": "tear"
       },
-      "back": {
-        "emoteId": "sad"
-      }
+      "back": {}
     }
   },
   {
@@ -130,6 +128,7 @@
       }
     },
     "mini": {
+      "expressionBubbleId": "angry",
       "front": {
         "eyebrows": {
           "poseId": "mad"
@@ -146,9 +145,7 @@
           "poseId": "flat_down_side"
         }
       },
-      "back": {
-        "emoteId": "angry"
-      }
+      "back": {}
     }
   },
   {
@@ -171,6 +168,7 @@
       }
     },
     "mini": {
+      "expressionBubbleId": "surprised",
       "front": {
         "eyes": {
           "poseId": "wide"
@@ -187,9 +185,7 @@
           "poseId": "small_open_side"
         }
       },
-      "back": {
-        "emoteId": "surprised"
-      }
+      "back": {}
     }
   },
   {
@@ -214,6 +210,7 @@
       }
     },
     "mini": {
+      "expressionBubbleId": "question",
       "front": {
         "eyebrows": {
           "poseId": "curious"
@@ -230,9 +227,7 @@
           "poseId": "small_smile_side"
         }
       },
-      "back": {
-        "emoteId": "question"
-      }
+      "back": {}
     }
   },
   {
@@ -257,6 +252,7 @@
       "effectId": "sparkle_light"
     },
     "mini": {
+      "expressionBubbleId": "sparkle_light",
       "front": {
         "upperEyelids": {
           "poseId": "look_up",
@@ -291,9 +287,7 @@
         },
         "effectId": "sparkle_light"
       },
-      "back": {
-        "emoteId": "sparkle_light"
-      }
+      "back": {}
     }
   }
 ]

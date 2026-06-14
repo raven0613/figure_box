@@ -25,10 +25,10 @@
       },
       {
         "phase": "accepted",
-        "type": "emote",
-        "target": "both",
-        "emoteId": "talk",
-        "durationMs": 900
+        "type": "expressionBubble",
+        "target": "target",
+        "expressionBubbleId": "laugh",
+        "durationMs": 3000
       },
       {
         "phase": "accepted",
@@ -97,9 +97,9 @@
       },
       {
         "phase": "participantLeftGroup",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "surprised",
+        "expressionBubbleId": "surprised",
         "durationMs": 5000
       },
       {
@@ -214,9 +214,9 @@
       },
       {
         "phase": "participantLeftGroup",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "surprised",
+        "expressionBubbleId": "surprised",
         "durationMs": 5000
       },
       {
@@ -248,10 +248,10 @@
       },
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "surprised",
-        "durationMs": 1800
+        "expressionBubbleId": "surprised",
+        "durationMs": 3000
       },
       {
         "phase": "active",
@@ -297,9 +297,9 @@
       },
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "target",
-        "emoteId": "angry",
+        "expressionBubbleId": "angry",
         "durationMs": 3200
       },
       {
@@ -375,11 +375,11 @@
       },
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "angry",
+        "expressionBubbleId": "angry",
         "delayMs": 1000,
-        "durationMs": 1800
+        "durationMs": 3000
       },
       {
         "phase": "active",
@@ -416,9 +416,9 @@
       },
       {
         "phase": "participantLeftGroup",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "surprised",
+        "expressionBubbleId": "surprised",
         "durationMs": 5000
       },
       {
@@ -443,10 +443,10 @@
       },
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "target",
-        "emoteId": "angry",
-        "durationMs": 1600
+        "expressionBubbleId": "angry",
+        "durationMs": 3000
       },
       {
         "phase": "active",
@@ -488,10 +488,10 @@
       },
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "laugh",
-        "durationMs": 1800
+        "expressionBubbleId": "laugh",
+        "durationMs": 3000
       },
       {
         "phase": "active",
@@ -514,10 +514,10 @@
       },
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "sigh",
-        "durationMs": 1800
+        "expressionBubbleId": "sigh",
+        "durationMs": 3000
       },
       {
         "phase": "active",
@@ -560,10 +560,10 @@
     "steps": [
       {
         "phase": "proposal",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "initiator",
-        "emoteId": "play",
-        "durationMs": 900
+        "expressionBubbleId": "play",
+        "durationMs": 3000
       },
       {
         "phase": "proposal",
@@ -647,9 +647,9 @@
       },
       {
         "phase": "participantLeftGroup",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "surprised",
+        "expressionBubbleId": "surprised",
         "durationMs": 5000
       },
       {
@@ -674,10 +674,10 @@
     "steps": [
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "play",
-        "durationMs": 900
+        "expressionBubbleId": "play",
+        "durationMs": 3000
       },
       {
         "phase": "active",
@@ -754,9 +754,9 @@
       },
       {
         "phase": "participantLeftGroup",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "surprised",
+        "expressionBubbleId": "surprised",
         "durationMs": 5000
       },
       {
@@ -781,10 +781,10 @@
     "steps": [
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "play",
-        "durationMs": 900
+        "expressionBubbleId": "play",
+        "durationMs": 3000
       },
       {
         "phase": "active",
@@ -859,9 +859,9 @@
       },
       {
         "phase": "participantLeftGroup",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "surprised",
+        "expressionBubbleId": "surprised",
         "durationMs": 5000
       },
       {
@@ -879,10 +879,10 @@
     "steps": [
       {
         "phase": "active",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "play",
-        "durationMs": 900
+        "expressionBubbleId": "play",
+        "durationMs": 3000
       },
       {
         "phase": "active",
@@ -957,9 +957,9 @@
       },
       {
         "phase": "participantLeftGroup",
-        "type": "emote",
+        "type": "expressionBubble",
         "target": "both",
-        "emoteId": "surprised",
+        "expressionBubbleId": "surprised",
         "durationMs": 5000
       },
       {

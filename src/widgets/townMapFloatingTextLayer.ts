@@ -3,6 +3,9 @@ import type { ExpressionPresetId } from '~/constants/character';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
 import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
+import type { ExpressionBubbleId } from '~/typing/expressionBubble';
+import { TownMapActivityLabelLayer } from './townMapActivityLabelLayer';
+import { TownMapExpressionBubbleLayer } from './townMapExpressionBubbleLayer';
 import type { GridCoordinate } from './townMapGrid';
 import {
   FLOATING_UI_LAYER_RANK,
@@ -29,7 +32,6 @@ interface TownMapFloatingTextLayerOptions {
   onMapActivityObserve?: (activityId: string) => void;
 }
 
-// bubble、emote、map activity、bubble sequence、timer
 export class TownMapFloatingTextLayer {
   private readonly canvas: Canvas;
   private readonly cellSize: number;
@@ -37,15 +39,13 @@ export class TownMapFloatingTextLayer {
   private readonly getZoom: () => number;
   private readonly updateCharacterExpressionPreset: (characterId: string, expressionPresetId: ExpressionPresetId) => void;
   private readonly startAnimationLoop: () => void;
-  private readonly onMapActivityObserve?: (activityId: string) => void;
   private readonly timerScheduler = new PausableTimeoutScheduler();
+  private readonly expressionBubbleLayer: TownMapExpressionBubbleLayer;
+  private readonly activityLabelLayer: TownMapActivityLabelLayer;
   private readonly characterBubbles = new Map<string, Text>();
-  private readonly characterEmotes = new Map<string, Text>();
   private readonly bubbleTimers = new Map<string, number>();
-  private readonly emoteTimers = new Map<string, number>();
+  private readonly expressionBubbleTimers = new Map<string, number>();
   private readonly bubbleAnimations = new Map<string, BubbleAnimationState>();
-  private readonly mapActivityLabels = new Map<string, Text>();
-  private readonly mapActivityTimers = new Map<string, number>();
   private pausedAt: number | null = null;
   private viewportZoom = 1;
 
@@ -56,22 +56,37 @@ export class TownMapFloatingTextLayer {
     this.getZoom = options.getZoom;
     this.updateCharacterExpressionPreset = options.updateCharacterExpressionPreset;
     this.startAnimationLoop = options.startAnimationLoop;
-    this.onMapActivityObserve = options.onMapActivityObserve;
+    this.expressionBubbleLayer = new TownMapExpressionBubbleLayer({
+      canvas: this.canvas,
+      cellSize: this.cellSize,
+      getCharacterCenter: this.getCharacterCenter,
+      startAnimationLoop: this.startAnimationLoop,
+    });
+    this.activityLabelLayer = new TownMapActivityLabelLayer({
+      canvas: this.canvas,
+      cellSize: this.cellSize,
+      timerScheduler: this.timerScheduler,
+      getCharacterCenter: this.getCharacterCenter,
+      getZoom: this.getZoom,
+      onMapActivityObserve: options.onMapActivityObserve,
+    });
   }
 
   dispose(): void {
     this.timerScheduler.clear();
     this.bubbleTimers.clear();
-    this.emoteTimers.clear();
-    this.mapActivityTimers.clear();
+    this.expressionBubbleTimers.clear();
     this.characterBubbles.clear();
-    this.characterEmotes.clear();
-    this.mapActivityLabels.clear();
+    this.expressionBubbleLayer.dispose();
+    this.activityLabelLayer.dispose();
     this.bubbleAnimations.clear();
   }
 
   hasActiveAnimations(): boolean {
-    return this.pausedAt === null && this.bubbleAnimations.size > 0;
+    return this.pausedAt === null && (
+      this.bubbleAnimations.size > 0
+      || this.expressionBubbleLayer.hasActiveAnimations()
+    );
   }
 
   setPaused(isPaused: boolean): void {
@@ -82,6 +97,7 @@ export class TownMapFloatingTextLayer {
 
       this.pausedAt = performance.now();
       this.timerScheduler.pause();
+      this.expressionBubbleLayer.setPaused(true);
       return;
     }
 
@@ -98,8 +114,9 @@ export class TownMapFloatingTextLayer {
     });
     this.pausedAt = null;
     this.timerScheduler.resume();
+    this.expressionBubbleLayer.setPaused(false);
 
-    if (this.bubbleAnimations.size > 0) {
+    if (this.hasActiveAnimations()) {
       this.startAnimationLoop();
     }
   }
@@ -146,28 +163,22 @@ export class TownMapFloatingTextLayer {
     }, durationMs));
   }
 
-  showCharacterEmote(characterId: string, text: string, durationMs = 1200): void {
+  showCharacterExpressionBubble(
+    characterId: string,
+    expressionBubbleId: ExpressionBubbleId,
+    durationMs = 1200,
+  ): void {
     const anchor = this.getCharacterCenter(characterId);
 
     if (!anchor) {
       return;
     }
 
-    this.clearTimer(this.emoteTimers, characterId);
+    this.clearTimer(this.expressionBubbleTimers, characterId);
+    this.expressionBubbleLayer.show(characterId, expressionBubbleId);
 
-    const emote = this.getOrCreateCharacterEmote(characterId, text);
-
-    emote.set({
-      text,
-      left: anchor.x + this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 0.42,
-      top: anchor.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 0.72,
-      opacity: 1,
-    });
-    this.canvas.bringObjectToFront(emote);
-    this.canvas.requestRenderAll();
-
-    this.emoteTimers.set(characterId, this.timerScheduler.schedule(() => {
-      this.removeCharacterEmote(characterId);
+    this.expressionBubbleTimers.set(characterId, this.timerScheduler.schedule(() => {
+      this.removeCharacterExpressionBubble(characterId);
     }, durationMs));
   }
 
@@ -190,37 +201,7 @@ export class TownMapFloatingTextLayer {
   }
 
   showMapActivity(activity: MapActivityView, durationMs: number | null = 4800): void {
-    if (activity.visibleAtZoom !== undefined && this.getZoom() < activity.visibleAtZoom) {
-      return;
-    }
-
-    const points = this.getMapActivityAnchorPoints(activity);
-
-    if (points.length === 0) {
-      return;
-    }
-
-    this.clearTimer(this.mapActivityTimers, activity.id);
-
-    const center = averagePoints(points);
-    const label = this.getOrCreateMapActivityLabel(activity);
-
-    this.configureMapActivityInteraction(label, activity);
-    label.set({
-      text: activity.label,
-      left: center.x,
-      top: center.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 1.1,
-      ...getMapActivityToneStyle(activity.tone),
-    });
-    label.setCoords();
-    this.canvas.bringObjectToFront(label);
-    this.canvas.requestRenderAll();
-
-    if (durationMs !== null) {
-      this.mapActivityTimers.set(activity.id, this.timerScheduler.schedule(() => {
-        this.removeMapActivity(activity.id);
-      }, durationMs));
-    }
+    this.activityLabelLayer.show(activity, durationMs);
   }
 
   syncViewportZoom(zoom: number): void {
@@ -230,55 +211,34 @@ export class TownMapFloatingTextLayer {
 
     this.viewportZoom = zoom;
     this.characterBubbles.forEach(text => this.applyTextViewportZoom(text));
-    this.characterEmotes.forEach(text => this.applyTextViewportZoom(text));
-    this.mapActivityLabels.forEach(text => this.applyTextViewportZoom(text));
+    this.expressionBubbleLayer.syncViewportZoom(zoom);
+    this.activityLabelLayer.syncViewportZoom(zoom);
     this.canvas.requestRenderAll();
   }
 
   removeMapActivity(activityId: string): void {
-    const currentLabel = this.mapActivityLabels.get(activityId);
-
-    if (!currentLabel) {
-      this.clearTimer(this.mapActivityTimers, activityId);
-      return;
-    }
-
-    this.canvas.remove(currentLabel);
-    this.mapActivityLabels.delete(activityId);
-    this.clearTimer(this.mapActivityTimers, activityId);
-    this.canvas.requestRenderAll();
+    this.activityLabelLayer.remove(activityId);
   }
 
   isMapActivityInteractionTarget(target: unknown): boolean {
-    return Array.from(this.mapActivityLabels.values()).some(label => (
-      label === target && label.evented
-    ));
+    return this.activityLabelLayer.isInteractionTarget(target);
   }
 
   removeCharacterBubbleById(characterId: string): void {
     this.removeCharacterBubble(characterId);
   }
 
-  removeCharacterEmote(characterId: string): void {
-    this.clearTimer(this.emoteTimers, characterId);
-
-    const currentEmote = this.characterEmotes.get(characterId);
-
-    if (!currentEmote) {
-      return;
-    }
-
-    this.canvas.remove(currentEmote);
-    this.characterEmotes.delete(characterId);
-    this.canvas.requestRenderAll();
+  removeCharacterExpressionBubble(characterId: string): void {
+    this.clearTimer(this.expressionBubbleTimers, characterId);
+    this.expressionBubbleLayer.remove(characterId);
   }
 
   removeCharacterUi(characterId: string): void {
     this.removeCanvasObject(this.characterBubbles, characterId);
-    this.removeCanvasObject(this.characterEmotes, characterId);
+    this.expressionBubbleLayer.remove(characterId);
     this.bubbleAnimations.delete(characterId);
     this.clearTimer(this.bubbleTimers, characterId);
-    this.clearTimer(this.emoteTimers, characterId);
+    this.clearTimer(this.expressionBubbleTimers, characterId);
   }
 
   advanceBubbleAnimations(timestamp: number): void {
@@ -309,6 +269,8 @@ export class TownMapFloatingTextLayer {
     completedCharacterIds.forEach(characterId => {
       this.removeCharacterBubble(characterId);
     });
+
+    this.expressionBubbleLayer.markSpritesDirty();
   }
 
   private showMapBubbleSequenceLine(line: MapBubbleSequenceLine, sequence: MapBubbleSequence): void {
@@ -322,25 +284,6 @@ export class TownMapFloatingTextLayer {
       sequence.bubbleDurationMs,
       sequence.animation,
     );
-  }
-
-  private getMapActivityAnchorPoints(activity: MapActivityView): GridCoordinate[] {
-    const participantPoints = activity.participantIds
-      .map(characterId => this.getCharacterCenter(characterId))
-      .filter((point): point is GridCoordinate => point !== null);
-
-    if (participantPoints.length > 0) {
-      return participantPoints;
-    }
-
-    if (!activity.anchorTile) {
-      return [];
-    }
-
-    return [{
-      x: (activity.anchorTile.x + 0.5) * this.cellSize,
-      y: (activity.anchorTile.y + 0.5) * this.cellSize,
-    }];
   }
 
   private removeCharacterBubble(characterId: string): void {
@@ -385,96 +328,6 @@ export class TownMapFloatingTextLayer {
     return bubble;
   }
 
-  private getOrCreateCharacterEmote(characterId: string, text: string): Text {
-    const existing = this.characterEmotes.get(characterId);
-
-    if (existing) {
-      return existing;
-    }
-
-    const emote = new Text(text, {
-      fontSize: 15,
-      fontFamily: 'Arial, sans-serif',
-      fontWeight: '700',
-      fill: '#24313a',
-      backgroundColor: 'rgba(255, 236, 153, 0.92)',
-      originX: 'center',
-      originY: 'bottom',
-      selectable: false,
-      evented: false,
-    });
-
-    emote.set('sortBottomY', Number.POSITIVE_INFINITY);
-    emote.set('entityLayerRank', FLOATING_UI_LAYER_RANK);
-    this.applyTextViewportZoom(emote);
-    this.characterEmotes.set(characterId, emote);
-    this.canvas.add(emote);
-    return emote;
-  }
-
-  private getOrCreateMapActivityLabel(activity: MapActivityView): Text {
-    const existing = this.mapActivityLabels.get(activity.id);
-
-    if (existing) {
-      return existing;
-    }
-
-    const label = new Text(activity.label, {
-      fontSize: 12,
-      fontFamily: 'Arial, sans-serif',
-      fontWeight: '700',
-      fill: '#24313a',
-      backgroundColor: 'rgba(246, 232, 184, 0.94)',
-      originX: 'center',
-      originY: 'bottom',
-      selectable: false,
-      evented: false,
-    });
-
-    label.set('sortBottomY', Number.POSITIVE_INFINITY);
-    label.set('entityLayerRank', FLOATING_UI_LAYER_RANK);
-    this.applyTextViewportZoom(label);
-    this.mapActivityLabels.set(activity.id, label);
-    this.canvas.add(label);
-    return label;
-  }
-
-  private configureMapActivityInteraction(label: Text, activity: MapActivityView): void {
-    const interaction = activity.interaction;
-
-    label.off('mouseover');
-    label.off('mouseout');
-    label.off('mouseup');
-
-    if (!interaction) {
-      label.set({
-        evented: false,
-        hoverCursor: 'default',
-      });
-      return;
-    }
-
-    label.set({
-      evented: true,
-      hoverCursor: 'pointer',
-    });
-    label.on('mouseover', () => {
-      label.set({
-        text: `${activity.label}\n[ ${interaction.label} ]`,
-      });
-      label.setCoords();
-      this.canvas.requestRenderAll();
-    });
-    label.on('mouseout', () => {
-      label.set({ text: activity.label });
-      label.setCoords();
-      this.canvas.requestRenderAll();
-    });
-    label.on('mouseup', () => {
-      this.onMapActivityObserve?.(interaction.activityId);
-    });
-  }
-
   private removeCanvasObject(objects: Map<string, Text>, id: string): void {
     const object = objects.get(id);
 
@@ -506,47 +359,6 @@ export class TownMapFloatingTextLayer {
     this.timerScheduler.cancel(timer);
     timerMap.delete(timerKey);
   }
-}
-
-function averagePoints(points: readonly GridCoordinate[]): GridCoordinate {
-  return points.reduce(
-    (sum, point) => ({
-      x: sum.x + point.x / points.length,
-      y: sum.y + point.y / points.length,
-    }),
-    { x: 0, y: 0 },
-  );
-}
-
-function getMapActivityToneStyle(tone: MapActivityView['tone']): {
-  fill: string;
-  backgroundColor: string;
-} {
-  if (tone === 'critical') {
-    return {
-      fill: '#7c2626',
-      backgroundColor: 'rgba(255, 220, 220, 0.96)',
-    };
-  }
-
-  if (tone === 'social') {
-    return {
-      fill: '#1f5f9f',
-      backgroundColor: 'rgba(221, 237, 255, 0.96)',
-    };
-  }
-
-  if (tone === 'minor') {
-    return {
-      fill: '#256a43',
-      backgroundColor: 'rgba(222, 244, 229, 0.96)',
-    };
-  }
-
-  return {
-    fill: '#24313a',
-    backgroundColor: 'rgba(246, 232, 184, 0.94)',
-  };
 }
 
 function applyFadeBubbleAnimation(state: BubbleAnimationState, progress: number, cellSize: number): void {

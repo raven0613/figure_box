@@ -7,7 +7,9 @@ import type {
   CharacterPerformanceTarget,
 } from './performances';
 import { isExpressionPresetId } from '~/constants/expressionCatalog';
+import { isExpressionBubbleId } from '~/constants/expressionBubbleCatalog';
 import type { ExpressionPresetId } from '~/typing/expression';
+import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import {
   CHARACTER_PERFORMANCE_ANIMATION_IDS,
   type CharacterPerformanceAnimationId,
@@ -28,7 +30,7 @@ const VALID_PERFORMANCE_TARGETS = ['initiator', 'target', 'both'] as const;
 const VALID_PERFORMANCE_STEP_TYPES = [
   'bubble',
   'expression',
-  'emote',
+  'expressionBubble',
   'mapEffect',
   'motion',
   'animation',
@@ -138,11 +140,11 @@ function readPerformanceStep(
     };
   }
 
-  if (type === 'emote') {
+  if (type === 'expressionBubble') {
     return {
       ...baseStep,
       type,
-      emoteId: readRequiredString(rawStep, 'emoteId', definitionIndex),
+      expressionBubbleId: readExpressionBubbleId(rawStep, definitionIndex),
     };
   }
 
@@ -338,6 +340,21 @@ function readExpressionPresetId(
 
   if (!isExpressionPresetId(value)) {
     throw new Error(`Character performance definition at index ${index} has invalid expressionPresetId "${value}".`);
+  }
+
+  return value;
+}
+
+function readExpressionBubbleId(
+  step: CharacterPerformanceRecord,
+  index: number,
+): ExpressionBubbleId {
+  const value = readRequiredString(step, 'expressionBubbleId', index);
+
+  if (!isExpressionBubbleId(value)) {
+    throw new Error(
+      `Character performance definition at index ${index} has invalid expressionBubbleId "${value}".`,
+    );
   }
 
   return value;

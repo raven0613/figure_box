@@ -1,4 +1,5 @@
-import { ExpressionPresetId, type Position } from '~/constants/character';
+import type { ExpressionPresetId, Position } from '~/constants/character';
+import { getExpressionPresetDefinition } from '~/constants/expressionCatalog';
 import {
   CharacterPerformanceRunner,
   type CharacterPerformanceDialogueRequest,
@@ -66,6 +67,7 @@ const RELATIONSHIP_MOMENT_DURATION_MS = 3000;
 const RELATIONSHIP_MOMENT_DECISION_GRACE_MS = 1800;
 const GOD_DROP_DECISION_GRACE_MS = 2600;
 const OFFLINE_RUNTIME_SYNC_DECISION_GRACE_MS = 1800;
+const DIALOGUE_EXPRESSION_BUBBLE_DURATION_MS = 1600;
 const APARTMENT_EXIT_FOOD_SCORE_THRESHOLD = 65;
 const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
 
@@ -157,11 +159,11 @@ export class TownCharacterController {
       removeCharacterBubble: characterId => {
         this.widget.removeCharacterBubble(characterId);
       },
-      showCharacterEmote: (characterId, text, durationMs) => {
-        this.widget.showCharacterEmote(characterId, text, durationMs);
+      showCharacterExpressionBubble: (characterId, expressionBubbleId, durationMs) => {
+        this.widget.showCharacterExpressionBubble(characterId, expressionBubbleId, durationMs);
       },
-      removeCharacterEmote: characterId => {
-        this.widget.removeCharacterEmote(characterId);
+      removeCharacterExpressionBubble: characterId => {
+        this.widget.removeCharacterExpressionBubble(characterId);
       },
       showMapActivity: (activity, durationMs) => {
         this.widget.showMapActivity(activity, durationMs);
@@ -360,8 +362,8 @@ export class TownCharacterController {
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
       },
-      showCharacterEmote: (characterId, text, durationMs) => {
-        this.widget.showCharacterEmote(characterId, text, durationMs);
+      showCharacterExpressionBubble: (characterId, expressionBubbleId, durationMs) => {
+        this.widget.showCharacterExpressionBubble(characterId, expressionBubbleId, durationMs);
       },
       onOpportunityChange: options.onGodDropOpportunityChange,
     });
@@ -436,11 +438,34 @@ export class TownCharacterController {
       return undefined;
     }
 
+    const expressionBubbleDurationMs = presentation.bubbleSequence.bubbleDurationMs;
+
     return this.widget.playMapBubbleSequence(presentation.bubbleSequence, line => {
       if (line.expressionPresetId) {
         this.setCharacterExpressionPreset(line.characterId, line.expressionPresetId);
+        this.showExpressionBubbleForExpressionPreset(
+          line.characterId,
+          line.expressionPresetId,
+          expressionBubbleDurationMs,
+        );
       }
     });
+  }
+
+  showExpressionBubbleForExpressionPreset(
+    characterId: string,
+    expressionPresetId: ExpressionPresetId,
+    durationMs = DIALOGUE_EXPRESSION_BUBBLE_DURATION_MS,
+  ): void {
+    const expressionBubbleId = getExpressionPresetDefinition(
+      expressionPresetId,
+    ).mini.expressionBubbleId;
+
+    if (!expressionBubbleId) {
+      return;
+    }
+
+    this.widget.showCharacterExpressionBubble(characterId, expressionBubbleId, durationMs);
   }
 
   pickUpCharacter(characterId: string): boolean {

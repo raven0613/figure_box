@@ -1,6 +1,7 @@
 import type { SocialStatus, Position } from '~/constants/character';
 import type { TownMapObjectData } from '~/constants/townMap';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
+import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import {
   GOD_DROP_SCAN_RADIUS,
   GodDropOpportunityService,
@@ -30,7 +31,11 @@ interface GodDropCoordinatorOptions {
   joinActivity: (characterId: string, activityId: string) => boolean;
   playRelationshipMoment: (actorId: string, targetCharacterId: string, label: string) => void;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
-  showCharacterEmote: (characterId: string, text: string, durationMs?: number) => void;
+  showCharacterExpressionBubble: (
+    characterId: string,
+    expressionBubbleId: ExpressionBubbleId,
+    durationMs?: number,
+  ) => void;
   onOpportunityChange?: (opportunity: GodDropOpportunity | null) => void;
 }
 
@@ -46,7 +51,7 @@ export class GodDropCoordinator {
   private readonly joinActivity: GodDropCoordinatorOptions['joinActivity'];
   private readonly playRelationshipMoment: GodDropCoordinatorOptions['playRelationshipMoment'];
   private readonly showCharacterBubble: GodDropCoordinatorOptions['showCharacterBubble'];
-  private readonly showCharacterEmote: GodDropCoordinatorOptions['showCharacterEmote'];
+  private readonly showCharacterExpressionBubble: GodDropCoordinatorOptions['showCharacterExpressionBubble'];
   private readonly onOpportunityChange: GodDropCoordinatorOptions['onOpportunityChange'] | undefined;
   private autoTimer: number | null = null;
   private expireTimer: number | null = null;
@@ -64,7 +69,7 @@ export class GodDropCoordinator {
     this.joinActivity = options.joinActivity;
     this.playRelationshipMoment = options.playRelationshipMoment;
     this.showCharacterBubble = options.showCharacterBubble;
-    this.showCharacterEmote = options.showCharacterEmote;
+    this.showCharacterExpressionBubble = options.showCharacterExpressionBubble;
     this.onOpportunityChange = options.onOpportunityChange;
   }
 
@@ -176,7 +181,7 @@ export class GodDropCoordinator {
         source === 'player' ? `我去看看${candidate.label.replace('看看', '')}` : candidate.label,
         2200,
       );
-      this.showCharacterEmote(opportunity.actorId, '!', 900);
+      this.showCharacterExpressionBubble(opportunity.actorId, 'surprised', 900);
       return;
     }
 

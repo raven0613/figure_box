@@ -8,6 +8,8 @@ import type {
   ExpressionTransform,
   MiniExpressionProfiles,
 } from '~/typing/expression';
+import { isExpressionBubbleId } from '~/constants/expressionBubbleCatalog';
+import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import {
   includesString,
   isRecord,
@@ -156,6 +158,7 @@ function readMiniExpressionProfiles(
   }
 
   return {
+    expressionBubbleId: readOptionalExpressionBubbleId(value, index),
     front: readOptionalExpressionProfile(value.front, index, 'mini.front', motionIds),
     side: readOptionalExpressionProfile(value.side, index, 'mini.side', motionIds),
     back: readOptionalExpressionProfile(value.back, index, 'mini.back', motionIds),
@@ -199,7 +202,6 @@ function readExpressionProfile(
   return {
     ...profile,
     effectId: readOptionalString(value, 'effectId', index),
-    emoteId: readOptionalString(value, 'emoteId', index),
   };
 }
 
@@ -284,6 +286,25 @@ function readOptionalString(
   }
 
   return property;
+}
+
+function readOptionalExpressionBubbleId(
+  value: ExpressionRecord,
+  index: number,
+): ExpressionBubbleId | undefined {
+  const expressionBubbleId = readOptionalString(value, 'expressionBubbleId', index);
+
+  if (expressionBubbleId === undefined) {
+    return undefined;
+  }
+
+  if (!isExpressionBubbleId(expressionBubbleId)) {
+    throw new Error(
+      `Expression preset definition at index ${index} has invalid expressionBubbleId "${expressionBubbleId}".`,
+    );
+  }
+
+  return expressionBubbleId;
 }
 
 function readOptionalBoolean(

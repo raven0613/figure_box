@@ -34,6 +34,10 @@ import {
 import { saveService } from '~/services/save/saveService';
 import { settingsService } from '~/services/save/settingsService';
 import { offlineSessionService } from '~/services/offlineSimulation/offlineSessionService';
+import {
+  getExpressionBubbleSpritePreloadTotal,
+  preloadExpressionBubbleSpriteSheets,
+} from '~/services/expressionBubbleSpritePreloadService';
 import { preloadTownRequiredSpriteSheets } from '~/services/townSpritePreloadService';
 import { startTownSpriteBackgroundBake } from '~/services/townSpriteBackgroundBakeService';
 import { gameFlowMachine } from '~/stateMachines/gameFlow';
@@ -113,15 +117,8 @@ function App() {
     });
   }, []);
   const handleDialogueLineChange = useCallback((line: { speakerId: string; expressionPresetId: ExpressionPresetId }) => {
-    setDialogueExpressionPresetIdByCharacterId(current => {
-      if (current[line.speakerId] === line.expressionPresetId) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [line.speakerId]: line.expressionPresetId,
-      };
+    setDialogueExpressionPresetIdByCharacterId({
+      [line.speakerId]: line.expressionPresetId,
     });
   }, []);
   const handleDialogueRequest = useCallback((request: CharacterPerformanceDialogueRequest) => {
@@ -348,10 +345,12 @@ function App() {
         setRomanceProfilesByCharacterId(settings.romanceRules.profilesByCharacterId);
         setRomanceRules([...settings.romanceRules.rules]);
         setRomanceRuleConfig(settings.romanceRules);
+        const expressionBubblePreloadTotal = getExpressionBubbleSpritePreloadTotal();
+
         setLoadingState({
           label: 'Loading sprites',
           completed: 0,
-          total: 0,
+          total: expressionBubblePreloadTotal,
         });
 
         return preloadTownRequiredSpriteSheets({
@@ -363,9 +362,33 @@ function App() {
             setLoadingState({
               label: progress.currentLabel,
               completed: progress.completed,
-              total: progress.total,
+              total: progress.total + expressionBubblePreloadTotal,
             });
           },
+        }).then(async townPreloadResult => {
+          if (!isMounted) {
+            return townPreloadResult;
+          }
+
+          const expressionBubblePreloadResult = await preloadExpressionBubbleSpriteSheets({
+            onProgress: progress => {
+              if (!isMounted) {
+                return;
+              }
+
+              setLoadingState({
+                label: progress.currentLabel,
+                completed: townPreloadResult.completed + progress.completed,
+                total: townPreloadResult.total + expressionBubblePreloadTotal,
+              });
+            },
+          });
+
+          return {
+            completed: townPreloadResult.completed + expressionBubblePreloadResult.completed,
+            total: townPreloadResult.total + expressionBubblePreloadResult.total,
+            failed: townPreloadResult.failed + expressionBubblePreloadResult.failed,
+          };
         });
       })
       .then(preloadResult => {

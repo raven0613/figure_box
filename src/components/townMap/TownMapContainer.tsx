@@ -64,6 +64,7 @@ import { InventoryPanel } from '~/components/inventory/InventoryPanel';
 import { ShopPanel } from '~/components/shop/ShopPanel';
 import { DraggablePanel } from '~/components/common/DraggablePanel';
 import { ApartmentPanel, type ApartmentResident } from './ApartmentPanel';
+import { ExpressionBubbleSpritePreviewWindow } from './ExpressionBubbleSpritePreviewWindow';
 
 import styles from './townMap.module.scss';
 
@@ -170,6 +171,7 @@ export function TownMapContainer({
   const [isApartmentPanelOpen, setIsApartmentPanelOpen] = useState(false);
   const [isInventoryPanelOpen, setIsInventoryPanelOpen] = useState(false);
   const [isRequestPanelOpen, setIsRequestPanelOpen] = useState(false);
+  const [isExpressionBubblePreviewOpen, setIsExpressionBubblePreviewOpen] = useState(false);
   const [isShopPanelOpen, setIsShopPanelOpen] = useState(false);
   const [shopStockItems, setShopStockItems] = useState<readonly ShopStockItem[]>([]);
   const [transferHistoryItem, setTransferHistoryItem] = useState<ItemInstance | null>(null);
@@ -757,9 +759,16 @@ export function TownMapContainer({
   }, [joinableActivities, observedActivityId]);
 
   useEffect(() => {
+    const characterController = characterControllerRef.current;
+
+    if (!characterController) {
+      return;
+    }
+
     Object.entries(expressionPresetIdByCharacterId).forEach(([characterId, expressionPresetId]) => {
       if (expressionPresetId) {
-        characterControllerRef.current?.setCharacterExpressionPreset(characterId, expressionPresetId);
+        characterController.setCharacterExpressionPreset(characterId, expressionPresetId);
+        characterController.showExpressionBubbleForExpressionPreset(characterId, expressionPresetId);
       }
     });
   }, [expressionPresetIdByCharacterId]);
@@ -998,6 +1007,12 @@ export function TownMapContainer({
         </DraggablePanel>
       ) : null}
 
+      {isExpressionBubblePreviewOpen ? (
+        <ExpressionBubbleSpritePreviewWindow
+          onClose={() => setIsExpressionBubblePreviewOpen(false)}
+        />
+      ) : null}
+
       <aside className={styles.panel}>
         <div className={styles.info}>
           <div className={styles.panelTitle}>Town Grid</div>
@@ -1072,8 +1087,10 @@ export function TownMapContainer({
           <DebugWindowActions
             isInventoryPanelOpen={isInventoryPanelOpen}
             isRequestPanelOpen={isRequestPanelOpen}
+            isExpressionBubblePreviewOpen={isExpressionBubblePreviewOpen}
             onOpenInventory={() => setIsInventoryPanelOpen(true)}
             onOpenRequests={() => setIsRequestPanelOpen(true)}
+            onOpenExpressionBubblePreview={() => setIsExpressionBubblePreviewOpen(true)}
           />
           <GodDropOpportunityPanel
             opportunity={godDropOpportunity}
@@ -1125,7 +1142,7 @@ function getGiftCandidateCharacterIds(
 
 function showGiftPreview(characterIds: readonly string[], widget: FabricTownMapWidget | null): void {
   characterIds.forEach(characterId => {
-    widget?.showCharacterEmote(characterId, '?', 700);
+    widget?.showCharacterExpressionBubble(characterId, 'question', 700);
   });
 }
 
@@ -1435,13 +1452,17 @@ function TransferHistoryPanel({
 function DebugWindowActions({
   isInventoryPanelOpen,
   isRequestPanelOpen,
+  isExpressionBubblePreviewOpen,
   onOpenInventory,
   onOpenRequests,
+  onOpenExpressionBubblePreview,
 }: {
   isInventoryPanelOpen: boolean;
   isRequestPanelOpen: boolean;
+  isExpressionBubblePreviewOpen: boolean;
   onOpenInventory: () => void;
   onOpenRequests: () => void;
+  onOpenExpressionBubblePreview: () => void;
 }) {
   return (
     <div className={styles.debugWindowActions}>
@@ -1461,6 +1482,14 @@ function DebugWindowActions({
         disabled={isRequestPanelOpen}
       >
         打開 Requests
+      </button>
+      <button
+        className={styles.debugWindowButton}
+        type="button"
+        onClick={onOpenExpressionBubblePreview}
+        disabled={isExpressionBubblePreviewOpen}
+      >
+        表情泡泡預覽
       </button>
     </div>
   );

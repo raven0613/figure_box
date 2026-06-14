@@ -19,6 +19,7 @@ import { sortEntityLayer, updateEntitySortMetadata } from './townMapLayerSorter'
 import { DEFAULT_CELL_SIZE } from '../constants/townMapWidgetConstants';
 import type { ExpressionPresetId } from '~/constants/character';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
+import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import type { ItemDefinition, PlacedObject } from '~/typing/item';
 import type { MapActivityView, MapBubbleSequence, MapBubbleSequenceLine } from '~/typing/eventDialoguePresentation';
 import type { MapDialogueBubbleAnimation } from '~/constants/event';
@@ -325,12 +326,16 @@ export class FabricTownMapWidget {
     this.floatingTextLayer.showCharacterBubble(characterId, text, durationMs, animation);
   }
 
-  showCharacterEmote(characterId: string, text: string, durationMs = 1200): void {
-    this.floatingTextLayer.showCharacterEmote(characterId, text, durationMs);
+  showCharacterExpressionBubble(
+    characterId: string,
+    expressionBubbleId: ExpressionBubbleId,
+    durationMs = 1200,
+  ): void {
+    this.floatingTextLayer.showCharacterExpressionBubble(characterId, expressionBubbleId, durationMs);
   }
 
-  removeCharacterEmote(characterId: string): void {
-    this.floatingTextLayer.removeCharacterEmote(characterId);
+  removeCharacterExpressionBubble(characterId: string): void {
+    this.floatingTextLayer.removeCharacterExpressionBubble(characterId);
   }
 
   removeCharacterBubble(characterId: string): void {

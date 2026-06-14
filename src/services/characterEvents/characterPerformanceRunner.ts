@@ -14,6 +14,7 @@ import type { MapActivityView } from '~/typing/eventDialoguePresentation';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
 import type { DialogueViewInstruction } from '~/typing/dialogueView';
 import type { ExpressionPresetId } from '~/typing/expression';
+import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
 
 export interface CharacterPerformanceSelection {
@@ -84,8 +85,12 @@ interface CharacterPerformanceRunnerPorts {
   setCharacterExpressionPreset: (characterId: string, expressionPresetId: ExpressionPresetId) => void;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   removeCharacterBubble: (characterId: string) => void;
-  showCharacterEmote: (characterId: string, text: string, durationMs?: number) => void;
-  removeCharacterEmote: (characterId: string) => void;
+  showCharacterExpressionBubble: (
+    characterId: string,
+    expressionBubbleId: ExpressionBubbleId,
+    durationMs?: number,
+  ) => void;
+  removeCharacterExpressionBubble: (characterId: string) => void;
   showMapActivity: (activity: MapActivityView, durationMs?: number | null) => void;
   removeMapActivity: (activityId: string) => void;
   playCharacterAnimation?: (
@@ -253,7 +258,7 @@ export class CharacterPerformanceRunner {
     new Set([...participantIds, ...hostCharacterIds]).forEach(characterId => {
       this.clearExpressionReset(characterId);
       this.ports.removeCharacterBubble(characterId);
-      this.ports.removeCharacterEmote(characterId);
+      this.ports.removeCharacterExpressionBubble(characterId);
       this.ports.cancelCharacterAnimation?.(characterId);
       this.ports.setCharacterExpressionPreset(characterId, DEFAULT_EXPRESSION_PRESET_ID);
     });
@@ -319,7 +324,7 @@ export class CharacterPerformanceRunner {
     );
 
     new Set([...participantIds, ...hostCharacterIds]).forEach(characterId => {
-      this.ports.removeCharacterEmote(characterId);
+      this.ports.removeCharacterExpressionBubble(characterId);
       this.ports.cancelCharacterAnimation?.(characterId);
     });
   }
@@ -418,11 +423,11 @@ export class CharacterPerformanceRunner {
       return;
     }
 
-    if (step.type === 'emote') {
+    if (step.type === 'expressionBubble') {
       characterIds.forEach(characterId => {
-        this.ports.showCharacterEmote(
+        this.ports.showCharacterExpressionBubble(
           characterId,
-          getEmoteLabel(step.emoteId),
+          step.expressionBubbleId,
           step.durationMs ?? 1200,
         );
       });
@@ -522,11 +527,11 @@ export class CharacterPerformanceRunner {
       return;
     }
 
-    if (step.type === 'emote') {
+    if (step.type === 'expressionBubble') {
       characterIds.forEach(characterId => {
-        this.ports.showCharacterEmote(
+        this.ports.showCharacterExpressionBubble(
           characterId,
-          getEmoteLabel(step.emoteId),
+          step.expressionBubbleId,
           step.durationMs ?? 1200,
         );
       });
@@ -618,7 +623,7 @@ export class CharacterPerformanceRunner {
     input.participantIds.forEach(characterId => {
       this.clearExpressionReset(characterId);
       this.ports.setCharacterExpressionPreset(characterId, 'surprised');
-      this.ports.showCharacterEmote(characterId, getEmoteLabel('surprised'), PARTICIPANT_LEFT_REACTION_MS);
+      this.ports.showCharacterExpressionBubble(characterId, 'surprised', PARTICIPANT_LEFT_REACTION_MS);
       this.scheduleExpressionReset(
         characterId,
         PARTICIPANT_LEFT_REACTION_MS,
@@ -875,17 +880,4 @@ function getPerformanceStepsDurationMs(steps: readonly CharacterPerformanceStep[
   return Math.max(...steps.map(step => (
     (step.delayMs ?? 0) + (step.type === 'roll' ? 0 : (step.durationMs ?? 0))
   )));
-}
-
-function getEmoteLabel(emoteId: string): string {
-  const emoteLabels: Record<string, string> = {
-    laugh: '大笑',
-    play: '玩',
-    talk: '聊',
-    angry: '怒',
-    surprised: '!',
-    sigh: '...',
-  };
-
-  return emoteLabels[emoteId] ?? emoteId;
 }

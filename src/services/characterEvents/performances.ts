@@ -1,6 +1,7 @@
 import rawCharacterPerformanceDefinitions from '~/constants/events/characterPerformances.json';
 import type { ExpressionPresetId } from '~/constants/character';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
+import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import { loadCharacterPerformanceDefinitions } from './performanceSchema';
 
 export type CharacterPerformancePhase =
@@ -24,7 +25,7 @@ export interface CharacterPerformanceDefinition {
 export type CharacterPerformanceStep =
   | CharacterPerformanceBubbleStep
   | CharacterPerformanceExpressionPresetStep
-  | CharacterPerformanceEmoteStep
+  | CharacterPerformanceExpressionBubbleStep
   | CharacterPerformanceMapEffectStep
   | CharacterPerformanceMotionStep
   | CharacterPerformanceAnimationStep
@@ -51,12 +52,12 @@ export interface CharacterPerformanceExpressionPresetStep {
   durationMs?: number;
 }
 
-export interface CharacterPerformanceEmoteStep {
-  type: 'emote';
+export interface CharacterPerformanceExpressionBubbleStep {
+  type: 'expressionBubble';
   phase: CharacterPerformancePhase;
   target: CharacterPerformanceTarget;
   participantCount?: CharacterPerformanceParticipantCountCondition;
-  emoteId: string;
+  expressionBubbleId: ExpressionBubbleId;
   delayMs?: number;
   durationMs?: number;
 }
