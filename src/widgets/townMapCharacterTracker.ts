@@ -64,6 +64,7 @@ export class TownMapCharacterTracker {
 
   selectCharacterForTracking(characterId: string): boolean {
     if (!this.getCharacterCenter(characterId)) {
+      this.clearSelection();
       return false;
     }
 

@@ -188,6 +188,7 @@ export function TownMapContainer({
   );
   const placementDraftRef = useRef<ItemInstance | null>(null);
   const pickupChainRef = useRef<PickupChainState | null>(null);
+  const characterSnapshotsRef = useRef<Record<string, CharacterSnapshot>>({});
   const activityObservationCameraViewRef = useRef<TownMapCameraView | null>(null);
   const focusedActivityObservationIdRef = useRef<string | null>(null);
   const isCameraRestoreTransitionActiveRef = useRef(false);
@@ -393,6 +394,10 @@ export function TownMapContainer({
   useEffect(() => {
     pickupChainRef.current = pickupChain;
   }, [pickupChain]);
+
+  useEffect(() => {
+    characterSnapshotsRef.current = characterSnapshots;
+  }, [characterSnapshots]);
 
   useEffect(() => {
     if (lastAppliedRomanceRuleRevisionRef.current === romanceRuleRevision) {
@@ -616,14 +621,31 @@ export function TownMapContainer({
       return;
     }
 
+    const requestedCharacterId = trackCharacterRequest.characterId;
     const didSelectCharacter = widgetRef.current?.selectCharacterForTracking(
-      trackCharacterRequest.characterId,
+      requestedCharacterId,
     ) ?? false;
 
     if (didSelectCharacter) {
-      setSelectedCharacterId(trackCharacterRequest.characterId);
+      setSelectedCharacterId(requestedCharacterId);
+      return;
     }
-  }, [trackCharacterRequest]);
+
+    const isPlayableCharacter = playableCharacters.some(character => character.id === requestedCharacterId);
+    const requestedSnapshot = characterSnapshotsRef.current[requestedCharacterId];
+
+    if (!isPlayableCharacter) {
+      console.warn(`Character ${requestedCharacterId} is not available in playable characters.`);
+      return;
+    }
+
+    if (
+      requestedSnapshot?.context.presence.kind === 'contained' &&
+      requestedSnapshot.context.presence.spaceId === TOWN_APARTMENT_SPACE_ID
+    ) {
+      setIsApartmentPanelOpen(true);
+    }
+  }, [playableCharacters, trackCharacterRequest]);
 
   useEffect(() => {
     seedDemoPlayerInventory();
