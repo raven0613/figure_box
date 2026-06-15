@@ -612,7 +612,6 @@ export class TownCharacterController {
     this.requestIndicatorPresenter.clear();
     this.actorRegistry.dispose();
 
-    this.relationshipCoordinator.reset();
     this.godDropCoordinator.dispose();
     this.characterRequestService.clear();
     this.notifyCharacterRequestsChanged();

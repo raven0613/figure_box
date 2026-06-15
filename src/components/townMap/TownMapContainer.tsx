@@ -76,7 +76,7 @@ const PLAYER_DEMO_ITEM_IDS: readonly ItemDefinitionId[] = [
   'wooden_chair',
 ];
 const GIFT_DROP_CHARACTER_RADIUS = 1;
-const ALLOW_DIAGONAL_MOVEMENT = false; // 斜走
+const ALLOW_DIAGONAL_MOVEMENT = false; // 斜走 斜線
 const ACTIVITY_OBSERVATION_CAMERA_ZOOM = 3;
 const ACTIVITY_OBSERVATION_CAMERA_TRANSITION_MS = 600;
 

@@ -18,7 +18,9 @@ import {
 } from '~/services/romanceRules/romanceRuleService';
 import {
   createRelationshipStore,
+  getRelationshipKey,
   normalizeRelationshipPair,
+  type RelationshipStore,
 } from '~/stateMachines/gameFlow/relationships';
 import type {
   ItemInstance,
@@ -30,7 +32,6 @@ import { createDefaultCharacterRuntimeSnapshot } from './characterRuntimeSaveSer
 import {
   createDefaultItemSaveRecord,
   createDefaultItemSnapshot,
-  createDefaultRelationshipSaveRecord,
   createDefaultSaveMeta,
   createDefaultSettingsRecord,
   createDefaultShopSaveRecord,
@@ -167,21 +168,52 @@ export function normalizeShopSaveRecord(rawRecord: unknown): ShopSaveRecord {
   };
 }
 
-export function normalizeRelationshipSaveRecord(rawRecord: unknown): RelationshipSaveRecord {
-  const timestamp = Date.now();
+export function normalizeRelationshipSaveRecords(rawRecords: readonly unknown[]): RelationshipStore {
+  const relationshipsById = new Map<string, RelationshipSaveRecord>();
 
-  if (!isRecord(rawRecord) || !isRecord(rawRecord.snapshot)) {
-    return createDefaultRelationshipSaveRecord(timestamp);
-  }
+  rawRecords.forEach(rawRecord => {
+    readRelationshipSaveRecords(rawRecord).forEach(record => {
+      const existingRecord = relationshipsById.get(record.id);
 
-  return {
-    id: 'current',
-    snapshot: {
-      mutualRelationships: readMutualRelationships(rawRecord.snapshot.mutualRelationships),
-      relationshipRecords: readRelationshipRecords(rawRecord.snapshot.relationshipRecords),
-    },
-    updatedAt: readFiniteNumber(rawRecord.updatedAt, timestamp),
-  };
+      if (
+        existingRecord &&
+        (
+          existingRecord.updatedAt > record.updatedAt ||
+          (
+            existingRecord.updatedAt === record.updatedAt &&
+            existingRecord.timestamp >= record.timestamp
+          )
+        )
+      ) {
+        return;
+      }
+
+      relationshipsById.set(record.id, record);
+    });
+  });
+
+  return Array.from(relationshipsById.values())
+    .sort((leftRecord, rightRecord) => leftRecord.id.localeCompare(rightRecord.id))
+    .reduce<RelationshipStore>(
+      (store, record) => ({
+        mutualRelationships: [
+          ...store.mutualRelationships,
+          {
+            charIds: [record.charIds[0], record.charIds[1]],
+            status: record.status,
+            timestamp: record.timestamp,
+          },
+        ],
+        relationshipRecords: [
+          ...store.relationshipRecords,
+          {
+            charIds: [record.charIds[0], record.charIds[1]],
+            records: record.records.map(entry => ({ ...entry })),
+          },
+        ],
+      }),
+      createRelationshipStore(),
+    );
 }
 
 export function normalizeCharacterRuntimeSaveRecords(
@@ -492,6 +524,116 @@ function readShopStockItems(value: unknown): readonly ShopStockItem[] {
       generatedAtDay: stockItem.generatedAtDay,
     }];
   });
+}
+
+function readRelationshipSaveRecords(rawRecord: unknown): RelationshipSaveRecord[] {
+  const timestamp = Date.now();
+
+  if (!isRecord(rawRecord)) {
+    return [];
+  }
+
+  if (isRecord(rawRecord.snapshot)) {
+    return createRelationshipSaveRecordsFromStore(
+      {
+        mutualRelationships: readMutualRelationships(rawRecord.snapshot.mutualRelationships),
+        relationshipRecords: readRelationshipRecords(rawRecord.snapshot.relationshipRecords),
+      },
+      readFiniteNumber(rawRecord.updatedAt, timestamp),
+    );
+  }
+
+  if (!Array.isArray(rawRecord.charIds)) {
+    return [];
+  }
+
+  const [firstCharacterId, secondCharacterId] = rawRecord.charIds;
+  const normalizedPair = typeof firstCharacterId === 'string' && typeof secondCharacterId === 'string'
+    ? normalizeRelationshipPair(firstCharacterId, secondCharacterId)
+    : null;
+
+  if (
+    !normalizedPair ||
+    typeof rawRecord.status !== 'string' ||
+    !SOCIAL_STATUSES.has(rawRecord.status) ||
+    typeof rawRecord.timestamp !== 'number' ||
+    !Number.isFinite(rawRecord.timestamp)
+  ) {
+    return [];
+  }
+
+  const relationshipRecord = normalizeRelationshipHistoryRecords(
+    readRelationshipStatusRecords(rawRecord.records),
+    rawRecord.status as RelationshipSaveRecord['status'],
+    rawRecord.timestamp,
+  );
+  const id = getRelationshipKey(normalizedPair[0], normalizedPair[1]);
+
+  if (!id) {
+    return [];
+  }
+
+  return [{
+    id,
+    charIds: normalizedPair,
+    status: rawRecord.status as RelationshipSaveRecord['status'],
+    timestamp: rawRecord.timestamp,
+    records: relationshipRecord,
+    updatedAt: readFiniteNumber(rawRecord.updatedAt, timestamp),
+  }];
+}
+
+function createRelationshipSaveRecordsFromStore(
+  relationshipStore: RelationshipStore,
+  updatedAt: number,
+): RelationshipSaveRecord[] {
+  return relationshipStore.mutualRelationships.flatMap(relationship => {
+    const id = getRelationshipKey(relationship.charIds[0], relationship.charIds[1]);
+
+    if (!id) {
+      return [];
+    }
+
+    const relationshipRecord = relationshipStore.relationshipRecords.find(record => (
+      getRelationshipKey(record.charIds[0], record.charIds[1]) === id
+    ));
+
+    return [{
+      id,
+      charIds: [relationship.charIds[0], relationship.charIds[1]],
+      status: relationship.status,
+      timestamp: relationship.timestamp,
+      records: normalizeRelationshipHistoryRecords(
+        relationshipRecord?.records ?? [],
+        relationship.status,
+        relationship.timestamp,
+      ),
+      updatedAt,
+    }];
+  });
+}
+
+function normalizeRelationshipHistoryRecords(
+  records: readonly { status: RelationshipSaveRecord['status']; timestamp: number }[],
+  currentStatus: RelationshipSaveRecord['status'],
+  currentTimestamp: number,
+): RelationshipSaveRecord['records'] {
+  const normalizedRecords = records.length > 0
+    ? records.map(record => ({ ...record }))
+    : [{ status: currentStatus, timestamp: currentTimestamp }];
+  const latestRecord = normalizedRecords.at(-1);
+
+  if (latestRecord?.status === currentStatus) {
+    return normalizedRecords;
+  }
+
+  return [
+    ...normalizedRecords,
+    {
+      status: currentStatus,
+      timestamp: currentTimestamp,
+    },
+  ];
 }
 
 function readMutualRelationships(value: unknown): ReturnType<typeof createRelationshipStore>['mutualRelationships'] {

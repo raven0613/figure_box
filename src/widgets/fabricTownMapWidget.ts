@@ -52,8 +52,8 @@ interface MoveCharacterToTileResult {
   position: GridCoordinate | null;
 }
 
-const OVERLAP_OFFSET_MIN_CELL_RATIO = 0.5;
-const OVERLAP_OFFSET_MAX_CELL_RATIO = 0.75;
+const OVERLAP_OFFSET_MIN_CELL_RATIO = 0.8;
+const OVERLAP_OFFSET_MAX_CELL_RATIO = 1.5;
 const OVERLAP_OFFSET_PUSH_DURATION_MS = 180;
 const ZERO_OFFSET: GridCoordinate = { x: 0, y: 0 };
 
@@ -849,7 +849,7 @@ export class FabricTownMapWidget {
     onZoomChange?.(zoom);
   }
 }
-
+// 角色擠在同一格時分散
 function createRandomOverlapOffset(cellSize: number): GridCoordinate {
   const minDistance = cellSize * OVERLAP_OFFSET_MIN_CELL_RATIO;
   const maxDistance = cellSize * OVERLAP_OFFSET_MAX_CELL_RATIO;

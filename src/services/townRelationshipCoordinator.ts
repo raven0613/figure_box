@@ -125,11 +125,6 @@ export class TownRelationshipCoordinator {
     ))?.status ?? SocialStatus.Stranger;
   }
 
-  reset(): void {
-    this.relationshipStore = createRelationshipStore();
-    this.notifyRelationshipStoreChanged();
-  }
-
   private notifyRelationshipStoreChanged(): void {
     this.onRelationshipStoreChange?.(this.relationshipStore);
   }

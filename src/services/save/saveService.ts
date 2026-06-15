@@ -3,7 +3,6 @@ import { shopService } from '~/services/items/shopService';
 import { saveDb, deleteSaveDatabase } from './saveDb';
 import {
   createDefaultItemSaveRecord,
-  createDefaultRelationshipSaveRecord,
   createDefaultSaveMeta,
   createDefaultSettingsRecord,
   createDefaultShopSaveRecord,
@@ -17,7 +16,7 @@ import {
   normalizeCustomObjectRecords,
   normalizeItemSaveRecord,
   normalizeOfflineRecapSaveRecords,
-  normalizeRelationshipSaveRecord,
+  normalizeRelationshipSaveRecords,
   normalizeSaveMetaRecord,
   normalizeSettingsRecord,
   normalizeShopSaveRecord,
@@ -68,6 +67,10 @@ import {
 import { worldProgressService } from './worldProgressService';
 import { offlineSessionService } from '~/services/offlineSimulation/offlineSessionService';
 import { clearMiniSpriteBakeCache } from '~/widgets/miniAvatar/miniSpriteBakeCache';
+import {
+  getRelationshipKey,
+  type RelationshipStore,
+} from '~/stateMachines/gameFlow/relationships';
 
 const AUTOSAVE_DELAY_MS = 600;
 const CHARACTER_SAVE_MIN_INTERVAL_MS = 5000;
@@ -269,7 +272,7 @@ class SaveService {
       rawItems,
       rawShops,
       rawSettings,
-      rawRelationships,
+      rawRelationshipRecords,
       rawCharacters,
       rawCharacterRuntime,
       rawCharacterAvatars,
@@ -282,7 +285,7 @@ class SaveService {
       saveDb.items.get('current'),
       saveDb.shops.get('current'),
       saveDb.settings.get('current'),
-      saveDb.relationships.get('current'),
+      saveDb.relationships.toArray(),
       saveDb.characters.toArray(),
       saveDb.characterRuntime.toArray(),
       saveDb.characterAvatars.toArray(),
@@ -312,9 +315,8 @@ class SaveService {
     const settings = rawSettings
       ? normalizeSettingsRecord(rawSettings)
       : createDefaultSettingsRecord(timestamp);
-    const relationshipStore = rawRelationships
-      ? normalizeRelationshipSaveRecord(rawRelationships)
-      : createDefaultRelationshipSaveRecord(timestamp);
+    const relationshipStore = normalizeRelationshipSaveRecords(rawRelationshipRecords);
+    const relationshipRecords = this.createRelationshipSaveRecords(relationshipStore, timestamp);
     const characterProfileRecords = normalizeCharacterProfileRecords(rawCharacters);
     const legacyCharacterRuntimeRecords = normalizeCharacterRuntimeSaveRecords(rawCharacters, {
       requireRuntimeShape: true,
@@ -332,7 +334,7 @@ class SaveService {
 
     worldProgressService.load(worldProgress);
     settingsService.load(settings);
-    relationshipStoreService.load(relationshipStore.snapshot);
+    relationshipStoreService.load(relationshipStore);
     characterProfileSaveService.load(characterProfileRecords);
     characterRuntimeSaveService.load(characterRuntimeRecords);
     characterAvatarSaveService.load(characterAvatarRecords);
@@ -359,7 +361,10 @@ class SaveService {
       await saveDb.items.put(itemSaveRecord);
       await saveDb.shops.put(shopSaveRecord);
       await saveDb.settings.put(settings);
-      await saveDb.relationships.put(relationshipStore);
+      await saveDb.relationships.clear();
+      if (relationshipRecords.length > 0) {
+        await saveDb.relationships.bulkPut(relationshipRecords);
+      }
       await saveDb.characters.clear();
       if (characterProfileRecords.length > 0) {
         await saveDb.characters.bulkPut(characterProfileRecords);
@@ -431,22 +436,57 @@ class SaveService {
   }
 
   private async saveRelationships(): Promise<boolean> {
-    const nextRecord: RelationshipSaveRecord = {
-      id: 'current',
-      snapshot: relationshipStoreService.getSnapshot(),
-      updatedAt: Date.now(),
-    };
-    const currentRecord = await saveDb.relationships.get('current');
+    const timestamp = Date.now();
+    const nextRelationshipStore = relationshipStoreService.getSnapshot();
+    const currentRelationshipStore = normalizeRelationshipSaveRecords(
+      await saveDb.relationships.toArray(),
+    );
+    const currentRecords = this.createRelationshipSaveRecords(currentRelationshipStore, 0);
+    const nextRecordsForComparison = this.createRelationshipSaveRecords(nextRelationshipStore, 0);
 
-    if (
-      currentRecord &&
-      JSON.stringify(currentRecord.snapshot) === JSON.stringify(nextRecord.snapshot)
-    ) {
+    if (JSON.stringify(currentRecords) === JSON.stringify(nextRecordsForComparison)) {
       return false;
     }
 
-    await saveDb.relationships.put(nextRecord);
+    const nextRecords = this.createRelationshipSaveRecords(nextRelationshipStore, timestamp);
+
+    await saveDb.relationships.clear();
+    if (nextRecords.length > 0) {
+      await saveDb.relationships.bulkPut(nextRecords);
+    }
+
     return true;
+  }
+
+  private createRelationshipSaveRecords(
+    relationshipStore: RelationshipStore,
+    timestamp: number,
+  ): readonly RelationshipSaveRecord[] {
+    return relationshipStore.mutualRelationships
+      .flatMap(relationship => {
+        const id = getRelationshipKey(relationship.charIds[0], relationship.charIds[1]);
+
+        if (!id) {
+          return [];
+        }
+
+        const relationshipRecord = relationshipStore.relationshipRecords.find(record => (
+          getRelationshipKey(record.charIds[0], record.charIds[1]) === id
+        ));
+
+        return [{
+          id,
+          charIds: [relationship.charIds[0], relationship.charIds[1]],
+          status: relationship.status,
+          timestamp: relationship.timestamp,
+          records: relationshipRecord?.records.map(record => ({ ...record })) ?? [{
+            status: relationship.status,
+            timestamp: relationship.timestamp,
+          }],
+          updatedAt: timestamp,
+        }];
+      })
+      .sort((leftRecord, rightRecord) => leftRecord.id.localeCompare(rightRecord.id));
   }
 
   private async saveCharacterRuntime(

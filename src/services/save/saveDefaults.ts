@@ -1,10 +1,8 @@
-import { createRelationshipStore } from '~/stateMachines/gameFlow/relationships';
 import { createDefaultRomanceRuleConfig } from '~/services/romanceRules/romanceRuleService';
 import type { ItemStoreSnapshot } from '~/services/items/itemStore';
 import {
   SAVE_SCHEMA_VERSION,
   type ItemSaveRecord,
-  type RelationshipSaveRecord,
   type SaveMetaRecord,
   type SettingsRecord,
   type ShopSaveRecord,
@@ -71,14 +69,6 @@ export function createDefaultShopSaveRecord(timestamp = Date.now()): ShopSaveRec
   return {
     id: 'current',
     snapshot: createDefaultShopSnapshot(),
-    updatedAt: timestamp,
-  };
-}
-
-export function createDefaultRelationshipSaveRecord(timestamp = Date.now()): RelationshipSaveRecord {
-  return {
-    id: 'current',
-    snapshot: createRelationshipStore(),
     updatedAt: timestamp,
   };
 }

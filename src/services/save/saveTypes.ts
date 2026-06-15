@@ -1,8 +1,11 @@
 import type { ItemStoreSnapshot } from '~/services/items/itemStore';
 import type { RomanceRuleConfig } from '~/services/romanceRules/romanceRuleService';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
-import type { RelationshipStore } from '~/stateMachines/gameFlow/relationships';
 import type { ShopStockItem } from '~/typing/item';
+import type {
+  MutualRelationship,
+  RelationshipRecord,
+} from '~/constants/character';
 import type {
   CharacterProfileData,
   PlayerCreatedCharacterProfileData,
@@ -69,8 +72,11 @@ export interface ShopSaveRecord {
 }
 
 export interface RelationshipSaveRecord {
-  id: 'current';
-  snapshot: RelationshipStore;
+  id: string;
+  charIds: MutualRelationship['charIds'];
+  status: MutualRelationship['status'];
+  timestamp: number;
+  records: RelationshipRecord['records'];
   updatedAt: number;
 }
 
