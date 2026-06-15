@@ -589,6 +589,7 @@ function createRelationshipSaveRecordsFromStore(
 ): RelationshipSaveRecord[] {
   return relationshipStore.mutualRelationships.flatMap(relationship => {
     const id = getRelationshipKey(relationship.charIds[0], relationship.charIds[1]);
+    const charIds: RelationshipSaveRecord['charIds'] = [relationship.charIds[0], relationship.charIds[1]];
 
     if (!id) {
       return [];
@@ -600,7 +601,7 @@ function createRelationshipSaveRecordsFromStore(
 
     return [{
       id,
-      charIds: [relationship.charIds[0], relationship.charIds[1]],
+      charIds,
       status: relationship.status,
       timestamp: relationship.timestamp,
       records: normalizeRelationshipHistoryRecords(

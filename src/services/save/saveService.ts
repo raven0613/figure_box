@@ -465,6 +465,7 @@ class SaveService {
     return relationshipStore.mutualRelationships
       .flatMap(relationship => {
         const id = getRelationshipKey(relationship.charIds[0], relationship.charIds[1]);
+        const charIds: RelationshipSaveRecord['charIds'] = [relationship.charIds[0], relationship.charIds[1]];
 
         if (!id) {
           return [];
@@ -476,7 +477,7 @@ class SaveService {
 
         return [{
           id,
-          charIds: [relationship.charIds[0], relationship.charIds[1]],
+          charIds,
           status: relationship.status,
           timestamp: relationship.timestamp,
           records: relationshipRecord?.records.map(record => ({ ...record })) ?? [{
