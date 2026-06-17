@@ -29,6 +29,7 @@ import {
 const VALID_ACTIVITY_TYPES = ['chat', 'playWithItem', 'playAtLocation'] as const;
 const VALID_ACTIVITY_START_PHASES = ['active', 'traveling'] as const;
 const VALID_JOIN_REQUIREMENT_TYPES = ['none', 'hasItem'] as const;
+const VALID_ITEM_JOIN_REQUIREMENT_SCOPES = ['joiner', 'host'] as const;
 const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
 const VALID_MOODS = Object.values(Mood) as Mood[];
 const VALID_MEMORY_TYPES = Object.values(MemoryType) as MemoryType[];
@@ -777,8 +778,17 @@ function readOptionalJoinRequirement(
     return { type };
   }
 
+  const scope = readOptionalString(value, 'scope', index);
+
+  if (scope !== undefined && !includesString(VALID_ITEM_JOIN_REQUIREMENT_SCOPES, scope)) {
+    throw new Error(
+      `Character event definition at index ${index} has invalid activity.joinRequirements.scope "${scope}".`,
+    );
+  }
+
   return {
     type,
     itemId: readRequiredString(value, 'itemId', index),
+    scope,
   };
 }

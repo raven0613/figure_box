@@ -9,6 +9,7 @@ import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townChara
 import { EventType } from '~/stateMachines/gameFlow/events';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import {
+  getItemJoinRequirementScope,
   getGroupMaxParticipants,
   getGroupMinParticipants,
   getPostInviteActivityPhase,
@@ -103,9 +104,11 @@ export class TownActivityInviteResolver {
       return true;
     }
 
-    const requiredItemId = activityDefinition.joinRequirements.itemId;
+    if (getItemJoinRequirementScope(activityDefinition.joinRequirements) === 'host') {
+      return true;
+    }
 
-    return this.actorHasItem(characterId, requiredItemId);
+    return this.actorHasItem(characterId, activityDefinition.joinRequirements.itemId);
   }
 
   handleGroupInviteResolution(

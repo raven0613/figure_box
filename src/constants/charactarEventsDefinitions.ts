@@ -153,9 +153,15 @@ export interface CharacterEventActivityTimeWindow {
   toMinute: number;
 }
 
+export type CharacterEventItemJoinRequirementScope = 'joiner' | 'host';
+
 export type CharacterEventJoinRequirement =
   | { type: 'none' }
-  | { type: 'hasItem'; itemId: string };
+  | {
+      type: 'hasItem';
+      itemId: string;
+      scope?: CharacterEventItemJoinRequirementScope;
+    };
 
 // 活動造成的效果
 export interface CharacterEventActivityEffects {

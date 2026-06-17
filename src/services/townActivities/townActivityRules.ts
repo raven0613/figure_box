@@ -1,5 +1,11 @@
 import type { Position } from '~/constants/character';
-import type { CharacterEventActivity } from '~/constants/charactarEventsDefinitions';
+import type {
+  CharacterEventActivity,
+  CharacterEventItemJoinRequirementScope,
+  CharacterEventJoinRequirement,
+} from '~/constants/charactarEventsDefinitions';
+
+export const DEFAULT_ITEM_JOIN_REQUIREMENT_SCOPE: CharacterEventItemJoinRequirementScope = 'joiner';
 
 export function sampleWithoutReplacement<T>(
   candidates: readonly T[],
@@ -42,4 +48,14 @@ export function getGroupMinParticipants(activityDefinition: CharacterEventActivi
 export function getGroupMaxParticipants(activityDefinition: CharacterEventActivity): number {
   const minParticipants = getGroupMinParticipants(activityDefinition);
   return Math.max(minParticipants, activityDefinition.group.maxParticipants ?? minParticipants);
+}
+
+export function getItemJoinRequirementScope(
+  joinRequirements: CharacterEventJoinRequirement,
+): CharacterEventItemJoinRequirementScope | null {
+  if (joinRequirements.type !== 'hasItem') {
+    return null;
+  }
+
+  return joinRequirements.scope ?? DEFAULT_ITEM_JOIN_REQUIREMENT_SCOPE;
 }

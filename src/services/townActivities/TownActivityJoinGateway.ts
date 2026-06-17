@@ -7,7 +7,10 @@ import type {
 import { EventType } from '~/stateMachines/gameFlow/events';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
-import { getGroupMaxParticipants } from '~/services/townActivities/townActivityRules';
+import {
+  getGroupMaxParticipants,
+  getItemJoinRequirementScope,
+} from '~/services/townActivities/townActivityRules';
 
 interface TownActivityJoinGatewayOptions {
   activityManager: JoinableActivityManager;
@@ -89,6 +92,12 @@ export class TownActivityJoinGateway {
       case 'none':
         return true;
       case 'hasItem':
+        if (getItemJoinRequirementScope(joinRequirements) === 'host') {
+          return activity.hostCharacterIds.some(hostCharacterId => (
+            this.actorHasItem(hostCharacterId, joinRequirements.itemId)
+          ));
+        }
+
         return this.actorHasItem(characterId, joinRequirements.itemId);
     }
   }

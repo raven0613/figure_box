@@ -1,6 +1,7 @@
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
 import { itemHoldingService, type ItemHoldingService } from '~/services/items/itemHoldingService';
 import { itemService, type ItemService } from '~/services/items/itemService';
+import { getItemJoinRequirementScope } from '~/services/townActivities/townActivityRules';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
 import type { CharacterHeldItem } from '~/stateMachines/gameFlow/context';
 import { EventType } from '~/stateMachines/gameFlow/events';
@@ -119,7 +120,7 @@ export class CharacterHeldItemCoordinator {
   }
 
   private syncActivityHeldItem(characterId: string, snapshot: CharacterSnapshot): boolean {
-    const requiredItemId = this.getRequiredActivityItemId(snapshot);
+    const requiredItemId = this.getRequiredActivityItemId(characterId, snapshot);
     const activityHeldItem = this.activityHeldItemsByCharacterId.get(characterId);
 
     if (!requiredItemId) {
@@ -153,7 +154,10 @@ export class CharacterHeldItemCoordinator {
     return true;
   }
 
-  private getRequiredActivityItemId(snapshot: CharacterSnapshot): ItemDefinitionId | null {
+  private getRequiredActivityItemId(
+    characterId: string,
+    snapshot: CharacterSnapshot,
+  ): ItemDefinitionId | null {
     const activityId = snapshot.context.currentActivity?.activityId;
 
     if (!activityId) {
@@ -166,6 +170,13 @@ export class CharacterHeldItemCoordinator {
       !activity ||
       activity.type !== 'playWithItem' ||
       activity.joinRequirements.type !== 'hasItem'
+    ) {
+      return null;
+    }
+
+    if (
+      getItemJoinRequirementScope(activity.joinRequirements) === 'host' &&
+      !activity.hostCharacterIds.includes(characterId)
     ) {
       return null;
     }

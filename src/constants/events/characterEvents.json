@@ -210,7 +210,8 @@
           },
           "joinRequirements": {
             "type": "hasItem",
-            "itemId": "toy-ball"
+            "itemId": "toy-ball",
+            "scope": "host"
           }
         }
       },
@@ -256,7 +257,8 @@
           },
           "joinRequirements": {
             "type": "hasItem",
-            "itemId": "cards"
+            "itemId": "cards",
+            "scope": "host"
           }
         }
       }

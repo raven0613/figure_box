@@ -22,6 +22,7 @@ import {
 } from '~/services/characterEvents/activityCompletionEffects';
 import { getPlayableCharacters } from '~/services/playableCharacterService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
+import { getItemJoinRequirementScope } from '~/services/townActivities/townActivityRules';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import type {
@@ -506,6 +507,10 @@ function canJoinOfflineActivity(
   const joinRequirements = activity.joinRequirements;
 
   if (joinRequirements?.type === 'hasItem') {
+    if (getItemJoinRequirementScope(joinRequirements) === 'host') {
+      return true;
+    }
+
     return itemService.getActorItems(candidate.id).some(item => (
       item.definitionId === joinRequirements.itemId &&
       (item.state === 'stored' || item.state === 'held')
