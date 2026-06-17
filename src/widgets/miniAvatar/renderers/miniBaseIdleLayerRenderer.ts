@@ -18,10 +18,8 @@ import type {
   MiniRigNode,
   MiniTransform,
 } from '../miniAvatarTypes';
-import {
-  MiniLayerBuilder,
-  type MiniMirroredSocketPoints,
-} from './miniLayerBuilder';
+import { MiniLayerBuilder } from './miniLayerBuilder';
+import type { MiniMirroredSocketPoints } from './miniRendererUtils';
 
 export abstract class MiniBaseIdleLayerRenderer {
   protected readonly state: AvatarState;
