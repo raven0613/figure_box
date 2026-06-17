@@ -5,11 +5,14 @@ import type { CharacterRuntimeSnapshot } from '~/services/save/saveTypes';
 import type { CharacterActorRegistry } from '~/services/characterActorRegistry';
 import type { CharacterHeldItemCoordinator } from '~/services/characterHeldItemCoordinator';
 import type { TownMovementCoordinator } from '~/services/townMovementCoordinator';
+import type { Position } from '~/constants/character';
 import { itemService } from '~/services/items/itemService';
 import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSaveService';
 import { saveService } from '~/services/save/saveService';
 
 const OFFLINE_RUNTIME_SYNC_DECISION_GRACE_MS = 1800;
+
+type SpawnRuntime = CharacterRuntimeSnapshot | CharacterSnapshot['context'];
 
 interface TownCharacterRuntimeCoordinatorOptions {
   actorRegistry: CharacterActorRegistry;
@@ -113,7 +116,10 @@ export class TownCharacterRuntimeCoordinator {
     const savedRuntime = previousContext
       ? null
       : characterRuntimeSaveService.getRuntimeSnapshot(character.id);
-    const runtime = previousContext ?? savedRuntime ?? undefined;
+    const runtime = this.resolveVisibleSpawnRuntime(
+      previousContext ?? savedRuntime ?? undefined,
+      character.position,
+    );
 
     if (runtime?.presence.kind === 'contained') {
       this.movementCoordinator.registerCharacterRenderData(character.id, character);
@@ -133,6 +139,54 @@ export class TownCharacterRuntimeCoordinator {
     });
   }
 
+  private resolveVisibleSpawnRuntime(
+    runtime: CharacterRuntimeSnapshot,
+    fallbackPosition: Position,
+  ): CharacterRuntimeSnapshot;
+  private resolveVisibleSpawnRuntime(
+    runtime: CharacterSnapshot['context'],
+    fallbackPosition: Position,
+  ): CharacterSnapshot['context'];
+  private resolveVisibleSpawnRuntime(
+    runtime: undefined,
+    fallbackPosition: Position,
+  ): undefined;
+  private resolveVisibleSpawnRuntime(
+    runtime: SpawnRuntime | undefined,
+    fallbackPosition: Position,
+  ): SpawnRuntime | undefined;
+  private resolveVisibleSpawnRuntime(
+    runtime: SpawnRuntime | undefined,
+    fallbackPosition: Position,
+  ): SpawnRuntime | undefined {
+    if (!runtime || runtime.presence.kind !== 'positioned') {
+      return runtime;
+    }
+
+    const spawnPosition = this.movementCoordinator.resolveVisibleSpawnPosition(
+      runtime.position,
+      fallbackPosition,
+    );
+
+    if (
+      spawnPosition.x === runtime.position.x &&
+      spawnPosition.y === runtime.position.y &&
+      spawnPosition.x === runtime.presence.position.x &&
+      spawnPosition.y === runtime.presence.position.y
+    ) {
+      return runtime;
+    }
+
+    return {
+      ...runtime,
+      position: spawnPosition,
+      presence: {
+        ...runtime.presence,
+        position: spawnPosition,
+      },
+    };
+  }
+
   applyOfflineRuntimeSnapshots(
     snapshots: readonly CharacterRuntimeSnapshot[],
   ): number {
@@ -143,22 +197,23 @@ export class TownCharacterRuntimeCoordinator {
     this.clearLiveActivitiesForOfflineApply();
 
     const syncedCharacterIds = snapshots.flatMap(snapshot => {
+      const visibleSnapshot = this.resolveVisibleSpawnRuntime(snapshot, snapshot.position) ?? snapshot;
       const didSyncActor = this.sendToCharacter(snapshot.id, {
         type: EventType.ApplyOfflineRuntime,
-        runtime: snapshot,
+        runtime: visibleSnapshot,
       });
 
       if (!didSyncActor) {
         return [];
       }
 
-      this.movementCoordinator.applyRuntimeSnapshot(snapshot);
+      this.movementCoordinator.applyRuntimeSnapshot(visibleSnapshot);
       this.deferCharacterDecision(
-        snapshot.id,
+        visibleSnapshot.id,
         OFFLINE_RUNTIME_SYNC_DECISION_GRACE_MS,
       );
 
-      return [snapshot.id];
+      return [visibleSnapshot.id];
     });
 
     this.syncRequestIndicators();

@@ -127,7 +127,7 @@ export const DESTINATION_MAP: Record<string, readonly Destination[]> = {
     { name: '露天桌', serviceTiles: [{ x: 5, y: 48 }, { x: 8, y: 48 }, { x: 7, y: 50 }] },
   ],
 };
-
+// 公寓入口
 export const TOWN_APARTMENT_ENTRANCE_TILES: readonly { readonly x: number; readonly y: number }[] = [
   { x: 62, y: 10 },
   { x: 63, y: 10 },

@@ -1,6 +1,6 @@
 import type { Position } from '~/constants/character';
 import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
-import { TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
+import { TOWN_APARTMENT_ENTRANCE_TILES, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
@@ -124,6 +124,24 @@ export class TownMovementCoordinator {
     if (placed) {
       this.visibleCharacterIds.add(characterId);
     }
+  }
+
+  resolveVisibleSpawnPosition(position: Position, fallbackPosition: Position): Position {
+    if (this.isWalkablePosition(position)) {
+      return { ...position };
+    }
+
+    const entrancePosition = TOWN_APARTMENT_ENTRANCE_TILES.find(tile => this.isWalkablePosition(tile));
+
+    if (entrancePosition) {
+      return { ...entrancePosition };
+    }
+
+    if (this.isWalkablePosition(fallbackPosition)) {
+      return { ...fallbackPosition };
+    }
+
+    return { ...position };
   }
 
   syncCharacterWithWidget(characterId: string, snapshot: CharacterSnapshot): void {
@@ -257,6 +275,10 @@ export class TownMovementCoordinator {
     if (placed) {
       this.visibleCharacterIds.add(characterId);
     }
+  }
+
+  private isWalkablePosition(position: Position): boolean {
+    return this.widget.getCell(position.x, position.y)?.walkable === true;
   }
 
   private enterApartmentIfGoingHome(characterId: string, motivation: string): boolean {
