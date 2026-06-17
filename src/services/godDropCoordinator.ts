@@ -23,7 +23,11 @@ interface GodDropCoordinatorOptions {
     excludedCharacterId: string,
   ) => readonly string[];
   getNearbyObjects: (position: Position, radius: number) => readonly TownMapObjectData[];
-  getNearbyActivities: (position: Position, timestamp: number) => readonly JoinableActivity[];
+  getNearbyActivities: (
+    actorId: string,
+    position: Position,
+    timestamp: number,
+  ) => readonly JoinableActivity[];
   isCharacterUnavailable: (characterId: string) => boolean;
   getCharacterName: (characterId: string) => string;
   getCharacterDistance: (position: Position, characterId: string) => number | null;
@@ -85,7 +89,7 @@ export class GodDropCoordinator {
         input.actorId,
       ),
       nearbyObjects: this.getNearbyObjects(input.droppedAt, GOD_DROP_SCAN_RADIUS),
-      nearbyActivities: this.getNearbyActivities(input.droppedAt, timestamp),
+      nearbyActivities: this.getNearbyActivities(input.actorId, input.droppedAt, timestamp),
       isCharacterUnavailable: characterId => this.isCharacterUnavailable(characterId),
       getCharacterName: characterId => this.getCharacterName(characterId),
       getCharacterDistance: characterId => this.getCharacterDistance(input.droppedAt, characterId),
@@ -188,6 +192,8 @@ export class GodDropCoordinator {
     if (candidate.branch === 'activityFocused' && candidate.activityId) {
       if (this.joinActivity(opportunity.actorId, candidate.activityId)) {
         this.showCharacterBubble(opportunity.actorId, candidate.label, 1800);
+      } else if (source === 'player') {
+        this.showCharacterBubble(opportunity.actorId, '現在加入不了...', 1400);
       }
       return;
     }

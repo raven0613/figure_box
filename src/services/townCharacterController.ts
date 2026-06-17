@@ -1,11 +1,9 @@
-import type { ExpressionPresetId, Position } from '~/constants/character';
+import type { ExpressionPresetId } from '~/constants/character';
 import { getExpressionPresetDefinition } from '~/constants/expressionCatalog';
 import {
   CharacterPerformanceRunner,
   type CharacterPerformanceDialogueRequest,
 } from '~/services/characterEvents/characterPerformanceRunner';
-import { getRandomDestinationTarget } from '~/services/characterEvents/targets';
-import { calculateCharacterUtilityScores } from '~/services/characterEvents/utility';
 import {
   createJoinableActivityManager,
   type JoinableActivity,
@@ -39,10 +37,6 @@ import type {
 import type { EventDialoguePresentation } from '~/typing/eventDialoguePresentation';
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 import type { GridCoordinate } from '~/widgets/townMapGrid';
-import {
-  TOWN_APARTMENT_ENTRANCE_TILES,
-  TOWN_WORLD_SPACE_ID,
-} from '~/constants/townMap';
 import { itemService } from '~/services/items/itemService';
 import { EventOccurrenceCoordinator } from '~/services/eventOccurrences/eventOccurrenceCoordinator';
 import type { EventOccurrence } from '~/services/eventOccurrences/worldEventTypes';
@@ -53,23 +47,21 @@ import { RelationshipMomentFlowCoordinator } from '~/services/relationshipMoment
 import { TownRelationshipCoordinator } from '~/services/townRelationshipCoordinator';
 import { TownCharacterTickCoordinator } from '~/services/townCharacterTickCoordinator';
 import { TownSimWorldPauseCoordinator } from '~/services/townSimWorldPauseCoordinator';
-import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSaveService';
-import { saveService } from '~/services/save/saveService';
 import { offlineRuntimeSyncService } from '~/services/offlineSimulation/offlineRuntimeSyncService';
-import type { CharacterRuntimeSnapshot } from '~/services/save/saveTypes';
 import { getSeedPlayableCharacters } from '~/services/playableCharacterService';
 import { createDefaultCharacterPersonality } from '~/constants/characterPersonality';
 import { GameSimWorldState } from '~/stateMachines/gameFlow/states';
+import { TownCharacterActivityLookup } from '~/services/townCharacters/TownCharacterActivityLookup';
+import { TownCharacterApartmentCoordinator } from '~/services/townCharacters/TownCharacterApartmentCoordinator';
+import { TownCharacterResumeTargetService } from '~/services/townCharacters/TownCharacterResumeTargetService';
+import { TownCharacterRuntimeCoordinator } from '~/services/townCharacters/TownCharacterRuntimeCoordinator';
 
 export type { CharacterSnapshot } from '~/services/townCharacterTypes';
 
 const RELATIONSHIP_MOMENT_DURATION_MS = 3000;
 const RELATIONSHIP_MOMENT_DECISION_GRACE_MS = 1800;
-const GOD_DROP_DECISION_GRACE_MS = 2600;
-const OFFLINE_RUNTIME_SYNC_DECISION_GRACE_MS = 1800;
+const GOD_DROP_DECISION_GRACE_MS = 3000;
 const DIALOGUE_EXPRESSION_BUBBLE_DURATION_MS = 1600;
-const APARTMENT_EXIT_FOOD_SCORE_THRESHOLD = 65;
-const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
@@ -105,6 +97,10 @@ export class TownCharacterController {
   private readonly heldItemCoordinator: CharacterHeldItemCoordinator;
   private readonly tickCoordinator: TownCharacterTickCoordinator;
   private readonly simWorldPauseCoordinator: TownSimWorldPauseCoordinator;
+  private readonly activityLookup: TownCharacterActivityLookup;
+  private readonly apartmentCoordinator: TownCharacterApartmentCoordinator;
+  private readonly resumeTargetService: TownCharacterResumeTargetService;
+  private readonly runtimeCoordinator: TownCharacterRuntimeCoordinator;
   private readonly characterRequestService = new CharacterRequestService({
     definitions: CHARACTER_REQUEST_DEFINITIONS,
   });
@@ -128,7 +124,9 @@ export class TownCharacterController {
       widget: this.widget,
     });
     this.actorRegistry = new CharacterActorRegistry({
-      onSnapshot: (characterId, snapshot) => this.handleCharacterSnapshot(characterId, snapshot),
+      onSnapshot: (characterId, snapshot) => {
+        this.handleRuntimeCharacterSnapshot(characterId, snapshot);
+      },
     });
     this.relationshipCoordinator = new TownRelationshipCoordinator({
       widget: this.widget,
@@ -139,6 +137,20 @@ export class TownCharacterController {
       onRelationshipStoreChange: options.onRelationshipStoreChange,
     });
     this.activityManager = createJoinableActivityManager();
+    this.activityLookup = new TownCharacterActivityLookup({
+      activityManager: this.activityManager,
+      getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
+      getCharacterSnapshotsById: () => this.getCharacterSnapshotsById(),
+    });
+    this.resumeTargetService = new TownCharacterResumeTargetService({
+      getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+    });
+    this.apartmentCoordinator = new TownCharacterApartmentCoordinator({
+      widget: this.widget,
+      getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+    });
     this.activityOutcomeResolver = new ActivityOutcomeResolver({
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
     });
@@ -189,6 +201,32 @@ export class TownCharacterController {
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
     });
+    this.runtimeCoordinator = new TownCharacterRuntimeCoordinator({
+      actorRegistry: this.actorRegistry,
+      movementCoordinator: this.movementCoordinator,
+      heldItemCoordinator: this.heldItemCoordinator,
+      isSimWorldPaused: () => this.simWorldPauseCoordinator.isPaused(),
+      clearLiveActivitiesForOfflineApply: () => {
+        this.activityCoordinator.clearLiveActivitiesForOfflineApply();
+      },
+      handleCurrentActivity: (characterId, snapshot) => {
+        this.activityCoordinator.handleCurrentActivity(characterId, snapshot);
+      },
+      handlePendingActivityJoin: (characterId, snapshot) => {
+        this.activityCoordinator.handlePendingActivityJoin(characterId, snapshot);
+      },
+      handleActivityTravelProgress: (characterId, snapshot) => {
+        this.activityCoordinator.handleActivityTravelProgress(characterId, snapshot);
+      },
+      deferCharacterDecision: (characterId, durationMs) => {
+        this.tickCoordinator.deferCharacterDecision(characterId, durationMs);
+      },
+      syncRequestIndicators: () => this.syncRequestIndicators(),
+      sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+      onCharacterSnapshot: (characterId, snapshot) => {
+        this.onCharacterSnapshot?.(characterId, snapshot);
+      },
+    });
     this.transientMomentCoordinator = new TransientMomentCoordinator({
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
       showMapActivity: (activity, durationMs) => {
@@ -221,8 +259,10 @@ export class TownCharacterController {
     });
     this.relationshipMomentFlowCoordinator = new RelationshipMomentFlowCoordinator({
       momentCoordinator: this.transientMomentCoordinator,
-      getActivityByParticipant: characterId => this.getRelationshipMomentActivityByParticipant(characterId),
-      getActivityParticipantIds: activityId => this.getActivityParticipantIds(activityId),
+      getActivityByParticipant: characterId => (
+        this.activityLookup.getRelationshipMomentActivityByParticipant(characterId)
+      ),
+      getActivityParticipantIds: activityId => this.activityLookup.getActivityParticipantIds(activityId),
       getRelationshipStatus: (actorId, targetCharacterId) => (
         this.relationshipCoordinator.getMutualRelationshipStatus(actorId, targetCharacterId)
       ),
@@ -235,8 +275,12 @@ export class TownCharacterController {
       finishRelationshipMomentRequest: (input, rewardText) => (
         this.requestFlowCoordinator.finishRelationshipMoment(input, rewardText)
       ),
-      captureResumeTargets: characterIds => this.captureResumeTargets(characterIds),
-      resumeTargets: resumeTargets => this.resumeTargets(resumeTargets),
+      captureResumeTargets: characterIds => (
+        this.resumeTargetService.captureResumeTargets(characterIds)
+      ),
+      resumeTargets: resumeTargets => {
+        this.resumeTargetService.resumeTargets(resumeTargets);
+      },
       deferCharactersDecision: (characterIds, durationMs) => {
         this.tickCoordinator.deferCharactersDecision(characterIds, durationMs);
       },
@@ -265,14 +309,18 @@ export class TownCharacterController {
     this.requestFlowCoordinator = new CharacterRequestFlowCoordinator({
       requestService: this.characterRequestService,
       fulfillmentCoordinator: this.requestFulfillmentCoordinator,
-      getActivityByParticipant: characterId => this.getActivityByParticipant(characterId),
+      getActivityByParticipant: characterId => this.activityLookup.getActivityByParticipant(characterId),
       getActivityById: activityId => this.activityManager.getActivity(activityId) ?? null,
       getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
       leaveActivity: (activityId, characterId) => {
         this.activityManager.leaveActivity(activityId, characterId);
       },
-      captureResumeTargets: characterIds => this.captureResumeTargets(characterIds),
-      resumeTargets: resumeTargets => this.resumeTargets(resumeTargets),
+      captureResumeTargets: characterIds => (
+        this.resumeTargetService.captureResumeTargets(characterIds)
+      ),
+      resumeTargets: resumeTargets => {
+        this.resumeTargetService.resumeTargets(resumeTargets);
+      },
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
       showCharacterBubble: (characterId, text, durationMs) => {
         this.widget.showCharacterBubble(characterId, text, durationMs);
@@ -334,12 +382,8 @@ export class TownCharacterController {
       getNearbyObjects: (position, radius) => (
         this.widget.getMapObjectsInRadius(position.x, position.y, radius)
       ),
-      getNearbyActivities: (position, timestamp) => (
-        this.activityManager.findNearbyActivities({
-          position,
-          timestamp,
-          phases: ['forming', 'traveling', 'active'],
-        })
+      getNearbyActivities: (actorId, position, timestamp) => (
+        this.activityCoordinator.getNearbyJoinableActivitiesAtPosition(actorId, position, timestamp)
       ),
       isCharacterUnavailable: characterId => this.isCharacterInBlockingMoment(characterId),
       getCharacterName: characterId => this.getCharacterName(characterId),
@@ -372,8 +416,12 @@ export class TownCharacterController {
       requestService: this.characterRequestService,
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       isCharacterActive: characterId => this.actorRegistry.isActive(characterId),
-      spawnCharacterActor: character => this.spawnCharacterActor(character),
-      maybeLeaveApartmentForOutsideNeed: characterId => this.maybeLeaveApartmentForOutsideNeed(characterId),
+      spawnCharacterActor: character => {
+        this.runtimeCoordinator.spawnCharacterActor(character);
+      },
+      maybeLeaveApartmentForOutsideNeed: characterId => (
+        this.apartmentCoordinator.maybeLeaveApartmentForOutsideNeed(characterId)
+      ),
       getNearbyCharacterIds: (characterId, range) => this.spatialQueries.getNearbyCharacterIds(characterId, range),
       getNearbyVisibleItems: (characterId, radius) => this.spatialQueries.getNearbyVisibleItems(characterId, radius),
       getNearbyRelationships: (characterId, nearbyCharacterIds) => (
@@ -382,7 +430,9 @@ export class TownCharacterController {
       getNearbyJoinableActivities: (characterId, timestamp) => (
         this.activityCoordinator.getNearbyJoinableActivities(characterId, timestamp)
       ),
-      getAvailableActorItemDefinitionIds: characterId => this.getAvailableActorItemDefinitionIds(characterId),
+      getAvailableActorItemDefinitionIds: characterId => (
+        this.runtimeCoordinator.getAvailableActorItemDefinitionIds(characterId)
+      ),
       getRelationshipTargets: characterId => (
         this.relationshipCoordinator.getCharacterRequestRelationshipTargets(characterId)
       ),
@@ -410,13 +460,13 @@ export class TownCharacterController {
     this.onJoinableActivitiesChange = options.onJoinableActivitiesChange;
     this.onCharacterRequestsChange = options.onCharacterRequestsChange;
     this.unregisterOfflineRuntimeSync = offlineRuntimeSyncService.registerApplier(
-      snapshots => this.applyOfflineRuntimeSnapshots(snapshots),
+      snapshots => this.runtimeCoordinator.applyOfflineRuntimeSnapshots(snapshots),
     );
   }
 
   start(): void {
     this.characters.forEach(character => {
-      this.seedCharacterItems(character);
+      this.runtimeCoordinator.seedCharacterItems(character);
     });
     this.tickCoordinator.start();
   }
@@ -520,7 +570,7 @@ export class TownCharacterController {
       return;
     }
 
-    this.leaveApartmentWithFollowUp(characterId);
+    this.apartmentCoordinator.leaveApartment(characterId);
   }
 
   syncRequestIndicators(zoom = this.widget.getZoom()): void {
@@ -623,196 +673,8 @@ export class TownCharacterController {
       this.transientMomentCoordinator.isCharacterInMoment(characterId);
   }
 
-  private captureResumeTargets(participantIds: readonly string[]): Map<string, Position> {
-    const resumeTargets = new Map<string, Position>();
-
-    participantIds.forEach(participantId => {
-      const context = this.getCharacterSnapshot(participantId)?.context;
-
-      if (!context?.target || context.presence.kind !== 'positioned') {
-        return;
-      }
-
-      resumeTargets.set(participantId, { ...context.target });
-    });
-
-    return resumeTargets;
-  }
-
-  private resumeTargets(resumeTargets: ReadonlyMap<string, Position>): void {
-    resumeTargets.forEach((target, characterId) => {
-      const context = this.getCharacterSnapshot(characterId)?.context;
-
-      if (!context || context.presence.kind !== 'positioned') {
-        return;
-      }
-
-      this.sendToCharacter(characterId, {
-        type: EventType.MoveTo,
-        target,
-      });
-    });
-  }
-
-  private getActivityByParticipant(characterId: string): JoinableActivity | null {
-    return this.activityManager.getActivities()
-      .find(activity => activity.participantIds.includes(characterId)) ?? null;
-  }
-
-  private getRelationshipMomentActivityByParticipant(characterId: string): JoinableActivity | null {
-    const activityByParticipant = this.getActivityByParticipant(characterId);
-
-    if (activityByParticipant) {
-      return activityByParticipant;
-    }
-
-    const characterActivityId = this.getCharacterActivityId(characterId);
-
-    if (!characterActivityId) {
-      return null;
-    }
-
-    return this.activityManager.getActivity(characterActivityId);
-  }
-
-  private getActivityParticipantIds(activityId: string): string[] {
-    const participantIds = new Set(this.activityManager.getActivity(activityId)?.participantIds ?? []);
-
-    Object.entries(this.getCharacterSnapshotsById()).forEach(([characterId, snapshot]) => {
-      if (this.getSnapshotActivityId(snapshot) === activityId) {
-        participantIds.add(characterId);
-      }
-    });
-
-    return Array.from(participantIds);
-  }
-
-  private getCharacterActivityId(characterId: string): string | null {
-    const snapshot = this.getCharacterSnapshot(characterId);
-
-    if (!snapshot) {
-      return null;
-    }
-
-    return this.getSnapshotActivityId(snapshot);
-  }
-
-  private getSnapshotActivityId(snapshot: CharacterSnapshot): string | null {
-    return snapshot.context.currentActivity?.activityId
-      ?? snapshot.context.pendingActivityJoin?.activityId
-      ?? null;
-  }
-
-  private seedCharacterItems(character: CharacterSeed): void {
-    if (!('ownItems' in character) || !character.ownItems?.length) {
-      return;
-    }
-
-    character.ownItems.forEach(seedItem => {
-      const existingQuantity = itemService.getActorItems(character.id)
-        .filter(itemInstance => itemInstance.definitionId === seedItem.definitionId)
-        .reduce((totalQuantity, itemInstance) => totalQuantity + itemInstance.quantity, 0);
-
-      if (existingQuantity >= seedItem.quantity) {
-        return;
-      }
-
-      Array.from({ length: seedItem.quantity - existingQuantity }).forEach(() => {
-        itemService.createItemInstance({
-          definitionId: seedItem.definitionId,
-          ownerActorId: character.id,
-          quantity: 1,
-          reason: 'system',
-          day: 0,
-          state: 'stored',
-        });
-      });
-    });
-
-    const heldSeedItem = character.ownItems.find(seedItem => (
-      'state' in seedItem && seedItem.state === 'held'
-    ));
-
-    if (heldSeedItem) {
-      this.heldItemCoordinator.holdStoredItemForCharacter(character.id, heldSeedItem.definitionId);
-    }
-  }
-
-  private getAvailableActorItemDefinitionIds(characterId: string): string[] {
-    return itemService.getActorItems(characterId)
-      .filter(itemInstance => itemInstance.state === 'stored' || itemInstance.state === 'held')
-      .map(itemInstance => itemInstance.definitionId);
-  }
-
-  private spawnCharacterActor(character: CharacterSeed): void {
-    const previousContext = this.actorRegistry.getSnapshot(character.id)?.context;
-    const savedRuntime = previousContext
-      ? null
-      : characterRuntimeSaveService.getRuntimeSnapshot(character.id);
-    const runtime = previousContext ?? savedRuntime ?? undefined;
-
-    if (runtime?.presence.kind === 'contained') {
-      this.movementCoordinator.registerCharacterRenderData(character.id, character);
-    } else {
-      this.movementCoordinator.placeCharacter(character.id, character, runtime);
-    }
-
-    this.actorRegistry.spawn(character, {
-      id: character.id,
-      name: character.name,
-      position: runtime?.position ?? character.position,
-      ownItems: previousContext?.ownItems ?? ('ownItems' in character ? character.ownItems : undefined),
-      saturation: runtime?.status.saturation ?? character.saturation,
-      relationships: runtime?.relationships,
-      heldItem: runtime?.heldItem ?? this.heldItemCoordinator.restoreHeldItemForCharacter(character.id),
-      runtime,
-    });
-  }
-
-  private applyOfflineRuntimeSnapshots(
-    snapshots: readonly CharacterRuntimeSnapshot[],
-  ): number {
-    if (this.simWorldPauseCoordinator.isPaused()) {
-      return 0;
-    }
-
-    this.activityCoordinator.clearLiveActivitiesForOfflineApply();
-
-    const syncedCharacterIds = snapshots.flatMap(snapshot => {
-      const didSyncActor = this.sendToCharacter(snapshot.id, {
-        type: EventType.ApplyOfflineRuntime,
-        runtime: snapshot,
-      });
-
-      if (!didSyncActor) {
-        return [];
-      }
-
-      this.movementCoordinator.applyRuntimeSnapshot(snapshot);
-      this.tickCoordinator.deferCharacterDecision(
-        snapshot.id,
-        OFFLINE_RUNTIME_SYNC_DECISION_GRACE_MS,
-      );
-
-      return [snapshot.id];
-    });
-
-    this.syncRequestIndicators();
-    return syncedCharacterIds.length;
-  }
-
-  private handleCharacterSnapshot(characterId: string, snapshot: CharacterSnapshot): void {
-    if (characterRuntimeSaveService.captureSnapshot(snapshot)) {
-      saveService.markDirty('characterRuntime');
-    }
-
-    this.onCharacterSnapshot?.(characterId, snapshot);
-    this.movementCoordinator.syncCharacterWithWidget(characterId, snapshot);
-    this.activityCoordinator.handleCurrentActivity(characterId, snapshot);
-    this.activityCoordinator.handlePendingActivityJoin(characterId, snapshot);
-    this.activityCoordinator.handleActivityTravelProgress(characterId, snapshot);
-    this.heldItemCoordinator.syncSnapshot(characterId, snapshot);
-    this.syncRequestIndicators();
+  private handleRuntimeCharacterSnapshot(characterId: string, snapshot: CharacterSnapshot): void {
+    this.runtimeCoordinator.handleCharacterSnapshot(characterId, snapshot);
   }
 
   private getCharacterName(characterId: string): string {
@@ -825,75 +687,6 @@ export class TownCharacterController {
 
   private getCharacterSnapshotsById(): Record<string, CharacterSnapshot> {
     return this.actorRegistry.getSnapshotsById();
-  }
-
-  private maybeLeaveApartmentForOutsideNeed(characterId: string): boolean {
-    const snapshot = this.getCharacterSnapshot(characterId);
-
-    if (!snapshot || snapshot.context.presence.kind !== 'contained') {
-      return false;
-    }
-
-    const utilityScores = calculateCharacterUtilityScores(snapshot.context);
-    const isHungry = (
-      snapshot.context.status.saturation <= snapshot.context.status.hungerThreshold ||
-      utilityScores.findFood >= APARTMENT_EXIT_FOOD_SCORE_THRESHOLD
-    );
-
-    if (!isHungry) {
-      return utilityScores.play >= APARTMENT_EXIT_PLAY_SCORE_THRESHOLD
-        ? this.leaveApartmentWithFollowUp(characterId, { type: EventType.GoPlay })
-        : false;
-    }
-
-    return this.leaveApartmentWithFollowUp(characterId, {
-      type: EventType.GoEat,
-      target: getRandomDestinationTarget('findFood') ?? { x: 1, y: 20 },
-    });
-  }
-
-  private leaveApartmentWithFollowUp(characterId: string, followUpEvent?: CharacterEvent): boolean {
-    const snapshot = this.getCharacterSnapshot(characterId);
-
-    if (!snapshot || snapshot.context.presence.kind !== 'contained') {
-      return false;
-    }
-
-    const entrancePosition = this.getAvailableApartmentEntrancePosition();
-
-    if (!entrancePosition) {
-      return false;
-    }
-
-    const didLeave = this.sendToCharacter(characterId, {
-      type: EventType.LeaveApartment,
-      worldSpaceId: TOWN_WORLD_SPACE_ID,
-      position: entrancePosition,
-    });
-
-    if (!didLeave) {
-      return false;
-    }
-
-    if (followUpEvent) {
-      this.sendToCharacter(characterId, followUpEvent);
-    }
-
-    return true;
-  }
-
-  private getAvailableApartmentEntrancePosition(): Position | null {
-    const candidates = TOWN_APARTMENT_ENTRANCE_TILES.filter(tile => {
-      const cell = this.widget.getCell(tile.x, tile.y);
-      return cell?.walkable;
-    });
-
-    if (candidates.length === 0) {
-      return null;
-    }
-
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-    return { x: chosen.x, y: chosen.y };
   }
 
   private notifyJoinableActivitiesChanged(): void {

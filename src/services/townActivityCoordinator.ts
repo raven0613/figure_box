@@ -5,9 +5,6 @@ import {
   type CharacterEventActivityEffects,
 } from '~/constants/charactarEventsDefinitions';
 import type { CharacterPersonality } from '~/constants/characterPersonality';
-import { resolveActivityDestination } from '~/services/characterEvents/targets';
-import { EventType } from '~/stateMachines/gameFlow/events';
-import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
 import type {
   CharacterPerformanceActivityRollRequest,
@@ -27,16 +24,13 @@ import { TownActivityDefinitionResolver } from '~/services/townActivities/TownAc
 import { TownActivityDialogueObserver } from '~/services/townActivities/TownActivityDialogueObserver';
 import { TownActivityDialogueSubjects } from '~/services/townActivities/TownActivityDialogueSubjects';
 import { TownActivityInviteResolver } from '~/services/townActivities/TownActivityInviteResolver';
+import { TownActivityJoinGateway } from '~/services/townActivities/TownActivityJoinGateway';
 import { TownActivityJoinTravelFlow } from '~/services/townActivities/TownActivityJoinTravelFlow';
 import { TownActivityParticipantLifecycle } from '~/services/townActivities/TownActivityParticipantLifecycle';
 import { TownActivityPerformanceDirector } from '~/services/townActivities/TownActivityPerformanceDirector';
 import { TownActivityRollResolver } from '~/services/townActivities/TownActivityRollResolver';
+import { TownActivityStarter } from '~/services/townActivities/TownActivityStarter';
 import { TownActivityTimeoutController } from '~/services/townActivities/TownActivityTimeoutController';
-import {
-  getGroupMaxParticipants,
-  getPostInviteActivityPhase,
-  shouldResolveGroupInvites,
-} from '~/services/townActivities/townActivityRules';
 
 interface TownActivityCoordinatorOptions {
   activityManager: JoinableActivityManager;
@@ -65,10 +59,12 @@ export class TownActivityCoordinator {
   private readonly dialogueObserver: TownActivityDialogueObserver;
   private readonly timeoutController = new TownActivityTimeoutController();
   private readonly inviteResolver: TownActivityInviteResolver;
+  private readonly joinGateway: TownActivityJoinGateway;
   private readonly joinTravelFlow: TownActivityJoinTravelFlow;
   private readonly participantLifecycle: TownActivityParticipantLifecycle;
   private readonly performanceDirector: TownActivityPerformanceDirector;
   private readonly rollResolver: TownActivityRollResolver;
+  private readonly activityStarter: TownActivityStarter;
   private readonly endingActivityIds = new Set<string>();
   private readonly activityManager: JoinableActivityManager;
   private readonly performanceRunner: CharacterPerformanceRunner;
@@ -158,9 +154,19 @@ export class TownActivityCoordinator {
       notifyActivitiesChanged: this.notifyActivitiesChanged,
       activityEndDurationMs: DEFAULT_ACTIVITY_END_DURATION_MS,
     });
+    this.joinGateway = new TownActivityJoinGateway({
+      activityManager: this.activityManager,
+      getCharacterContext: this.getCharacterContext,
+      getCharacterPosition: this.getCharacterPosition,
+      getActivityDefinition: activity => this.getActivityDefinition(activity),
+      actorHasItem: this.actorHasItem,
+      sendToCharacter: this.sendToCharacter,
+    });
     this.joinTravelFlow = new TownActivityJoinTravelFlow({
       activityManager: this.activityManager,
-      canCharacterJoinActivity: (characterId, activity) => this.canCharacterJoinActivity(characterId, activity),
+      canCharacterJoinActivity: (characterId, activity) => (
+        this.joinGateway.canCharacterJoinActivity(characterId, activity)
+      ),
       getTravelTarget: options.getTravelTarget,
       removeStaleActivityParticipations: (characterId, snapshot) => {
         this.removeStaleActivityParticipations(characterId, snapshot);
@@ -226,6 +232,27 @@ export class TownActivityCoordinator {
       notifyActivitiesChanged: this.notifyActivitiesChanged,
       activityResponseDelayMs: DEFAULT_ACTIVITY_RESPONSE_DELAY_MS,
     });
+    this.activityStarter = new TownActivityStarter({
+      activityManager: this.activityManager,
+      getCharacterPosition: this.getCharacterPosition,
+      getSelectedActivityDefinition: snapshot => this.getSelectedActivityDefinition(snapshot),
+      getInvitedParticipantIds: (hostCharacterId, activityDefinition) => (
+        this.inviteResolver.getInvitedParticipantIds(hostCharacterId, activityDefinition)
+      ),
+      handleGroupInviteResolution: (activity, hostCharacterId, activityDefinition) => {
+        this.inviteResolver.handleGroupInviteResolution(activity, hostCharacterId, activityDefinition);
+      },
+      acceptInvitedParticipants: (activity, hostCharacterId) => {
+        this.joinTravelFlow.acceptInvitedParticipants(activity, hostCharacterId);
+      },
+      sendParticipantsToActivityLocation: activity => {
+        this.sendParticipantsToActivityLocation(activity);
+      },
+      playActivityPerformance: activity => this.playActivityPerformance(activity),
+      isActivityEnding: activityId => this.endingActivityIds.has(activityId),
+      sendToCharacter: this.sendToCharacter,
+      notifyActivitiesChanged: this.notifyActivitiesChanged,
+    });
   }
 
   pauseWorld(observedActivityId: string | null): void {
@@ -242,62 +269,7 @@ export class TownActivityCoordinator {
   }
 
   handleCurrentActivity(characterId: string, snapshot: CharacterSnapshot): void {
-    const currentActivity = snapshot.context.currentActivity;
-
-    if (
-      !currentActivity ||
-      this.activityManager.getActivity(currentActivity.activityId) ||
-      this.endingActivityIds.has(currentActivity.activityId)
-    ) {
-      return;
-    }
-
-    const activityDefinition = this.getSelectedActivityDefinition(snapshot);
-
-    if (!activityDefinition?.joinable) {
-      this.sendToCharacter(characterId, {
-        type: EventType.EndJoinedActivity,
-        activityId: currentActivity.activityId,
-        timestamp: Date.now(),
-      });
-      return;
-    }
-
-    const timestamp = Date.now();
-    const currentPosition = this.getCharacterPosition(characterId) ?? snapshot.context.position;
-    const destination = resolveActivityDestination(activityDefinition.destination);
-    const location = destination ?? currentPosition;
-    const phase = shouldResolveGroupInvites(activityDefinition)
-      ? 'inviting'
-      : getPostInviteActivityPhase(activityDefinition);
-    const participantIds = this.getInvitedParticipantIds(characterId, activityDefinition);
-
-    const activity = this.activityManager.createActivity({
-      id: currentActivity.activityId,
-      sourceEventId: currentActivity.sourceEventId,
-      activity: activityDefinition,
-      hostCharacterIds: [characterId],
-      participantIds,
-      timestamp,
-      phase,
-      location,
-    });
-
-    if (phase === 'inviting') {
-      this.handleGroupInviteResolution(activity, characterId, activityDefinition);
-      this.notifyActivitiesChanged();
-      return;
-    }
-
-    this.acceptInvitedParticipants(activity, characterId);
-
-    if (phase === 'traveling') {
-      this.sendParticipantsToActivityLocation(activity);
-    } else {
-      this.playActivityPerformance(activity);
-    }
-
-    this.notifyActivitiesChanged();
+    this.activityStarter.handleCurrentActivity(characterId, snapshot);
   }
 
   handlePendingActivityJoin(characterId: string, snapshot: CharacterSnapshot): void {
@@ -324,17 +296,15 @@ export class TownActivityCoordinator {
     characterId: string,
     timestamp: number,
   ): readonly JoinableActivity[] {
-    const position = this.getCharacterPosition(characterId);
+    return this.joinGateway.getNearbyJoinableActivities(characterId, timestamp);
+  }
 
-    if (!position) {
-      return [];
-    }
-
-    return this.activityManager.findNearbyActivities({
-      position,
-      timestamp,
-      phases: ['forming', 'traveling', 'active'],
-    }).filter(activity => this.canCharacterJoinActivity(characterId, activity));
+  getNearbyJoinableActivitiesAtPosition(
+    characterId: string,
+    position: Position,
+    timestamp: number,
+  ): readonly JoinableActivity[] {
+    return this.joinGateway.getNearbyJoinableActivitiesAtPosition(characterId, position, timestamp);
   }
 
   pruneEndedActivities(timestamp: number): void {
@@ -352,34 +322,7 @@ export class TownActivityCoordinator {
   }
 
   canCharacterJoinActivity(characterId: string, activity: JoinableActivity): boolean {
-    if (activity.participantIds.includes(characterId)) {
-      return false;
-    }
-
-    const context = this.getCharacterContext(characterId);
-
-    if (!context) {
-      return false;
-    }
-
-    if (context.controlState !== CharacterControlState.Normal) {
-      return false;
-    }
-
-    const activityDefinition = this.getActivityDefinition(activity);
-
-    if (activityDefinition && activity.participantIds.length >= getGroupMaxParticipants(activityDefinition)) {
-      return false;
-    }
-
-    const joinRequirements = activity.joinRequirements;
-
-    switch (joinRequirements.type) {
-      case 'none':
-        return true;
-      case 'hasItem':
-        return this.actorHasItem(characterId, joinRequirements.itemId);
-    }
+    return this.joinGateway.canCharacterJoinActivity(characterId, activity);
   }
 
   replayActivityActiveVisuals(activityId: string): void {
@@ -410,17 +353,7 @@ export class TownActivityCoordinator {
   }
 
   joinActivityByGodDrop(characterId: string, activityId: string): boolean {
-    const activity = this.activityManager.getActivity(activityId);
-
-    if (!activity || !this.canCharacterJoinActivity(characterId, activity)) {
-      return false;
-    }
-
-    return this.sendToCharacter(characterId, {
-      type: EventType.JoinActivity,
-      activityId: activity.id,
-      sourceEventId: activity.sourceEventId,
-    });
+    return this.joinGateway.joinActivityByGodDrop(characterId, activityId);
   }
 
   resolveActivityRoll(request: CharacterPerformanceActivityRollRequest): string | null {
@@ -433,31 +366,8 @@ export class TownActivityCoordinator {
     return this.dialogueObserver.createActivityDialogueRequest(activityId);
   }
 
-  private getInvitedParticipantIds(hostCharacterId: string, activityDefinition: CharacterEventActivity): string[] {
-    return this.inviteResolver.getInvitedParticipantIds(hostCharacterId, activityDefinition);
-  }
-
-  private handleGroupInviteResolution(
-    activity: JoinableActivity,
-    hostCharacterId: string,
-    activityDefinition: CharacterEventActivity,
-  ): void {
-    this.inviteResolver.handleGroupInviteResolution(activity, hostCharacterId, activityDefinition);
-  }
-
-  private acceptInvitedParticipants(activity: JoinableActivity, hostCharacterId: string): void {
-    this.joinTravelFlow.acceptInvitedParticipants(activity, hostCharacterId);
-  }
-
   private sendParticipantsToActivityLocation(activity: JoinableActivity): void {
     this.joinTravelFlow.sendParticipantsToActivityLocation(activity);
-  }
-
-  private sendParticipantToActivityLocation(
-    activity: JoinableActivity,
-    characterId: string,
-  ): void {
-    this.joinTravelFlow.sendParticipantToActivityLocation(activity, characterId);
   }
 
   private getSelectedActivityDefinition(snapshot: CharacterSnapshot): CharacterEventActivity | undefined {
