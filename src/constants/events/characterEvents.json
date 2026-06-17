@@ -884,6 +884,92 @@
     ]
   },
   {
+    "id": "social.wallSlam",
+    "bucketId": "environment",
+    "motivation": "chat",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 1,
+    "addWeight": 1,
+    "maxWeight": 12,
+    "interruptPolicy": "soft",
+    "commitment": 24,
+    "requiresNearbyCharacter": true,
+    "conditions": [
+      {
+        "path": "input.nearbyCharacterCount",
+        "operator": ">",
+        "value": 0
+      }
+    ],
+    "weightModifiers": [
+      {
+        "path": "character.status.moodValue",
+        "operator": ">=",
+        "value": 45,
+        "add": 2
+      }
+    ],
+    "acceptance": {
+      "minMoodValue": 25,
+      "relationships": [
+        {
+          "minIntimacy": 20,
+          "allowedFeelings": ["warm", "like", "fond", "secret_crush", "open_crush", "love"],
+          "allowedSocialStatuses": ["friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
+        }
+      ],
+      "fallbackChance": 0.25
+    },
+    "presentationVariants": [
+      {
+        "id": "wall_slam.default",
+        "baseWeight": 10,
+        "presentationTags": ["expressionBubble.surprised", "motion.stand"],
+        "performanceId": "social.wallSlam",
+        "activity": {
+          "key": "social.wallSlam",
+          "type": "chat",
+          "startPhase": "active",
+          "group": {
+            "inviteNearbyRange": 1,
+            "minParticipants": 2,
+            "maxParticipants": 2
+          },
+          "joinable": false,
+          "durationMs": 8000,
+          "cooldowns": {
+            "selfMs": 60000,
+            "targetMs": 60000,
+            "pairMs": 180000,
+            "category": "social_wall_slam",
+            "repeatPenalty": {
+              "windowMs": 600000,
+              "weightMultiplierPerRepeat": 0.15,
+              "maxRepeats": 1
+            }
+          },
+          "effectsByRole": {
+            "initiator": {
+              "moodValueDelta": 2
+            },
+            "target": {
+              "relationshipIntimacyDelta": 1,
+              "moodValueDelta": 2
+            }
+          }
+        }
+      }
+    ],
+    "card": {
+      "label": "壁咚",
+      "promptTemplate": "{initiator} 壁咚 {target}",
+      "participantMode": "initiatorTarget",
+      "performanceId": "social.wallSlam"
+    }
+  },
+  {
     "id": "environment.nearbyActivity.joinChat",
     "bucketId": "environment",
     "motivation": "chat",

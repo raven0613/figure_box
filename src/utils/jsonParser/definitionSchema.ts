@@ -1,5 +1,7 @@
 import type {
   CharacterEventAcceptance,
+  CharacterEventCardDefinition,
+  CharacterEventCardParticipantMode,
   CharacterEventDefinition,
   CharacterEventInterruptPolicy,
   CharacterEventInteractionPresentation,
@@ -33,6 +35,7 @@ import {
 } from './schemaReaders';
 
 const VALID_INTERRUPT_POLICIES = ['none', 'soft', 'always', 'critical'] as const;
+const VALID_CARD_PARTICIPANT_MODES = ['initiatorTarget'] as const;
 const VALID_MOODS = Object.values(Mood) as Mood[];
 const VALID_FEELINGS = Object.values(Feeling) as Feeling[];
 const VALID_SOCIAL_STATUSES = Object.values(SocialStatus) as SocialStatus[];
@@ -74,6 +77,7 @@ function parseCharacterEventDefinition(
   const acceptance = readOptionalAcceptance(rawDefinition, index);
   const interruptPolicy = readOptionalInterruptPolicy(rawDefinition, 'interruptPolicy', index);
   const commitment = readOptionalNumber(rawDefinition, 'commitment', index);
+  const card = readOptionalCard(rawDefinition, index);
   const offlineRecap = readOptionalOfflineRecap(rawDefinition, index, 'offlineRecap');
   const onInterrupted = readOptionalTransitionPresentations(rawDefinition, 'onInterrupted', index);
   const onInterruptRejected = readOptionalTransitionPresentations(rawDefinition, 'onInterruptRejected', index);
@@ -96,6 +100,7 @@ function parseCharacterEventDefinition(
     acceptance,
     interruptPolicy,
     commitment,
+    card,
     offlineRecap,
     onInterrupted,
     onInterruptRejected,
@@ -144,6 +149,41 @@ function readOptionalAcceptance(
     relationships: readOptionalRelationshipAcceptanceList(value, index),
     fallbackChance: readOptionalProbability(value, 'fallbackChance', index),
   };
+}
+
+function readOptionalCard(
+  definition: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventCardDefinition | undefined {
+  const value = definition.card;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Character event definition at index ${index} has invalid card.`);
+  }
+
+  return {
+    label: readRequiredString(value, 'label', index),
+    promptTemplate: readRequiredString(value, 'promptTemplate', index),
+    participantMode: readCardParticipantMode(value, index),
+    performanceId: readRequiredString(value, 'performanceId', index),
+  };
+}
+
+function readCardParticipantMode(
+  definition: CharacterEventDefinitionRecord,
+  index: number,
+): CharacterEventCardParticipantMode {
+  const value = readRequiredString(definition, 'participantMode', index);
+
+  if (!includesString(VALID_CARD_PARTICIPANT_MODES, value)) {
+    throw new Error(`Character event definition at index ${index} has invalid card.participantMode.`);
+  }
+
+  return value;
 }
 
 function readOptionalRelationshipAcceptanceList(

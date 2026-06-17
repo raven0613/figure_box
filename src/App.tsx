@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { createActor, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 import { OfflineRecapDebugWindow } from '~/components/debug/OfflineRecapDebugWindow';
@@ -38,6 +38,10 @@ import {
   getExpressionBubbleSpritePreloadTotal,
   preloadExpressionBubbleSpriteSheets,
 } from '~/services/expressionBubbleSpritePreloadService';
+import {
+  interactionCardService,
+  type InteractionCardViewModel,
+} from '~/services/interactionCards/interactionCardService';
 import { preloadTownRequiredSpriteSheets } from '~/services/townSpritePreloadService';
 import { startTownSpriteBackgroundBake } from '~/services/townSpriteBackgroundBakeService';
 import { gameFlowMachine } from '~/stateMachines/gameFlow';
@@ -51,6 +55,10 @@ import { DialogueWindow } from './components/dialogue/DialogueWindow';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import styles from './App.module.scss';
 import { TownMapContainer } from './components/townMap/TownMapContainer';
+import {
+  InteractionCardHand,
+  type InteractionCardDropInput,
+} from './widgets/interactionCards/InteractionCardHand';
 
 const AVATAR_EDITOR_PATH = '/figure_box/avatar_editor';
 
@@ -69,6 +77,21 @@ interface ActiveDialogueSession {
   script: DialogueViewScript;
   activityId?: string;
   onClose?: () => void;
+}
+
+interface InteractionCardDraft {
+  card: InteractionCardViewModel;
+  initiatorId: string | null;
+  targetId: string | null;
+}
+
+interface PendingInteractionCardDrop {
+  id: number;
+  cardId: string;
+  pointer: {
+    x: number;
+    y: number;
+  };
 }
 
 function App() {
@@ -106,6 +129,77 @@ function App() {
     setDialogueExpressionPresetIdByCharacterId,
   ] = useState<Partial<Record<string, ExpressionPresetId>>>({});
   const [mapDialoguePresentation, setMapDialoguePresentation] = useState<EventDialoguePresentation | null>(null);
+  const interactionCards = useMemo(() => interactionCardService.getAvailableCards(), []);
+  const [interactionCardDraft, setInteractionCardDraft] = useState<InteractionCardDraft | null>(null);
+  const [pendingInteractionCardDrop, setPendingInteractionCardDrop] = useState<PendingInteractionCardDrop | null>(null);
+  const characterNamesById = useMemo(() => (
+    getPlayableCharacters().reduce<Record<string, string>>(
+      (namesById, character) => ({
+        ...namesById,
+        [character.id]: character.name,
+      }),
+      {},
+    )
+  ), [characterRosterRevision]);
+  const interactionCardPromptText = useMemo(() => {
+    if (!interactionCardDraft) {
+      return null;
+    }
+
+    return formatInteractionCardPrompt(
+      interactionCardDraft.card.promptTemplate,
+      interactionCardDraft.initiatorId
+        ? characterNamesById[interactionCardDraft.initiatorId] ?? interactionCardDraft.initiatorId
+        : '__',
+      interactionCardDraft.targetId
+        ? characterNamesById[interactionCardDraft.targetId] ?? interactionCardDraft.targetId
+        : '__',
+    );
+  }, [characterNamesById, interactionCardDraft]);
+  const handleInteractionCardSelect = useCallback((card: InteractionCardViewModel) => {
+    setInteractionCardDraft({
+      card,
+      initiatorId: null,
+      targetId: null,
+    });
+  }, []);
+  const handleInteractionCardDrop = useCallback((input: InteractionCardDropInput) => {
+    setInteractionCardDraft({
+      card: input.card,
+      initiatorId: null,
+      targetId: null,
+    });
+    setPendingInteractionCardDrop({
+      id: Date.now(),
+      cardId: input.card.id,
+      pointer: input.pointer,
+    });
+  }, []);
+  const handleInteractionCardInitiatorSelect = useCallback((cardId: string, initiatorId: string) => {
+    setInteractionCardDraft(currentDraft => {
+      if (!currentDraft || currentDraft.card.id !== cardId) {
+        return currentDraft;
+      }
+
+      return {
+        ...currentDraft,
+        initiatorId,
+        targetId: null,
+      };
+    });
+  }, []);
+  const handleInteractionCardTargetSelect = useCallback((cardId: string, targetId: string) => {
+    setInteractionCardDraft(currentDraft => {
+      if (!currentDraft || currentDraft.card.id !== cardId || !currentDraft.initiatorId) {
+        return currentDraft;
+      }
+
+      return {
+        ...currentDraft,
+        targetId,
+      };
+    });
+  }, []);
   const cancelActivityObservation = useCallback((
     activityId: string,
     onCancel?: () => void,
@@ -596,8 +690,27 @@ function App() {
             characterRosterRevision={characterRosterRevision}
             apartmentReveal={apartmentReveal}
             trackCharacterRequest={trackCharacterRequest}
+            interactionCardDropRequest={pendingInteractionCardDrop}
+            interactionCardSelection={interactionCardDraft
+              ? {
+                cardId: interactionCardDraft.card.id,
+                initiatorId: interactionCardDraft.initiatorId,
+                targetId: interactionCardDraft.targetId,
+              }
+              : null}
+            onInteractionCardInitiatorSelect={handleInteractionCardInitiatorSelect}
+            onInteractionCardTargetSelect={handleInteractionCardTargetSelect}
             onDialogueRequest={handleDialogueRequest}
             onActivitySettled={handleActivitySettled}
+          />
+        ) : null}
+        {isGameActive ? (
+          <InteractionCardHand
+            cards={interactionCards}
+            selectedCardId={interactionCardDraft?.card.id ?? null}
+            promptText={interactionCardPromptText}
+            onCardSelect={handleInteractionCardSelect}
+            onCardDrop={handleInteractionCardDrop}
           />
         ) : null}
         {isSaveDebugOpen ? (
@@ -642,6 +755,16 @@ function getNormalizedPath(): string {
 
 function createCharacterDialogueLabel(name: string): string {
   return (Array.from(name.trim())[0] ?? '?').toUpperCase();
+}
+
+function formatInteractionCardPrompt(
+  template: string,
+  initiatorName: string,
+  targetName: string,
+): string {
+  return template
+    .replace('{initiator}', initiatorName)
+    .replace('{target}', targetName);
 }
 
 function createActivityDialogueScript(

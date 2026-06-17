@@ -76,6 +76,7 @@ const PLAYER_DEMO_ITEM_IDS: readonly ItemDefinitionId[] = [
   'wooden_chair',
 ];
 const GIFT_DROP_CHARACTER_RADIUS = 1;
+const INTERACTION_CARD_DROP_CHARACTER_RADIUS = 1;
 const ALLOW_DIAGONAL_MOVEMENT = false; // 斜走 斜線
 const ACTIVITY_OBSERVATION_CAMERA_ZOOM = 3;
 const ACTIVITY_OBSERVATION_CAMERA_TRANSITION_MS = 600;
@@ -94,9 +95,28 @@ interface TownMapContainerProps {
     characterId: string;
     revision: number;
   } | null;
+  interactionCardDropRequest?: InteractionCardDropRequest | null;
+  interactionCardSelection?: InteractionCardSelection | null;
+  onInteractionCardInitiatorSelect?: (cardId: string, initiatorId: string) => void;
+  onInteractionCardTargetSelect?: (cardId: string, targetId: string) => void;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
   onActivitySettled?: (activityId: string) => void;
   observedActivityId?: string | null;
+}
+
+interface InteractionCardDropRequest {
+  id: number;
+  cardId: string;
+  pointer: {
+    x: number;
+    y: number;
+  };
+}
+
+interface InteractionCardSelection {
+  cardId: string;
+  initiatorId: string | null;
+  targetId: string | null;
 }
 
 interface GiftDragState {
@@ -150,6 +170,10 @@ export function TownMapContainer({
   characterRosterRevision = 0,
   apartmentReveal = null,
   trackCharacterRequest = null,
+  interactionCardDropRequest = null,
+  interactionCardSelection = null,
+  onInteractionCardInitiatorSelect,
+  onInteractionCardTargetSelect,
   onDialogueRequest,
   onActivitySettled,
   observedActivityId = null,
@@ -189,6 +213,9 @@ export function TownMapContainer({
   const placementDraftRef = useRef<ItemInstance | null>(null);
   const pickupChainRef = useRef<PickupChainState | null>(null);
   const characterSnapshotsRef = useRef<Record<string, CharacterSnapshot>>({});
+  const interactionCardSelectionRef = useRef<InteractionCardSelection | null>(null);
+  const onInteractionCardInitiatorSelectRef = useRef<typeof onInteractionCardInitiatorSelect>(undefined);
+  const onInteractionCardTargetSelectRef = useRef<typeof onInteractionCardTargetSelect>(undefined);
   const activityObservationCameraViewRef = useRef<TownMapCameraView | null>(null);
   const focusedActivityObservationIdRef = useRef<string | null>(null);
   const isCameraRestoreTransitionActiveRef = useRef(false);
@@ -400,6 +427,18 @@ export function TownMapContainer({
   }, [characterSnapshots]);
 
   useEffect(() => {
+    interactionCardSelectionRef.current = interactionCardSelection;
+  }, [interactionCardSelection]);
+
+  useEffect(() => {
+    onInteractionCardInitiatorSelectRef.current = onInteractionCardInitiatorSelect;
+  }, [onInteractionCardInitiatorSelect]);
+
+  useEffect(() => {
+    onInteractionCardTargetSelectRef.current = onInteractionCardTargetSelect;
+  }, [onInteractionCardTargetSelect]);
+
+  useEffect(() => {
     if (lastAppliedRomanceRuleRevisionRef.current === romanceRuleRevision) {
       return;
     }
@@ -543,6 +582,17 @@ export function TownMapContainer({
         characterControllerRef.current?.syncRequestIndicators(zoom);
       },
       onCharacterPickUp: characterId => {
+        const cardSelection = interactionCardSelectionRef.current;
+
+        if (cardSelection?.initiatorId && !cardSelection.targetId) {
+          if (characterId !== cardSelection.initiatorId) {
+            widget.showCharacterExpressionBubble(characterId, 'question', 700);
+            onInteractionCardTargetSelectRef.current?.(cardSelection.cardId, characterId);
+          }
+
+          return false;
+        }
+
         if (placementDraftRef.current) {
           cancelPlacementDraft();
           return false;
@@ -720,6 +770,26 @@ export function TownMapContainer({
       window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [giftDragState, giftItemToCharacter]);
+
+  useEffect(() => {
+    if (!interactionCardDropRequest) {
+      return;
+    }
+
+    const candidateCharacterIds = getInteractionCardCandidateCharacterIds(
+      interactionCardDropRequest.pointer,
+      canvasHostRef.current,
+      widgetRef.current,
+    );
+    const initiatorId = candidateCharacterIds[0];
+
+    if (!initiatorId) {
+      return;
+    }
+
+    widgetRef.current?.showCharacterExpressionBubble(initiatorId, 'question', 700);
+    onInteractionCardInitiatorSelect?.(interactionCardDropRequest.cardId, initiatorId);
+  }, [interactionCardDropRequest, onInteractionCardInitiatorSelect]);
 
   useEffect(() => {
     characterControllerRef.current?.setSimWorldState(simWorldState, observedActivityId);
@@ -1159,6 +1229,33 @@ function getGiftCandidateCharacterIds(
     event.clientX - rect.left,
     event.clientY - rect.top,
     GIFT_DROP_CHARACTER_RADIUS,
+  );
+}
+
+function getInteractionCardCandidateCharacterIds(
+  pointer: { x: number; y: number },
+  canvasHost: HTMLElement | null,
+  widget: FabricTownMapWidget | null,
+): readonly string[] {
+  if (!canvasHost || !widget) {
+    return [];
+  }
+
+  const rect = canvasHost.getBoundingClientRect();
+
+  if (
+    pointer.x < rect.left ||
+    pointer.x > rect.right ||
+    pointer.y < rect.top ||
+    pointer.y > rect.bottom
+  ) {
+    return [];
+  }
+
+  return widget.getCharacterIdsNearViewportPoint(
+    pointer.x - rect.left,
+    pointer.y - rect.top,
+    INTERACTION_CARD_DROP_CHARACTER_RADIUS,
   );
 }
 

@@ -38,6 +38,7 @@ export interface CharacterEventDefinition {
   acceptance?: CharacterEventAcceptance;
   interruptPolicy?: CharacterEventInterruptPolicy;
   commitment?: number;
+  card?: CharacterEventCardDefinition;
   offlineRecap?: OfflineRecapTemplate;
   onInterrupted?: readonly CharacterEventTransitionPresentation[];
   onInterruptRejected?: readonly CharacterEventTransitionPresentation[];
@@ -85,6 +86,15 @@ export interface CharacterEventInteractionPresentation {
   acceptedLine?: string;
   rejectedLine?: string;
   endLine?: string;
+}
+
+export type CharacterEventCardParticipantMode = 'initiatorTarget';
+
+export interface CharacterEventCardDefinition {
+  label: string;
+  promptTemplate: string;
+  participantMode: CharacterEventCardParticipantMode;
+  performanceId: string;
 }
 
 export interface CharacterEventAcceptance {
