@@ -5,7 +5,7 @@ import {
   MINI_CANVAS_HEIGHT,
   MINI_PIXEL_SCALE,
 } from './miniAvatarRig';
-import type { AvatarColorGradient, AvatarGradientCoordinateSpace, AvatarTintSource } from '../avatarCanvas';
+import type { AvatarColorGradient, AvatarGradientCoordinateSpace, AvatarTintSource } from '../avatar/avatarTypes';
 import type { MiniImageContentBounds, MiniLayer } from './miniAvatarTypes';
 
 interface MiniImagePixelBounds {

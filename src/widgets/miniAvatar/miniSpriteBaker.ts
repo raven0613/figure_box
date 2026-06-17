@@ -1,6 +1,6 @@
 import { StaticCanvas } from 'fabric';
 
-import type { AvatarState } from '../avatarCanvas';
+import type { AvatarState } from '../avatar/avatarTypes';
 import {
   getMiniAnimationFrameCount,
   getMiniAnimationFrameDurationMs,

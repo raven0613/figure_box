@@ -1,5 +1,5 @@
 import { AVATAR_RIG_COLORS } from '../../constants/avatarRig';
-import type { AccessoryLayerSlot } from '../avatarCanvas';
+import type { AccessoryLayerSlot } from '../avatar/avatarTypes';
 import type { MiniIdleRigLayout } from './miniAvatarTypes';
 
 export const MINI_CANVAS_WIDTH = 172;

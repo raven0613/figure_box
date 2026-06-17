@@ -1,4 +1,4 @@
-import type { AvatarState } from '../avatarCanvas';
+import type { AvatarState } from '../avatar/avatarTypes';
 import { MINI_CANVAS_HEIGHT, MINI_CANVAS_WIDTH } from './miniAvatarRig';
 import { bakeMiniAnimationSpriteSheet } from './miniSpriteBaker';
 import type { MiniAnimation, MiniSpriteSheet } from './miniAvatarTypes';

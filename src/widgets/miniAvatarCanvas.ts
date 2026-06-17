@@ -1,7 +1,7 @@
 import { Canvas } from 'fabric';
 
-import { createDefaultAvatarState } from './avatarCanvas';
-import type { AvatarState } from './avatarCanvas';
+import { createDefaultAvatarState } from './avatar/avatarState';
+import type { AvatarState } from './avatar/avatarTypes';
 import {
   sampleMiniAnimation,
 } from './miniAvatar/miniAvatarAnimation';

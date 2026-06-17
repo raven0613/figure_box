@@ -1,5 +1,5 @@
 import type { AVATAR_RIG_COLORS } from '../../constants/avatarRig';
-import type { AccessoryCategory, AvatarGradientCoordinateSpace, AvatarTintSource } from '../avatarCanvas';
+import type { AccessoryCategory, AvatarGradientCoordinateSpace, AvatarTintSource } from '../avatar/avatarTypes';
 
 export interface MiniSpriteSheet {
   dataUrl: string;

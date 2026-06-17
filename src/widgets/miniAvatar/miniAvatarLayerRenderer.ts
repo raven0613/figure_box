@@ -1,10 +1,10 @@
 import {
   getAccessoryCategoryDefinition,
   getAccessoryLayerSlotDefinition,
-  getAccessoryPoseState,
-  isAvatarPartOptionColorEditable,
   resolveAccessoryColorFileName,
-} from '../avatarCanvas';
+} from '../avatar/avatarAccessoryDefinitions';
+import { getAccessoryPoseState } from '../avatar/avatarAccessoryState';
+import { isAvatarPartOptionColorEditable } from '../avatar/avatarDefinitions';
 import type {
   AccessoryCategory,
   AccessoryLayerSlot,
@@ -14,7 +14,7 @@ import type {
   AvatarPartKey,
   AvatarState,
   AvatarTintSource,
-} from '../avatarCanvas';
+} from '../avatar/avatarTypes';
 import {
   formatMiniOptionId,
   getCombinedMiniContentBounds,
