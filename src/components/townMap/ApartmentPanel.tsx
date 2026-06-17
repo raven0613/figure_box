@@ -1,20 +1,9 @@
 import { DraggablePanel } from '~/components/common/DraggablePanel';
+import type {
+  ApartmentResident,
+  ApartmentResidentRequest,
+} from '~/utils/townMapResidents';
 import styles from './ApartmentPanel.module.scss';
-
-export interface ApartmentResident {
-  id: string;
-  name: string;
-  statusText: string;
-  requests: readonly ApartmentResidentRequest[];
-}
-
-export interface ApartmentResidentRequest {
-  id: string;
-  label: string;
-  level: 'critical' | 'social' | 'minor';
-  levelLabel: string;
-  status: string;
-}
 
 interface ApartmentPanelProps {
   title: string;
