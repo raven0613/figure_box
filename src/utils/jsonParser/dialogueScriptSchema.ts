@@ -1,12 +1,15 @@
 import { isExpressionPresetId } from '~/constants/expressionCatalog';
 import type { ExpressionPresetId } from '~/typing/expression';
 import type {
+  DialogueActivityRollContext,
+  DialogueScriptActivityRollDefinition,
   DialogueScriptBranchCandidateDefinition,
   DialogueScriptBranchGroupDefinition,
   DialogueScriptChoiceDefinition,
   DialogueScriptChoiceResultDefinition,
   DialogueScriptConditionDefinition,
   DialogueScriptDefinition,
+  DialogueScriptInputDefinition,
   DialogueScriptInstructionDefinition,
   DialogueScriptParticipantDefinition,
   DialogueScriptSayDefinition,
@@ -24,12 +27,13 @@ import {
 } from './schemaReaders';
 
 const VALID_AVATAR_SLOTS = ['left', 'center-left', 'center-right', 'right'] as const;
-const VALID_INSTRUCTION_TYPES = ['SAY', 'CHOICE'] as const;
+const VALID_INSTRUCTION_TYPES = ['SAY', 'INPUT', 'CHOICE', 'ACTIVITY_ROLL'] as const;
 const VALID_CHOICE_RESULT_TYPES = [
   'appendLines',
   'replaceRemaining',
   'jumpTo',
   'branch',
+  'setRollContext',
   'activityRoll',
   'end',
 ] as const;
@@ -148,9 +152,38 @@ function readInstruction(
     );
   }
 
-  return type === 'SAY'
-    ? readSay(value, definitionIndex, path, participantKeys)
-    : readChoice(value, definitionIndex, path, participantKeys);
+  if (type === 'SAY') {
+    return readSay(value, definitionIndex, path, participantKeys);
+  }
+
+  if (type === 'INPUT') {
+    return readInput(value, definitionIndex, path, participantKeys);
+  }
+
+  if (type === 'ACTIVITY_ROLL') {
+    return readActivityRollInstruction(value, definitionIndex, path, participantKeys);
+  }
+
+  return readChoice(value, definitionIndex, path, participantKeys);
+}
+
+function readInput(
+  value: CharacterEventDefinitionRecord,
+  definitionIndex: number,
+  path: string,
+  participantKeys: ReadonlySet<string>,
+): DialogueScriptInputDefinition {
+  return {
+    id: readOptionalString(value, 'id', definitionIndex),
+    type: 'INPUT',
+    speaker: readParticipantKey(value, 'speaker', definitionIndex, path, participantKeys),
+    target: readParticipantKey(value, 'target', definitionIndex, path, participantKeys),
+    prompt: readRequiredString(value, 'prompt', definitionIndex),
+    variable: readRequiredString(value, 'variable', definitionIndex),
+    fallbackValue: readRequiredString(value, 'fallbackValue', definitionIndex),
+    memoryKey: readRequiredString(value, 'memoryKey', definitionIndex),
+    expressionPresetId: readExpressionPresetId(value, definitionIndex, path),
+  };
 }
 
 function readSay(
@@ -228,6 +261,21 @@ function readChoice(
   };
 }
 
+function readActivityRollInstruction(
+  value: CharacterEventDefinitionRecord,
+  definitionIndex: number,
+  path: string,
+  participantKeys: ReadonlySet<string>,
+): DialogueScriptActivityRollDefinition {
+  const activityRoll = readActivityRollFields(value, definitionIndex, path, participantKeys);
+
+  return {
+    id: readOptionalString(value, 'id', definitionIndex),
+    type: 'ACTIVITY_ROLL',
+    ...activityRoll,
+  };
+}
+
 function readChoiceResult(
   value: unknown,
   definitionIndex: number,
@@ -249,6 +297,11 @@ function readChoiceResult(
   if (type === 'appendLines' || type === 'replaceRemaining') {
     return {
       type,
+      rollContext: readOptionalActivityRollContext(
+        value.rollContext,
+        definitionIndex,
+        `${path}.rollContext`,
+      ),
       lines: readInstructions(value.lines, definitionIndex, `${path}.lines`, participantKeys),
     };
   }
@@ -267,46 +320,107 @@ function readChoiceResult(
     };
   }
 
-  if (type === 'activityRoll') {
-    const contentPoolId = readOptionalString(value, 'contentPoolId', definitionIndex);
-    const subjectKey = readOptionalString(value, 'subjectKey', definitionIndex);
-    const subjectKeys = readOptionalStringList(
-      value.subjectKeys,
+  if (type === 'setRollContext') {
+    const rollContext = readOptionalActivityRollContext(
+      value.rollContext,
       definitionIndex,
-      `${path}.subjectKeys`,
+      `${path}.rollContext`,
     );
 
-    if (contentPoolId && !subjectKey && !subjectKeys) {
+    if (!rollContext) {
       throw new Error(
-        `Dialogue script definition at index ${definitionIndex} requires a subject key for ${path}.`,
+        `Dialogue script definition at index ${definitionIndex} requires ${path}.rollContext.`,
       );
     }
 
     return {
       type,
-      rollId: readRequiredString(value, 'rollId', definitionIndex),
-      contentPoolId,
-      subjectKey,
-      subjectKeys,
-      lines: value.lines === undefined
-        ? undefined
-        : readInstructions(value.lines, definitionIndex, `${path}.lines`, participantKeys),
-      lineVariants: readOptionalInstructionVariants(
-        value.lineVariants,
-        definitionIndex,
-        `${path}.lineVariants`,
-        participantKeys,
-      ),
-      branchLines: readRequiredBranchLines(
-        value.branchLines,
-        definitionIndex,
-        `${path}.branchLines`,
-        participantKeys,
-      ),
+      rollContext,
+    };
+  }
+
+  if (type === 'activityRoll') {
+    return {
+      type,
+      ...readActivityRollFields(value, definitionIndex, path, participantKeys),
     };
   }
 
   return { type: 'end' };
+}
+
+function readActivityRollFields(
+  value: CharacterEventDefinitionRecord,
+  definitionIndex: number,
+  path: string,
+  participantKeys: ReadonlySet<string>,
+): Omit<DialogueScriptActivityRollDefinition, 'id' | 'type'> {
+  const contentPoolId = readOptionalString(value, 'contentPoolId', definitionIndex);
+  const subjectKey = readOptionalString(value, 'subjectKey', definitionIndex);
+  const subjectKeys = readOptionalStringList(
+    value.subjectKeys,
+    definitionIndex,
+    `${path}.subjectKeys`,
+  );
+
+  if (contentPoolId && !subjectKey && !subjectKeys) {
+    throw new Error(
+      `Dialogue script definition at index ${definitionIndex} requires a subject key for ${path}.`,
+    );
+  }
+
+  return {
+    rollId: readRequiredString(value, 'rollId', definitionIndex),
+    rollContext: readOptionalActivityRollContext(
+      value.rollContext,
+      definitionIndex,
+      `${path}.rollContext`,
+    ),
+    contentPoolId,
+    subjectKey,
+    subjectKeys,
+    lines: value.lines === undefined
+      ? undefined
+      : readInstructions(value.lines, definitionIndex, `${path}.lines`, participantKeys),
+    lineVariants: readOptionalInstructionVariants(
+      value.lineVariants,
+      definitionIndex,
+      `${path}.lineVariants`,
+      participantKeys,
+    ),
+    branchLines: readRequiredBranchLines(
+      value.branchLines,
+      definitionIndex,
+      `${path}.branchLines`,
+      participantKeys,
+    ),
+  };
+}
+
+function readOptionalActivityRollContext(
+  value: unknown,
+  definitionIndex: number,
+  path: string,
+): DialogueActivityRollContext | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error(`Dialogue script definition at index ${definitionIndex} has invalid ${path}.`);
+  }
+
+  const entries = Object.entries(value);
+
+  if (entries.some(([, entryValue]) => (
+    typeof entryValue !== 'string'
+    && typeof entryValue !== 'number'
+    && typeof entryValue !== 'boolean'
+  ))) {
+    throw new Error(`Dialogue script definition at index ${definitionIndex} has invalid ${path}.`);
+  }
+
+  return Object.fromEntries(entries) as DialogueActivityRollContext;
 }
 
 function readOptionalStringList(

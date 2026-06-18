@@ -24,8 +24,9 @@ import {
     changeRelationshipIntimacy,
     decreaseRelationshipIntimacyToFeelingMin,
     normalizeRomanticRelationshipFeelings,
-    rememberRelationshipMemory,
     rememberPassBy,
+    rememberRelationshipMemory,
+    rememberSpokenLine,
 } from '../relationships';
 import { decideCharacterEvent } from '~/services/characterEvents/decision';
 import {
@@ -116,6 +117,9 @@ export const characterMachine = createMachine(
             },
             [EventType.RememberRelationshipMemory]: {
                 actions: 'rememberRelationshipMemory',
+            },
+            [EventType.RememberSpokenLine]: {
+                actions: 'rememberSpokenLine',
             },
             [EventType.NormalizeRomanceFeelings]: {
                 actions: 'normalizeRomanceFeelings',
@@ -835,10 +839,13 @@ export const characterMachine = createMachine(
                     event.type === EventType.ApplyOfflineRuntime
                         ? event.runtime.relationships.map(relationship => ({
                             ...relationship,
+                            spokenLines: relationship.spokenLines.map(line => ({ ...line })),
                             memories: {
                                 impression: { ...relationship.memories.impression },
                                 argument: { ...relationship.memories.argument },
                                 fight: { ...relationship.memories.fight },
+                                kiss: { ...relationship.memories.kiss },
+                                wallSlam: { ...relationship.memories.wallSlam },
                             },
                         }))
                         : context.relationships
@@ -988,6 +995,20 @@ export const characterMachine = createMachine(
                             event.memoryType,
                             event.countDelta,
                             event.startedById,
+                            event.timestamp ?? Date.now(),
+                        )
+                        : context.relationships
+                ),
+            }),
+            rememberSpokenLine: assign({
+                relationships: ({ context, event }) => (
+                    event.type === EventType.RememberSpokenLine
+                        ? rememberSpokenLine(
+                            context.relationships,
+                            context.id,
+                            event.targetCharId,
+                            event.memoryKey,
+                            event.text,
                             event.timestamp ?? Date.now(),
                         )
                         : context.relationships

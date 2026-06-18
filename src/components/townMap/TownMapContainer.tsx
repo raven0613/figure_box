@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type RelationshipStore,
@@ -64,6 +64,8 @@ interface TownMapContainerProps {
   interactionCardSelection?: InteractionCardSelection | null;
   onInteractionCardInitiatorSelect?: (cardId: string, initiatorId: string) => void;
   onInteractionCardTargetSelect?: (cardId: string, targetId: string) => void;
+  onInteractionCardUseComplete?: (cardId: string) => void;
+  onInteractionCardUseFailed?: (cardId: string) => void;
   onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
   onActivitySettled?: (activityId: string) => void;
   observedActivityId?: string | null;
@@ -81,6 +83,8 @@ export function TownMapContainer({
   interactionCardSelection = null,
   onInteractionCardInitiatorSelect,
   onInteractionCardTargetSelect,
+  onInteractionCardUseComplete,
+  onInteractionCardUseFailed,
   onDialogueRequest,
   onActivitySettled,
   observedActivityId = null,
@@ -89,6 +93,7 @@ export function TownMapContainer({
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<FabricTownMapWidget | null>(null);
   const characterControllerRef = useRef<TownCharacterController | null>(null);
+  const completedInteractionCardUseKeyRef = useRef<string | null>(null);
   const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(() => relationshipStoreService.getSnapshot());
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
   const [selectedMapObjects, setSelectedMapObjects] = useState<string[]>([]);
@@ -140,6 +145,40 @@ export function TownMapContainer({
     actorId: PLAYER_ACTOR_ID,
     characterControllerRef,
   });
+
+  useEffect(() => {
+    if (
+      !interactionCardSelection?.initiatorId ||
+      !interactionCardSelection.targetId
+    ) {
+      completedInteractionCardUseKeyRef.current = null;
+      return;
+    }
+
+    const useKey = [
+      interactionCardSelection.cardId,
+      interactionCardSelection.initiatorId,
+      interactionCardSelection.targetId,
+    ].join(':');
+
+    if (completedInteractionCardUseKeyRef.current === useKey) {
+      return;
+    }
+
+    const didUseCard = characterControllerRef.current?.useInteractionCard({
+      cardId: interactionCardSelection.cardId,
+      initiatorId: interactionCardSelection.initiatorId,
+      targetId: interactionCardSelection.targetId,
+    }) ?? false;
+
+    if (!didUseCard) {
+      onInteractionCardUseFailed?.(interactionCardSelection.cardId);
+      return;
+    }
+
+    completedInteractionCardUseKeyRef.current = useKey;
+    onInteractionCardUseComplete?.(interactionCardSelection.cardId);
+  }, [interactionCardSelection, onInteractionCardUseComplete, onInteractionCardUseFailed]);
   const transferHistoryDefinition = transferHistoryItem ? getItemDefinition(transferHistoryItem.definitionId) : null;
 
   const handleRelationshipStoreChange = useCallback((nextRelationshipStore: RelationshipStore) => {

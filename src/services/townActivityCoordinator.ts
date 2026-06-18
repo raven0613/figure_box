@@ -1,5 +1,6 @@
 import type { Position, SocialStatus } from '~/constants/character';
 import {
+  CHARACTER_EVENT_DEFINITIONS_BY_ID,
   type CharacterEventActivity,
   type CharacterEventActivityRollBranch,
   type CharacterEventActivityEffects,
@@ -31,6 +32,7 @@ import { TownActivityPerformanceDirector } from '~/services/townActivities/TownA
 import { TownActivityRollResolver } from '~/services/townActivities/TownActivityRollResolver';
 import { TownActivityStarter } from '~/services/townActivities/TownActivityStarter';
 import { TownActivityTimeoutController } from '~/services/townActivities/TownActivityTimeoutController';
+import { EventType } from '~/stateMachines/gameFlow/events';
 
 interface TownActivityCoordinatorOptions {
   activityManager: JoinableActivityManager;
@@ -47,6 +49,12 @@ interface TownActivityCoordinatorOptions {
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   resolveActivityOutcome: (input: ResolveActivityOutcomeInput) => ResolvedActivityOutcome;
   notifyActivitiesChanged: () => void;
+}
+
+export interface InteractionCardActivityInput {
+  eventId: string;
+  initiatorId: string;
+  targetId: string;
 }
 
 const DEFAULT_ACTIVITY_RESPONSE_DELAY_MS = 1200;
@@ -107,6 +115,14 @@ export class TownActivityCoordinator {
       getActivityPerformanceSelection: activity => this.getActivityPerformanceSelection(activity),
       isActivityEnding: activityId => this.endingActivityIds.has(activityId),
       resolveActivityRoll: request => this.resolveActivityRoll(request),
+      recordSpokenLine: input => {
+        this.sendToCharacter(input.speakerId, {
+          type: EventType.RememberSpokenLine,
+          targetCharId: input.targetId,
+          memoryKey: input.memoryKey,
+          text: input.text,
+        });
+      },
       resolveActivityFromRoll: (activity, branch) => {
         this.resolveActivityFromRoll(activity, branch);
       },
@@ -364,6 +380,48 @@ export class TownActivityCoordinator {
     activityId: string,
   ): CharacterPerformanceDialogueRequest | null {
     return this.dialogueObserver.createActivityDialogueRequest(activityId);
+  }
+
+  startInteractionCardActivity(
+    input: InteractionCardActivityInput,
+  ): CharacterPerformanceDialogueRequest | null {
+    if (input.initiatorId === input.targetId) {
+      return null;
+    }
+
+    const definition = CHARACTER_EVENT_DEFINITIONS_BY_ID[input.eventId];
+    const activityVariant = definition?.presentationVariants
+      ?.find(variant => variant.activity);
+    const activityDefinition = activityVariant?.activity;
+    const initiatorPosition = this.getCharacterPosition(input.initiatorId);
+    const targetPosition = this.getCharacterPosition(input.targetId);
+
+    if (!definition?.card || !activityDefinition || (!initiatorPosition && !targetPosition)) {
+      return null;
+    }
+
+    const timestamp = Date.now();
+    const activity = this.activityManager.createActivity({
+      id: `card-${input.eventId}-${input.initiatorId}-${input.targetId}-${timestamp}`,
+      sourceEventId: input.eventId,
+      activity: activityDefinition,
+      hostCharacterIds: [input.initiatorId],
+      participantIds: [input.initiatorId, input.targetId],
+      timestamp,
+      phase: 'active',
+      location: initiatorPosition ?? targetPosition ?? undefined,
+    });
+
+    activity.participantIds.forEach(participantId => {
+      this.sendToCharacter(participantId, {
+        type: EventType.JoinActivityAccepted,
+        activityId: activity.id,
+        sourceEventId: activity.sourceEventId,
+      });
+    });
+
+    this.notifyActivitiesChanged();
+    return this.createActivityDialogueRequest(activity.id);
   }
 
   private sendParticipantsToActivityLocation(activity: JoinableActivity): void {

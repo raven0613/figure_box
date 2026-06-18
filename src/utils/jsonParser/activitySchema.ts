@@ -305,9 +305,12 @@ function readActivityRoll(
   if (
     !resolvesActivity
     && branches.some(branch => (
-      branch.effects !== undefined
-      || branch.effectsByRole !== undefined
-      || branch.memoryEffects !== undefined
+      !branch.resolvesActivity
+      && (
+        branch.effects !== undefined
+        || branch.effectsByRole !== undefined
+        || branch.memoryEffects !== undefined
+      )
     ))
   ) {
     throw new Error(
@@ -339,6 +342,7 @@ function readActivityRollBranch(
   return {
     id: readRequiredString(rawBranch, 'id', index),
     baseWeight: readRequiredNonNegativeNumber(rawBranch, 'baseWeight', index),
+    resolvesActivity: readOptionalBoolean(rawBranch, 'resolvesActivity', index),
     conditionMode: readOptionalClauseMode(rawBranch, 'conditionMode', index),
     conditions: readOptionalActivityRollClauses(rawBranch, 'conditions', index),
     weightModifiers: readOptionalActivityRollWeightModifiers(rawBranch, index),

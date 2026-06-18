@@ -132,6 +132,7 @@ function App() {
   const interactionCards = useMemo(() => interactionCardService.getAvailableCards(), []);
   const [interactionCardDraft, setInteractionCardDraft] = useState<InteractionCardDraft | null>(null);
   const [pendingInteractionCardDrop, setPendingInteractionCardDrop] = useState<PendingInteractionCardDrop | null>(null);
+  const isInteractionCardTargetingPausedRef = useRef(false);
   const characterNamesById = useMemo(() => (
     getPlayableCharacters().reduce<Record<string, string>>(
       (namesById, character) => ({
@@ -156,14 +157,28 @@ function App() {
         : '__',
     );
   }, [characterNamesById, interactionCardDraft]);
+  const resumeInteractionCardTargetingPause = useCallback(() => {
+    if (!isInteractionCardTargetingPausedRef.current) {
+      return;
+    }
+
+    isInteractionCardTargetingPausedRef.current = false;
+    gameFlowActorRef.current?.send({ type: 'RESUME_SIM_WORLD' });
+  }, []);
+  const clearInteractionCardTargetingPause = useCallback(() => {
+    isInteractionCardTargetingPausedRef.current = false;
+  }, []);
   const handleInteractionCardSelect = useCallback((card: InteractionCardViewModel) => {
+    resumeInteractionCardTargetingPause();
     setInteractionCardDraft({
       card,
       initiatorId: null,
       targetId: null,
     });
-  }, []);
+    setPendingInteractionCardDrop(null);
+  }, [resumeInteractionCardTargetingPause]);
   const handleInteractionCardDrop = useCallback((input: InteractionCardDropInput) => {
+    resumeInteractionCardTargetingPause();
     setInteractionCardDraft({
       card: input.card,
       initiatorId: null,
@@ -174,8 +189,10 @@ function App() {
       cardId: input.card.id,
       pointer: input.pointer,
     });
-  }, []);
+  }, [resumeInteractionCardTargetingPause]);
   const handleInteractionCardInitiatorSelect = useCallback((cardId: string, initiatorId: string) => {
+    gameFlowActorRef.current?.send({ type: 'PAUSE_SIM_WORLD' });
+    isInteractionCardTargetingPausedRef.current = true;
     setInteractionCardDraft(currentDraft => {
       if (!currentDraft || currentDraft.card.id !== cardId) {
         return currentDraft;
@@ -200,6 +217,24 @@ function App() {
       };
     });
   }, []);
+  const handleInteractionCardUseComplete = useCallback((cardId: string) => {
+    setInteractionCardDraft(currentDraft => (
+      currentDraft?.card.id === cardId ? null : currentDraft
+    ));
+    setPendingInteractionCardDrop(currentDrop => (
+      currentDrop?.cardId === cardId ? null : currentDrop
+    ));
+    clearInteractionCardTargetingPause();
+  }, [clearInteractionCardTargetingPause]);
+  const handleInteractionCardUseFailed = useCallback((cardId: string) => {
+    setInteractionCardDraft(currentDraft => (
+      currentDraft?.card.id === cardId ? null : currentDraft
+    ));
+    setPendingInteractionCardDrop(currentDrop => (
+      currentDrop?.cardId === cardId ? null : currentDrop
+    ));
+    resumeInteractionCardTargetingPause();
+  }, [resumeInteractionCardTargetingPause]);
   const cancelActivityObservation = useCallback((
     activityId: string,
     onCancel?: () => void,
@@ -228,6 +263,7 @@ function App() {
       } else {
         handleCancel?.();
       }
+      resumeInteractionCardTargetingPause();
       return;
     }
 
@@ -243,7 +279,7 @@ function App() {
       activityId: request.activityId,
       onClose: request.onClose,
     });
-  }, [cancelActivityObservation]);
+  }, [cancelActivityObservation, resumeInteractionCardTargetingPause]);
   const resetDialogueParticipantExpressionPresets = useCallback((script: DialogueViewScript) => {
     setDialogueExpressionPresetIdByCharacterId(current => {
       const next = { ...current };
@@ -700,6 +736,8 @@ function App() {
               : null}
             onInteractionCardInitiatorSelect={handleInteractionCardInitiatorSelect}
             onInteractionCardTargetSelect={handleInteractionCardTargetSelect}
+            onInteractionCardUseComplete={handleInteractionCardUseComplete}
+            onInteractionCardUseFailed={handleInteractionCardUseFailed}
             onDialogueRequest={handleDialogueRequest}
             onActivitySettled={handleActivitySettled}
           />
@@ -791,6 +829,7 @@ function createActivityDialogueScript(
     templateValues: request.templateValues,
     resolveActivityRoll: request.resolveActivityRoll,
     resolveDialogueContent: request.resolveDialogueContent,
+    recordSpokenLine: request.recordSpokenLine,
   });
 }
 

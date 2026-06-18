@@ -226,18 +226,29 @@ export interface DirectedRelationship {
     feeling: Feeling;
     intimacy: number; // 親密度 (-100 到 100，預設0),
     memories: MemoryValueMap;
+    spokenLines: SpokenLineMemory[];
+}
+
+export interface SpokenLineMemory {
+    memoryKey: string;
+    text: string;
+    timestamp: number;
 }
 
 export enum MemoryType {
     Impression = "impression",
     Argument = "argument",
     Fight = "fight",
+    Kiss = "kiss",
+    WallSlam = "wallSlam",
 }
 
 export type MemoryValueMap = {
     [MemoryType.Impression]: Memory;
     [MemoryType.Argument]: MemoryData;
     [MemoryType.Fight]: MemoryData;
+    [MemoryType.Kiss]: MemoryData;
+    [MemoryType.WallSlam]: MemoryData;
 };
 
 export interface Memory {

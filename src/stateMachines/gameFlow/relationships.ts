@@ -21,6 +21,7 @@ const EMPTY_STARTED_BY_ID = '';
 const IMPRESSION_COOLDOWN_MS = 60 * 1000;
 const MIN_INTIMACY = -100;
 const MAX_INTIMACY = 100;
+const MAX_SPOKEN_LINES_PER_RELATIONSHIP = 100;
 
 export interface RelationshipStageThreshold<TStage extends string> {
   minIntimacy: number;
@@ -109,6 +110,39 @@ export function rememberRelationshipMemory(
         },
       };
     },
+    timestamp,
+  );
+}
+
+export function rememberSpokenLine(
+  relationships: DirectedRelationship[],
+  charId: string,
+  targetCharId: string,
+  memoryKey: string,
+  text: string,
+  timestamp: number = Date.now(),
+): DirectedRelationship[] {
+  const normalizedText = text.trim();
+
+  if (!memoryKey || !normalizedText || charId === targetCharId) {
+    return relationships;
+  }
+
+  return upsertDirectedRelationship(
+    relationships,
+    charId,
+    targetCharId,
+    relationship => ({
+      ...relationship,
+      spokenLines: [
+        ...relationship.spokenLines,
+        {
+          memoryKey,
+          text: normalizedText,
+          timestamp,
+        },
+      ].slice(-MAX_SPOKEN_LINES_PER_RELATIONSHIP),
+    }),
     timestamp,
   );
 }
@@ -351,6 +385,7 @@ export function createDirectedRelationship(
     intimacy: 0,
     feeling: getFeelingForIntimacy(0),
     memories: createMemoryValueMap(timestamp),
+    spokenLines: [],
   };
 }
 
@@ -366,6 +401,16 @@ export function createMemoryValueMap(timestamp: number): MemoryValueMap {
       startedById: EMPTY_STARTED_BY_ID,
     },
     [MemoryType.Fight]: {
+      counts: 0,
+      lastUpdate: timestamp,
+      startedById: EMPTY_STARTED_BY_ID,
+    },
+    [MemoryType.Kiss]: {
+      counts: 0,
+      lastUpdate: timestamp,
+      startedById: EMPTY_STARTED_BY_ID,
+    },
+    [MemoryType.WallSlam]: {
       counts: 0,
       lastUpdate: timestamp,
       startedById: EMPTY_STARTED_BY_ID,

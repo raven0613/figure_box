@@ -215,6 +215,7 @@ export interface CharacterEventActivityRollWeightModifier
 export interface CharacterEventActivityRollBranch {
   id: string;
   baseWeight: number;
+  resolvesActivity?: boolean;
   conditionMode?: CharacterEventClauseMode;
   conditions?: readonly CharacterEventActivityRollRuleClause[];
   weightModifiers?: readonly CharacterEventActivityRollWeightModifier[];

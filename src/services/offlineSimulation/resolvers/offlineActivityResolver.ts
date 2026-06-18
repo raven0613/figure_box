@@ -340,6 +340,7 @@ function resolveOfflineActivityRolls(
         ...ruleContext,
         activity: {
           participantCount: participants.length,
+          rollContext: {},
           rolls: selections,
         },
       },

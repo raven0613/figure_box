@@ -43,6 +43,10 @@ import type { EventOccurrence } from '~/services/eventOccurrences/worldEventType
 import { TownSpatialQueryService } from '~/services/townSpatialQueryService';
 import { CharacterActorRegistry } from '~/services/characterActorRegistry';
 import { CharacterHeldItemCoordinator } from '~/services/characterHeldItemCoordinator';
+import {
+  interactionCardService,
+  type InteractionCardUseIntent,
+} from '~/services/interactionCards/interactionCardService';
 import { RelationshipMomentFlowCoordinator } from '~/services/relationshipMomentFlowCoordinator';
 import { TownRelationshipCoordinator } from '~/services/townRelationshipCoordinator';
 import { TownCharacterTickCoordinator } from '~/services/townCharacterTickCoordinator';
@@ -62,6 +66,17 @@ const RELATIONSHIP_MOMENT_DURATION_MS = 3000;
 const RELATIONSHIP_MOMENT_DECISION_GRACE_MS = 1800;
 const GOD_DROP_DECISION_GRACE_MS = 3000;
 const DIALOGUE_EXPRESSION_BUBBLE_DURATION_MS = 1600;
+const INTERACTION_CARD_TARGET_OFFSETS: readonly GridCoordinate[] = [
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 },
+  { x: 1, y: 1 },
+  { x: -1, y: 1 },
+  { x: 1, y: -1 },
+  { x: -1, y: -1 },
+  { x: 0, y: 0 },
+];
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
@@ -565,6 +580,88 @@ export class TownCharacterController {
     this.godDropCoordinator.clear();
   }
 
+  private pullInteractionCardTargetNearInitiator(
+    initiatorId: string,
+    targetId: string,
+  ): boolean {
+    const targetActor = this.actorRegistry.getActor(targetId);
+    const initiatorTile = this.widget.getCharacterTile(initiatorId);
+
+    if (!targetActor || !initiatorTile) {
+      return false;
+    }
+
+    this.widget.cancelWalk(targetId);
+
+    if (!this.sendToCharacter(targetId, { type: EventType.PickUp })) {
+      return false;
+    }
+
+    const pickedUpSnapshot = this.actorRegistry.getSnapshot(targetId);
+
+    if (pickedUpSnapshot?.context.currentMotivation !== 'controllingByGod') {
+      return false;
+    }
+
+    const dropTile = this.moveInteractionCardTargetToDropTile(targetId, initiatorTile);
+
+    if (dropTile) {
+      this.sendToCharacter(targetId, { type: EventType.Drop, position: dropTile });
+      return true;
+    }
+
+    this.sendToCharacter(targetId, { type: EventType.Drop });
+    return false;
+  }
+
+  private moveInteractionCardTargetToDropTile(
+    targetId: string,
+    initiatorTile: GridCoordinate,
+  ): GridCoordinate | null {
+    const candidateTiles = INTERACTION_CARD_TARGET_OFFSETS
+      .map(offset => ({
+        x: initiatorTile.x + offset.x,
+        y: initiatorTile.y + offset.y,
+      }))
+      .filter(tile => this.widget.getCell(tile.x, tile.y)?.walkable === true);
+
+    return candidateTiles.find(tile => this.widget.moveCharacter(targetId, tile)) ?? null;
+  }
+
+  private prepareInteractionCardInitiator(initiatorId: string): boolean {
+    const snapshot = this.actorRegistry.getSnapshot(initiatorId);
+    const tile = this.widget.getCharacterTile(initiatorId);
+
+    if (!snapshot || !tile) {
+      return false;
+    }
+
+    const shouldInterruptMovement = (
+      snapshot.context.currentMotivation === 'goHome' ||
+      snapshot.context.target !== null ||
+      this.widget.isWalking(initiatorId)
+    );
+
+    if (!shouldInterruptMovement) {
+      return true;
+    }
+
+    this.widget.cancelWalk(initiatorId);
+
+    if (!this.sendToCharacter(initiatorId, { type: EventType.PickUp })) {
+      return false;
+    }
+
+    const pickedUpSnapshot = this.actorRegistry.getSnapshot(initiatorId);
+
+    if (pickedUpSnapshot?.context.currentMotivation !== 'controllingByGod') {
+      return false;
+    }
+
+    this.sendToCharacter(initiatorId, { type: EventType.Drop, position: tile });
+    return true;
+  }
+
   leaveApartment(characterId: string): void {
     if (this.simWorldPauseCoordinator.isPaused()) {
       return;
@@ -597,6 +694,39 @@ export class TownCharacterController {
     if (request) {
       this.onDialogueRequest?.(request);
     }
+  }
+
+  useInteractionCard(intent: InteractionCardUseIntent): boolean {
+    const resolution = interactionCardService.resolveCardUse(intent);
+
+    if (
+      !resolution ||
+      this.isCharacterBodyFrozen(resolution.initiatorId) ||
+      this.isCharacterBodyFrozen(resolution.targetId)
+    ) {
+      return false;
+    }
+
+    if (!this.prepareInteractionCardInitiator(resolution.initiatorId)) {
+      return false;
+    }
+
+    if (!this.pullInteractionCardTargetNearInitiator(resolution.initiatorId, resolution.targetId)) {
+      return false;
+    }
+
+    const dialogueRequest = this.activityCoordinator.startInteractionCardActivity({
+      eventId: resolution.eventId,
+      initiatorId: resolution.initiatorId,
+      targetId: resolution.targetId,
+    });
+
+    if (!dialogueRequest) {
+      return false;
+    }
+
+    this.onDialogueRequest?.(dialogueRequest);
+    return true;
   }
 
   resolveActivityOutcome(input: ResolveActivityOutcomeInput): ResolvedActivityOutcome {

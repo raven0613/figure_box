@@ -156,10 +156,13 @@ function cloneRelationships(
 ): CharacterRuntimeSnapshot['relationships'] {
   return relationships.map(relationship => ({
     ...relationship,
+    spokenLines: relationship.spokenLines.map(line => ({ ...line })),
     memories: {
       impression: { ...relationship.memories.impression },
       argument: { ...relationship.memories.argument },
       fight: { ...relationship.memories.fight },
+      kiss: { ...relationship.memories.kiss },
+      wallSlam: { ...relationship.memories.wallSlam },
     },
   }));
 }

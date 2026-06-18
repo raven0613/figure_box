@@ -402,5 +402,297 @@
         ]
       }
     ]
+  },
+  {
+    "id": "activity-wall-slam-tension-choice",
+    "participants": [
+      { "key": "initiator", "slot": "left" },
+      { "key": "target", "slot": "right" }
+    ],
+    "lines": [
+      {
+        "id": "wall-slam-initiator-line",
+        "type": "ACTIVITY_ROLL",
+        "rollId": "wallSlamInitiatorPose",
+        "branchLines": {
+          "pressure": [
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "旁白：{initiatorName} 跨前一步，單手啪地一聲撐在牆上，將 {targetName} 困在自己與牆壁之間。他的眼神維持著平靜與專注，封死了所有退路。",
+              "expressionPresetId": "normal"
+            },
+            {
+              "type": "INPUT",
+              "speaker": "initiator",
+              "target": "target",
+              "prompt": "{initiatorName}要對{targetName}說什麼？",
+              "variable": "sentence",
+              "fallbackValue": "我有話想跟你說",
+              "memoryKey": "wallSlam.spokenLine",
+              "expressionPresetId": "normal"
+            },
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "......{sentence}",
+              "expressionPresetId": "normal"
+            }
+          ],
+          "clumsy": [
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "旁白：{initiatorName} 本想表現得俐落一點，結果衝得太快，手掌重重撞在牆上，身體還差點失去平衡往前栽，臉色有些不自然。",
+              "expressionPresetId": "surprised"
+            },
+            {
+              "type": "INPUT",
+              "speaker": "initiator",
+              "target": "target",
+              "prompt": "{initiatorName}要對{targetName}說什麼？",
+              "variable": "sentence",
+              "fallbackValue": "我有話想跟你說",
+              "memoryKey": "wallSlam.spokenLine",
+              "expressionPresetId": "surprised"
+            },
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "咳咳、{sentence}",
+              "expressionPresetId": "surprised"
+            }
+          ],
+          "unspoken": [
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "旁白：{initiatorName} 踏前一步，雙手撐在牆上，將 {targetName} 整個圈了起來。然而他的視線卻微微向下，沒有看著 {targetName} 的眼睛。",
+              "expressionPresetId": "normal"
+            },
+            {
+              "type": "INPUT",
+              "speaker": "initiator",
+              "target": "target",
+              "prompt": "{initiatorName}要對{targetName}說什麼？",
+              "variable": "sentence",
+              "fallbackValue": "其實，我一直想找你說這件事",
+              "memoryKey": "wallSlam.spokenLine",
+              "expressionPresetId": "normal"
+            },
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "......{sentence}",
+              "expressionPresetId": "normal"
+            }
+          ],
+          "confident": [
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "旁白：{initiatorName} 一手撐在牆上，阻斷了 {targetName} 離開的方向。隨後他用另一隻手理了理自己的領口，臉上帶著對目前局面完全完全篤定的微笑。",
+              "expressionPresetId": "laugh"
+            },
+            {
+              "type": "INPUT",
+              "speaker": "initiator",
+              "target": "target",
+              "prompt": "{initiatorName}要對{targetName}說什麼？",
+              "variable": "sentence",
+              "fallbackValue": "你會聽我把話說完",
+              "memoryKey": "wallSlam.spokenLine",
+              "expressionPresetId": "laugh"
+            },
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "我有預感，接下來 {sentence}",
+              "expressionPresetId": "laugh"
+            }
+          ]
+        }
+      },
+      {
+        "id": "wall-slam-target-pose",
+        "type": "ACTIVITY_ROLL",
+        "rollId": "wallSlamTargetPose",
+        "branchLines": {
+          "strangerRecognition": [
+            {
+              "type": "SAY",
+              "speaker": "target",
+              "text": "我好像看過你......只是沒想到居然是用這種方式認識你。",
+              "expressionPresetId": "curious"
+            }
+          ],
+          "surprised": [
+            {
+              "type": "SAY",
+              "speaker": "target",
+              "text": "旁白：{targetName} 似乎還沒搞清楚狀況，大腦飛速運轉中。",
+              "expressionPresetId": "surprised"
+            }
+          ],
+          "understands": [
+            {
+              "type": "SAY",
+              "speaker": "target",
+              "text": "旁白：{targetName} 有些驚訝地看著 {initiatorName}，眼帶笑意的說。",
+              "expressionPresetId": "laugh"
+            },
+            {
+              "type": "SAY",
+              "speaker": "target",
+              "text": "幹嘛？怎麼突然。",
+              "expressionPresetId": "laugh"
+            }
+          ]
+        }
+      },
+      {
+        "id": "wall-slam-tension-choice",
+        "type": "CHOICE",
+        "speaker": "initiator",
+        "text": "要為他們加點張力，還是介入降溫？",
+        "expressionPresetId": "curious",
+        "timeoutMs": 12000,
+        "choices": [
+          {
+            "id": "push-initiator",
+            "label": "推A一把",
+            "result": {
+              "type": "setRollContext",
+              "rollContext": {
+                "wallSlamTensionChoice": "pushInitiator"
+              }
+            }
+          },
+          {
+            "id": "cool-down",
+            "label": "拿風扇降溫",
+            "result": {
+              "type": "setRollContext",
+              "rollContext": {
+                "wallSlamTensionChoice": "coolDown"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "wall-slam-distance-outcome",
+        "type": "ACTIVITY_ROLL",
+        "rollId": "wallSlamDistanceOutcome",
+        "branchLines": {
+          "heartOverload": [
+            {
+              "type": "SAY",
+              "speaker": "target",
+              "text": "旁白：{targetName} 被 {initiatorName} 盯得渾身不自在，眼神有些慌亂地移開，雙手無處安放。兩人的距離極近。",
+              "expressionPresetId": "mad"
+            },
+            {
+              "type": "SAY",
+              "speaker": "target",
+              "text": "……太近了，你到底想幹嘛。",
+              "expressionPresetId": "mad"
+            },
+            {
+              "id": "wall-slam-final-after-heart-overload",
+              "type": "ACTIVITY_ROLL",
+              "rollId": "wallSlamFinalAfterHeartOverload",
+              "branchLines": {
+                "escape": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "旁白：{targetName} 實在受不了這種近距離的視線，臉上的紅暈一路蔓延到脖子。他咬了咬牙，伸手用力把 {initiatorName} 的手臂從牆上推開，低下頭光速從旁邊的空隙鑽了出去，連頭都沒回。",
+                    "expressionPresetId": "surprised"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "……算了，當我沒問。沒事的話，我要先走了。",
+                    "expressionPresetId": "surprised"
+                  }
+                ],
+                "softenedStandoff": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "旁白：兩人就這樣在極近的距離下對視了數秒，誰也沒有退讓。最後 {targetName} 率先嘆了一口氣，肩膀微微放鬆，雖然臉上還帶著沒退去的紅暈，但眼神已經無奈地軟化了下來。",
+                    "expressionPresetId": "curious"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "……真是拿你沒辦法。所以，你特地把我攔在這裡，到底是要跟我說什麼？",
+                    "expressionPresetId": "curious"
+                  }
+                ]
+              }
+            }
+          ],
+          "lipBrush": [
+            {
+              "type": "SAY",
+              "speaker": "initiator",
+              "text": "旁白：兩人的距離在萬分之一秒內歸零，嘴唇極其輕微地擦過了對方的嘴唇。空氣在這一瞬間徹底死寂。",
+              "expressionPresetId": "surprised"
+            },
+            {
+              "id": "wall-slam-final-after-lip-brush",
+              "type": "ACTIVITY_ROLL",
+              "rollId": "wallSlamFinalAfterLipBrush",
+              "branchLines": {
+                "flusteredAnger": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "旁白：{targetName} 的臉瞬間漲紅，頭頂冒出無數煙霧與憤怒符號。他雙手猛地把 {initiatorName} 推開，用手背用力擦拭嘴唇，眼神充滿了慌亂與羞憤。",
+                    "expressionPresetId": "mad"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "你……你到底在做什麼？！我絕對不會原諒你的。",
+                    "expressionPresetId": "mad"
+                  }
+                ],
+                "returnGift": [
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "旁白：兩人在原地石化了整整五秒鐘。{targetName} 的胸口微微起伏，然後突然往前跨了一小步，精準且快速地也在 {initiatorName} 的唇上輕輕啄了一下。接著若無其事地拉開距離，只有耳朵紅得快滴出水來。",
+                    "expressionPresetId": "surprised"
+                  },
+                  {
+                    "type": "SAY",
+                    "speaker": "target",
+                    "text": "這樣就扯平了。",
+                    "expressionPresetId": "surprised"
+                  }
+                ]
+              }
+            }
+          ],
+          "counter": [
+            {
+              "type": "SAY",
+              "speaker": "target",
+              "text": "旁白：{targetName} 眼神冰冷，一記手刀啪地打掉 {initiatorName} 撐在牆上的手，直接從側邊閃了出去。",
+              "expressionPresetId": "mad"
+            },
+            {
+              "type": "SAY",
+              "speaker": "target",
+              "text": "雖然不知道你想幹嘛，但下次就不只這樣了。",
+              "expressionPresetId": "mad"
+            }
+          ]
+        }
+      }
+    ]
   }
 ]

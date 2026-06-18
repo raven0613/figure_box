@@ -1036,5 +1036,381 @@
         "durationMs": 1000
       }
     ]
+  },
+  {
+    "id": "social.wallSlam",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "normal",
+        "durationMs": 1200
+      },
+      {
+        "phase": "accepted",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "curious",
+        "durationMs": 1400
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamWallRise",
+        "label": "壁咚",
+        "durationMs": 45000
+      },
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "both",
+        "expressionBubbleId": "surprised",
+        "delayMs": 300,
+        "durationMs": 1600
+      },
+      {
+        "phase": "active",
+        "type": "dialogue",
+        "target": "both",
+        "scriptId": "activity-wall-slam-tension-choice",
+        "displayMode": "preview",
+        "delayMs": 800
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "surprised",
+        "durationMs": 5000
+      },
+      {
+        "phase": "participantLeftGroup",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamInterrupted",
+        "label": "壁咚被打斷了",
+        "durationMs": 5000
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.a.pressure",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "normal",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamPressure",
+        "label": "壓迫感",
+        "durationMs": 3600
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.a.clumsy",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "surprised",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamClumsyImpact",
+        "label": "帥不過三秒",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "initiator",
+        "expressionBubbleId": "surprised",
+        "delayMs": 400,
+        "durationMs": 1800
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.a.unspoken",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "normal",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamUnspokenCage",
+        "label": "難以說出口",
+        "durationMs": 3600
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.a.confident",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "laugh",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamConfidentCollar",
+        "label": "自信心",
+        "durationMs": 3600
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.b.strangerRecognition",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "curious",
+        "durationMs": 3200
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.b.surprised",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "surprised",
+        "durationMs": 3000
+      },
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "target",
+        "expressionBubbleId": "question",
+        "durationMs": 2600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "target",
+        "effectId": "wallSlamTargetProcessing",
+        "label": "稍微嚇一跳",
+        "durationMs": 3200
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.b.understands",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "laugh",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "target",
+        "effectId": "wallSlamTargetUnderstands",
+        "label": "馬上就懂了",
+        "durationMs": 2600
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.c.heartOverload",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "mad",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamHeartOverload",
+        "label": "心跳過載",
+        "durationMs": 4200
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.c.lipBrush",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "surprised",
+        "durationMs": 4200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamLipBrush",
+        "label": "意外的擦唇暴擊",
+        "durationMs": 4800
+      },
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "both",
+        "expressionBubbleId": "surprised",
+        "delayMs": 700,
+        "durationMs": 3000
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.c.counter",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "mad",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "target",
+        "expressionBubbleId": "angry",
+        "durationMs": 3000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamCounterChop",
+        "label": "無情手刀",
+        "durationMs": 4600
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.d.flusteredAnger",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "mad",
+        "durationMs": 4200
+      },
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "target",
+        "expressionBubbleId": "angry",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamFlusteredSteam",
+        "label": "震驚與惱羞成怒",
+        "durationMs": 5200
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.d.returnGift",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "surprised",
+        "durationMs": 3200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamReturnGiftSilence",
+        "label": "短暫沉默",
+        "durationMs": 4200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamReturnGiftKiss",
+        "label": "回禮",
+        "delayMs": 4200,
+        "durationMs": 4200
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.d.escape",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "surprised",
+        "durationMs": 3600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamEscape",
+        "label": "落荒而逃",
+        "durationMs": 4800
+      }
+    ]
+  },
+  {
+    "id": "social.wallSlam.d.softenedStandoff",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "target",
+        "expressionPresetId": "curious",
+        "durationMs": 4200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "wallSlamSoftenedStandoff",
+        "label": "僵持不下的心跳認輸",
+        "durationMs": 5200
+      }
+    ]
   }
 ]

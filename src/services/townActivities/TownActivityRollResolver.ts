@@ -84,7 +84,11 @@ export class TownActivityRollResolver {
       return previousSelections[request.rollId]?.selectedBranchId ?? null;
     }
 
-    const context = this.createActivityRollRuleContext(activity, previousSelections);
+    const context = this.createActivityRollRuleContext(
+      activity,
+      previousSelections,
+      request.rollContext ?? {},
+    );
     const selectedBranch = context
       ? selectActivityRollBranch(roll, context)
       : null;
@@ -97,10 +101,11 @@ export class TownActivityRollResolver {
       ...previousSelections,
       [roll.id]: {
         selectedBranchId: selectedBranch.id,
+        rollContext: request.rollContext,
       },
     });
 
-    if (roll.resolvesActivity) {
+    if (roll.resolvesActivity || selectedBranch.resolvesActivity) {
       if (this.dialogueObserver.deferActivityResolution(activity, selectedBranch)) {
         return selectedBranch.id;
       }
@@ -124,6 +129,7 @@ export class TownActivityRollResolver {
   private createActivityRollRuleContext(
     activity: JoinableActivity,
     rolls: Readonly<Record<string, ActivityRollSelection>>,
+    rollContext: Readonly<Record<string, unknown>>,
   ): ActivityRollRuleContext | null {
     const initiatorId = activity.hostCharacterIds[0] ?? activity.participantIds[0];
     const targetId = activity.participantIds.find(characterId => characterId !== initiatorId);
@@ -167,6 +173,7 @@ export class TownActivityRollResolver {
       },
       activity: {
         participantCount: activity.participantIds.length,
+        rollContext,
         rolls,
       },
     };

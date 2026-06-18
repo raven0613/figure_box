@@ -80,6 +80,7 @@ export function createDialogueViewScript(
     branchContext: createBranchContext(context, participantIdByKey),
     resolveActivityRoll: context.resolveActivityRoll,
     resolveDialogueContent: context.resolveDialogueContent,
+    recordSpokenLine: context.recordSpokenLine,
   };
 }
 
@@ -88,22 +89,58 @@ function resolveInstruction(
   participantIdByKey: ReadonlyMap<string, string>,
   templateValues: Readonly<Record<string, string>>,
 ): DialogueViewInstruction {
-  const speakerId = getParticipantId(instruction.speaker, participantIdByKey);
-
   if (instruction.type === 'SAY') {
     return {
       id: instruction.id,
       type: 'SAY',
-      speakerId,
+      speakerId: getParticipantId(instruction.speaker, participantIdByKey),
       text: formatDialogueText(instruction.text, templateValues),
       expressionPresetId: instruction.expressionPresetId,
+    };
+  }
+
+  if (instruction.type === 'INPUT') {
+    return {
+      id: instruction.id,
+      type: 'INPUT',
+      speakerId: getParticipantId(instruction.speaker, participantIdByKey),
+      targetId: getParticipantId(instruction.target, participantIdByKey),
+      prompt: formatDialogueText(instruction.prompt, templateValues),
+      variable: instruction.variable,
+      fallbackValue: formatDialogueText(instruction.fallbackValue, templateValues),
+      memoryKey: instruction.memoryKey,
+      expressionPresetId: instruction.expressionPresetId,
+    };
+  }
+
+  if (instruction.type === 'ACTIVITY_ROLL') {
+    return {
+      id: instruction.id,
+      type: 'ACTIVITY_ROLL',
+      rollId: instruction.rollId,
+      rollContext: instruction.rollContext ? { ...instruction.rollContext } : undefined,
+      contentPoolId: instruction.contentPoolId,
+      subjectKey: instruction.subjectKey,
+      subjectKeys: instruction.subjectKeys ? [...instruction.subjectKeys] : undefined,
+      lines: (instruction.lines ?? []).map(line => (
+        resolveInstruction(line, participantIdByKey, templateValues)
+      )),
+      lineVariants: instruction.lineVariants?.map(lines => (
+        lines.map(line => resolveInstruction(line, participantIdByKey, templateValues))
+      )),
+      branchLines: Object.fromEntries(
+        Object.entries(instruction.branchLines).map(([branchId, lines]) => [
+          branchId,
+          lines.map(line => resolveInstruction(line, participantIdByKey, templateValues)),
+        ]),
+      ),
     };
   }
 
   return {
     id: instruction.id,
     type: 'CHOICE',
-    speakerId,
+    speakerId: getParticipantId(instruction.speaker, participantIdByKey),
     text: formatDialogueText(instruction.text, templateValues),
     expressionPresetId: instruction.expressionPresetId,
     idlePrompt: instruction.idlePrompt
@@ -133,6 +170,7 @@ function resolveChoiceResult(
   if (result.type === 'appendLines' || result.type === 'replaceRemaining') {
     return {
       type: result.type,
+      rollContext: result.rollContext ? { ...result.rollContext } : undefined,
       lines: result.lines.map(instruction => (
         resolveInstruction(instruction, participantIdByKey, templateValues)
       )),
@@ -153,10 +191,18 @@ function resolveChoiceResult(
     };
   }
 
+  if (result.type === 'setRollContext') {
+    return {
+      type: 'setRollContext',
+      rollContext: { ...result.rollContext },
+    };
+  }
+
   if (result.type === 'activityRoll') {
     return {
       type: 'activityRoll',
       rollId: result.rollId,
+      rollContext: result.rollContext ? { ...result.rollContext } : undefined,
       contentPoolId: result.contentPoolId,
       subjectKey: result.subjectKey,
       subjectKeys: result.subjectKeys ? [...result.subjectKeys] : undefined,

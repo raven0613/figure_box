@@ -68,20 +68,16 @@ export class TownSimWorldPauseCoordinator {
 
   private pause(observedActivityId: string | null): void {
     if (this.isPaused()) {
+      this.syncObservedActivityPause(observedActivityId);
       return;
     }
 
     const timestamp = Date.now();
-    const observedParticipantIds = observedActivityId
-      ? this.activityManager.getActivity(observedActivityId)?.participantIds ?? []
-      : [];
 
     this.pausedAt = timestamp;
     this.tickCoordinator.pause();
     this.movementCoordinator.pauseWorld();
-    this.widget.setPresentationPaused(true, observedParticipantIds);
-    this.performanceRunner.pauseWorld(observedActivityId);
-    this.activityCoordinator.pauseWorld(observedActivityId);
+    this.syncObservedActivityPause(observedActivityId);
     this.transientMomentCoordinator.pauseWorld();
     this.activityManager.getActivities().forEach(activity => {
       if (activity.pausedAt !== undefined) {
@@ -98,6 +94,16 @@ export class TownSimWorldPauseCoordinator {
     if (this.pausedActivityIds.size > 0) {
       this.notifyActivitiesChanged();
     }
+  }
+
+  private syncObservedActivityPause(observedActivityId: string | null): void {
+    const observedParticipantIds = observedActivityId
+      ? this.activityManager.getActivity(observedActivityId)?.participantIds ?? []
+      : [];
+
+    this.widget.setPresentationPaused(true, observedParticipantIds);
+    this.performanceRunner.pauseWorld(observedActivityId);
+    this.activityCoordinator.pauseWorld(observedActivityId);
   }
 
   private resume(): void {

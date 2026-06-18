@@ -884,6 +884,35 @@ function readDirectedRelationships(value: unknown): CharacterRuntimeSnapshot['re
       feeling: relationship.feeling as Feeling,
       intimacy: relationship.intimacy,
       memories: readMemoryValueMap(relationship.memories),
+      spokenLines: readSpokenLines(relationship.spokenLines),
+    }];
+  });
+}
+
+function readSpokenLines(
+  value: unknown,
+): CharacterRuntimeSnapshot['relationships'][number]['spokenLines'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap(line => {
+    if (
+      !isRecord(line)
+      || typeof line.memoryKey !== 'string'
+      || line.memoryKey.length === 0
+      || typeof line.text !== 'string'
+      || line.text.length === 0
+      || typeof line.timestamp !== 'number'
+      || !Number.isFinite(line.timestamp)
+    ) {
+      return [];
+    }
+
+    return [{
+      memoryKey: line.memoryKey,
+      text: line.text,
+      timestamp: line.timestamp,
     }];
   });
 }
@@ -895,6 +924,8 @@ function readMemoryValueMap(value: unknown): CharacterRuntimeSnapshot['relations
     [MemoryType.Impression]: readMemory(memoryRecord[MemoryType.Impression]),
     [MemoryType.Argument]: readMemoryData(memoryRecord[MemoryType.Argument]),
     [MemoryType.Fight]: readMemoryData(memoryRecord[MemoryType.Fight]),
+    [MemoryType.Kiss]: readMemoryData(memoryRecord[MemoryType.Kiss]),
+    [MemoryType.WallSlam]: readMemoryData(memoryRecord[MemoryType.WallSlam]),
   };
 }
 

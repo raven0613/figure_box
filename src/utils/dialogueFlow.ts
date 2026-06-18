@@ -1,4 +1,6 @@
 import type {
+  DialogueActivityRollContext,
+  DialogueViewActivityRollInstruction,
   DialogueBranchCandidate,
   DialogueBranchContext,
   DialogueChoiceResult,
@@ -12,6 +14,7 @@ export interface DialogueChoiceResolution {
   instructions: DialogueViewInstruction[];
   nextLineIndex: number;
   shouldClose: boolean;
+  rollContext?: DialogueActivityRollContext;
 }
 
 export function resolveDialogueChoiceResult(
@@ -30,6 +33,7 @@ export function resolveDialogueChoiceResult(
         ],
         nextLineIndex: lineIndex + 1,
         shouldClose: false,
+        rollContext: result.rollContext,
       };
     case 'replaceRemaining':
       return {
@@ -39,6 +43,7 @@ export function resolveDialogueChoiceResult(
         ],
         nextLineIndex: lineIndex + 1,
         shouldClose: false,
+        rollContext: result.rollContext,
       };
     case 'jumpTo':
       return {
@@ -48,8 +53,15 @@ export function resolveDialogueChoiceResult(
       };
     case 'branch':
       return resolveBranchChoice(script, instructions, lineIndex, result.branchGroupId);
+    case 'setRollContext':
+      return {
+        instructions,
+        nextLineIndex: lineIndex + 1,
+        shouldClose: false,
+        rollContext: result.rollContext,
+      };
     case 'activityRoll':
-      return resolveActivityRollChoice(script, instructions, lineIndex, result);
+      return resolveActivityRollInstruction(script, instructions, lineIndex, result, true);
     case 'end':
       return {
         instructions,
@@ -65,11 +77,23 @@ export function resolveDialogueChoiceResult(
   }
 }
 
-function resolveActivityRollChoice(
+export function resolveDialogueActivityRoll(
   script: DialogueViewScript,
   instructions: DialogueViewInstruction[],
   lineIndex: number,
-  result: Extract<DialogueChoiceResult, { type: 'activityRoll' }>,
+  instruction: DialogueViewActivityRollInstruction,
+  inheritedRollContext?: DialogueActivityRollContext,
+): DialogueChoiceResolution {
+  return resolveActivityRollInstruction(script, instructions, lineIndex, instruction, false, inheritedRollContext);
+}
+
+function resolveActivityRollInstruction(
+  script: DialogueViewScript,
+  instructions: DialogueViewInstruction[],
+  lineIndex: number,
+  result: Extract<DialogueChoiceResult, { type: 'activityRoll' }> | DialogueViewActivityRollInstruction,
+  keepCurrentInstruction: boolean,
+  inheritedRollContext?: DialogueActivityRollContext,
 ): DialogueChoiceResolution {
   const random = script.branchContext?.random ?? Math.random;
   const subjectKey = result.subjectKey
@@ -81,7 +105,14 @@ function resolveActivityRollChoice(
   const resolvedContent = result.contentPoolId && subjectKey
     ? script.resolveDialogueContent?.(result.contentPoolId, subjectKey)
     : null;
-  const selectedBranchId = script.resolveActivityRoll?.(result.rollId) ?? null;
+  const rollContext = {
+    ...(inheritedRollContext ?? {}),
+    ...(result.rollContext ?? {}),
+  };
+  const selectedBranchId = script.resolveActivityRoll?.(
+    result.rollId,
+    Object.keys(rollContext).length ? rollContext : undefined,
+  ) ?? null;
   const selectedVariant = result.lineVariants?.length
     ? result.lineVariants[Math.floor(random() * result.lineVariants.length)]
     : undefined;
@@ -89,15 +120,23 @@ function resolveActivityRollChoice(
   const branchLines = selectedBranchId
     ? result.branchLines[selectedBranchId] ?? []
     : [];
-
-  return {
-    instructions: [
+  const nextInstructions = keepCurrentInstruction
+    ? [
       ...instructions.slice(0, lineIndex + 1),
       ...preludeLines,
       ...branchLines,
       ...instructions.slice(lineIndex + 1),
-    ],
-    nextLineIndex: lineIndex + 1,
+    ]
+    : [
+      ...instructions.slice(0, lineIndex),
+      ...preludeLines,
+      ...branchLines,
+      ...instructions.slice(lineIndex + 1),
+    ];
+
+  return {
+    instructions: nextInstructions,
+    nextLineIndex: keepCurrentInstruction ? lineIndex + 1 : Math.min(lineIndex, nextInstructions.length - 1),
     shouldClose: false,
   };
 }

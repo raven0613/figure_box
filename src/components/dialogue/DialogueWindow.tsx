@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   DialogueViewChoice,
+  DialogueActivityRollContext,
+  DialogueViewChoiceLine,
+  DialogueViewInputLine,
   DialogueViewLine,
   DialogueViewInstruction,
   DialogueViewScript,
 } from '~/typing/dialogueView';
-import { resolveDialogueChoiceResult } from '~/utils/dialogueFlow';
+import { resolveDialogueActivityRoll, resolveDialogueChoiceResult } from '~/utils/dialogueFlow';
 import { DialogueAvatarStage } from './DialogueAvatarStage';
+import { DialogueInputForm } from './DialogueInputForm';
 
 import styles from './dialogue.module.scss';
 
@@ -23,6 +27,42 @@ interface IdleDialogueFlow {
 
 const IDLE_DIALOGUE_LINE_DURATION_MS = 2200;
 
+type DialogueDisplayLine = DialogueViewLine | DialogueViewChoiceLine | DialogueViewInputLine;
+
+function isReadableDialogueLine(instruction: DialogueViewInstruction | undefined): instruction is DialogueDisplayLine {
+  return instruction?.type === 'SAY'
+    || instruction?.type === 'CHOICE'
+    || instruction?.type === 'INPUT';
+}
+
+function getFallbackDialogueLine(
+  instructions: DialogueViewInstruction[],
+  lineIndex: number,
+  script: DialogueViewScript,
+): DialogueDisplayLine {
+  const previousLine = instructions
+    .slice(0, lineIndex)
+    .reverse()
+    .find(isReadableDialogueLine);
+
+  if (previousLine) {
+    return previousLine;
+  }
+
+  const nextLine = instructions.slice(lineIndex + 1).find(isReadableDialogueLine);
+
+  if (nextLine) {
+    return nextLine;
+  }
+
+  return {
+    type: 'SAY',
+    speakerId: script.participants[0]?.id ?? '',
+    text: '',
+    expressionPresetId: 'normal',
+  };
+}
+
 export function DialogueWindow({
   script,
   onClose,
@@ -32,12 +72,20 @@ export function DialogueWindow({
   const [lineIndex, setLineIndex] = useState(0);
   const [idleDialogueFlow, setIdleDialogueFlow] = useState<IdleDialogueFlow | null>(null);
   const [idleBubbleBySpeakerId, setIdleBubbleBySpeakerId] = useState<Record<string, string>>({});
+  const [activityRollContext, setActivityRollContext] = useState<DialogueActivityRollContext>({});
   const currentInstruction = instructions[lineIndex];
-  const currentLine = currentInstruction;
+  const currentLine = isReadableDialogueLine(currentInstruction)
+    ? currentInstruction
+    : getFallbackDialogueLine(instructions, lineIndex, script);
   const currentIdleLine = idleDialogueFlow?.lines[idleDialogueFlow.lineIndex] ?? null;
   const activeLine = currentIdleLine ?? currentLine;
-  const isChoiceLine = currentInstruction.type === 'CHOICE';
-  const currentChoiceLine = isChoiceLine && currentInstruction.type === 'CHOICE'
+  const isChoiceLine = currentInstruction?.type === 'CHOICE';
+  const isInputLine = currentInstruction?.type === 'INPUT';
+  const isActivityRollLine = currentInstruction?.type === 'ACTIVITY_ROLL';
+  const currentChoiceLine = isChoiceLine && currentInstruction?.type === 'CHOICE'
+    ? currentInstruction
+    : null;
+  const currentInputLine = isInputLine && currentInstruction?.type === 'INPUT'
     ? currentInstruction
     : null;
   const activeSpeaker = useMemo(
@@ -51,9 +99,15 @@ export function DialogueWindow({
     [isChoiceLine, script.participants],
   );
   const currentExpressionPresetId = activeLine.expressionPresetId;
+  const currentLineText = currentLine.type === 'INPUT'
+    ? currentLine.prompt
+    : currentLine.text;
+  const activeLineText = activeLine.type === 'INPUT'
+    ? activeLine.prompt
+    : activeLine.text;
   const expressionRunId = currentIdleLine
     ? `idle:${lineIndex}:${idleDialogueFlow?.lineIndex ?? 0}:${currentIdleLine.id ?? currentIdleLine.text}`
-    : `line:${lineIndex}:${activeLine.id ?? activeLine.text}`;
+    : `line:${lineIndex}:${activeLine.id ?? activeLineText}`;
   const bubbleBySpeakerId = useMemo(() => {
     if (currentIdleLine) {
       return {
@@ -82,9 +136,14 @@ export function DialogueWindow({
     setLineIndex(0);
     setIdleDialogueFlow(null);
     setIdleBubbleBySpeakerId({});
+    setActivityRollContext({});
   }, [script.id, script.lines]);
 
   useEffect(() => {
+    if (isActivityRollLine || activeLine.type === 'INPUT') {
+      return;
+    }
+
     onLineChange?.({
       id: activeLine.id,
       type: 'SAY',
@@ -92,7 +151,39 @@ export function DialogueWindow({
       text: activeLine.text,
       expressionPresetId: activeLine.expressionPresetId,
     });
-  }, [activeLine.expressionPresetId, activeLine.id, activeLine.speakerId, activeLine.text, onLineChange]);
+  }, [
+    activeLine.expressionPresetId,
+    activeLine.id,
+    activeLine.speakerId,
+    activeLineText,
+    currentIdleLine,
+    isActivityRollLine,
+    onLineChange,
+  ]);
+
+  useEffect(() => {
+    if (!currentInstruction || currentInstruction.type !== 'ACTIVITY_ROLL') {
+      return;
+    }
+
+    const resolution = resolveDialogueActivityRoll(
+      script,
+      instructions,
+      lineIndex,
+      currentInstruction,
+      activityRollContext,
+    );
+
+    if (resolution.instructions.length === 0) {
+      onClose();
+      return;
+    }
+
+    setInstructions(resolution.instructions);
+    setIdleDialogueFlow(null);
+    setIdleBubbleBySpeakerId({});
+    setLineIndex(Math.max(0, resolution.nextLineIndex));
+  }, [activityRollContext, currentInstruction, instructions, lineIndex, onClose, script]);
 
   useEffect(() => {
     setIdleDialogueFlow(null);
@@ -147,7 +238,7 @@ export function DialogueWindow({
   }, [idleDialogueFlow]);
 
   const handleNext = () => {
-    if (isChoiceLine) {
+    if (isChoiceLine || isInputLine || isActivityRollLine) {
       return;
     }
 
@@ -170,7 +261,35 @@ export function DialogueWindow({
     setInstructions(resolution.instructions);
     setIdleDialogueFlow(null);
     setIdleBubbleBySpeakerId({});
+    if (resolution.rollContext) {
+      setActivityRollContext(current => ({
+        ...current,
+        ...resolution.rollContext,
+      }));
+    }
     setLineIndex(resolution.nextLineIndex);
+  };
+
+  const handleInputComplete = (inputLine: DialogueViewInputLine, value: string) => {
+    const templateToken = `{${inputLine.variable}}`;
+
+    setInstructions(current => current.map((instruction, index) => {
+      if (index <= lineIndex || instruction.type !== 'SAY') {
+        return instruction;
+      }
+
+      return {
+        ...instruction,
+        text: instruction.text.split(templateToken).join(value),
+      };
+    }));
+    script.recordSpokenLine?.({
+      speakerId: inputLine.speakerId,
+      targetId: inputLine.targetId,
+      memoryKey: inputLine.memoryKey,
+      text: value,
+    });
+    setLineIndex(current => Math.min(current + 1, instructions.length - 1));
   };
 
   return (
@@ -186,7 +305,14 @@ export function DialogueWindow({
             <strong>{activeSpeaker?.name ?? 'Unknown'}</strong>
             <span>{currentExpressionPresetId}</span>
           </div>
-          <p className={styles.lineText}>{currentLine.text}</p>
+          <p className={styles.lineText}>{currentLineText}</p>
+          {currentInputLine ? (
+            <DialogueInputForm
+              key={currentInputLine.id ?? `${lineIndex}:${currentInputLine.memoryKey}`}
+              inputLine={currentInputLine}
+              onSubmit={value => handleInputComplete(currentInputLine, value)}
+            />
+          ) : null}
           {currentChoiceLine ? (
             <div className={styles.choiceGrid}>
               {currentChoiceLine.choices.map(choice => (
@@ -204,7 +330,11 @@ export function DialogueWindow({
             <span className={styles.progress}>
               {lineIndex + 1} / {instructions.length}
             </span>
-            <button type="button" onClick={handleNext} disabled={isChoiceLine}>
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={isChoiceLine || isInputLine || isActivityRollLine}
+            >
               {nextButtonLabel}
             </button>
           </div>

@@ -28,6 +28,12 @@ interface TownActivityDialogueObserverOptions {
   getActivityPerformanceSelection: (activity: JoinableActivity) => CharacterPerformanceSelection;
   isActivityEnding: (activityId: string) => boolean;
   resolveActivityRoll: (request: CharacterPerformanceActivityRollRequest) => string | null;
+  recordSpokenLine: (input: {
+    speakerId: string;
+    targetId: string;
+    memoryKey: string;
+    text: string;
+  }) => void;
   resolveActivityFromRoll: (
     activity: JoinableActivity,
     branch: CharacterEventActivityRollBranch,
@@ -47,6 +53,7 @@ export class TownActivityDialogueObserver {
   private readonly getActivityPerformanceSelection: (activity: JoinableActivity) => CharacterPerformanceSelection;
   private readonly isActivityEnding: (activityId: string) => boolean;
   private readonly resolveActivityRoll: (request: CharacterPerformanceActivityRollRequest) => string | null;
+  private readonly recordSpokenLine: TownActivityDialogueObserverOptions['recordSpokenLine'];
   private readonly resolveActivityFromRoll: (
     activity: JoinableActivity,
     branch: CharacterEventActivityRollBranch,
@@ -64,6 +71,7 @@ export class TownActivityDialogueObserver {
     this.getActivityPerformanceSelection = options.getActivityPerformanceSelection;
     this.isActivityEnding = options.isActivityEnding;
     this.resolveActivityRoll = options.resolveActivityRoll;
+    this.recordSpokenLine = options.recordSpokenLine;
     this.resolveActivityFromRoll = options.resolveActivityFromRoll;
     this.playActivityEndPerformance = options.playActivityEndPerformance;
     this.notifyActivitiesChanged = options.notifyActivitiesChanged;
@@ -151,9 +159,10 @@ export class TownActivityDialogueObserver {
           this.getCharacterName(subjectId),
         ]),
       ),
-      resolveActivityRoll: rollId => this.resolveActivityRoll({
+      resolveActivityRoll: (rollId, rollContext) => this.resolveActivityRoll({
         activityId: activity.id,
         rollId,
+        rollContext,
         participantIds: activity.participantIds,
         hostCharacterIds: activity.hostCharacterIds,
       }),
@@ -186,6 +195,9 @@ export class TownActivityDialogueObserver {
           text: content.text,
           expressionPresetId: content.expressionPresetId,
         }];
+      },
+      recordSpokenLine: input => {
+        this.recordSpokenLine(input);
       },
       onClose: () => {
         this.settleObservedActivityAfterDialogue(activity.id);

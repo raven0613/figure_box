@@ -26,6 +26,7 @@ export interface ActivityRollCharacterContext {
 
 export interface ActivityRollSelection {
   selectedBranchId: string;
+  rollContext?: Readonly<Record<string, unknown>>;
 }
 
 export interface ActivityRollRuleContext {
@@ -37,6 +38,7 @@ export interface ActivityRollRuleContext {
   };
   activity: {
     participantCount: number;
+    rollContext: Readonly<Record<string, unknown>>;
     rolls: Readonly<Record<string, ActivityRollSelection>>;
   };
 }

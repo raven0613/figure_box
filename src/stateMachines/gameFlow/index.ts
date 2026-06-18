@@ -124,6 +124,10 @@ export const gameFlowMachine = createMachine(
                   RESUME_SIM_WORLD: {
                     target: GameSimWorldState.Running,
                   },
+                  START_ACTIVITY_OBSERVATION: {
+                    target: GameSimWorldState.ActivityObservationPaused,
+                    actions: 'startActivityObservation',
+                  },
                   ACTIVITY_OBSERVATION_SETTLED: {
                     guard: 'isCurrentActivityObservationEvent',
                     actions: 'clearActivityObservation',

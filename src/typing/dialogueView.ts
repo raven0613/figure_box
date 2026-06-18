@@ -20,6 +20,34 @@ export interface DialogueViewLine {
   expressionPresetId: ExpressionPresetId;
 }
 
+export interface DialogueViewInputLine {
+  id?: string;
+  type: 'INPUT';
+  speakerId: string;
+  targetId: string;
+  prompt: string;
+  variable: string;
+  fallbackValue: string;
+  memoryKey: string;
+  expressionPresetId: ExpressionPresetId;
+}
+
+export type DialogueActivityRollContextValue = string | number | boolean;
+export type DialogueActivityRollContext = Record<string, DialogueActivityRollContextValue>;
+
+export interface DialogueViewActivityRollInstruction {
+  id?: string;
+  type: 'ACTIVITY_ROLL';
+  rollId: string;
+  rollContext?: DialogueActivityRollContext;
+  contentPoolId?: string;
+  subjectKey?: string;
+  subjectKeys?: string[];
+  lines: DialogueViewInstruction[];
+  lineVariants?: DialogueViewInstruction[][];
+  branchLines: Record<string, DialogueViewInstruction[]>;
+}
+
 export interface DialogueViewChoice {
   id: string;
   label: string;
@@ -29,10 +57,12 @@ export interface DialogueViewChoice {
 export type DialogueChoiceResult =
   | {
     type: 'appendLines';
+    rollContext?: DialogueActivityRollContext;
     lines: DialogueViewInstruction[];
   }
   | {
     type: 'replaceRemaining';
+    rollContext?: DialogueActivityRollContext;
     lines: DialogueViewInstruction[];
   }
   | {
@@ -44,8 +74,13 @@ export type DialogueChoiceResult =
     branchGroupId: string;
   }
   | {
+    type: 'setRollContext';
+    rollContext: DialogueActivityRollContext;
+  }
+  | {
     type: 'activityRoll';
     rollId: string;
+    rollContext?: DialogueActivityRollContext;
     contentPoolId?: string;
     subjectKey?: string;
     subjectKeys?: string[];
@@ -134,7 +169,11 @@ export interface DialogueViewChoiceLine {
   choices: DialogueViewChoice[];
 }
 
-export type DialogueViewInstruction = DialogueViewLine | DialogueViewChoiceLine;
+export type DialogueViewInstruction =
+  | DialogueViewLine
+  | DialogueViewInputLine
+  | DialogueViewActivityRollInstruction
+  | DialogueViewChoiceLine;
 
 export interface DialogueViewScript {
   id: string;
@@ -142,9 +181,15 @@ export interface DialogueViewScript {
   lines: DialogueViewInstruction[];
   branchGroups?: Record<string, DialogueBranchGroup>;
   branchContext?: DialogueBranchContext;
-  resolveActivityRoll?: (rollId: string) => string | null;
+  resolveActivityRoll?: (rollId: string, rollContext?: DialogueActivityRollContext) => string | null;
   resolveDialogueContent?: (
     contentPoolId: string,
     subjectKey: string,
   ) => readonly DialogueViewInstruction[] | null;
+  recordSpokenLine?: (input: {
+    speakerId: string;
+    targetId: string;
+    memoryKey: string;
+    text: string;
+  }) => void;
 }

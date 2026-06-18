@@ -86,6 +86,13 @@ export type CharacterEvent =
     timestamp?: number;
   }
   | {
+    type: EventType.RememberSpokenLine;
+    targetCharId: string;
+    memoryKey: string;
+    text: string;
+    timestamp?: number;
+  }
+  | {
     type: EventType.ApplyRequestEffects;
     requestEffects: readonly CharacterRequestSatisfiedEffect[];
   }
@@ -134,6 +141,7 @@ export enum EventType {
   EndJoinedActivity = "endJoinedActivity",
   RecordActivityCooldown = "recordActivityCooldown",
   RememberRelationshipMemory = "rememberRelationshipMemory",
+  RememberSpokenLine = "rememberSpokenLine",
   ApplyRequestEffects = "applyRequestEffects",
   NormalizeRomanceFeelings = "normalizeRomanceFeelings",
   SetControlState = "setControlState",

@@ -12,7 +12,10 @@ import {
 } from './performances';
 import type { MapActivityView } from '~/typing/eventDialoguePresentation';
 import type { CharacterPerformanceAnimationId } from '~/constants/presentationAnimations';
-import type { DialogueViewInstruction } from '~/typing/dialogueView';
+import type {
+  DialogueActivityRollContext,
+  DialogueViewInstruction,
+} from '~/typing/dialogueView';
 import type { ExpressionPresetId } from '~/typing/expression';
 import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
@@ -51,6 +54,7 @@ export interface CharacterActivityPerformanceInput {
 export interface CharacterPerformanceActivityRollRequest {
   activityId: string;
   rollId: string;
+  rollContext?: DialogueActivityRollContext;
   participantIds: readonly string[];
   hostCharacterIds: readonly string[];
 }
@@ -71,11 +75,17 @@ export interface CharacterPerformanceDialogueRequest {
   initiatorId: string;
   targetId?: string;
   templateValues?: Readonly<Record<string, string>>;
-  resolveActivityRoll?: (rollId: string) => string | null;
+  resolveActivityRoll?: (rollId: string, rollContext?: DialogueActivityRollContext) => string | null;
   resolveDialogueContent?: (
     contentPoolId: string,
     subjectKey: string,
   ) => readonly DialogueViewInstruction[] | null;
+  recordSpokenLine?: (input: {
+    speakerId: string;
+    targetId: string;
+    memoryKey: string;
+    text: string;
+  }) => void;
   onClose?: () => void;
   onCancel?: () => void;
 }

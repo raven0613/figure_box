@@ -265,10 +265,13 @@ function createCharacterRuntimeSnapshot(snapshot: CharacterSnapshot): CharacterR
     locks: cloneLocks(context.locks),
     relationships: context.relationships.map(relationship => ({
       ...relationship,
+      spokenLines: relationship.spokenLines.map(line => ({ ...line })),
       memories: {
         impression: { ...relationship.memories.impression },
         argument: { ...relationship.memories.argument },
         fight: { ...relationship.memories.fight },
+        kiss: { ...relationship.memories.kiss },
+        wallSlam: { ...relationship.memories.wallSlam },
       },
     })),
   };
@@ -286,10 +289,13 @@ function cloneCharacterRuntimeSnapshot(snapshot: CharacterRuntimeSnapshot): Char
     locks: cloneLocks(snapshot.locks),
     relationships: snapshot.relationships.map(relationship => ({
       ...relationship,
+      spokenLines: relationship.spokenLines.map(line => ({ ...line })),
       memories: {
         impression: { ...relationship.memories.impression },
         argument: { ...relationship.memories.argument },
         fight: { ...relationship.memories.fight },
+        kiss: { ...relationship.memories.kiss },
+        wallSlam: { ...relationship.memories.wallSlam },
       },
     })),
   };

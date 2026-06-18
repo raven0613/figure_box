@@ -894,9 +894,9 @@
     },
     "baseWeight": 1,
     "addWeight": 1,
-    "maxWeight": 12,
+    "maxWeight": 18,
     "interruptPolicy": "soft",
-    "commitment": 24,
+    "commitment": 40,
     "requiresNearbyCharacter": true,
     "conditions": [
       {
@@ -940,7 +940,8 @@
             "maxParticipants": 2
           },
           "joinable": false,
-          "durationMs": 8000,
+          "durationMs": 45000,
+          "dialogueScriptId": "activity-wall-slam-tension-choice",
           "cooldowns": {
             "selfMs": 60000,
             "targetMs": 60000,
@@ -952,14 +953,423 @@
               "maxRepeats": 1
             }
           },
-          "effectsByRole": {
-            "initiator": {
-              "moodValueDelta": 2
+          "rolls": [
+            {
+              "id": "wallSlamInitiatorPose",
+              "branches": [
+                {
+                  "id": "pressure",
+                  "baseWeight": 35,
+                  "performanceId": "social.wallSlam.a.pressure"
+                },
+                {
+                  "id": "clumsy",
+                  "baseWeight": 25,
+                  "performanceId": "social.wallSlam.a.clumsy",
+                  "weightModifiers": [
+                    {
+                      "path": "initiator.personality.activityPace",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 12
+                    }
+                  ]
+                },
+                {
+                  "id": "unspoken",
+                  "baseWeight": 25,
+                  "performanceId": "social.wallSlam.a.unspoken",
+                  "weightModifiers": [
+                    {
+                      "path": "initiator.personality.emotionalExpression",
+                      "operator": "<=",
+                      "value": 2,
+                      "add": 18
+                    }
+                  ]
+                },
+                {
+                  "id": "confident",
+                  "baseWeight": 20,
+                  "performanceId": "social.wallSlam.a.confident",
+                  "weightModifiers": [
+                    {
+                      "path": "initiator.personality.initiative",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 18
+                    },
+                    {
+                      "path": "initiator.personality.emotionalExpression",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 10
+                    }
+                  ]
+                }
+              ]
             },
-            "target": {
-              "relationshipIntimacyDelta": 1,
-              "moodValueDelta": 2
+            {
+              "id": "wallSlamTargetPose",
+              "branches": [
+                {
+                  "id": "strangerRecognition",
+                  "baseWeight": 24,
+                  "performanceId": "social.wallSlam.b.strangerRecognition",
+                  "storyConditions": [
+                    {
+                      "path": "target.relationshipToInitiator.socialStatus",
+                      "operator": "==",
+                      "value": "stranger"
+                    }
+                  ],
+                  "storyWeightModifiers": [
+                    {
+                      "path": "target.relationshipToInitiator.memories.impression",
+                      "operator": ">",
+                      "value": 1,
+                      "add": 45
+                    }
+                  ],
+                  "weightModifiers": [
+                    {
+                      "path": "target.relationshipToInitiator.intimacy",
+                      "operator": "<=",
+                      "value": 5,
+                      "add": 12
+                    }
+                  ]
+                },
+                {
+                  "id": "surprised",
+                  "baseWeight": 45,
+                  "performanceId": "social.wallSlam.b.surprised"
+                },
+                {
+                  "id": "understands",
+                  "baseWeight": 22,
+                  "performanceId": "social.wallSlam.b.understands",
+                  "storyWeightModifiers": [
+                    {
+                      "path": "target.relationshipToInitiator.socialStatus",
+                      "operator": "in",
+                      "value": ["lovers", "married"],
+                      "add": 40
+                    }
+                  ],
+                  "weightModifiers": [
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["fond", "secret_crush", "open_crush", "love"],
+                      "add": 20
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.intimacy",
+                      "operator": ">=",
+                      "value": 45,
+                      "add": 18
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "wallSlamDistanceOutcome",
+              "branches": [
+                {
+                  "id": "heartOverload",
+                  "baseWeight": 35,
+                  "performanceId": "social.wallSlam.c.heartOverload",
+                  "weightModifiers": [
+                    {
+                      "path": "activity.rollContext.wallSlamTensionChoice",
+                      "operator": "==",
+                      "value": "pushInitiator",
+                      "add": 45
+                    },
+                    {
+                      "path": "activity.rollContext.wallSlamTensionChoice",
+                      "operator": "==",
+                      "value": "coolDown",
+                      "add": 15
+                    }
+                  ]
+                },
+                {
+                  "id": "lipBrush",
+                  "baseWeight": 8,
+                  "performanceId": "social.wallSlam.c.lipBrush",
+                  "storyChoice": "pushInitiator",
+                  "conditions": [
+                    {
+                      "path": "activity.rollContext.wallSlamTensionChoice",
+                      "operator": "==",
+                      "value": "pushInitiator"
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "!=",
+                      "value": "hate"
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "!=",
+                      "value": "dislike"
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "!=",
+                      "value": "wary"
+                    }
+                  ],
+                  "storyConditions": [
+                    {
+                      "path": "target.relationshipToInitiator.socialStatus",
+                      "operator": "!=",
+                      "value": "hostile"
+                    }
+                  ],
+                  "weightModifiers": [
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["warm", "like", "fond", "secret_crush", "open_crush", "love"],
+                      "add": 35
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.intimacy",
+                      "operator": ">=",
+                      "value": 35,
+                      "add": 18
+                    }
+                  ]
+                },
+                {
+                  "id": "counter",
+                  "baseWeight": 70,
+                  "performanceId": "social.wallSlam.c.counter",
+                  "resolvesActivity": true,
+                  "storyChoice": "coolDown",
+                  "conditions": [
+                    {
+                      "path": "activity.rollContext.wallSlamTensionChoice",
+                      "operator": "==",
+                      "value": "coolDown"
+                    },
+                    {
+                      "path": "activity.rolls.wallSlamTargetPose.selectedBranchId",
+                      "operator": "!=",
+                      "value": "understands"
+                    }
+                  ],
+                  "effectsByRole": {
+                    "initiator": {
+                      "moodStageTarget": "upset"
+                    },
+                    "target": {
+                      "relationshipIntimacyDelta": -5,
+                      "relationshipFeelingTarget": "wary"
+                    }
+                  },
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 的壁咚嘗試被極具效率地化解。",
+                    "detail": "A 試將 B 逼至牆角，被 B 用極具效率的物理防衛無情化解。"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "wallSlamFinalAfterLipBrush",
+              "resolvesActivity": true,
+              "branches": [
+                {
+                  "id": "flusteredAnger",
+                  "baseWeight": 55,
+                  "performanceId": "social.wallSlam.d.flusteredAnger",
+                  "weightModifiers": [
+                    {
+                      "path": "target.personality.emotionalExpression",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 28
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "==",
+                      "value": "secret_crush",
+                      "add": 28
+                    }
+                  ],
+                  "effects": {
+                    "relationshipIntimacyDelta": 5
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "both",
+                      "target": "otherParticipant",
+                      "memoryType": "kiss",
+                      "countDelta": 1
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 在壁咚中發生了嚴重的物理碰撞事故。",
+                    "detail": "A 與 B 的距離短暫歸零，隨後引發了兩人的全面恐慌。"
+                  }
+                },
+                {
+                  "id": "returnGift",
+                  "baseWeight": 35,
+                  "performanceId": "social.wallSlam.d.returnGift",
+                  "storyConditions": [
+                    {
+                      "path": "target.relationshipToInitiator.socialStatus",
+                      "operator": "in",
+                      "value": ["lovers", "married"]
+                    }
+                  ],
+                  "weightModifiers": [
+                    {
+                      "path": "target.personality.initiative",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 35
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.intimacy",
+                      "operator": ">=",
+                      "value": 60,
+                      "add": 25
+                    }
+                  ],
+                  "effects": {
+                    "relationshipFeelingTarget": "love"
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "both",
+                      "target": "otherParticipant",
+                      "memoryType": "kiss",
+                      "countDelta": 1
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 的壁咚最後變成了十分可疑的回禮。",
+                    "detail": "A將B 逼至牆角，隨後發生了兩次連續的意外接觸。"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "wallSlamFinalAfterHeartOverload",
+              "resolvesActivity": true,
+              "branches": [
+                {
+                  "id": "escape",
+                  "baseWeight": 45,
+                  "performanceId": "social.wallSlam.d.escape",
+                  "weightModifiers": [
+                    {
+                      "path": "target.personality.interpersonalAttitude",
+                      "operator": "<=",
+                      "value": 2,
+                      "add": 35
+                    }
+                  ],
+                  "effects": {
+                    "relationshipIntimacyDelta": 3
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "both",
+                      "target": "otherParticipant",
+                      "memoryType": "wallSlam",
+                      "countDelta": 1
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 的壁咚以光速離場收尾。",
+                    "detail": "現場氣氛過於令人不自在，最終以 B 的光速離場宣告散會。"
+                  }
+                },
+                {
+                  "id": "softenedStandoff",
+                  "baseWeight": 45,
+                  "performanceId": "social.wallSlam.d.softenedStandoff",
+                  "storyConditions": [
+                    {
+                      "path": "target.relationshipToInitiator.socialStatus",
+                      "operator": "in",
+                      "value": ["lovers", "married"]
+                    }
+                  ],
+                  "weightModifiers": [
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["like", "fond", "love"],
+                      "add": 28
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.intimacy",
+                      "operator": ">=",
+                      "value": 50,
+                      "add": 18
+                    }
+                  ],
+                  "effects": {
+                    "relationshipIntimacyDelta": 3
+                  },
+                  "memoryEffects": [
+                    {
+                      "recipientRole": "both",
+                      "target": "otherParticipant",
+                      "memoryType": "wallSlam",
+                      "countDelta": 1
+                    }
+                  ],
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 在壁咚的漫長對視中達成了微妙妥協。",
+                    "detail": "A 將 B 逼至牆角，兩人在漫長的對視中達成了微妙的妥協。"
+                  }
+                }
+              ]
             }
+          ],
+          "storyFlow": {
+            "choicePrompt": "要為他們加點張力，還是介入降溫？",
+            "choices": [
+              {
+                "id": "pushInitiator",
+                "label": "推A一把",
+                "rollId": "wallSlamDistanceOutcome",
+                "rollContext": {
+                  "wallSlamTensionChoice": "pushInitiator"
+                }
+              },
+              {
+                "id": "coolDown",
+                "label": "拿風扇降溫",
+                "rollId": "wallSlamDistanceOutcome",
+                "rollContext": {
+                  "wallSlamTensionChoice": "coolDown"
+                }
+              }
+            ],
+            "finalRollRouting": [
+              {
+                "afterBranch": "lipBrush",
+                "rollId": "wallSlamFinalAfterLipBrush"
+              },
+              {
+                "afterBranch": "heartOverload",
+                "rollId": "wallSlamFinalAfterHeartOverload"
+              },
+              {
+                "afterBranch": "counter",
+                "endsActivity": true
+              }
+            ]
           }
         }
       }

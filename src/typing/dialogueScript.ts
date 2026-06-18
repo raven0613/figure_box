@@ -16,6 +16,8 @@ export interface DialogueScriptParticipantDefinition {
 
 export type DialogueScriptInstructionDefinition =
   | DialogueScriptSayDefinition
+  | DialogueScriptInputDefinition
+  | DialogueScriptActivityRollDefinition
   | DialogueScriptChoiceDefinition;
 
 export interface DialogueScriptSayDefinition {
@@ -23,6 +25,18 @@ export interface DialogueScriptSayDefinition {
   type: 'SAY';
   speaker: string;
   text: string;
+  expressionPresetId: ExpressionPresetId;
+}
+
+export interface DialogueScriptInputDefinition {
+  id?: string;
+  type: 'INPUT';
+  speaker: string;
+  target: string;
+  prompt: string;
+  variable: string;
+  fallbackValue: string;
+  memoryKey: string;
   expressionPresetId: ExpressionPresetId;
 }
 
@@ -38,6 +52,22 @@ export interface DialogueScriptChoiceDefinition {
   choices: readonly DialogueScriptChoiceDefinitionOption[];
 }
 
+export type DialogueActivityRollContextValue = string | number | boolean;
+export type DialogueActivityRollContext = Readonly<Record<string, DialogueActivityRollContextValue>>;
+
+export interface DialogueScriptActivityRollDefinition {
+  id?: string;
+  type: 'ACTIVITY_ROLL';
+  rollId: string;
+  rollContext?: DialogueActivityRollContext;
+  contentPoolId?: string;
+  subjectKey?: string;
+  subjectKeys?: readonly string[];
+  lines?: readonly DialogueScriptInstructionDefinition[];
+  lineVariants?: readonly (readonly DialogueScriptInstructionDefinition[])[];
+  branchLines: Readonly<Record<string, readonly DialogueScriptInstructionDefinition[]>>;
+}
+
 export interface DialogueScriptChoiceDefinitionOption {
   id: string;
   label: string;
@@ -47,6 +77,7 @@ export interface DialogueScriptChoiceDefinitionOption {
 export type DialogueScriptChoiceResultDefinition =
   | {
     type: 'appendLines' | 'replaceRemaining';
+    rollContext?: DialogueActivityRollContext;
     lines: readonly DialogueScriptInstructionDefinition[];
   }
   | {
@@ -64,8 +95,13 @@ export type DialogueScriptChoiceResultDefinition =
     branchGroupId: string;
   }
   | {
+    type: 'setRollContext';
+    rollContext: DialogueActivityRollContext;
+  }
+  | {
     type: 'activityRoll';
     rollId: string;
+    rollContext?: DialogueActivityRollContext;
     contentPoolId?: string;
     subjectKey?: string;
     subjectKeys?: readonly string[];
@@ -132,10 +168,16 @@ export interface DialogueScriptRuntimeContext {
   }[];
   recentBranchIds?: readonly string[];
   templateValues?: Readonly<Record<string, string>>;
-  resolveActivityRoll?: (rollId: string) => string | null;
+  resolveActivityRoll?: (rollId: string, rollContext?: DialogueActivityRollContext) => string | null;
   resolveDialogueContent?: (
     contentPoolId: string,
     subjectKey: string,
   ) => readonly DialogueViewInstruction[] | null;
+  recordSpokenLine?: (input: {
+    speakerId: string;
+    targetId: string;
+    memoryKey: string;
+    text: string;
+  }) => void;
   random?: () => number;
 }
