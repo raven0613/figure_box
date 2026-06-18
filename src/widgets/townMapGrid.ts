@@ -149,6 +149,18 @@ export class TownMapGrid {
     return neighbors;
   }
 
+  isTileWalkableForOccupant(x: number, y: number): boolean {
+    const tile = this.getTile(x, y);
+
+    if (!tile?.cell.walkable) {
+      return false;
+    }
+
+    return !this.mapObjects.some(object => (
+      object.blocksMovement && this.isObjectOccupyingTile(object, x, y)
+    ));
+  }
+
   moveOccupant(occupantId: string, target: GridCoordinate): boolean {
     const targetTile = this.getTile(target.x, target.y);
 
@@ -465,16 +477,6 @@ export class TownMapGrid {
       })),
       ...explicitMapObjects,
     ];
-  }
-
-  private isTileWalkableForOccupant(x: number, y: number): boolean {
-    const tile = this.getTile(x, y);
-
-    if (!tile?.cell.walkable) {
-      return false;
-    }
-
-    return !this.mapObjects.some(object => object.blocksMovement && this.isObjectOccupyingTile(object, x, y));
   }
 
   private isObjectOccupyingTile(object: TownMapObjectData, x: number, y: number): boolean {

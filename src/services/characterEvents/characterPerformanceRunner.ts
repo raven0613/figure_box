@@ -71,6 +71,7 @@ export interface CharacterPerformanceDialogueRequest {
   dialogueGroupId?: string;
   scriptId?: string;
   displayMode?: CharacterPerformanceDialogueStep['displayMode'];
+  presentationMode?: 'default' | 'mapCinematic';
   participantIds: readonly string[];
   initiatorId: string;
   targetId?: string;
@@ -86,8 +87,9 @@ export interface CharacterPerformanceDialogueRequest {
     memoryKey: string;
     text: string;
   }) => void;
-  onClose?: () => void;
-  onCancel?: () => void;
+  onBeforeClose?: () => void | Promise<void>;
+  onClose?: () => void | Promise<void>;
+  onCancel?: () => void | Promise<void>;
 }
 
 interface CharacterPerformanceRunnerPorts {

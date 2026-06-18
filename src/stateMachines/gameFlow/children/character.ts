@@ -22,11 +22,11 @@ import {
 } from '../context';
 import {
     changeRelationshipIntimacy,
-    decreaseRelationshipIntimacyToFeelingMin,
     normalizeRomanticRelationshipFeelings,
     rememberPassBy,
     rememberRelationshipMemory,
     rememberSpokenLine,
+    setRelationshipFeeling,
 } from '../relationships';
 import { decideCharacterEvent } from '~/services/characterEvents/decision';
 import {
@@ -1219,7 +1219,7 @@ function applyCompletedActivityRelationshipEffects(
                     return changedRelationships;
                 }
 
-                return decreaseRelationshipIntimacyToFeelingMin(
+                return setRelationshipFeeling(
                     changedRelationships,
                     characterId,
                     participantId,

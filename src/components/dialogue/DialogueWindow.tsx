@@ -293,7 +293,10 @@ export function DialogueWindow({
   };
 
   return (
-    <section className={styles.dialogueOverlay} aria-label="Dialogue demo">
+    <section
+      className={styles.dialogueOverlay}
+      aria-label="Dialogue demo"
+    >
       <div className={styles.dialogueSurface}>
         <DialogueAvatarStage
           participants={script.participants}

@@ -1,4 +1,4 @@
-import type { Feeling, Mood } from '~/constants/character';
+import type { Feeling, Mood, SocialStatus } from '~/constants/character';
 import type { CharacterPersonality } from '~/constants/characterPersonality';
 import type {
   CharacterEventActivityRoll,
@@ -21,6 +21,10 @@ export interface ActivityRollCharacterContext {
   relationshipToOther: {
     feeling: Feeling;
     intimacy: number;
+    socialStatus: SocialStatus;
+    memories: {
+      impression: number;
+    };
   };
 }
 

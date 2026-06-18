@@ -137,6 +137,7 @@ export class TownActivityCoordinator {
       getActivityDefinition: activity => this.getActivityDefinition(activity),
       getCharacterContext: this.getCharacterContext,
       getCharacterPersonality: this.getCharacterPersonality,
+      getRelationshipStatus: this.getRelationshipStatus,
       isActivityEnding: activityId => this.endingActivityIds.has(activityId),
       resolveActivityFromRoll: (activity, branch) => {
         this.resolveActivityFromRoll(activity, branch);
@@ -300,6 +301,10 @@ export class TownActivityCoordinator {
     return this.participantLifecycle.handleCharacterPickedUp(characterId);
   }
 
+  handleCharactersPickedUp(characterIds: readonly string[]): boolean {
+    return this.participantLifecycle.handleCharactersPickedUp(characterIds);
+  }
+
   clearLiveActivitiesForOfflineApply(): void {
     this.participantLifecycle.clearLiveActivitiesForOfflineApply();
   }
@@ -412,16 +417,59 @@ export class TownActivityCoordinator {
       location: initiatorPosition ?? targetPosition ?? undefined,
     });
 
-    activity.participantIds.forEach(participantId => {
+    for (const participantId of activity.participantIds) {
       this.sendToCharacter(participantId, {
         type: EventType.JoinActivityAccepted,
         activityId: activity.id,
         sourceEventId: activity.sourceEventId,
       });
-    });
 
+      const participantActivityId = this.getCharacterContext(participantId)
+        ?.currentActivity
+        ?.activityId;
+
+      if (participantActivityId !== activity.id) {
+        console.warn('Interaction card participant rejected activity.', {
+          activityId: activity.id,
+          eventId: input.eventId,
+          participantId,
+          participantActivityId: participantActivityId ?? null,
+        });
+        this.cancelInteractionCardActivityState(activity);
+        return null;
+      }
+    }
+
+    const dialogueRequest = this.createActivityDialogueRequest(activity.id);
+
+    if (dialogueRequest) {
+      return dialogueRequest;
+    }
+
+    this.cancelInteractionCardActivityState(activity);
+    return null;
+  }
+
+  cancelInteractionCardActivity(activityId: string): void {
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (!activity) {
+      return;
+    }
+
+    this.cancelInteractionCardActivityState(activity);
+  }
+
+  private cancelInteractionCardActivityState(activity: JoinableActivity): void {
+    this.activityManager.endActivity(activity.id);
+    activity.participantIds.forEach(participantId => {
+      this.sendToCharacter(participantId, {
+        type: EventType.EndJoinedActivity,
+        activityId: activity.id,
+        timestamp: Date.now(),
+      });
+    });
     this.notifyActivitiesChanged();
-    return this.createActivityDialogueRequest(activity.id);
   }
 
   private sendParticipantsToActivityLocation(activity: JoinableActivity): void {

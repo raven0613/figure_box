@@ -30,7 +30,7 @@ interface UseTownMapWidgetOptions {
   onActivitySettled?: (activityId: string) => void;
   onCharacterRequestsChange: (requests: readonly CharacterRequest[]) => void;
   onCharacterSnapshotChange: (updater: (current: Record<string, CharacterSnapshot>) => Record<string, CharacterSnapshot>) => void;
-  onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
+  onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => boolean;
   onGodDropOpportunityChange: (opportunity: GodDropOpportunity | null) => void;
   onJoinableActivitiesChange: (activities: readonly JoinableActivity[]) => void;
   onMapObjectsClear: () => void;

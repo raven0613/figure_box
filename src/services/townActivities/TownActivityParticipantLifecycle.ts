@@ -89,36 +89,68 @@ export class TownActivityParticipantLifecycle {
   }
 
   handleCharacterPickedUp(characterId: string): boolean {
-    const activity = this.activityManager.getActivities()
-      .find(candidate => candidate.participantIds.includes(characterId));
+    return this.handleCharactersPickedUp([characterId]);
+  }
 
-    if (!activity) {
-      return false;
-    }
+  handleCharactersPickedUp(characterIds: readonly string[]): boolean {
+    const pickedUpCharacterIds = new Set(characterIds);
+    const affectedActivities = this.activityManager.getActivities()
+      .filter(activity => (
+        activity.participantIds.some(participantId => (
+          pickedUpCharacterIds.has(participantId)
+        ))
+      ));
+
+    affectedActivities.forEach(activity => {
+      this.removePickedUpCharactersFromActivity(activity, pickedUpCharacterIds);
+    });
+
+    return affectedActivities.length > 0;
+  }
+
+  private removePickedUpCharactersFromActivity(
+    activity: JoinableActivity,
+    pickedUpCharacterIds: ReadonlySet<string>,
+  ): void {
+    const departingCharacterIds = activity.participantIds
+      .filter(participantId => pickedUpCharacterIds.has(participantId));
 
     const previousParticipantCount = activity.participantIds.length;
-    const nextActivity = this.activityManager.leaveActivity(activity.id, characterId);
+    let nextActivity: JoinableActivity | null = activity;
 
-    this.clearDepartingParticipantActivityState(activity, characterId);
+    departingCharacterIds.forEach(characterId => {
+      nextActivity = this.activityManager.leaveActivity(activity.id, characterId);
+      this.deleteArrivedCharacterFromActivity(activity.id, characterId);
+    });
+    this.dialogueSubjects.clearActivity(activity.id);
+    this.performanceRunner.cancelActivityPerformance(activity.id);
+    this.performanceRunner.clearActivityActiveVisuals(
+      this.getActivityPerformanceSelection(activity),
+      activity.id,
+      activity.participantIds,
+      activity.hostCharacterIds,
+    );
 
     if (activity.phase === 'inviting') {
-      const endedActivity = this.activityManager.endActivity(activity.id) ?? activity;
+      const endedActivity = this.activityManager.endActivity(activity.id)
+        ?? nextActivity
+        ?? activity;
 
       this.clearActivityVisuals(endedActivity);
       this.deleteRollSelectionsForActivity(activity.id);
       this.sendActivityEndedToParticipants(
         activity.id,
-        endedActivity.participantIds.filter(participantId => participantId !== characterId),
+        endedActivity.participantIds,
       );
       this.notifyActivitiesChanged();
-      return true;
+      return;
     }
 
     if (!nextActivity) {
       this.clearActivityVisuals(activity);
       this.deleteRollSelectionsForActivity(activity.id);
       this.notifyActivitiesChanged();
-      return true;
+      return;
     }
 
     if (this.shouldEndActivityAfterParticipantLeft(nextActivity)) {
@@ -127,13 +159,12 @@ export class TownActivityParticipantLifecycle {
       this.deleteRollSelectionsForActivity(nextActivity.id);
       this.sendActivityEndedToParticipants(nextActivity.id, nextActivity.participantIds);
       this.notifyActivitiesChanged();
-      return true;
+      return;
     }
 
     this.sendActivityAcceptedToParticipants(nextActivity);
     this.playParticipantLeftPerformance(nextActivity, previousParticipantCount);
     this.notifyActivitiesChanged();
-    return true;
   }
 
   clearLiveActivitiesForOfflineApply(): void {
@@ -200,21 +231,6 @@ export class TownActivityParticipantLifecycle {
       }
     });
     this.notifyActivitiesChanged();
-  }
-
-  private clearDepartingParticipantActivityState(
-    activity: JoinableActivity,
-    characterId: string,
-  ): void {
-    this.deleteArrivedCharacterFromActivity(activity.id, characterId);
-    this.dialogueSubjects.clearActivity(activity.id);
-    this.performanceRunner.cancelActivityPerformance(activity.id);
-    this.performanceRunner.clearActivityActiveVisuals(
-      this.getActivityPerformanceSelection(activity),
-      activity.id,
-      activity.participantIds,
-      activity.hostCharacterIds,
-    );
   }
 
   private shouldEndActivityAfterParticipantLeft(activity: JoinableActivity): boolean {

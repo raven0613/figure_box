@@ -3,6 +3,7 @@ import { I18nextProvider } from 'react-i18next';
 import { createActor, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 import { OfflineRecapDebugWindow } from '~/components/debug/OfflineRecapDebugWindow';
 import { SaveDebugPanel } from '~/components/debug/SaveDebugPanel';
+import { Toast, type ToastTone } from '~/components/common/Toast';
 import { CHARACTER_SEEDS } from '~/constants/character';
 import { createCharacterCreationSuccessDialogueScript } from '~/constants/characterCreationDialogue';
 import { DIALOGUE_DEMO_SCRIPT } from '~/constants/dialogueDemo';
@@ -42,6 +43,7 @@ import {
   interactionCardService,
   type InteractionCardViewModel,
 } from '~/services/interactionCards/interactionCardService';
+import type { InteractionCardUseFailureReason } from '~/services/townCharacterController';
 import { preloadTownRequiredSpriteSheets } from '~/services/townSpritePreloadService';
 import { startTownSpriteBackgroundBake } from '~/services/townSpriteBackgroundBakeService';
 import { gameFlowMachine } from '~/stateMachines/gameFlow';
@@ -76,7 +78,13 @@ interface CharacterCreationBakeState extends AppLoadingState {
 interface ActiveDialogueSession {
   script: DialogueViewScript;
   activityId?: string;
-  onClose?: () => void;
+  onBeforeClose?: () => void | Promise<void>;
+  onClose?: () => void | Promise<void>;
+}
+
+interface PendingDialogueSettlement {
+  activityId: string;
+  resolve: () => void;
 }
 
 interface InteractionCardDraft {
@@ -93,6 +101,14 @@ interface PendingInteractionCardDrop {
     y: number;
   };
 }
+
+interface AppToast {
+  id: number;
+  message: string;
+  tone: ToastTone;
+}
+
+type InteractionCardFailureToast = Omit<AppToast, 'id'>;
 
 function App() {
   const gameFlowActorRef = useRef<ActorRefFrom<typeof gameFlowMachine> | null>(null);
@@ -124,6 +140,10 @@ function App() {
   );
   const [romanceRuleRevision, setRomanceRuleRevision] = useState(0);
   const [activeDialogueSession, setActiveDialogueSession] = useState<ActiveDialogueSession | null>(null);
+  const [toast, setToast] = useState<AppToast | null>(null);
+  const nextToastIdRef = useRef(0);
+  const isDialogueClosingRef = useRef(false);
+  const pendingDialogueSettlementRef = useRef<PendingDialogueSettlement | null>(null);
   const [
     dialogueExpressionPresetIdByCharacterId,
     setDialogueExpressionPresetIdByCharacterId,
@@ -226,7 +246,10 @@ function App() {
     ));
     clearInteractionCardTargetingPause();
   }, [clearInteractionCardTargetingPause]);
-  const handleInteractionCardUseFailed = useCallback((cardId: string) => {
+  const handleInteractionCardUseFailed = useCallback((
+    cardId: string,
+    reason: InteractionCardUseFailureReason,
+  ) => {
     setInteractionCardDraft(currentDraft => (
       currentDraft?.card.id === cardId ? null : currentDraft
     ));
@@ -234,16 +257,29 @@ function App() {
       currentDrop?.cardId === cardId ? null : currentDrop
     ));
     resumeInteractionCardTargetingPause();
-  }, [resumeInteractionCardTargetingPause]);
-  const cancelActivityObservation = useCallback((
-    activityId: string,
-    onCancel?: () => void,
-  ) => {
-    onCancel?.();
-    gameFlowActorRef.current?.send({
-      type: 'CANCEL_ACTIVITY_OBSERVATION',
-      activityId,
+
+    const failureToast = getInteractionCardFailureToast(reason);
+    nextToastIdRef.current += 1;
+    setToast({
+      id: nextToastIdRef.current,
+      ...failureToast,
     });
+  }, [resumeInteractionCardTargetingPause]);
+  const dismissToast = useCallback(() => {
+    setToast(null);
+  }, []);
+  const cancelActivityObservation = useCallback(async (
+    activityId: string,
+    onCancel?: () => void | Promise<void>,
+  ): Promise<void> => {
+    try {
+      await onCancel?.();
+    } finally {
+      gameFlowActorRef.current?.send({
+        type: 'CANCEL_ACTIVITY_OBSERVATION',
+        activityId,
+      });
+    }
   }, []);
   const handleDialogueLineChange = useCallback((line: { speakerId: string; expressionPresetId: ExpressionPresetId }) => {
     setDialogueExpressionPresetIdByCharacterId({
@@ -258,13 +294,18 @@ function App() {
     if (!script) {
       const handleCancel = request.onCancel ?? request.onClose;
 
-      if (request.activityId) {
-        cancelActivityObservation(request.activityId, handleCancel);
-      } else {
-        handleCancel?.();
-      }
-      resumeInteractionCardTargetingPause();
-      return;
+      void (async () => {
+        try {
+          if (request.activityId) {
+            await cancelActivityObservation(request.activityId, handleCancel);
+          } else {
+            await handleCancel?.();
+          }
+        } finally {
+          resumeInteractionCardTargetingPause();
+        }
+      })();
+      return false;
     }
 
     if (request.activityId) {
@@ -277,8 +318,11 @@ function App() {
     setActiveDialogueSession({
       script,
       activityId: request.activityId,
+      onBeforeClose: request.onBeforeClose,
       onClose: request.onClose,
     });
+    isDialogueClosingRef.current = false;
+    return true;
   }, [cancelActivityObservation, resumeInteractionCardTargetingPause]);
   const resetDialogueParticipantExpressionPresets = useCallback((script: DialogueViewScript) => {
     setDialogueExpressionPresetIdByCharacterId(current => {
@@ -291,23 +335,52 @@ function App() {
       return next;
     });
   }, []);
-  const closeActiveDialogue = useCallback(() => {
-    if (!activeDialogueSession) {
+  const closeActiveDialogue = useCallback(async () => {
+    if (!activeDialogueSession || isDialogueClosingRef.current) {
       return;
     }
 
-    resetDialogueParticipantExpressionPresets(activeDialogueSession.script);
-    setActiveDialogueSession(null);
-    activeDialogueSession.onClose?.();
+    isDialogueClosingRef.current = true;
+    try {
+      const activityId = activeDialogueSession.activityId;
 
-    if (activeDialogueSession.activityId) {
-      gameFlowActorRef.current?.send({
-        type: 'ACTIVITY_OBSERVATION_DIALOGUE_CLOSED',
-        activityId: activeDialogueSession.activityId,
-      });
+      if (activityId && activeDialogueSession.onClose) {
+        const settlementCompleted = new Promise<void>(resolve => {
+          pendingDialogueSettlementRef.current = {
+            activityId,
+            resolve,
+          };
+        });
+
+        await activeDialogueSession.onClose();
+        await settlementCompleted;
+      }
+
+      await activeDialogueSession.onBeforeClose?.();
+      resetDialogueParticipantExpressionPresets(activeDialogueSession.script);
+      setActiveDialogueSession(null);
+
+      if (activityId) {
+        gameFlowActorRef.current?.send({
+          type: 'ACTIVITY_OBSERVATION_DIALOGUE_CLOSED',
+          activityId,
+        });
+      } else {
+        await waitForNextAnimationFrame();
+        await activeDialogueSession.onClose?.();
+      }
+    } finally {
+      isDialogueClosingRef.current = false;
     }
   }, [activeDialogueSession, resetDialogueParticipantExpressionPresets]);
   const handleActivitySettled = useCallback((activityId: string) => {
+    const pendingSettlement = pendingDialogueSettlementRef.current;
+
+    if (pendingSettlement?.activityId === activityId) {
+      pendingDialogueSettlementRef.current = null;
+      pendingSettlement.resolve();
+    }
+
     gameFlowActorRef.current?.send({
       type: 'ACTIVITY_OBSERVATION_SETTLED',
       activityId,
@@ -782,6 +855,14 @@ function App() {
             onClose={closeActiveDialogue}
           />
         ) : null}
+        {toast ? (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            tone={toast.tone}
+            onDismiss={dismissToast}
+          />
+        ) : null}
       </div>
     </I18nextProvider>
   );
@@ -789,6 +870,59 @@ function App() {
 
 function getNormalizedPath(): string {
   return window.location.pathname.replace(/\/$/, '');
+}
+
+function getInteractionCardFailureToast(
+  reason: InteractionCardUseFailureReason,
+): InteractionCardFailureToast {
+  switch (reason) {
+    case 'invalidSelection':
+      return {
+        message: '卡片或角色選擇無效，請重新選擇。',
+        tone: 'warning',
+      };
+    case 'characterUnavailable':
+      return {
+        message: '角色目前無法參加活動，請稍後再試。',
+        tone: 'warning',
+      };
+    case 'initiatorPreparationFailed':
+      return {
+        message: '發起者無法進入演出位置，請稍後再試。',
+        tone: 'warning',
+      };
+    case 'insufficientSpace':
+      return {
+        message: '空間不足！請到開闊的地方再試一次。',
+        tone: 'warning',
+      };
+    case 'targetMoveFailed':
+      return {
+        message: '無法將目標帶到演出位置，請換個位置再試。',
+        tone: 'warning',
+      };
+    case 'activityStartFailed':
+      return {
+        message: '活動無法開始，請稍後再試。',
+        tone: 'error',
+      };
+    case 'presentationFailed':
+      return {
+        message: '演出載入失敗，請再試一次。',
+        tone: 'error',
+      };
+    case 'dialogueUnavailable':
+      return {
+        message: '對話無法開始，請再試一次。',
+        tone: 'error',
+      };
+  }
+}
+
+function waitForNextAnimationFrame(): Promise<void> {
+  return new Promise(resolve => {
+    window.requestAnimationFrame(() => resolve());
+  });
 }
 
 function createCharacterDialogueLabel(name: string): string {

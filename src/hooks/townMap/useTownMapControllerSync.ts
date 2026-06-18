@@ -114,8 +114,18 @@ export function useTownMapControllerSync({
   ]);
 
   useEffect(() => {
-    characterControllerRef.current?.setSimWorldState(simWorldState, observedActivityId);
-  }, [characterControllerRef, observedActivityId, simWorldState]);
+    const characterController = characterControllerRef.current;
+
+    if (!characterController) {
+      return;
+    }
+
+    characterController.setSimWorldState(simWorldState, observedActivityId);
+  }, [
+    characterControllerRef,
+    observedActivityId,
+    simWorldState,
+  ]);
 
   useEffect(() => {
     const characterController = characterControllerRef.current;

@@ -6,10 +6,9 @@ export function sortEntityLayer(canvas: Canvas): void {
   const sortedObjects = [...canvas.getObjects()].sort((first, second) => {
     const firstBottomY = getNumericFabricValue(first, 'sortBottomY');
     const secondBottomY = getNumericFabricValue(second, 'sortBottomY');
-    const bottomDelta = firstBottomY - secondBottomY;
 
-    if (bottomDelta !== 0) {
-      return bottomDelta;
+    if (firstBottomY !== secondBottomY) {
+      return firstBottomY - secondBottomY;
     }
 
     return getNumericFabricValue(first, 'entityLayerRank') - getNumericFabricValue(second, 'entityLayerRank');
@@ -29,4 +28,3 @@ function getNumericFabricValue(object: FabricObject, key: string): number {
   const value = object.get(key);
   return typeof value === 'number' ? value : 0;
 }
-

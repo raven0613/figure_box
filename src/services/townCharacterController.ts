@@ -59,13 +59,41 @@ import { TownCharacterActivityLookup } from '~/services/townCharacters/TownChara
 import { TownCharacterApartmentCoordinator } from '~/services/townCharacters/TownCharacterApartmentCoordinator';
 import { TownCharacterResumeTargetService } from '~/services/townCharacters/TownCharacterResumeTargetService';
 import { TownCharacterRuntimeCoordinator } from '~/services/townCharacters/TownCharacterRuntimeCoordinator';
+import {
+  DEFAULT_DIALOGUE_MAP_FOCUS,
+  DEFAULT_MAP_PERFORMANCE_CROWD_DISPLACEMENT,
+  WALL_SLAM_MAP_PERFORMANCE,
+} from '~/constants/mapPerformance';
+import {
+  getWallSlamDirectionVector,
+  type WallSlamDirection,
+} from '~/widgets/townMapCinematicLayer';
+import type { TownMapCharacterSpriteDirection } from '~/widgets/townMapCharacterSpriteRenderer';
 
 export type { CharacterSnapshot } from '~/services/townCharacterTypes';
+
+export type InteractionCardUseFailureReason =
+  | 'invalidSelection'
+  | 'characterUnavailable'
+  | 'initiatorPreparationFailed'
+  | 'insufficientSpace'
+  | 'targetMoveFailed'
+  | 'activityStartFailed'
+  | 'presentationFailed'
+  | 'dialogueUnavailable';
+
+export type InteractionCardUseResult =
+  | { success: true }
+  | {
+    success: false;
+    reason: InteractionCardUseFailureReason;
+  };
 
 const RELATIONSHIP_MOMENT_DURATION_MS = 3000;
 const RELATIONSHIP_MOMENT_DECISION_GRACE_MS = 1800;
 const GOD_DROP_DECISION_GRACE_MS = 3000;
 const DIALOGUE_EXPRESSION_BUBBLE_DURATION_MS = 1600;
+const WALL_SLAM_EVENT_ID = 'social.wallSlam';
 const INTERACTION_CARD_TARGET_OFFSETS: readonly GridCoordinate[] = [
   { x: 1, y: 0 },
   { x: -1, y: 0 },
@@ -77,12 +105,25 @@ const INTERACTION_CARD_TARGET_OFFSETS: readonly GridCoordinate[] = [
   { x: -1, y: -1 },
   { x: 0, y: 0 },
 ];
+type WallSlamSideDirection = Extract<WallSlamDirection, 'east' | 'west'>;
+
+const WALL_SLAM_LAYOUT_DIRECTIONS: readonly WallSlamSideDirection[] = [
+  'east',
+  'west',
+];
+
+interface WallSlamLayout {
+  direction: WallSlamSideDirection;
+  targetTile: GridCoordinate;
+  wallTile: GridCoordinate;
+  distanceFromCurrentTarget: number;
+}
 
 interface TownCharacterControllerOptions {
   widget: FabricTownMapWidget;
   characters?: readonly CharacterSeed[];
   initialRelationshipStore?: RelationshipStore;
-  onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
+  onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => boolean;
   onActivitySettled?: (activityId: string) => void;
   onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   onRelationshipStoreChange?: (relationshipStore: RelationshipStore) => void;
@@ -119,7 +160,7 @@ export class TownCharacterController {
   private readonly characterRequestService = new CharacterRequestService({
     definitions: CHARACTER_REQUEST_DEFINITIONS,
   });
-  private readonly onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
+  private readonly onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => boolean;
   private readonly onActivitySettled?: (activityId: string) => void;
   private readonly onCharacterSnapshot?: (characterId: string, snapshot: CharacterSnapshot) => void;
   private readonly onJoinableActivitiesChange?: (activities: readonly JoinableActivity[]) => void;
@@ -205,7 +246,7 @@ export class TownCharacterController {
         this.widget.cancelCharacterAnimation(characterId);
       },
       playDialogue: request => {
-        this.onDialogueRequest?.(request);
+        this.openDialogueRequest(request);
       },
       rollActivity: request => {
         this.activityCoordinator.resolveActivityRoll(request);
@@ -583,6 +624,7 @@ export class TownCharacterController {
   private pullInteractionCardTargetNearInitiator(
     initiatorId: string,
     targetId: string,
+    preferredDropTile?: GridCoordinate,
   ): boolean {
     const targetActor = this.actorRegistry.getActor(targetId);
     const initiatorTile = this.widget.getCharacterTile(initiatorId);
@@ -603,7 +645,9 @@ export class TownCharacterController {
       return false;
     }
 
-    const dropTile = this.moveInteractionCardTargetToDropTile(targetId, initiatorTile);
+    const dropTile = preferredDropTile
+      ? this.moveInteractionCardTargetToTile(targetId, preferredDropTile)
+      : this.moveInteractionCardTargetToDropTile(targetId, initiatorTile);
 
     if (dropTile) {
       this.sendToCharacter(targetId, { type: EventType.Drop, position: dropTile });
@@ -628,22 +672,23 @@ export class TownCharacterController {
     return candidateTiles.find(tile => this.widget.moveCharacter(targetId, tile)) ?? null;
   }
 
+  private moveInteractionCardTargetToTile(
+    targetId: string,
+    targetTile: GridCoordinate,
+  ): GridCoordinate | null {
+    if (this.widget.getCell(targetTile.x, targetTile.y)?.walkable !== true) {
+      return null;
+    }
+
+    return this.widget.moveCharacter(targetId, targetTile) ? targetTile : null;
+  }
+
   private prepareInteractionCardInitiator(initiatorId: string): boolean {
     const snapshot = this.actorRegistry.getSnapshot(initiatorId);
     const tile = this.widget.getCharacterTile(initiatorId);
 
     if (!snapshot || !tile) {
       return false;
-    }
-
-    const shouldInterruptMovement = (
-      snapshot.context.currentMotivation === 'goHome' ||
-      snapshot.context.target !== null ||
-      this.widget.isWalking(initiatorId)
-    );
-
-    if (!shouldInterruptMovement) {
-      return true;
     }
 
     this.widget.cancelWalk(initiatorId);
@@ -692,27 +737,73 @@ export class TownCharacterController {
     const request = this.activityCoordinator.createActivityDialogueRequest(activityId);
 
     if (request) {
-      this.onDialogueRequest?.(request);
+      this.openDialogueRequest(request);
     }
   }
 
-  useInteractionCard(intent: InteractionCardUseIntent): boolean {
+  async useInteractionCard(
+    intent: InteractionCardUseIntent,
+  ): Promise<InteractionCardUseResult> {
     const resolution = interactionCardService.resolveCardUse(intent);
 
-    if (
-      !resolution ||
-      this.isCharacterBodyFrozen(resolution.initiatorId) ||
-      this.isCharacterBodyFrozen(resolution.targetId)
-    ) {
-      return false;
+    if (!resolution) {
+      return {
+        success: false,
+        reason: 'invalidSelection',
+      };
     }
+
+    if (
+      this.isCharacterBodyFrozen(resolution.initiatorId)
+      || this.isCharacterBodyFrozen(resolution.targetId)
+    ) {
+      return {
+        success: false,
+        reason: 'characterUnavailable',
+      };
+    }
+
+    const originalTargetTile = this.widget.getCharacterTile(resolution.targetId);
+
+    if (!originalTargetTile) {
+      return {
+        success: false,
+        reason: 'targetMoveFailed',
+      };
+    }
+
+    const wallSlamLayout = resolution.eventId === WALL_SLAM_EVENT_ID
+      ? this.resolveWallSlamLayout(resolution.initiatorId, resolution.targetId)
+      : null;
+
+    if (resolution.eventId === WALL_SLAM_EVENT_ID && !wallSlamLayout) {
+      return {
+        success: false,
+        reason: 'insufficientSpace',
+      };
+    }
+
+    this.activityCoordinator.handleCharactersPickedUp([
+      resolution.initiatorId,
+      resolution.targetId,
+    ]);
 
     if (!this.prepareInteractionCardInitiator(resolution.initiatorId)) {
-      return false;
+      return {
+        success: false,
+        reason: 'initiatorPreparationFailed',
+      };
     }
 
-    if (!this.pullInteractionCardTargetNearInitiator(resolution.initiatorId, resolution.targetId)) {
-      return false;
+    if (!this.pullInteractionCardTargetNearInitiator(
+      resolution.initiatorId,
+      resolution.targetId,
+      wallSlamLayout?.targetTile,
+    )) {
+      return {
+        success: false,
+        reason: 'targetMoveFailed',
+      };
     }
 
     const dialogueRequest = this.activityCoordinator.startInteractionCardActivity({
@@ -722,11 +813,360 @@ export class TownCharacterController {
     });
 
     if (!dialogueRequest) {
+      this.restoreInteractionCardTargetPosition(
+        resolution.targetId,
+        originalTargetTile,
+      );
+      return {
+        success: false,
+        reason: 'activityStartFailed',
+      };
+    }
+
+    if (wallSlamLayout) {
+      const useResult = await this.openWallSlamDialogue(
+        resolution.initiatorId,
+        resolution.targetId,
+        wallSlamLayout,
+        dialogueRequest,
+      );
+
+      if (!useResult.success) {
+        this.restoreInteractionCardTargetPosition(
+          resolution.targetId,
+          originalTargetTile,
+        );
+      }
+
+      return useResult;
+    }
+
+    if (!this.onDialogueRequest) {
+      await this.cancelFailedDialogueRequest(dialogueRequest);
+      this.restoreInteractionCardTargetPosition(
+        resolution.targetId,
+        originalTargetTile,
+      );
+      return {
+        success: false,
+        reason: 'dialogueUnavailable',
+      };
+    }
+
+    let didOpenDialogue = false;
+
+    try {
+      didOpenDialogue = this.openDialogueRequest(dialogueRequest);
+    } catch (error) {
+      console.error('Failed to open interaction card dialogue.', error);
+      await this.cancelFailedDialogueRequest(dialogueRequest);
+      this.restoreInteractionCardTargetPosition(
+        resolution.targetId,
+        originalTargetTile,
+      );
+      return {
+        success: false,
+        reason: 'dialogueUnavailable',
+      };
+    }
+
+    if (!didOpenDialogue) {
+      if (dialogueRequest.activityId) {
+        this.activityCoordinator.cancelInteractionCardActivity(
+          dialogueRequest.activityId,
+        );
+      }
+      this.restoreInteractionCardTargetPosition(
+        resolution.targetId,
+        originalTargetTile,
+      );
+      return {
+        success: false,
+        reason: 'dialogueUnavailable',
+      };
+    }
+
+    return { success: true };
+  }
+
+  private restoreInteractionCardTargetPosition(
+    targetId: string,
+    originalTile: GridCoordinate,
+  ): void {
+    if (!this.widget.moveCharacter(targetId, originalTile)) {
+      console.error(
+        `Failed to restore interaction card target ${targetId} to its original tile.`,
+      );
+      return;
+    }
+
+    this.sendToCharacter(targetId, {
+      type: EventType.Drop,
+      position: originalTile,
+    });
+  }
+
+  private resolveWallSlamLayout(
+    initiatorId: string,
+    targetId: string,
+  ): WallSlamLayout | null {
+    const initiatorTile = this.widget.getCharacterTile(initiatorId);
+    const currentTargetTile = this.widget.getCharacterTile(targetId);
+
+    if (!initiatorTile || !currentTargetTile) {
+      return null;
+    }
+
+    return WALL_SLAM_LAYOUT_DIRECTIONS
+      .map(direction => {
+        const vector = getWallSlamDirectionVector(direction);
+        const targetTile = {
+          x: initiatorTile.x + vector.x,
+          y: initiatorTile.y + vector.y,
+        };
+        const wallTile = {
+          x: targetTile.x + vector.x,
+          y: targetTile.y + vector.y,
+        };
+
+        return {
+          direction,
+          targetTile,
+          wallTile,
+          distanceFromCurrentTarget: getManhattanDistance(targetTile, currentTargetTile),
+        };
+      })
+      .filter(layout => (
+        this.widget.isCharacterTileWalkable(layout.targetTile)
+        && this.widget.getCell(layout.wallTile.x, layout.wallTile.y) !== null
+      ))
+      .sort((first, second) => (
+        first.distanceFromCurrentTarget - second.distanceFromCurrentTarget
+      ))[0] ?? null;
+  }
+
+  private async openWallSlamDialogue(
+    initiatorId: string,
+    targetId: string,
+    layout: WallSlamLayout,
+    dialogueRequest: CharacterPerformanceDialogueRequest,
+  ): Promise<InteractionCardUseResult> {
+    try {
+      const directionVector = getWallSlamDirectionVector(layout.direction);
+      const targetPresentationDistance = Math.max(
+        0,
+        WALL_SLAM_MAP_PERFORMANCE.participantDistanceCells - 1,
+      );
+      const targetOffset = {
+        x: directionVector.x * targetPresentationDistance,
+        y: directionVector.y * targetPresentationDistance,
+      };
+      const [
+        pushedCharacterIds,
+        didPositionInitiator,
+        didPositionTarget,
+      ] = await Promise.all([
+        this.widget.pushCharactersAwayFromTile({
+          anchorTile: this.widget.getCharacterTile(initiatorId) ?? layout.targetTile,
+          excludedCharacterIds: [initiatorId, targetId],
+          radiusCells: DEFAULT_MAP_PERFORMANCE_CROWD_DISPLACEMENT.detectionRadiusCells,
+          distanceCells: DEFAULT_MAP_PERFORMANCE_CROWD_DISPLACEMENT.pushDistanceCells,
+          durationMs: DEFAULT_MAP_PERFORMANCE_CROWD_DISPLACEMENT.pushDurationMs,
+        }),
+        this.widget.setCharacterPresentationPositionFromTileCenterInCells(
+          initiatorId,
+          { x: 0, y: 0 },
+          DEFAULT_MAP_PERFORMANCE_CROWD_DISPLACEMENT.pushDurationMs,
+        ),
+        this.widget.setCharacterPresentationPositionFromTileCenterInCells(
+          targetId,
+          targetOffset,
+          DEFAULT_MAP_PERFORMANCE_CROWD_DISPLACEMENT.pushDurationMs,
+        ),
+      ]);
+      const displacedCharacterIds = [...pushedCharacterIds, initiatorId, targetId];
+
+      if (!didPositionInitiator || !didPositionTarget) {
+        this.clearWallSlamPresentationImmediately(displacedCharacterIds);
+        await this.cancelFailedDialogueRequest(dialogueRequest);
+        return {
+          success: false,
+          reason: 'presentationFailed',
+        };
+      }
+
+      this.setWallSlamCharacterDirections(initiatorId, targetId, layout.direction);
+
+      const didShowScene = await this.widget.showWallSlamScene({
+        initiatorId,
+        targetId,
+        direction: layout.direction,
+        wallDistanceCells: WALL_SLAM_MAP_PERFORMANCE.wallDistanceCells,
+        wallDropDistanceCells: WALL_SLAM_MAP_PERFORMANCE.wallDropDistanceCells,
+        wallEnterDurationMs: WALL_SLAM_MAP_PERFORMANCE.wallEnterDurationMs,
+        backgroundDimOpacity: WALL_SLAM_MAP_PERFORMANCE.backgroundDimOpacity,
+        backgroundDimDurationMs: WALL_SLAM_MAP_PERFORMANCE.backgroundDimDurationMs,
+      });
+
+      if (!didShowScene) {
+        this.clearWallSlamPresentationImmediately(displacedCharacterIds);
+        await this.cancelFailedDialogueRequest(dialogueRequest);
+        return {
+          success: false,
+          reason: 'presentationFailed',
+        };
+      }
+
+      if (!this.onDialogueRequest) {
+        this.clearWallSlamPresentationImmediately(displacedCharacterIds);
+        await this.cancelFailedDialogueRequest(dialogueRequest);
+        return {
+          success: false,
+          reason: 'dialogueUnavailable',
+        };
+      }
+
+      const didOpenDialogue = this.openDialogueRequest({
+        ...dialogueRequest,
+        presentationMode: 'mapCinematic',
+        onBeforeClose: () => this.closeWallSlamPresentation(displacedCharacterIds),
+        onCancel: () => this.closeWallSlamPresentation(displacedCharacterIds)
+          .then(() => dialogueRequest.onCancel?.()),
+      });
+
+      if (!didOpenDialogue && dialogueRequest.activityId) {
+        this.activityCoordinator.cancelInteractionCardActivity(
+          dialogueRequest.activityId,
+        );
+      }
+
+      return didOpenDialogue
+        ? { success: true }
+        : {
+          success: false,
+          reason: 'dialogueUnavailable',
+        };
+    } catch (error) {
+      console.error('Failed to open wall slam presentation.', error);
+      this.widget.clearCinematicSceneImmediately();
+      try {
+        await this.widget.clearAllCharacterPresentationOffsets(0);
+      } catch (cleanupError) {
+        console.error('Failed to clear wall slam presentation offsets.', cleanupError);
+      }
+      await this.cancelFailedDialogueRequest(dialogueRequest);
+      return {
+        success: false,
+        reason: 'presentationFailed',
+      };
+    }
+  }
+
+  private openDialogueRequest(
+    dialogueRequest: CharacterPerformanceDialogueRequest,
+  ): boolean {
+    if (!this.onDialogueRequest) {
       return false;
     }
 
-    this.onDialogueRequest?.(dialogueRequest);
-    return true;
+    const shouldFocusMapParticipants = (
+      dialogueRequest.presentationMode !== 'mapCinematic'
+    );
+    const hideDialogueFocus = () => (
+      shouldFocusMapParticipants
+        ? this.widget.hideDialogueFocus(
+          DEFAULT_DIALOGUE_MAP_FOCUS.transitionDurationMs,
+        )
+        : Promise.resolve()
+    );
+
+    if (shouldFocusMapParticipants) {
+      void this.widget.showDialogueFocus(
+        dialogueRequest.participantIds,
+        DEFAULT_DIALOGUE_MAP_FOCUS.backgroundDimOpacity,
+        DEFAULT_DIALOGUE_MAP_FOCUS.transitionDurationMs,
+      );
+    }
+
+    try {
+      const didOpenDialogue = this.onDialogueRequest({
+        ...dialogueRequest,
+        onBeforeClose: async () => {
+          await Promise.all([
+            dialogueRequest.onBeforeClose?.(),
+            hideDialogueFocus(),
+          ]);
+        },
+        onCancel: async () => {
+          await Promise.all([
+            dialogueRequest.onCancel?.(),
+            hideDialogueFocus(),
+          ]);
+        },
+      });
+
+      if (!didOpenDialogue && shouldFocusMapParticipants) {
+        void this.widget.hideDialogueFocus(0);
+      }
+
+      return didOpenDialogue;
+    } catch (error) {
+      if (shouldFocusMapParticipants) {
+        void this.widget.hideDialogueFocus(0);
+      }
+      throw error;
+    }
+  }
+
+  private async cancelFailedDialogueRequest(
+    dialogueRequest: CharacterPerformanceDialogueRequest,
+  ): Promise<void> {
+    try {
+      await dialogueRequest.onCancel?.();
+    } catch (error) {
+      console.error('Failed to cancel interaction card dialogue.', error);
+    } finally {
+      if (dialogueRequest.activityId) {
+        this.activityCoordinator.cancelInteractionCardActivity(
+          dialogueRequest.activityId,
+        );
+      }
+    }
+  }
+
+  private async closeWallSlamPresentation(
+    characterIds: readonly string[],
+  ): Promise<void> {
+    await Promise.all([
+      this.widget.hideWallSlamScene(
+        WALL_SLAM_MAP_PERFORMANCE.wallExitDurationMs,
+        WALL_SLAM_MAP_PERFORMANCE.backgroundDimDurationMs,
+      ),
+      ...characterIds.map(characterId => (
+        this.widget.clearCharacterPresentationOffset(
+          characterId,
+          DEFAULT_MAP_PERFORMANCE_CROWD_DISPLACEMENT.restoreDurationMs,
+        )
+      )),
+    ]);
+  }
+
+  private clearWallSlamPresentationImmediately(characterIds: readonly string[]): void {
+    this.widget.clearCinematicSceneImmediately();
+    characterIds.forEach(characterId => {
+      void this.widget.clearCharacterPresentationOffset(characterId, 0);
+    });
+  }
+
+  private setWallSlamCharacterDirections(
+    initiatorId: string,
+    targetId: string,
+    direction: WallSlamSideDirection,
+  ): void {
+    const directions = getFacingDirections(direction);
+
+    this.widget.setCharacterSpriteDirection(initiatorId, directions.initiator);
+    this.widget.setCharacterSpriteDirection(targetId, directions.target);
   }
 
   resolveActivityOutcome(input: ResolveActivityOutcomeInput): ResolvedActivityOutcome {
@@ -843,4 +1283,26 @@ export class TownCharacterController {
     return locks.bodyAction.length > 0 || locks.bodyMove.length > 0;
   }
 
+}
+
+function getFacingDirections(direction: WallSlamSideDirection): {
+  initiator: TownMapCharacterSpriteDirection;
+  target: TownMapCharacterSpriteDirection;
+} {
+  return direction === 'east'
+    ? {
+      initiator: 'side-right',
+      target: 'side-left',
+    }
+    : {
+      initiator: 'side-left',
+      target: 'side-right',
+    };
+}
+
+function getManhattanDistance(
+  first: GridCoordinate,
+  second: GridCoordinate,
+): number {
+  return Math.abs(first.x - second.x) + Math.abs(first.y - second.y);
 }

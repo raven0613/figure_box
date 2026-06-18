@@ -1,4 +1,9 @@
-import { Feeling, SocialStatus, type Position } from '~/constants/character';
+import {
+  Feeling,
+  MemoryType,
+  SocialStatus,
+  type Position,
+} from '~/constants/character';
 import type {
   CharacterEventAcceptance,
   CharacterEventActivity,
@@ -368,7 +373,7 @@ function resolveOfflineActivityRolls(
       },
     };
 
-    if (roll.resolvesActivity) {
+    if (roll.resolvesActivity || selectedBranch.resolvesActivity) {
       return {
         success: true,
         selections,
@@ -407,10 +412,18 @@ function createOfflineActivityRollRuleContext(
   const relationshipToTarget = {
     feeling: initiatorRelationship?.feeling ?? Feeling.Neutral,
     intimacy: initiatorRelationship?.intimacy ?? 0,
+    socialStatus: getMutualRelationshipStatus(initiator.id, target.id),
+    memories: {
+      impression: initiatorRelationship?.memories[MemoryType.Impression].counts ?? 0,
+    },
   };
   const relationshipToInitiator = {
     feeling: targetRelationship?.feeling ?? Feeling.Neutral,
     intimacy: targetRelationship?.intimacy ?? 0,
+    socialStatus: getMutualRelationshipStatus(target.id, initiator.id),
+    memories: {
+      impression: targetRelationship?.memories[MemoryType.Impression].counts ?? 0,
+    },
   };
 
   return {

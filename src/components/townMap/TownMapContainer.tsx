@@ -6,6 +6,8 @@ import {
 import type {
   TownCharacterController,
   CharacterSnapshot,
+  InteractionCardUseFailureReason,
+  InteractionCardUseResult,
 } from '~/services/townCharacterController';
 import { saveService } from '~/services/save/saveService';
 import { relationshipStoreService } from '~/services/save/relationshipStoreService';
@@ -65,8 +67,11 @@ interface TownMapContainerProps {
   onInteractionCardInitiatorSelect?: (cardId: string, initiatorId: string) => void;
   onInteractionCardTargetSelect?: (cardId: string, targetId: string) => void;
   onInteractionCardUseComplete?: (cardId: string) => void;
-  onInteractionCardUseFailed?: (cardId: string) => void;
-  onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => void;
+  onInteractionCardUseFailed?: (
+    cardId: string,
+    reason: InteractionCardUseFailureReason,
+  ) => void;
+  onDialogueRequest?: (request: CharacterPerformanceDialogueRequest) => boolean;
   onActivitySettled?: (activityId: string) => void;
   observedActivityId?: string | null;
 }
@@ -94,6 +99,9 @@ export function TownMapContainer({
   const widgetRef = useRef<FabricTownMapWidget | null>(null);
   const characterControllerRef = useRef<TownCharacterController | null>(null);
   const completedInteractionCardUseKeyRef = useRef<string | null>(null);
+  const interactionCardId = interactionCardSelection?.cardId ?? null;
+  const interactionCardInitiatorId = interactionCardSelection?.initiatorId ?? null;
+  const interactionCardTargetId = interactionCardSelection?.targetId ?? null;
   const [relationshipStore, setRelationshipStore] = useState<RelationshipStore>(() => relationshipStoreService.getSnapshot());
   const [selectedTile, setSelectedTile] = useState<TownMapTile | null>(null);
   const [selectedMapObjects, setSelectedMapObjects] = useState<string[]>([]);
@@ -147,38 +155,72 @@ export function TownMapContainer({
   });
 
   useEffect(() => {
-    if (
-      !interactionCardSelection?.initiatorId ||
-      !interactionCardSelection.targetId
-    ) {
+    if (!interactionCardId || !interactionCardInitiatorId || !interactionCardTargetId) {
       completedInteractionCardUseKeyRef.current = null;
       return;
     }
 
     const useKey = [
-      interactionCardSelection.cardId,
-      interactionCardSelection.initiatorId,
-      interactionCardSelection.targetId,
+      interactionCardId,
+      interactionCardInitiatorId,
+      interactionCardTargetId,
     ].join(':');
 
     if (completedInteractionCardUseKeyRef.current === useKey) {
       return;
     }
 
-    const didUseCard = characterControllerRef.current?.useInteractionCard({
-      cardId: interactionCardSelection.cardId,
-      initiatorId: interactionCardSelection.initiatorId,
-      targetId: interactionCardSelection.targetId,
-    }) ?? false;
-
-    if (!didUseCard) {
-      onInteractionCardUseFailed?.(interactionCardSelection.cardId);
-      return;
-    }
-
     completedInteractionCardUseKeyRef.current = useKey;
-    onInteractionCardUseComplete?.(interactionCardSelection.cardId);
-  }, [interactionCardSelection, onInteractionCardUseComplete, onInteractionCardUseFailed]);
+    let isCancelled = false;
+
+    void (async () => {
+      let useResult: InteractionCardUseResult;
+
+      try {
+        const controller = characterControllerRef.current;
+        useResult = controller
+          ? await controller.useInteractionCard({
+            cardId: interactionCardId,
+            initiatorId: interactionCardInitiatorId,
+            targetId: interactionCardTargetId,
+          })
+          : {
+            success: false as const,
+            reason: 'characterUnavailable' as const,
+          };
+      } catch (error) {
+        console.error('Failed to use interaction card.', error);
+        useResult = {
+          success: false as const,
+          reason: 'presentationFailed' as const,
+        };
+      }
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (!useResult.success) {
+        onInteractionCardUseFailed?.(
+          interactionCardId,
+          useResult.reason,
+        );
+        return;
+      }
+
+      onInteractionCardUseComplete?.(interactionCardId);
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    interactionCardId,
+    interactionCardInitiatorId,
+    interactionCardTargetId,
+    onInteractionCardUseComplete,
+    onInteractionCardUseFailed,
+  ]);
   const transferHistoryDefinition = transferHistoryItem ? getItemDefinition(transferHistoryItem.definitionId) : null;
 
   const handleRelationshipStoreChange = useCallback((nextRelationshipStore: RelationshipStore) => {

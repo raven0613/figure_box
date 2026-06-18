@@ -14,7 +14,7 @@ import type { CharacterSnapshot } from '~/services/townCharacterTypes';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import {
   changeRelationshipIntimacy,
-  decreaseRelationshipIntimacyToFeelingMin,
+  setRelationshipFeeling,
 } from '~/stateMachines/gameFlow/relationships';
 import type {
   CharacterRuntimeSnapshot,
@@ -172,7 +172,7 @@ function applyOfflineRelationshipPatches(
       return changedRelationships;
     }
 
-    return decreaseRelationshipIntimacyToFeelingMin(
+    return setRelationshipFeeling(
       changedRelationships,
       characterId,
       patch.targetCharacterId,

@@ -10,6 +10,10 @@ import { TownMapCharacterLayer } from './townMapCharacterLayer';
 import { TownMapFloatingTextLayer } from './townMapFloatingTextLayer';
 import { TownMapWalkAnimator } from './townMapWalkAnimator';
 import { TownMapPointerController } from './townMapPointerController';
+import {
+  TownMapCinematicLayer,
+  type ShowWallSlamSceneInput,
+} from './townMapCinematicLayer';
 import { TownMapItemGlyphFactory } from './townMapItemGlyphFactory';
 import {
   MapObjectGlyphFactory,
@@ -52,6 +56,19 @@ interface MoveCharacterToTileResult {
   position: GridCoordinate | null;
 }
 
+export interface PushCharactersAwayFromTileInput {
+  anchorTile: GridCoordinate;
+  excludedCharacterIds?: readonly string[];
+  radiusCells: number;
+  distanceCells: number;
+  durationMs: number;
+}
+
+interface CharacterPresentationOffsetAnimation {
+  frameId: number;
+  resolve: (completed: boolean) => void;
+}
+
 const OVERLAP_OFFSET_MIN_CELL_RATIO = 0.8;
 const OVERLAP_OFFSET_MAX_CELL_RATIO = 1.5;
 const OVERLAP_OFFSET_PUSH_DURATION_MS = 180;
@@ -64,6 +81,7 @@ export class FabricTownMapWidget {
   private readonly camera: TownMapCamera;
   private readonly characterTracker: TownMapCharacterTracker;
   private readonly characterLayer: TownMapCharacterLayer;
+  private readonly cinematicLayer: TownMapCinematicLayer;
   private readonly floatingTextLayer: TownMapFloatingTextLayer;
   private readonly walkAnimator: TownMapWalkAnimator;
   private readonly grid: TownMapGrid;
@@ -75,6 +93,9 @@ export class FabricTownMapWidget {
   private readonly placedItemShapes = new Map<string, Group>();
   private readonly characterTileOffsets = new Map<string, GridCoordinate>();
   private readonly characterOffsetAnimationFrameIds = new Map<string, number>();
+  private readonly characterPresentationOffsets = new Map<string, GridCoordinate>();
+  private readonly characterPresentationOffsetAnimations =
+    new Map<string, CharacterPresentationOffsetAnimation>();
   private animationFrameId: number | null = null;
 
   constructor(canvasElement: HTMLCanvasElement | string, options: FabricTownMapOptions = {}) {
@@ -129,6 +150,14 @@ export class FabricTownMapWidget {
       canvas: this.canvas,
       cellSize: this.cellSize,
       characterTracker: this.characterTracker,
+    });
+    this.cinematicLayer = new TownMapCinematicLayer({
+      canvas: this.canvas,
+      cellSize: this.cellSize,
+      mapWidth: this.mapWidth,
+      mapHeight: this.mapHeight,
+      getCharacterCenter: characterId => this.getCharacterCenter(characterId),
+      getCharacterToken: characterId => this.characterLayer.getToken(characterId),
     });
     this.floatingTextLayer = new TownMapFloatingTextLayer({
       canvas: this.canvas,
@@ -204,6 +233,10 @@ export class FabricTownMapWidget {
 
   getOccupantIdsAt(x: number, y: number): string[] {
     return this.grid.getOccupantIdsAt(x, y);
+  }
+
+  isCharacterTileWalkable(tile: GridCoordinate): boolean {
+    return this.grid.isTileWalkableForOccupant(tile.x, tile.y);
   }
 
   getMapObjectsAt(x: number, y: number): TownMapObjectData[] {
@@ -284,6 +317,140 @@ export class FabricTownMapWidget {
 
   setCharacterSpriteDirection(characterId: string, direction: TownMapCharacterSpriteDirection): void {
     this.characterLayer.setCharacterSpriteDirection(characterId, direction);
+  }
+
+  showDialogueFocus(
+    participantIds: readonly string[],
+    backgroundDimOpacity: number,
+    transitionDurationMs: number,
+  ): Promise<boolean> {
+    return this.cinematicLayer.showDialogueFocus(
+      participantIds,
+      backgroundDimOpacity,
+      transitionDurationMs,
+    );
+  }
+
+  hideDialogueFocus(transitionDurationMs: number): Promise<void> {
+    return this.cinematicLayer.hideDialogueFocus(transitionDurationMs);
+  }
+
+  showWallSlamScene(input: ShowWallSlamSceneInput): Promise<boolean> {
+    return this.cinematicLayer.showWallSlamScene(input);
+  }
+
+  hideWallSlamScene(
+    wallExitDurationMs: number,
+    backgroundDimDurationMs: number,
+  ): Promise<void> {
+    return this.cinematicLayer.hideWallSlamScene({
+      wallExitDurationMs,
+      backgroundDimDurationMs,
+    });
+  }
+
+  clearCinematicSceneImmediately(): void {
+    this.cinematicLayer.clearImmediately();
+  }
+
+  setCharacterPresentationOffsetInCells(
+    characterId: string,
+    offsetCells: GridCoordinate,
+    durationMs: number,
+  ): Promise<boolean> {
+    return this.animateCharacterPresentationOffset(
+      characterId,
+      {
+        x: offsetCells.x * this.cellSize,
+        y: offsetCells.y * this.cellSize,
+      },
+      durationMs,
+    );
+  }
+
+  setCharacterPresentationPositionFromTileCenterInCells(
+    characterId: string,
+    positionOffsetCells: GridCoordinate,
+    durationMs: number,
+  ): Promise<boolean> {
+    const tileOffset = this.characterTileOffsets.get(characterId) ?? ZERO_OFFSET;
+
+    return this.animateCharacterPresentationOffset(
+      characterId,
+      {
+        x: positionOffsetCells.x * this.cellSize - tileOffset.x,
+        y: positionOffsetCells.y * this.cellSize - tileOffset.y,
+      },
+      durationMs,
+    );
+  }
+
+  clearCharacterPresentationOffset(
+    characterId: string,
+    durationMs: number,
+  ): Promise<boolean> {
+    return this.animateCharacterPresentationOffset(characterId, ZERO_OFFSET, durationMs);
+  }
+
+  async clearAllCharacterPresentationOffsets(durationMs: number): Promise<void> {
+    const characterIds = [
+      ...new Set([
+        ...this.characterPresentationOffsets.keys(),
+        ...this.characterPresentationOffsetAnimations.keys(),
+      ]),
+    ];
+
+    await Promise.all(
+      characterIds.map(characterId => (
+        this.clearCharacterPresentationOffset(characterId, durationMs)
+      )),
+    );
+  }
+
+  async pushCharactersAwayFromTile(
+    input: PushCharactersAwayFromTileInput,
+  ): Promise<readonly string[]> {
+    const excludedCharacterIds = new Set(input.excludedCharacterIds ?? []);
+    const characterIds = [
+      ...new Set(
+        this.grid.getOccupiedNeighborIds(
+          input.anchorTile.x,
+          input.anchorTile.y,
+          input.radiusCells,
+        ),
+      ),
+    ].filter(characterId => !excludedCharacterIds.has(characterId));
+    const displacements = characterIds.flatMap((characterId, index) => {
+      const characterTile = this.grid.getOccupantTile(characterId);
+
+      if (!characterTile) {
+        return [];
+      }
+
+      return [{
+        characterId,
+        offsetCells: calculateRadialOffset(
+          input.anchorTile,
+          characterTile,
+          input.distanceCells,
+          index,
+          characterIds.length,
+        ),
+      }];
+    });
+    const results = await Promise.all(
+      displacements.map(displacement => (
+        this.setCharacterPresentationOffsetInCells(
+          displacement.characterId,
+          displacement.offsetCells,
+          input.durationMs,
+        )
+      )),
+    );
+
+    return displacements
+      .filter((_, index) => results[index])
+      .map(displacement => displacement.characterId);
   }
 
   updateCharacterRequestMarker(
@@ -412,8 +579,10 @@ export class FabricTownMapWidget {
     const previousTile = this.grid.getOccupantTile(characterId);
 
     this.cancelCharacterOffsetAnimation(characterId);
+    this.cancelCharacterPresentationOffsetAnimation(characterId);
     this.grid.removeOccupant(characterId);
     this.characterTileOffsets.delete(characterId);
+    this.characterPresentationOffsets.delete(characterId);
     this.syncTileOverlapOffsets(previousTile);
     this.characterTracker.removeCharacter(characterId);
     this.characterLayer.removeCharacterToken(characterId);
@@ -501,9 +670,11 @@ export class FabricTownMapWidget {
   destroy(): Promise<boolean> {
     this.stopAnimationLoop();
     this.cancelAllCharacterOffsetAnimations();
+    this.cancelAllCharacterPresentationOffsetAnimations();
     this.camera.dispose();
     this.walkAnimator.dispose();
     this.floatingTextLayer.dispose();
+    this.cinematicLayer.dispose();
     this.characterTracker.dispose();
     this.characterLayer.dispose();
     this.mapObjectShapes.clear();
@@ -677,11 +848,12 @@ export class FabricTownMapWidget {
 
   private getCharacterPosition(characterId: string, coordinate: GridCoordinate): GridCoordinate {
     const center = this.characterLayer.getCharacterPosition(coordinate);
-    const offset = this.characterTileOffsets.get(characterId) ?? ZERO_OFFSET;
+    const tileOffset = this.characterTileOffsets.get(characterId) ?? ZERO_OFFSET;
+    const presentationOffset = this.characterPresentationOffsets.get(characterId) ?? ZERO_OFFSET;
 
     return {
-      x: center.x + offset.x,
-      y: center.y + offset.y,
+      x: center.x + tileOffset.x + presentationOffset.x,
+      y: center.y + tileOffset.y + presentationOffset.y,
     };
   }
 
@@ -746,6 +918,94 @@ export class FabricTownMapWidget {
     return createRandomOverlapOffset(this.cellSize);
   }
 
+  private animateCharacterPresentationOffset(
+    characterId: string,
+    targetOffset: GridCoordinate,
+    durationMs: number,
+  ): Promise<boolean> {
+    if (!this.grid.getOccupantTile(characterId) || !this.characterLayer.getToken(characterId)) {
+      return Promise.resolve(false);
+    }
+
+    this.cancelCharacterOffsetAnimation(characterId);
+    this.cancelCharacterPresentationOffsetAnimation(characterId);
+
+    const startOffset = this.characterPresentationOffsets.get(characterId) ?? ZERO_OFFSET;
+    const normalizedDurationMs = Math.max(0, durationMs);
+
+    if (normalizedDurationMs === 0 || areSamePosition(startOffset, targetOffset)) {
+      this.commitCharacterPresentationOffset(characterId, targetOffset);
+      return Promise.resolve(true);
+    }
+
+    return new Promise(resolve => {
+      const startedAt = performance.now();
+      const animate = (timestamp: number) => {
+        const elapsedRatio = Math.min(1, (timestamp - startedAt) / normalizedDurationMs);
+        const easedRatio = easeOutCubic(elapsedRatio);
+        const nextOffset = {
+          x: startOffset.x + (targetOffset.x - startOffset.x) * easedRatio,
+          y: startOffset.y + (targetOffset.y - startOffset.y) * easedRatio,
+        };
+
+        this.characterPresentationOffsets.set(characterId, nextOffset);
+
+        if (!this.positionCharacterAtCurrentTile(characterId)) {
+          this.characterPresentationOffsetAnimations.delete(characterId);
+          resolve(false);
+          return;
+        }
+
+        if (elapsedRatio < 1) {
+          const frameId = window.requestAnimationFrame(animate);
+
+          this.characterPresentationOffsetAnimations.set(characterId, {
+            frameId,
+            resolve,
+          });
+          return;
+        }
+
+        this.characterPresentationOffsetAnimations.delete(characterId);
+        this.commitCharacterPresentationOffset(characterId, targetOffset);
+        resolve(true);
+      };
+      const frameId = window.requestAnimationFrame(animate);
+
+      this.characterPresentationOffsetAnimations.set(characterId, {
+        frameId,
+        resolve,
+      });
+    });
+  }
+
+  private commitCharacterPresentationOffset(
+    characterId: string,
+    offset: GridCoordinate,
+  ): void {
+    if (isZeroOffset(offset)) {
+      this.characterPresentationOffsets.delete(characterId);
+    } else {
+      this.characterPresentationOffsets.set(characterId, { ...offset });
+    }
+
+    this.positionCharacterAtCurrentTile(characterId);
+  }
+
+  private positionCharacterAtCurrentTile(characterId: string): boolean {
+    const characterTile = this.grid.getOccupantTile(characterId);
+
+    if (!characterTile || !this.characterLayer.getToken(characterId)) {
+      return false;
+    }
+
+    this.characterLayer.positionCharacterToken(
+      characterId,
+      this.getCharacterPosition(characterId, characterTile),
+    );
+    return true;
+  }
+
   private animateCharacterToPosition(characterId: string, targetPosition: GridCoordinate): void {
     const startPosition = this.getCharacterCenter(characterId);
 
@@ -799,6 +1059,24 @@ export class FabricTownMapWidget {
   private cancelAllCharacterOffsetAnimations(): void {
     Array.from(this.characterOffsetAnimationFrameIds.keys()).forEach(characterId => {
       this.cancelCharacterOffsetAnimation(characterId);
+    });
+  }
+
+  private cancelCharacterPresentationOffsetAnimation(characterId: string): void {
+    const animation = this.characterPresentationOffsetAnimations.get(characterId);
+
+    if (!animation) {
+      return;
+    }
+
+    window.cancelAnimationFrame(animation.frameId);
+    this.characterPresentationOffsetAnimations.delete(characterId);
+    animation.resolve(false);
+  }
+
+  private cancelAllCharacterPresentationOffsetAnimations(): void {
+    [...this.characterPresentationOffsetAnimations.keys()].forEach(characterId => {
+      this.cancelCharacterPresentationOffsetAnimation(characterId);
     });
   }
 
@@ -859,6 +1137,35 @@ function createRandomOverlapOffset(cellSize: number): GridCoordinate {
   return {
     x: Math.cos(angle) * distance,
     y: Math.sin(angle) * distance,
+  };
+}
+
+function calculateRadialOffset(
+  anchorTile: GridCoordinate,
+  characterTile: GridCoordinate,
+  distanceCells: number,
+  characterIndex: number,
+  characterCount: number,
+): GridCoordinate {
+  const directionX = characterTile.x - anchorTile.x;
+  const directionY = characterTile.y - anchorTile.y;
+  const directionLength = Math.hypot(directionX, directionY);
+  const normalizedDistanceCells = Math.max(0, distanceCells);
+
+  if (directionLength > 0) {
+    return {
+      x: directionX / directionLength * normalizedDistanceCells,
+      y: directionY / directionLength * normalizedDistanceCells,
+    };
+  }
+
+  const angle = characterCount > 0
+    ? characterIndex / characterCount * Math.PI * 2
+    : 0;
+
+  return {
+    x: Math.cos(angle) * normalizedDistanceCells,
+    y: Math.sin(angle) * normalizedDistanceCells,
   };
 }
 

@@ -1016,22 +1016,20 @@
                   "id": "strangerRecognition",
                   "baseWeight": 24,
                   "performanceId": "social.wallSlam.b.strangerRecognition",
-                  "storyConditions": [
+                  "conditions": [
                     {
                       "path": "target.relationshipToInitiator.socialStatus",
                       "operator": "==",
                       "value": "stranger"
                     }
                   ],
-                  "storyWeightModifiers": [
+                  "weightModifiers": [
                     {
                       "path": "target.relationshipToInitiator.memories.impression",
                       "operator": ">",
                       "value": 1,
                       "add": 45
-                    }
-                  ],
-                  "weightModifiers": [
+                    },
                     {
                       "path": "target.relationshipToInitiator.intimacy",
                       "operator": "<=",
@@ -1049,15 +1047,13 @@
                   "id": "understands",
                   "baseWeight": 22,
                   "performanceId": "social.wallSlam.b.understands",
-                  "storyWeightModifiers": [
+                  "weightModifiers": [
                     {
                       "path": "target.relationshipToInitiator.socialStatus",
                       "operator": "in",
                       "value": ["lovers", "married"],
                       "add": 40
-                    }
-                  ],
-                  "weightModifiers": [
+                    },
                     {
                       "path": "target.relationshipToInitiator.feeling",
                       "operator": "in",
@@ -1100,7 +1096,6 @@
                   "id": "lipBrush",
                   "baseWeight": 8,
                   "performanceId": "social.wallSlam.c.lipBrush",
-                  "storyChoice": "pushInitiator",
                   "conditions": [
                     {
                       "path": "activity.rollContext.wallSlamTensionChoice",
@@ -1121,9 +1116,7 @@
                       "path": "target.relationshipToInitiator.feeling",
                       "operator": "!=",
                       "value": "wary"
-                    }
-                  ],
-                  "storyConditions": [
+                    },
                     {
                       "path": "target.relationshipToInitiator.socialStatus",
                       "operator": "!=",
@@ -1150,7 +1143,6 @@
                   "baseWeight": 70,
                   "performanceId": "social.wallSlam.c.counter",
                   "resolvesActivity": true,
-                  "storyChoice": "coolDown",
                   "conditions": [
                     {
                       "path": "activity.rollContext.wallSlamTensionChoice",
@@ -1201,8 +1193,10 @@
                       "add": 28
                     }
                   ],
-                  "effects": {
-                    "relationshipIntimacyDelta": 5
+                  "effectsByRole": {
+                    "target": {
+                      "relationshipIntimacyDelta": 5
+                    }
                   },
                   "memoryEffects": [
                     {
@@ -1221,7 +1215,7 @@
                   "id": "returnGift",
                   "baseWeight": 35,
                   "performanceId": "social.wallSlam.d.returnGift",
-                  "storyConditions": [
+                  "conditions": [
                     {
                       "path": "target.relationshipToInitiator.socialStatus",
                       "operator": "in",
@@ -1296,7 +1290,7 @@
                   "id": "softenedStandoff",
                   "baseWeight": 45,
                   "performanceId": "social.wallSlam.d.softenedStandoff",
-                  "storyConditions": [
+                  "conditions": [
                     {
                       "path": "target.relationshipToInitiator.socialStatus",
                       "operator": "in",

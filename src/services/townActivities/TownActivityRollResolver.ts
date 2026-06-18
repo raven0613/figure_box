@@ -1,4 +1,4 @@
-import { Feeling } from '~/constants/character';
+import { Feeling, MemoryType, type SocialStatus } from '~/constants/character';
 import type {
   CharacterEventActivity,
   CharacterEventActivityRollBranch,
@@ -25,6 +25,7 @@ interface TownActivityRollResolverOptions {
   getActivityDefinition: (activity: JoinableActivity) => CharacterEventActivity | undefined;
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   getCharacterPersonality: (characterId: string) => CharacterPersonality;
+  getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
   isActivityEnding: (activityId: string) => boolean;
   resolveActivityFromRoll: (
     activity: JoinableActivity,
@@ -48,6 +49,7 @@ export class TownActivityRollResolver {
   ) => CharacterEventActivity | undefined;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   private readonly getCharacterPersonality: (characterId: string) => CharacterPersonality;
+  private readonly getRelationshipStatus: TownActivityRollResolverOptions['getRelationshipStatus'];
   private readonly isActivityEnding: (activityId: string) => boolean;
   private readonly resolveActivityFromRoll: (
     activity: JoinableActivity,
@@ -64,6 +66,7 @@ export class TownActivityRollResolver {
     this.getActivityDefinition = options.getActivityDefinition;
     this.getCharacterContext = options.getCharacterContext;
     this.getCharacterPersonality = options.getCharacterPersonality;
+    this.getRelationshipStatus = options.getRelationshipStatus;
     this.isActivityEnding = options.isActivityEnding;
     this.resolveActivityFromRoll = options.resolveActivityFromRoll;
     this.playActivityRollBranchPerformance = options.playActivityRollBranchPerformance;
@@ -152,10 +155,18 @@ export class TownActivityRollResolver {
     const relationshipToTarget = {
       feeling: initiatorRelationship?.feeling ?? Feeling.Neutral,
       intimacy: initiatorRelationship?.intimacy ?? 0,
+      socialStatus: this.getRelationshipStatus(initiatorId, targetId),
+      memories: {
+        impression: initiatorRelationship?.memories[MemoryType.Impression].counts ?? 0,
+      },
     };
     const relationshipToInitiator = {
       feeling: targetRelationship?.feeling ?? Feeling.Neutral,
       intimacy: targetRelationship?.intimacy ?? 0,
+      socialStatus: this.getRelationshipStatus(targetId, initiatorId),
+      memories: {
+        impression: targetRelationship?.memories[MemoryType.Impression].counts ?? 0,
+      },
     };
 
     return {
