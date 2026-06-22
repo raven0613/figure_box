@@ -6,6 +6,8 @@ export const MINI_CANVAS_WIDTH = 172;
 export const MINI_CANVAS_HEIGHT = 172;
 export const MINI_PIXEL_SCALE = 2;
 export const MINI_CENTER_X = MINI_CANVAS_WIDTH / 2;
+// Shared baseline used by every body type when baking the feet position.
+export const MINI_FEET_BASELINE_Y = 143;
 export const MINI_BASE_TINT_LUMINANCE = 128;
 export const MINI_ACCESSORY_ORDER_STEP = 0.01;
 export const MINI_CLOTHING_BODY_Z_INDEX = 2.3;

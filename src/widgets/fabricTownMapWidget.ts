@@ -170,6 +170,9 @@ export class FabricTownMapWidget {
       startAnimationLoop: () => this.startAnimationLoop(),
       onMapActivityObserve: options.onMapActivityObserve,
     });
+    this.characterLayer.setCharacterPositionChangeHandler((characterId, position) => {
+      this.floatingTextLayer.syncCharacterPosition(characterId, position);
+    });
     this.walkAnimator = new TownMapWalkAnimator({
       cellSize: this.cellSize,
       getCharacterToken: characterId => this.characterLayer.getToken(characterId),
@@ -183,6 +186,9 @@ export class FabricTownMapWidget {
       stopAnimationLoopIfIdle: () => this.stopAnimationLoopIfIdle(),
       setCharacterDirection: (characterId, direction) => {
         this.characterLayer.setCharacterSpriteDirection(characterId, direction);
+      },
+      onWalkStopped: characterId => {
+        this.syncTileOverlapOffsets(this.grid.getOccupantTile(characterId));
       },
     });
     const pointerController = new TownMapPointerController({
@@ -893,13 +899,17 @@ export class FabricTownMapWidget {
     const occupantIds = this.grid.getOccupantIdsAt(tile.x, tile.y);
 
     occupantIds.forEach(characterId => {
+      const isWalking = this.walkAnimator.isWalking(characterId);
+      const existingOffset = this.characterTileOffsets.get(characterId) ?? ZERO_OFFSET;
       const nextOffset = occupantIds.length > 1
         ? this.getExistingOrRandomOverlapOffset(characterId)
-        : ZERO_OFFSET;
+        : isWalking
+          ? existingOffset
+          : ZERO_OFFSET;
 
       this.characterTileOffsets.set(characterId, nextOffset);
 
-      if (skipPositionCharacterIds.has(characterId) || this.walkAnimator.isWalking(characterId)) {
+      if (skipPositionCharacterIds.has(characterId) || isWalking) {
         this.cancelCharacterOffsetAnimation(characterId);
         return;
       }
@@ -1103,7 +1113,7 @@ export class FabricTownMapWidget {
 
     if (existingShape) {
       existingShape.set({ left: center.x, top: center.y });
-      updateEntitySortMetadata(existingShape, center.y + this.cellSize * 0.5);
+      updateEntitySortMetadata(existingShape, center.y);
       existingShape.setCoords();
       return;
     }
@@ -1116,7 +1126,7 @@ export class FabricTownMapWidget {
     });
     shape.set('mapObjectId', placedObject.id);
     shape.set('placedObjectId', placedObject.id);
-    updateEntitySortMetadata(shape, center.y + this.cellSize * 0.5);
+    updateEntitySortMetadata(shape, center.y);
     this.placedItemShapes.set(placedObject.id, shape);
     this.canvas.add(shape);
   }

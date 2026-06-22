@@ -27,6 +27,7 @@ interface TownMapWalkAnimatorOptions {
   startAnimationLoop: () => void;
   stopAnimationLoopIfIdle: () => void;
   setCharacterDirection: (characterId: string, direction: TownMapCharacterSpriteDirection) => void;
+  onWalkStopped: (characterId: string) => void;
 }
 
 const MAX_WALK_FRAME_DELTA_MS = 50;
@@ -42,6 +43,7 @@ export class TownMapWalkAnimator {
   private readonly startAnimationLoop: () => void;
   private readonly stopAnimationLoopIfIdle: () => void;
   private readonly setCharacterDirection: (characterId: string, direction: TownMapCharacterSpriteDirection) => void;
+  private readonly onWalkStopped: (characterId: string) => void;
   private readonly walkers = new Map<string, WalkState>();
   private isPaused = false;
 
@@ -55,6 +57,7 @@ export class TownMapWalkAnimator {
     this.startAnimationLoop = options.startAnimationLoop;
     this.stopAnimationLoopIfIdle = options.stopAnimationLoopIfIdle;
     this.setCharacterDirection = options.setCharacterDirection;
+    this.onWalkStopped = options.onWalkStopped;
   }
 
   dispose(): void {
@@ -135,6 +138,7 @@ export class TownMapWalkAnimator {
   cancelWalk(characterId: string): void {
     if (this.walkers.delete(characterId)) {
       this.setCharacterDirection(characterId, 'front');
+      this.onWalkStopped(characterId);
     }
 
     this.stopAnimationLoopIfIdle();
@@ -171,6 +175,7 @@ export class TownMapWalkAnimator {
     completedWalkers.forEach(({ id, walker }) => {
       if (this.walkers.get(id) === walker) {
         this.walkers.delete(id);
+        this.onWalkStopped(id);
       }
     });
   }
@@ -296,7 +301,10 @@ function getSegmentLength(from: GridCoordinate, to: GridCoordinate): number {
 }
 
 function getInterpolatedPosition(walker: WalkState): GridCoordinate {
-  const progress = walker.segmentProgress / walker.segmentLengths[walker.currentSegment];
+  const segmentLength = walker.segmentLengths[walker.currentSegment];
+  const progress = segmentLength > 0
+    ? Math.min(1, walker.segmentProgress / segmentLength)
+    : 1;
   const from = walker.allPoints[walker.currentSegment];
   const to = walker.allPoints[walker.currentSegment + 1];
 

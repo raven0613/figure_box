@@ -1,6 +1,7 @@
 import { FabricImage } from 'fabric';
 import { TOWN_MAP_CHARACTER_RENDER_SCALE } from '~/constants/townMapWidgetConstants';
 import type { MiniSpriteSheet } from './miniAvatar/miniAvatarTypes';
+import { getTownMapCharacterVisualOffsetY } from './townMapCharacterLayout';
 
 export type TownMapCharacterSpriteDirection = 'front' | 'back' | 'side-left' | 'side-right';
 
@@ -73,7 +74,8 @@ export class TownMapCharacterSpriteRenderer {
       const column = frameIndex % spriteSheet.columns;
       const row = Math.floor(frameIndex / spriteSheet.columns);
       const isMirrored = direction === 'side-right';
-      const destination = -this.renderSize / 2;
+      const destinationX = -this.renderSize / 2;
+      const destinationY = destinationX + getTownMapCharacterVisualOffsetY(this.renderSize);
 
       context.save();
       context.imageSmoothingEnabled = false;
@@ -88,8 +90,8 @@ export class TownMapCharacterSpriteRenderer {
         row * spriteSheet.frameHeight,
         spriteSheet.frameWidth,
         spriteSheet.frameHeight,
-        destination,
-        destination,
+        destinationX,
+        destinationY,
         this.renderSize,
         this.renderSize,
       );

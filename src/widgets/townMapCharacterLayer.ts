@@ -13,6 +13,7 @@ import {
   getCharacterUiGroupTop,
   getRequestMarkerStyle,
 } from './townMapCharacterTokenFactory';
+import { getTownMapCharacterVisualOffsetY } from './townMapCharacterLayout';
 import { TownMapItemGlyphFactory } from './townMapItemGlyphFactory';
 import type { GridCoordinate } from './townMapGrid';
 import type { TownMapCharacter } from './townMapWidgetTypes';
@@ -31,6 +32,11 @@ interface TownMapCharacterLayerOptions {
   cellSize: number;
   characterTracker: TownMapCharacterTracker;
 }
+
+type CharacterPositionChangeHandler = (
+  characterId: string,
+  position: GridCoordinate,
+) => void;
 
 // 角色 render/update/remove/snap/center
 export class TownMapCharacterLayer {
@@ -53,6 +59,7 @@ export class TownMapCharacterLayer {
   private isDisposed = false;
   private isPresentationPaused = false;
   private viewportZoom = 1;
+  private onCharacterPositionChange: CharacterPositionChangeHandler | null = null;
 
   constructor(options: TownMapCharacterLayerOptions) {
     this.canvas = options.canvas;
@@ -62,6 +69,7 @@ export class TownMapCharacterLayer {
 
   dispose(): void {
     this.isDisposed = true;
+    this.onCharacterPositionChange = null;
     Array.from(this.presentationAnimationHandles.keys()).forEach(key => {
       this.cancelPresentationAnimation(key);
     });
@@ -78,6 +86,12 @@ export class TownMapCharacterLayer {
 
   getToken(characterId: string): Group | undefined {
     return this.characterTokens.get(characterId);
+  }
+
+  setCharacterPositionChangeHandler(
+    handler: CharacterPositionChangeHandler | null,
+  ): void {
+    this.onCharacterPositionChange = handler;
   }
 
   getCharacterCenter(characterId: string): GridCoordinate | null {
@@ -124,6 +138,7 @@ export class TownMapCharacterLayer {
     );
 
     token.set('selectable', this.isCharacterDraggingEnabled);
+    this.bindTokenPositionTracking(token);
     this.applyTokenUiZoom(token);
     updateEntitySortMetadata(token, position.y);
     this.characterTokens.set(character.id, token);
@@ -432,10 +447,12 @@ export class TownMapCharacterLayer {
 
   positionToken(token: Group, position: GridCoordinate): void {
     token.set({ left: position.x, top: position.y });
-    updateEntitySortMetadata(token, position.y);
+    updateEntitySortMetadata(token, token.top ?? position.y);
     token.setCoords();
     sortEntityLayer(this.canvas);
     this.characterTracker.update();
+
+    this.notifyCharacterPositionChange(token, position);
   }
 
   getCharacterPosition(coordinate: GridCoordinate): GridCoordinate {
@@ -472,6 +489,7 @@ export class TownMapCharacterLayer {
     );
 
     this.copyRequestMarker(currentToken, nextToken);
+    this.bindTokenPositionTracking(nextToken);
     this.applyTokenUiZoom(nextToken);
     updateEntitySortMetadata(nextToken, getNumericTokenValue(currentToken, 'sortBottomY') || currentPosition.y);
     nextToken.set('entityLayerRank', getNumericTokenValue(currentToken, 'entityLayerRank'));
@@ -481,6 +499,26 @@ export class TownMapCharacterLayer {
     sortEntityLayer(this.canvas);
     this.characterTracker.update();
     this.canvas.requestRenderAll();
+  }
+
+  private bindTokenPositionTracking(token: Group): void {
+    token.on('moving', () => {
+      this.notifyCharacterPositionChange(token, {
+        x: token.left ?? 0,
+        y: token.top ?? 0,
+      });
+    });
+  }
+
+  private notifyCharacterPositionChange(
+    token: Group,
+    position: GridCoordinate,
+  ): void {
+    const characterId = token.get('characterId');
+
+    if (typeof characterId === 'string') {
+      this.onCharacterPositionChange?.(characterId, position);
+    }
   }
 
   private createSpriteBody(characterId: string): TownMapCharacterSpriteBody | undefined {
@@ -521,7 +559,7 @@ export class TownMapCharacterLayer {
     }
 
     uiGroup.set({
-      top: this.getCharacterUiGroupTop(),
+      top: this.getCharacterUiGroupTop(token),
       scaleX: inverseZoom,
       scaleY: inverseZoom,
     });
@@ -530,10 +568,17 @@ export class TownMapCharacterLayer {
     token.setCoords();
   }
 
-  private getCharacterUiGroupTop(): number {
+  private getCharacterUiGroupTop(token: Group): number {
+    const spriteBody = token.get('spriteBodyObject');
+    const renderSize = this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE;
+    const visualOffsetY = spriteBody
+      ? getTownMapCharacterVisualOffsetY(renderSize)
+      : 0;
+
     return getCharacterUiGroupTop(
-      this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE,
+      renderSize,
       this.viewportZoom,
+      visualOffsetY,
     );
   }
 

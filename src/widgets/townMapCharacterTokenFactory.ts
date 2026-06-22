@@ -1,7 +1,16 @@
-import { Circle, Group, Rect, Text, type FabricObject } from 'fabric';
+import {
+  Circle,
+  FixedLayout,
+  Group,
+  LayoutManager,
+  Rect,
+  Text,
+  type FabricObject,
+} from 'fabric';
 import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import type { CharacterRequestLevel } from '~/services/characterRequests/types';
 import type { GridCoordinate } from './townMapGrid';
+import { getTownMapCharacterVisualOffsetY } from './townMapCharacterLayout';
 import type { TownMapCharacter } from './townMapWidgetTypes';
 import {
   CHARACTER_RADIUS_RATIO,
@@ -23,6 +32,9 @@ export class CharacterTokenFactory {
     spriteBody?: FabricObject,
   ): Group {
     const renderSize = cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE;
+    const visualOffsetY = spriteBody
+      ? getTownMapCharacterVisualOffsetY(renderSize)
+      : 0;
     const fallbackToken = new Circle({
       radius: renderSize * CHARACTER_RADIUS_RATIO,
       fill: character.color ?? '#f2d16b',
@@ -125,7 +137,7 @@ export class CharacterTokenFactory {
     });
     const heldItemSlot = new Group([heldItemSlotBounds, heldItemMount], {
       left: 10,
-      top: -10,
+      top: -10 + visualOffsetY,
       width: 20,
       height: 20,
       originX: 'center',
@@ -136,7 +148,7 @@ export class CharacterTokenFactory {
     });
     const uiGroup = new Group([requestMarker, expressionPresetId, status], {
       left: 0,
-      top: getCharacterUiGroupTop(renderSize, 1),
+      top: getCharacterUiGroupTop(renderSize, 1, visualOffsetY),
       originX: 'center',
       originY: 'center',
       selectable: false,
@@ -152,17 +164,14 @@ export class CharacterTokenFactory {
       evented: false,
     });
 
-    const group = new Group([
-      uiGroup,
-      hitArea,
-      bodyObject,
-      ...(label ? [label] : []),
-      heldItemSlot,
-    ], {
-      left: center.x,
-      top: center.y,
+    const group = new Group([], {
+      left: 0,
+      top: 0,
+      width: renderSize,
+      height: renderSize,
       originX: 'center',
       originY: 'center',
+      layoutManager: new LayoutManager(new FixedLayout()),
       selectable: true,
       evented: true,
       hasControls: false,
@@ -173,6 +182,17 @@ export class CharacterTokenFactory {
       hoverCursor: 'grab',
       moveCursor: 'grabbing',
       objectCaching: false,
+    });
+    group.add(
+      uiGroup,
+      hitArea,
+      bodyObject,
+      ...(label ? [label] : []),
+      heldItemSlot,
+    );
+    group.set({
+      left: center.x,
+      top: center.y,
     });
 
     group.set('characterId', character.id);
@@ -188,8 +208,12 @@ export class CharacterTokenFactory {
   }
 }
 
-export function getCharacterUiGroupTop(renderSize: number, zoom: number): number {
-  return -renderSize / 2 - CHARACTER_UI_MARGIN_SCREEN_PX / zoom;
+export function getCharacterUiGroupTop(
+  renderSize: number,
+  zoom: number,
+  visualOffsetY: number,
+): number {
+  return visualOffsetY - renderSize / 2 - CHARACTER_UI_MARGIN_SCREEN_PX / zoom;
 }
 
 export function getRequestMarkerStyle(level: CharacterRequestLevel): {

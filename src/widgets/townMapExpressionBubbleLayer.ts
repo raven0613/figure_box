@@ -3,15 +3,18 @@ import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import {
   FLOATING_UI_LAYER_RANK,
   TOWN_MAP_CHARACTER_RENDER_SCALE,
-  TOWN_MAP_EXPRESSION_BUBBLE_OFFSET_X_RATIO,
-  TOWN_MAP_EXPRESSION_BUBBLE_OFFSET_Y_RATIO,
+  TOWN_MAP_EXPRESSION_BUBBLE_RAISE_CELL_RATIO,
   TOWN_MAP_EXPRESSION_BUBBLE_RENDER_SCALE,
 } from '../constants/townMapWidgetConstants';
-import { EXPRESSION_BUBBLE_MAP_SOURCE_CROP } from './expressionBubble/expressionBubbleRig';
+import {
+  EXPRESSION_BUBBLE_ASSET_CENTER,
+  EXPRESSION_BUBBLE_MAP_SOURCE_CROP,
+} from './expressionBubble/expressionBubbleRig';
 import {
   createTownMapExpressionBubbleSpriteBody,
   type TownMapExpressionBubbleSpriteBody,
 } from './townMapExpressionBubbleSpriteRenderer';
+import { getTownMapCharacterSourceOffsetFromFeetY } from './townMapCharacterLayout';
 import type { GridCoordinate } from './townMapGrid';
 
 interface TownMapExpressionBubbleLayerOptions {
@@ -84,6 +87,16 @@ export class TownMapExpressionBubbleLayer {
     });
   }
 
+  syncCharacterPosition(characterId: string, anchor: GridCoordinate): void {
+    const expressionBubble = this.characterExpressionBubbles.get(characterId);
+
+    if (!expressionBubble) {
+      return;
+    }
+
+    this.positionExpressionBubble(expressionBubble, anchor);
+  }
+
   private async showSprite(
     characterId: string,
     expressionBubbleId: ExpressionBubbleId,
@@ -134,8 +147,11 @@ export class TownMapExpressionBubbleLayer {
     const characterRenderSize = this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE;
 
     expressionBubble.set({
-      left: anchor.x + characterRenderSize * TOWN_MAP_EXPRESSION_BUBBLE_OFFSET_X_RATIO,
-      top: anchor.y + characterRenderSize * TOWN_MAP_EXPRESSION_BUBBLE_OFFSET_Y_RATIO,
+      left: anchor.x,
+      top: anchor.y + getTownMapCharacterSourceOffsetFromFeetY(
+        EXPRESSION_BUBBLE_ASSET_CENTER.y,
+        characterRenderSize,
+      ) - this.cellSize * TOWN_MAP_EXPRESSION_BUBBLE_RAISE_CELL_RATIO,
       opacity: 1,
     });
     expressionBubble.setCoords();

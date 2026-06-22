@@ -5,6 +5,15 @@ interface TerrainStyle {
   fill: string;
   stroke: string;
 }
+
+interface MapObjectGeometry {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  sortGroundY: number;
+}
+
 // 地形樣式、地圖物件 glyph
 export class TerrainStyleCatalog {
   private readonly styles: Record<TerrainType, TerrainStyle> = {
@@ -35,15 +44,12 @@ export class MapObjectGlyphFactory {
       return this.createLamp(object, cellSize);
     }
 
-    const left = object.x * cellSize;
-    const top = object.y * cellSize;
-    const width = object.width * cellSize;
-    const height = object.height * cellSize;
+    const geometry = this.getObjectGeometry(object, cellSize);
     const body = new Rect({
       left: 0,
       top: 0,
-      width,
-      height,
+      width: geometry.width,
+      height: geometry.height,
       originX: 'left',
       originY: 'top',
       fill: this.getFill(object.type),
@@ -55,11 +61,11 @@ export class MapObjectGlyphFactory {
       evented: false,
     });
     const glyph = new Text(this.getGlyph(object.type), {
-      left: width / 2,
-      top: height / 2,
+      left: geometry.width / 2,
+      top: geometry.height / 2,
       originX: 'center',
       originY: 'center',
-      fontSize: Math.max(8, Math.min(width, height) * 0.38),
+      fontSize: Math.max(8, Math.min(geometry.width, geometry.height) * 0.38),
       fontFamily: 'Arial, sans-serif',
       fontWeight: '700',
       fill: '#f7fbff',
@@ -67,8 +73,8 @@ export class MapObjectGlyphFactory {
       evented: false,
     });
     const group = new Group([body, glyph], {
-      left,
-      top,
+      left: geometry.left,
+      top: geometry.top,
       originX: 'left',
       originY: 'top',
       selectable: false,
@@ -76,15 +82,14 @@ export class MapObjectGlyphFactory {
       objectCaching: true,
     });
 
-    this.applyObjectMetadata(group, object, top + height);
+    this.applyObjectMetadata(group, object, geometry.sortGroundY);
     return group;
   }
 
   private createApartment(object: TownMapObjectData, cellSize: number): Group {
-    const left = object.x * cellSize;
-    const top = object.y * cellSize;
-    const width = object.width * cellSize;
-    const height = object.height * cellSize;
+    const geometry = this.getObjectGeometry(object, cellSize);
+    const width = geometry.width;
+    const height = geometry.height;
     const cornerRadius = Math.min(4, cellSize * 0.25);
     const doorWidth = Math.max(cellSize * 2.2, width * 0.24);
     const doorHeight = Math.max(cellSize * 1.7, height * 0.18);
@@ -199,8 +204,8 @@ export class MapObjectGlyphFactory {
       canopyTrim,
       label,
     ], {
-      left,
-      top,
+      left: geometry.left,
+      top: geometry.top,
       originX: 'left',
       originY: 'top',
       selectable: false,
@@ -208,7 +213,7 @@ export class MapObjectGlyphFactory {
       objectCaching: true,
     });
 
-    this.applyObjectMetadata(group, object, top + height);
+    this.applyObjectMetadata(group, object, geometry.sortGroundY);
     return group;
   }
 
@@ -241,8 +246,9 @@ export class MapObjectGlyphFactory {
   }
 
   private createTree(object: TownMapObjectData, cellSize: number): Group {
-    const width = object.width * cellSize;
-    const height = object.height * cellSize;
+    const geometry = this.getObjectGeometry(object, cellSize);
+    const width = geometry.width;
+    const height = geometry.height;
     const centerX = width / 2;
     const trunkWidth = width * 0.2;
     const trunkHeight = height * 0.35;
@@ -268,11 +274,9 @@ export class MapObjectGlyphFactory {
       selectable: false,
       evented: false,
     });
-    const left = object.x * cellSize;
-    const top = object.y * cellSize;
     const group = new Group([trunk, crown], {
-      left,
-      top,
+      left: geometry.left,
+      top: geometry.top,
       originX: 'left',
       originY: 'top',
       selectable: false,
@@ -280,13 +284,14 @@ export class MapObjectGlyphFactory {
       objectCaching: true,
     });
 
-    this.applyObjectMetadata(group, object, top + height);
+    this.applyObjectMetadata(group, object, geometry.sortGroundY);
     return group;
   }
 
   private createLamp(object: TownMapObjectData, cellSize: number): Group {
-    const width = object.width * cellSize;
-    const height = object.height * cellSize;
+    const geometry = this.getObjectGeometry(object, cellSize);
+    const width = geometry.width;
+    const height = geometry.height;
     const centerX = width / 2;
     const poleWidth = width * 0.15;
     const poleHeight = height * 0.75;
@@ -328,11 +333,9 @@ export class MapObjectGlyphFactory {
       selectable: false,
       evented: false,
     });
-    const left = object.x * cellSize;
-    const top = object.y * cellSize;
     const group = new Group([glow, pole, head], {
-      left,
-      top,
+      left: geometry.left,
+      top: geometry.top,
       originX: 'left',
       originY: 'top',
       selectable: false,
@@ -340,14 +343,30 @@ export class MapObjectGlyphFactory {
       objectCaching: true,
     });
 
-    this.applyObjectMetadata(group, object, top + height);
+    this.applyObjectMetadata(group, object, geometry.sortGroundY);
     return group;
   }
 
-  private applyObjectMetadata(group: Group, object: TownMapObjectData, sortBottomY: number): void {
+  private getObjectGeometry(
+    object: TownMapObjectData,
+    cellSize: number,
+  ): MapObjectGeometry {
+    const groundBottomY = (object.y + object.length) * cellSize;
+    const height = object.height * cellSize;
+
+    return {
+      left: object.x * cellSize,
+      top: groundBottomY - height,
+      width: object.width * cellSize,
+      height,
+      sortGroundY: groundBottomY - cellSize / 2,
+    };
+  }
+
+  private applyObjectMetadata(group: Group, object: TownMapObjectData, sortGroundY: number): void {
     group.set('mapObjectId', object.id);
     group.set('mapObjectType', object.type);
-    group.set('sortBottomY', sortBottomY);
+    group.set('sortBottomY', sortGroundY);
     group.set('entityLayerRank', this.getLayerRank(object.layer));
   }
 

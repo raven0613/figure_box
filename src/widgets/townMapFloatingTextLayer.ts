@@ -137,7 +137,7 @@ export class TownMapFloatingTextLayer {
     this.bubbleAnimations.delete(characterId);
 
     const bubble = this.getOrCreateCharacterBubble(characterId, text);
-    const top = anchor.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 0.46;
+    const top = getCharacterBubbleTop(anchor, this.cellSize);
 
     bubble.set({
       text,
@@ -239,6 +239,28 @@ export class TownMapFloatingTextLayer {
     this.bubbleAnimations.delete(characterId);
     this.clearTimer(this.bubbleTimers, characterId);
     this.clearTimer(this.expressionBubbleTimers, characterId);
+  }
+
+  syncCharacterPosition(characterId: string, anchor: GridCoordinate): void {
+    this.expressionBubbleLayer.syncCharacterPosition(characterId, anchor);
+
+    const animationState = this.bubbleAnimations.get(characterId);
+
+    if (!animationState) {
+      return;
+    }
+
+    const nextStartTop = getCharacterBubbleTop(anchor, this.cellSize);
+    const offsetX = anchor.x - animationState.startLeft;
+    const offsetY = nextStartTop - animationState.startTop;
+
+    animationState.startLeft = anchor.x;
+    animationState.startTop = nextStartTop;
+    animationState.bubble.set({
+      left: (animationState.bubble.left ?? 0) + offsetX,
+      top: (animationState.bubble.top ?? 0) + offsetY,
+    });
+    animationState.bubble.setCoords();
   }
 
   advanceBubbleAnimations(timestamp: number): void {
@@ -386,6 +408,10 @@ function applyBounceAwayBubbleAnimation(state: BubbleAnimationState, progress: n
     top: state.startTop - hop,
     angle: state.direction * progress * 7,
   });
+}
+
+function getCharacterBubbleTop(anchor: GridCoordinate, cellSize: number): number {
+  return anchor.y - cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 0.46;
 }
 
 function easeOutCubic(progress: number): number {
