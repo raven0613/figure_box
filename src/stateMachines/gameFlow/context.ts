@@ -3,6 +3,7 @@ import type { ItemDefinitionId, ItemInstanceId, CharacterSeedItem } from "~/typi
 import type { CharacterControlState } from "./states";
 import type { RelationshipStore } from "./relationships";
 import { DialogueChoiceInstruction, DialogueParticipant, DialogueScriptDocument } from "~/typing/dialogue";
+import type { CharacterPersonality } from "~/constants/characterPersonality";
 
 // 放要存的資料
 export interface GameFlowContext {
@@ -20,6 +21,7 @@ export interface GameActivityObservation {
 export interface CharacterContext {
   id: string;
   name: string;
+  personality: CharacterPersonality;
   ownItems: CharacterSeedItem[],
   status: {
     mood: Mood;
@@ -74,6 +76,7 @@ export interface CharacterRuntimeInput {
 export interface CharacterMachineInput {
   id: string;
   name: string;
+  personality: CharacterPersonality;
   position: Position;
   ownItems?: readonly CharacterSeedItem[];
   saturation?: number;

@@ -1,5 +1,6 @@
 import { createActor } from 'xstate';
 import { describe, expect, test } from 'vitest';
+import { createDefaultCharacterPersonality } from '~/constants/characterPersonality';
 import {
     TOWN_APARTMENT_ENTRANCE_TILES,
     TOWN_APARTMENT_SPACE_ID,
@@ -19,6 +20,7 @@ function createTestCharacterActor() {
         input: {
             id: 'character-a',
             name: '測試角色',
+            personality: createDefaultCharacterPersonality(),
             position: { x: 1, y: 1 },
             saturation: 50,
         },

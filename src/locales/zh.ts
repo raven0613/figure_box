@@ -72,6 +72,14 @@ export default {
         name: '卡片',
         description: '可以拿來一起玩的卡片。',
       },
+      book: {
+        name: '書',
+        description: '適合找個安靜角落慢慢閱讀。',
+      },
+      camera: {
+        name: '相機',
+        description: '可以送給角色，讓他帶著相機出門攝影。',
+      },
       clearGem: {
         name: '透明寶石',
         description: '可以裝飾，也可以拿來製作。',

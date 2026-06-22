@@ -50,6 +50,14 @@ export class TownMapItemGlyphFactory {
       return this.createCardsGlyph(size);
     }
 
+    if (assetId === 'item/book') {
+      return this.createBookGlyph(size);
+    }
+
+    if (assetId === 'item/camera') {
+      return this.createCameraGlyph(size);
+    }
+
     if (assetId === 'item/clear_gem') {
       return this.createGemGlyph(size);
     }
@@ -185,6 +193,97 @@ export class TownMapItemGlyphFactory {
     });
 
     return this.createGlyphGroup([backCard, frontCard, mark]);
+  }
+
+  private createBookGlyph(size: number): Group {
+    const cover = new Rect({
+      width: size * 0.72,
+      height: size * 0.86,
+      rx: 1.5,
+      ry: 1.5,
+      fill: '#557a95',
+      stroke: '#263f50',
+      strokeWidth: 1,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const pages = new Rect({
+      left: size * 0.05,
+      width: size * 0.56,
+      height: size * 0.7,
+      fill: '#f5eedc',
+      stroke: '#b9aa8d',
+      strokeWidth: 0.7,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const spine = new Rect({
+      left: -size * 0.27,
+      width: size * 0.1,
+      height: size * 0.82,
+      fill: '#36566d',
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+
+    return this.createGlyphGroup([cover, pages, spine]);
+  }
+
+  private createCameraGlyph(size: number): Group {
+    const body = new Rect({
+      width: size * 0.86,
+      height: size * 0.58,
+      rx: 2,
+      ry: 2,
+      fill: '#39434c',
+      stroke: '#1d2328',
+      strokeWidth: 1,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const top = new Rect({
+      left: -size * 0.18,
+      top: -size * 0.36,
+      width: size * 0.28,
+      height: size * 0.16,
+      rx: 1,
+      ry: 1,
+      fill: '#59646d',
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const lens = new Circle({
+      radius: size * 0.21,
+      fill: '#78a9bd',
+      stroke: '#182a33',
+      strokeWidth: 1.5,
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+    const glint = new Circle({
+      left: -size * 0.06,
+      top: -size * 0.07,
+      radius: size * 0.055,
+      fill: 'rgba(255,255,255,0.75)',
+      originX: 'center',
+      originY: 'center',
+      selectable: false,
+      evented: false,
+    });
+
+    return this.createGlyphGroup([body, top, lens, glint]);
   }
 
   private createGemGlyph(size: number): Group {

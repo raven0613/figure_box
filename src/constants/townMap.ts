@@ -124,7 +124,25 @@ export const DESTINATION_MAP: Record<string, readonly Destination[]> = {
   play: [
     { name: '中央廣場', serviceTiles: [{ x: 45, y: 22 }, { x: 46, y: 22 }, { x: 45, y: 23 }] },
     { name: '公園', serviceTiles: [{ x: 18, y: 8 }, { x: 19, y: 8 }, { x: 20, y: 8 }] },
-    { name: '露天桌', serviceTiles: [{ x: 5, y: 48 }, { x: 8, y: 48 }, { x: 7, y: 50 }] },
+    { name: '露天舞台', serviceTiles: [{ x: 22, y: 63 }, { x: 23, y: 63 }, { x: 25, y: 63 }] },
+  ],
+  coffee: [
+    { name: '露天咖啡座', serviceTiles: [{ x: 5, y: 48 }, { x: 8, y: 48 }, { x: 7, y: 50 }, { x: 6, y: 47 }] },
+  ],
+  sketch: [
+    { name: '公園池畔', serviceTiles: [{ x: 20, y: 9 }, { x: 29, y: 9 }] },
+    { name: '中央廣場', serviceTiles: [{ x: 40, y: 20 }, { x: 50, y: 26 }] },
+    { name: '自然保留區', serviceTiles: [{ x: 39, y: 66 }, { x: 50, y: 66 }] },
+  ],
+  jogging: [
+    { name: '北側道路', serviceTiles: [{ x: 14, y: 13 }, { x: 34, y: 13 }, { x: 55, y: 13 }] },
+    { name: '中央道路', serviceTiles: [{ x: 14, y: 34 }, { x: 34, y: 34 }, { x: 55, y: 34 }] },
+    { name: '南側道路', serviceTiles: [{ x: 14, y: 55 }, { x: 34, y: 55 }, { x: 55, y: 55 }] },
+  ],
+  photography: [
+    { name: '公園池畔', serviceTiles: [{ x: 21, y: 8 }, { x: 30, y: 8 }] },
+    { name: '廣場雕像', serviceTiles: [{ x: 42, y: 23 }, { x: 46, y: 24 }] },
+    { name: '自然保留區', serviceTiles: [{ x: 38, y: 65 }, { x: 51, y: 65 }] },
   ],
 };
 // 公寓入口
@@ -196,7 +214,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
   {
     id: 'test-cafe-table',
     type: 'table',
-    label: '露天桌',
+    label: '露天咖啡桌',
     x: 6,
     y: 48,
     width: 2,
@@ -209,7 +227,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
   {
     id: 'test-cafe-chair-a',
     type: 'chair',
-    label: '露天椅 A',
+    label: '咖啡座椅 A',
     x: 5,
     y: 49,
     width: 1,
@@ -222,7 +240,7 @@ export const TOWN_MAP_OBJECTS: readonly TownMapObjectData[] = [
   {
     id: 'test-cafe-chair-b',
     type: 'chair',
-    label: '露天椅 B',
+    label: '咖啡座椅 B',
     x: 8,
     y: 49,
     width: 1,

@@ -1,4 +1,5 @@
 import { CHARACTER_SEEDS } from '~/constants/character';
+import { createDefaultCharacterPersonality } from '~/constants/characterPersonality';
 import { collectCharacterEventCandidates } from '~/services/characterEvents/buckets';
 import { calculateCharacterUtilityScores } from '~/services/characterEvents/utility';
 import { characterRuntimeSaveService, createDefaultCharacterRuntimeSnapshot } from '~/services/save/characterRuntimeSaveService';
@@ -86,6 +87,7 @@ function createCharacterContext(snapshot: CharacterRuntimeSnapshot): CharacterCo
   const contextWithoutUtilityScores = {
     id: snapshot.id,
     name: seed?.name ?? snapshot.id,
+    personality: createDefaultCharacterPersonality(),
     ownItems,
     status: { ...snapshot.status },
     lastEventDecision: null,

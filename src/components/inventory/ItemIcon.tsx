@@ -26,6 +26,27 @@ export function ItemIcon({ definition }: ItemIconProps) {
     );
   }
 
+  if (definition.visual.assetId === 'item/book') {
+    return (
+      <svg className={styles.itemIconSvg} viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="7" y="4" width="19" height="24" rx="2" fill="#557a95" stroke="#263f50" strokeWidth="1.5" />
+        <rect x="11" y="7" width="12" height="18" fill="#f5eedc" stroke="#b9aa8d" strokeWidth="1" />
+        <rect x="7" y="5" width="3" height="22" fill="#36566d" />
+      </svg>
+    );
+  }
+
+  if (definition.visual.assetId === 'item/camera') {
+    return (
+      <svg className={styles.itemIconSvg} viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="4" y="10" width="24" height="16" rx="3" fill="#39434c" stroke="#1d2328" strokeWidth="1.5" />
+        <rect x="8" y="7" width="8" height="4" rx="1" fill="#59646d" />
+        <circle cx="16" cy="18" r="6" fill="#78a9bd" stroke="#182a33" strokeWidth="2" />
+        <circle cx="14" cy="16" r="1.5" fill="rgba(255,255,255,0.75)" />
+      </svg>
+    );
+  }
+
   if (definition.visual.assetId === 'item/apple') {
     return (
       <svg className={styles.itemIconSvg} viewBox="0 0 32 32" aria-hidden="true">

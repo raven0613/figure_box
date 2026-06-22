@@ -4,6 +4,7 @@ import {
   SocialStatus,
   type Position,
 } from '~/constants/character';
+import { DESTINATION_MAP } from '~/constants/townMap';
 import type {
   CharacterEventAcceptance,
   CharacterEventActivity,
@@ -20,6 +21,7 @@ import {
   type ActivityRollRuleContext,
   type ActivityRollSelection,
 } from '~/services/characterEvents/activityRolls';
+import { canAcceptCharacterEventInvitation } from '~/services/characterEvents/acceptance';
 import { itemService } from '~/services/items/itemService';
 import {
   applyCompletedActivityStatusEffects,
@@ -540,49 +542,13 @@ function canAcceptOfflineActivity(
   acceptance: CharacterEventAcceptance | undefined,
   random: () => number,
 ): boolean {
-  if (!acceptance) {
-    return true;
-  }
-
-  const meetsMinMood = acceptance.minMoodValue === undefined ||
-    candidate.status.moodValue >= acceptance.minMoodValue;
-  const meetsAllowedMood = !acceptance.allowedMoods?.length ||
-    acceptance.allowedMoods.includes(candidate.status.mood);
-  const meetsRelationship = !acceptance.relationships?.length ||
-    acceptance.relationships.some(requirement => {
-      const relationship = candidate.relationships.find(entry => entry.targetCharId === hostCharacterId);
-      const intimacy = relationship?.intimacy ?? 0;
-      const socialStatus = getMutualRelationshipStatus(candidate.id, hostCharacterId);
-
-      if (requirement.minIntimacy !== undefined && intimacy < requirement.minIntimacy) {
-        return false;
-      }
-
-      if (requirement.maxIntimacy !== undefined && intimacy > requirement.maxIntimacy) {
-        return false;
-      }
-
-      const feeling = relationship?.feeling ?? Feeling.Neutral;
-
-      if (requirement.allowedFeelings?.length && !requirement.allowedFeelings.includes(feeling)) {
-        return false;
-      }
-
-      if (
-        requirement.allowedSocialStatuses?.length &&
-        !requirement.allowedSocialStatuses.includes(socialStatus)
-      ) {
-        return false;
-      }
-
-      return true;
-    });
-
-  if (meetsMinMood && meetsAllowedMood && meetsRelationship) {
-    return true;
-  }
-
-  return random() <= (acceptance.fallbackChance ?? 0);
+  return canAcceptCharacterEventInvitation({
+    candidate,
+    hostCharacterId,
+    hostSocialStatus: getMutualRelationshipStatus(candidate.id, hostCharacterId),
+    acceptance,
+    random,
+  });
 }
 
 function createActivityStatusPatch(
@@ -670,8 +636,10 @@ function getDistance(left: Position, right: Position): number {
 function resolveActivityDestination(
   activity: CharacterEventActivity,
 ) {
-  if (activity.destination === 'randomDestination.play') {
-    return getFirstDestinationTarget('play');
+  if (typeof activity.destination === 'string') {
+    return getFirstDestinationTarget(
+      activity.destination.replace('randomDestination.', ''),
+    );
   }
 
   if (activity.destination) {
@@ -682,8 +650,10 @@ function resolveActivityDestination(
 }
 
 function resolveLocationName(activity: CharacterEventActivity): string {
-  if (activity.destination === 'randomDestination.play') {
-    return '遊玩地點';
+  if (typeof activity.destination === 'string') {
+    const destinationKey = activity.destination.replace('randomDestination.', '');
+
+    return DESTINATION_MAP[destinationKey]?.[0]?.name ?? '活動地點';
   }
 
   if (activity.destination) {

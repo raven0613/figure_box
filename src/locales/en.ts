@@ -72,6 +72,14 @@ export default {
         name: 'Cards',
         description: 'A small deck for playing together.',
       },
+      book: {
+        name: 'Book',
+        description: 'A book for reading somewhere quiet.',
+      },
+      camera: {
+        name: 'Camera',
+        description: 'Give it to a character so they can go out taking photos.',
+      },
       clearGem: {
         name: 'Clear Gem',
         description: 'A gem for decoration or crafting.',

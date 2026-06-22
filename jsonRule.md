@@ -279,6 +279,12 @@ parser 只檢查 path 是否以 `character.`、`utility.` 或 `input.` 開頭；
 
 - `character.id`
 - `character.name`
+- `character.personality.socialTendency`
+- `character.personality.initiative`
+- `character.personality.activityPace`
+- `character.personality.emotionalExpression`
+- `character.personality.noveltyPreference`
+- `character.personality.interpersonalAttitude`
 - `character.status.mood`
 - `character.status.moodValue`
 - `character.status.saturation`
@@ -438,7 +444,7 @@ event 選中後，會從符合條件且權重大於 `0` 的 variant 中再做一
 | `key` | 是 | 活動種類的穩定識別碼，寫入 runtime activity 的 `activityKey` |
 | `type` | 是 | `chat`、`playWithItem`、`playAtLocation` |
 | `startPhase` | 否 | `active` 或 `traveling`；省略時，有 `destination` 為 `traveling`，否則為 `active` |
-| `destination` | 否 | `"randomDestination.play"` 或 `{ "x": number, "y": number }` |
+| `destination` | 否 | `"randomDestination.play"`、`"randomDestination.coffee"`、`"randomDestination.sketch"`、`"randomDestination.jogging"`、`"randomDestination.photography"`，或 `{ "x": number, "y": number }` |
 | `availability` | 否 | 活動可用時段。目前由 offline simulation 使用；live town activity 流程尚未套用 |
 | `group` | 是 | 邀請距離與人數 |
 | `joinable` | 否 | live town activity 必須明確設為 `true` 才會建立；省略或 `false` 時 starter 會立即結束該 activity |
@@ -608,17 +614,32 @@ sad, upset, heartbroken, angry, afraid
       "allowedSocialStatuses": ["stranger", "acquaintance", "friend"]
     }
   ],
-  "fallbackChance": 0.25
+  "baseChance": 0.75,
+  "fallbackChance": 0.25,
+  "weightModifiers": [
+    {
+      "path": "character.personality.socialTendency",
+      "operator": ">=",
+      "value": 4,
+      "multiplier": 1.2
+    }
+  ]
 }
 ```
 
-被邀請者要直接接受，必須同時符合：
+系統先判斷受邀者是否同時符合：
 
 1. `minMoodValue`。
 2. `allowedMoods`。
 3. `relationships` 中至少一組完整符合。
 
-若不符合，仍以 `fallbackChance` 做最後一次隨機接受。省略 `fallbackChance` 等同 `0`。
+符合時以 `baseChance` 作為基礎接受機率，省略等同 `1`；不符合時改用
+`fallbackChance`，省略等同 `0`。接著依序套用 `weightModifiers`，最後把機率限制
+在 `0..1` 並進行隨機判定。
+
+`acceptance.weightModifiers` 使用和 event 頂層 `weightModifiers` 相同的規則格式。此處的
+`character` 是受邀者，`utility` 是受邀者目前的需求分數；邀請判定沒有額外感知輸入，
+所以 `input.*` 會是空陣列或 `0`，通常不應用來調整接受機率。
 
 | Key | 限制 |
 | --- | --- |
@@ -628,7 +649,9 @@ sad, upset, heartbroken, angry, afraid
 | `relationships[].maxIntimacy` | finite number |
 | `relationships[].allowedFeelings` | 必須使用 Feeling enum |
 | `relationships[].allowedSocialStatuses` | 必須使用 SocialStatus enum |
+| `baseChance` | 符合心情與關係要求時的基礎接受機率，`0..1`，省略為 `1` |
 | `fallbackChance` | `0..1` |
+| `weightModifiers` | 依受邀者狀態、需求或 personality 調整接受機率 |
 
 SocialStatus 可用值：
 

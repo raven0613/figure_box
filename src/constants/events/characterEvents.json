@@ -314,7 +314,34 @@
           "allowedSocialStatuses": ["stranger", "acquaintance", "friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
         }
       ],
-      "fallbackChance": 0.65
+      "baseChance": 0.72,
+      "fallbackChance": 0.65,
+      "weightModifiers": [
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "<=",
+          "value": 1,
+          "multiplier": 0.75
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "==",
+          "value": 2,
+          "multiplier": 0.85
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "==",
+          "value": 4,
+          "multiplier": 1.15
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": ">=",
+          "value": 5,
+          "multiplier": 1.35
+        }
+      ]
     },
     "conditions": [
       {
@@ -404,7 +431,34 @@
           "allowedSocialStatuses": ["stranger", "acquaintance", "friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
         }
       ],
-      "fallbackChance": 0.82
+      "baseChance": 0.78,
+      "fallbackChance": 0.82,
+      "weightModifiers": [
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "<=",
+          "value": 1,
+          "multiplier": 0.75
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "==",
+          "value": 2,
+          "multiplier": 0.85
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "==",
+          "value": 4,
+          "multiplier": 1.15
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": ">=",
+          "value": 5,
+          "multiplier": 1.35
+        }
+      ]
     },
     "presentationVariants": [
       {
@@ -841,7 +895,34 @@
           "allowedSocialStatuses": ["stranger", "acquaintance", "friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
         }
       ],
-      "fallbackChance": 0.75
+      "baseChance": 0.72,
+      "fallbackChance": 0.75,
+      "weightModifiers": [
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "<=",
+          "value": 1,
+          "multiplier": 0.75
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "==",
+          "value": 2,
+          "multiplier": 0.85
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "==",
+          "value": 4,
+          "multiplier": 1.15
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": ">=",
+          "value": 5,
+          "multiplier": 1.35
+        }
+      ]
     },
     "presentationVariants": [
       {
@@ -922,7 +1003,34 @@
           "allowedSocialStatuses": ["friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
         }
       ],
-      "fallbackChance": 0.25
+      "baseChance": 0.68,
+      "fallbackChance": 0.25,
+      "weightModifiers": [
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "<=",
+          "value": 1,
+          "multiplier": 0.75
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "==",
+          "value": 2,
+          "multiplier": 0.85
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "==",
+          "value": 4,
+          "multiplier": 1.15
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": ">=",
+          "value": 5,
+          "multiplier": 1.35
+        }
+      ]
     },
     "presentationVariants": [
       {
@@ -1376,6 +1484,437 @@
     }
   },
   {
+    "id": "need.readBook",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 4,
+    "maxWeight": 58,
+    "conditions": [
+      {
+        "path": "input.ownItemIds",
+        "operator": "includes",
+        "value": "book"
+      }
+    ],
+    "weightModifiers": [
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "<=",
+        "value": 2,
+        "multiplier": 1.45
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": ">=",
+        "value": 4,
+        "multiplier": 0.72
+      },
+      {
+        "path": "character.personality.noveltyPreference",
+        "operator": "<=",
+        "value": 2,
+        "add": 6
+      }
+    ],
+    "acceptance": {
+      "baseChance": 0.55,
+      "fallbackChance": 0.2,
+      "weightModifiers": [
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "<=",
+          "value": 2,
+          "multiplier": 0.65
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": ">=",
+          "value": 4,
+          "multiplier": 1.25
+        }
+      ]
+    },
+    "presentationVariants": [
+      {
+        "id": "read_book.quiet",
+        "baseWeight": 10,
+        "performanceId": "life.readBook",
+        "offlineRecap": {
+          "summary": "{participantNameList} 找了個安靜的位置看書。",
+          "detail": "短暫的閱讀時間讓心情沉靜了下來。"
+        },
+        "activity": {
+          "key": "life.read-book",
+          "type": "playWithItem",
+          "startPhase": "active",
+          "group": {
+            "inviteNearbyRange": 2,
+            "minParticipants": 1,
+            "maxParticipants": 2
+          },
+          "joinable": true,
+          "durationMs": 24000,
+          "refreshDurationOnJoin": false,
+          "joinWindowMs": 10000,
+          "cooldowns": {
+            "selfMs": 18000,
+            "targetMs": 10000,
+            "pairMs": 30000,
+            "category": "quiet_reading",
+            "repeatPenalty": {
+              "windowMs": 180000,
+              "weightMultiplierPerRepeat": 0.45,
+              "maxRepeats": 3
+            }
+          },
+          "effects": {
+            "moodValueDelta": 6,
+            "playNeedDelta": -18
+          },
+          "joinRequirements": {
+            "type": "hasItem",
+            "itemId": "book",
+            "scope": "host"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "need.drinkCoffee",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 2,
+    "maxWeight": 50,
+    "weightModifiers": [
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "<=",
+        "value": 2,
+        "multiplier": 1.25
+      },
+      {
+        "path": "character.personality.activityPace",
+        "operator": "<=",
+        "value": 2,
+        "add": 7
+      }
+    ],
+    "acceptance": {
+      "baseChance": 0.65,
+      "fallbackChance": 0.3,
+      "weightModifiers": [
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "<=",
+          "value": 2,
+          "multiplier": 0.7
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": ">=",
+          "value": 4,
+          "multiplier": 1.2
+        }
+      ]
+    },
+    "presentationVariants": [
+      {
+        "id": "drink_coffee.outdoor",
+        "baseWeight": 10,
+        "performanceId": "life.drinkCoffee",
+        "offlineRecap": {
+          "summary": "{participantNameList} 到露天咖啡座休息了一會兒。",
+          "detail": "咖啡和安靜的片刻讓步調慢了下來。"
+        },
+        "activity": {
+          "key": "life.drink-coffee",
+          "type": "playAtLocation",
+          "startPhase": "traveling",
+          "destination": "randomDestination.coffee",
+          "group": {
+            "inviteNearbyRange": 4,
+            "minParticipants": 1,
+            "maxParticipants": 4
+          },
+          "joinable": true,
+          "durationMs": 22000,
+          "refreshDurationOnJoin": true,
+          "joinWindowMs": 14000,
+          "cooldowns": {
+            "selfMs": 20000,
+            "targetMs": 10000,
+            "pairMs": 28000,
+            "category": "quiet_coffee",
+            "repeatPenalty": {
+              "windowMs": 180000,
+              "weightMultiplierPerRepeat": 0.5,
+              "maxRepeats": 3
+            }
+          },
+          "effects": {
+            "moodValueDelta": 7,
+            "playNeedDelta": -16
+          },
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "need.sketchScenery",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 3,
+    "maxWeight": 52,
+    "weightModifiers": [
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "<=",
+        "value": 2,
+        "multiplier": 1.5
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": ">=",
+        "value": 4,
+        "multiplier": 0.65
+      },
+      {
+        "path": "character.personality.noveltyPreference",
+        "operator": ">=",
+        "value": 4,
+        "add": 8
+      }
+    ],
+    "presentationVariants": [
+      {
+        "id": "sketch_scenery.quiet",
+        "baseWeight": 10,
+        "performanceId": "life.sketchScenery",
+        "offlineRecap": {
+          "summary": "{participantNameList} 獨自找了個景色不錯的地方寫生。",
+          "detail": "專心觀察風景的時間讓思緒安定了下來。"
+        },
+        "activity": {
+          "key": "life.sketch-scenery",
+          "type": "playAtLocation",
+          "startPhase": "traveling",
+          "destination": "randomDestination.sketch",
+          "group": {
+            "minParticipants": 1,
+            "maxParticipants": 1
+          },
+          "joinable": true,
+          "durationMs": 26000,
+          "refreshDurationOnJoin": false,
+          "cooldowns": {
+            "selfMs": 22000,
+            "category": "quiet_creative",
+            "repeatPenalty": {
+              "windowMs": 180000,
+              "weightMultiplierPerRepeat": 0.45,
+              "maxRepeats": 3
+            }
+          },
+          "effects": {
+            "moodValueDelta": 8,
+            "playNeedDelta": -22
+          },
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "need.jogging",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 3,
+    "maxWeight": 58,
+    "weightModifiers": [
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "<=",
+        "value": 2,
+        "multiplier": 1.25
+      },
+      {
+        "path": "character.personality.activityPace",
+        "operator": ">=",
+        "value": 4,
+        "add": 12
+      }
+    ],
+    "acceptance": {
+      "baseChance": 0.6,
+      "fallbackChance": 0.25,
+      "weightModifiers": [
+        {
+          "path": "character.personality.activityPace",
+          "operator": "<=",
+          "value": 2,
+          "multiplier": 0.55
+        },
+        {
+          "path": "character.personality.activityPace",
+          "operator": ">=",
+          "value": 4,
+          "multiplier": 1.3
+        }
+      ]
+    },
+    "presentationVariants": [
+      {
+        "id": "jogging.casual",
+        "baseWeight": 10,
+        "performanceId": "life.jogging",
+        "offlineRecap": {
+          "summary": "{participantNameList} 沿著鎮上的道路慢跑。",
+          "detail": "規律的步伐讓精神稍微振作了起來。"
+        },
+        "activity": {
+          "key": "life.jogging",
+          "type": "playAtLocation",
+          "startPhase": "traveling",
+          "destination": "randomDestination.jogging",
+          "group": {
+            "inviteNearbyRange": 3,
+            "minParticipants": 1,
+            "maxParticipants": 2
+          },
+          "joinable": true,
+          "durationMs": 18000,
+          "refreshDurationOnJoin": false,
+          "joinWindowMs": 10000,
+          "cooldowns": {
+            "selfMs": 18000,
+            "targetMs": 10000,
+            "pairMs": 30000,
+            "category": "quiet_jogging",
+            "repeatPenalty": {
+              "windowMs": 150000,
+              "weightMultiplierPerRepeat": 0.5,
+              "maxRepeats": 3
+            }
+          },
+          "effects": {
+            "moodValueDelta": 6,
+            "playNeedDelta": -24
+          },
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "need.photography",
+    "bucketId": "need",
+    "motivation": "play",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 0,
+    "weightSource": "play",
+    "addWeight": 5,
+    "maxWeight": 64,
+    "conditions": [
+      {
+        "path": "input.ownItemIds",
+        "operator": "includes",
+        "value": "camera"
+      }
+    ],
+    "weightModifiers": [
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "<=",
+        "value": 2,
+        "multiplier": 1.35
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": ">=",
+        "value": 4,
+        "multiplier": 0.7
+      },
+      {
+        "path": "character.personality.noveltyPreference",
+        "operator": ">=",
+        "value": 4,
+        "add": 12
+      }
+    ],
+    "presentationVariants": [
+      {
+        "id": "photography.scenery",
+        "baseWeight": 10,
+        "performanceId": "life.photography",
+        "offlineRecap": {
+          "summary": "{participantNameList} 帶著相機出門拍了些照片。",
+          "detail": "尋找畫面的過程帶來了不少新鮮感。"
+        },
+        "activity": {
+          "key": "life.photography",
+          "type": "playWithItem",
+          "startPhase": "traveling",
+          "destination": "randomDestination.photography",
+          "group": {
+            "minParticipants": 1,
+            "maxParticipants": 1
+          },
+          "joinable": true,
+          "durationMs": 22000,
+          "refreshDurationOnJoin": false,
+          "cooldowns": {
+            "selfMs": 24000,
+            "category": "quiet_photography",
+            "repeatPenalty": {
+              "windowMs": 210000,
+              "weightMultiplierPerRepeat": 0.4,
+              "maxRepeats": 3
+            }
+          },
+          "effects": {
+            "moodValueDelta": 8,
+            "playNeedDelta": -24
+          },
+          "joinRequirements": {
+            "type": "hasItem",
+            "itemId": "camera",
+            "scope": "host"
+          }
+        }
+      }
+    ]
+  },
+  {
     "id": "environment.nearbyActivity.joinChat",
     "bucketId": "environment",
     "motivation": "chat",
@@ -1390,6 +1929,32 @@
     "maxWeight": 70,
     "interruptPolicy": "soft",
     "commitment": 8,
+    "weightModifiers": [
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "<=",
+        "value": 1,
+        "multiplier": 0.25
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "==",
+        "value": 2,
+        "multiplier": 0.55
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "==",
+        "value": 4,
+        "multiplier": 1.25
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": ">=",
+        "value": 5,
+        "multiplier": 1.5
+      }
+    ],
     "conditions": [
       {
         "path": "input.nearbyJoinableActivityCount",
@@ -1413,6 +1978,32 @@
     "maxWeight": 80,
     "interruptPolicy": "soft",
     "commitment": 10,
+    "weightModifiers": [
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "<=",
+        "value": 1,
+        "multiplier": 0.25
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "==",
+        "value": 2,
+        "multiplier": 0.55
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "==",
+        "value": 4,
+        "multiplier": 1.25
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": ">=",
+        "value": 5,
+        "multiplier": 1.5
+      }
+    ],
     "conditions": [
       {
         "path": "input.nearbyJoinableActivityCount",

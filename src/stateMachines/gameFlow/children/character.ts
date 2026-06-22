@@ -73,6 +73,7 @@ export const characterMachine = createMachine(
         context: ({ input }) => ({
             id: input.id,
             name: input.name,
+            personality: { ...input.personality },
             ownItems: [...(input.ownItems ?? [])],
             status: input.runtime?.status ?? {
                 mood: getMoodForMoodValue(65),

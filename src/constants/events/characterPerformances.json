@@ -1412,5 +1412,248 @@
         "durationMs": 5200
       }
     ]
+  },
+  {
+    "id": "life.readBook",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "要一起安靜看書嗎？",
+        "durationMs": 2200
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "好，我坐旁邊。",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "normal",
+        "durationMs": 24000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "max": 1
+        },
+        "effectId": "quietReading",
+        "label": "安靜看書中",
+        "durationMs": 24000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "effectId": "quietReading",
+        "label": "一起安靜看書",
+        "durationMs": 24000
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "先看到這裡。",
+        "durationMs": 1800
+      }
+    ]
+  },
+  {
+    "id": "life.drinkCoffee",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "有人想一起喝杯咖啡嗎？",
+        "durationMs": 2400
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "我也休息一下。",
+        "durationMs": 2000
+      },
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "both",
+        "expressionPresetId": "normal",
+        "durationMs": 22000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "max": 1
+        },
+        "effectId": "coffeeBreak",
+        "label": "獨自喝咖啡",
+        "durationMs": 22000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "effectId": "coffeeBreak",
+        "label": "悠閒喝咖啡",
+        "durationMs": 22000
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "both",
+        "text": "休息夠了。",
+        "durationMs": 1800
+      }
+    ]
+  },
+  {
+    "id": "life.sketchScenery",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "curious",
+        "durationMs": 26000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "initiator",
+        "effectId": "sketchScenery",
+        "label": "專心寫生中",
+        "durationMs": 26000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "這個角度不錯。",
+        "delayMs": 1800,
+        "durationMs": 2600
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "畫得差不多了。",
+        "durationMs": 1800
+      }
+    ]
+  },
+  {
+    "id": "life.jogging",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "要一起慢跑嗎？",
+        "durationMs": 2000
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "走吧，慢慢跑。",
+        "durationMs": 1800
+      },
+      {
+        "phase": "active",
+        "type": "animation",
+        "target": "both",
+        "animationId": "characterJumpAnim",
+        "durationMs": 18000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "max": 1
+        },
+        "effectId": "casualJogging",
+        "label": "獨自慢跑中",
+        "durationMs": 18000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "participantCount": {
+          "min": 2
+        },
+        "effectId": "casualJogging",
+        "label": "結伴慢跑中",
+        "durationMs": 18000
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "both",
+        "text": "呼……今天先跑到這裡。",
+        "durationMs": 2200
+      }
+    ]
+  },
+  {
+    "id": "life.photography",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expression",
+        "target": "initiator",
+        "expressionPresetId": "curious",
+        "durationMs": 22000
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "initiator",
+        "effectId": "sceneryPhotography",
+        "label": "取景拍照中",
+        "durationMs": 22000
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "喀嚓。",
+        "delayMs": 1800,
+        "durationMs": 1600
+      },
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "initiator",
+        "expressionBubbleId": "sparkle_light",
+        "delayMs": 5200,
+        "durationMs": 2200
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "拍到喜歡的畫面了。",
+        "durationMs": 2000
+      }
+    ]
   }
 ]

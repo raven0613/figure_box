@@ -101,7 +101,9 @@ export interface CharacterEventAcceptance {
   minMoodValue?: number;
   allowedMoods?: readonly Mood[];
   relationships?: readonly CharacterEventRelationshipAcceptance[];
+  baseChance?: number;
   fallbackChance?: number;
+  weightModifiers?: readonly CharacterEventWeightModifier[];
 }
 
 export interface CharacterEventRelationshipAcceptance {
@@ -135,6 +137,10 @@ export type CharacterEventActivityType = 'chat' | 'playWithItem' | 'playAtLocati
 export type CharacterEventActivityStartPhase = 'active' | 'traveling';
 export type CharacterEventActivityDestination =
   | 'randomDestination.play'
+  | 'randomDestination.coffee'
+  | 'randomDestination.sketch'
+  | 'randomDestination.jogging'
+  | 'randomDestination.photography'
   | Position;
 
 export interface CharacterEventGroupActivity {

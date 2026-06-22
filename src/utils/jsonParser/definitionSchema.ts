@@ -147,7 +147,9 @@ function readOptionalAcceptance(
     minMoodValue: readOptionalNonNegativeNumber(value, 'minMoodValue', index),
     allowedMoods: readOptionalMoodList(value, 'allowedMoods', index),
     relationships: readOptionalRelationshipAcceptanceList(value, index),
+    baseChance: readOptionalProbability(value, 'baseChance', index),
     fallbackChance: readOptionalProbability(value, 'fallbackChance', index),
+    weightModifiers: readOptionalWeightModifiers(value, 'weightModifiers', index),
   };
 }
 

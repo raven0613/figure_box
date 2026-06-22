@@ -9,6 +9,7 @@ import type { Position } from '~/constants/character';
 import { itemService } from '~/services/items/itemService';
 import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSaveService';
 import { saveService } from '~/services/save/saveService';
+import { createDefaultCharacterPersonality } from '~/constants/characterPersonality';
 
 const OFFLINE_RUNTIME_SYNC_DECISION_GRACE_MS = 1800;
 
@@ -130,6 +131,9 @@ export class TownCharacterRuntimeCoordinator {
     this.actorRegistry.spawn(character, {
       id: character.id,
       name: character.name,
+      personality: {
+        ...(character.personality ?? createDefaultCharacterPersonality()),
+      },
       position: runtime?.position ?? character.position,
       ownItems: previousContext?.ownItems ?? ('ownItems' in character ? character.ownItems : undefined),
       saturation: runtime?.status.saturation ?? character.saturation,

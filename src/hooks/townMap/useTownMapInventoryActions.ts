@@ -28,6 +28,7 @@ const PLAYER_DEMO_ITEM_IDS: readonly ItemDefinitionId[] = [
   'clear_gem',
   'silver_bracelet',
   'wooden_chair',
+  'camera',
 ];
 
 export function useTownMapInventoryActions({

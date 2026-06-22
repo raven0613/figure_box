@@ -72,6 +72,14 @@ export default {
         name: '카드',
         description: '함께 놀 수 있는 작은 카드 묶음입니다.',
       },
+      book: {
+        name: '책',
+        description: '조용한 곳에서 천천히 읽기 좋은 책입니다.',
+      },
+      camera: {
+        name: '카메라',
+        description: '캐릭터에게 선물하면 사진을 찍으러 나갈 수 있습니다.',
+      },
       clearGem: {
         name: '투명 보석',
         description: '장식하거나 제작에 쓸 수 있는 보석입니다.',

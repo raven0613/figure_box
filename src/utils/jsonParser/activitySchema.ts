@@ -36,6 +36,13 @@ const VALID_MEMORY_TYPES = Object.values(MemoryType) as MemoryType[];
 const VALID_PARTICIPANT_ROLES = ['initiator', 'target'] as const;
 const VALID_OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', 'includes'] as const;
 const TIME_TEXT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const VALID_RANDOM_ACTIVITY_DESTINATIONS = [
+  'randomDestination.play',
+  'randomDestination.coffee',
+  'randomDestination.sketch',
+  'randomDestination.jogging',
+  'randomDestination.photography',
+] as const;
 
 // activity / joinRequirements parser
 export function readOptionalActivity(
@@ -642,7 +649,10 @@ function readOptionalDestination(
     return undefined;
   }
 
-  if (value === 'randomDestination.play') {
+  if (
+    typeof value === 'string' &&
+    includesString(VALID_RANDOM_ACTIVITY_DESTINATIONS, value)
+  ) {
     return value;
   }
 

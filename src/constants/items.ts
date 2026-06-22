@@ -45,6 +45,50 @@ export const ITEM_DEFINITIONS: readonly ItemDefinition[] = [
     },
   },
   {
+    id: 'book',
+    nameKey: 'item.book.name',
+    descriptionKey: 'item.book.description',
+    type: 'tool',
+    category: 'collectible',
+    tags: ['quiet', 'reading', 'book'],
+    rarity: 'common',
+    stackable: false,
+    basePrice: 45,
+    visual: {
+      assetId: 'item/book',
+      scale: {
+        icon: 1,
+        held: 0.5,
+      },
+      heldOffset: {
+        x: -1,
+        y: 2,
+      },
+    },
+  },
+  {
+    id: 'camera',
+    nameKey: 'item.camera.name',
+    descriptionKey: 'item.camera.description',
+    type: 'tool',
+    category: 'tool',
+    tags: ['creative', 'photography', 'camera'],
+    rarity: 'uncommon',
+    stackable: false,
+    basePrice: 160,
+    visual: {
+      assetId: 'item/camera',
+      scale: {
+        icon: 1,
+        held: 0.48,
+      },
+      heldOffset: {
+        x: -1,
+        y: 1,
+      },
+    },
+  },
+  {
     id: 'apple',
     nameKey: 'item.apple.name',
     descriptionKey: 'item.apple.description',

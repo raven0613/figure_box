@@ -1,4 +1,4 @@
-import { Feeling, SocialStatus } from '~/constants/character';
+import { SocialStatus } from '~/constants/character';
 import {
   CHARACTER_EVENT_DEFINITIONS_BY_ID,
   type CharacterEventActivity,
@@ -8,6 +8,7 @@ import type { JoinableActivity, JoinableActivityManager } from '~/services/chara
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
+import { canAcceptCharacterEventInvitation } from '~/services/characterEvents/acceptance';
 import {
   getItemJoinRequirementScope,
   getGroupMaxParticipants,
@@ -222,51 +223,13 @@ export class TownActivityInviteResolver {
       return false;
     }
 
-    const acceptance = definition.acceptance;
-
-    if (!acceptance) {
-      return true;
-    }
-
-    const meetsMinMood = acceptance.minMoodValue === undefined ||
-      context.status.moodValue >= acceptance.minMoodValue;
-    const meetsAllowedMood = !acceptance.allowedMoods?.length ||
-      acceptance.allowedMoods.includes(context.status.mood);
-    const meetsRelationship = !acceptance.relationships?.length ||
-      acceptance.relationships.some(requirement => {
-        const relationship = context.relationships.find(entry => entry.targetCharId === hostCharacterId);
-        const intimacy = relationship?.intimacy ?? 0;
-        const socialStatus = this.getRelationshipStatus(inviteeId, hostCharacterId) ?? SocialStatus.Stranger;
-
-        if (requirement.minIntimacy !== undefined && intimacy < requirement.minIntimacy) {
-          return false;
-        }
-
-        if (requirement.maxIntimacy !== undefined && intimacy > requirement.maxIntimacy) {
-          return false;
-        }
-
-        const feeling = relationship?.feeling ?? Feeling.Neutral;
-
-        if (requirement.allowedFeelings?.length && !requirement.allowedFeelings.includes(feeling)) {
-          return false;
-        }
-
-        if (
-          requirement.allowedSocialStatuses?.length &&
-          !requirement.allowedSocialStatuses.includes(socialStatus)
-        ) {
-          return false;
-        }
-
-        return true;
-      });
-
-    if (meetsMinMood && meetsAllowedMood && meetsRelationship) {
-      return true;
-    }
-
-    return Math.random() <= (acceptance.fallbackChance ?? 0);
+    return canAcceptCharacterEventInvitation({
+      candidate: context,
+      hostCharacterId,
+      hostSocialStatus: this.getRelationshipStatus(inviteeId, hostCharacterId)
+        ?? SocialStatus.Stranger,
+      acceptance: definition.acceptance,
+    });
   }
 
   private recordInviteCooldowns(
