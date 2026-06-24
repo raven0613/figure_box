@@ -18,6 +18,7 @@ import {
 import {
   deletePlayerCharacterCreation,
   markPlayerCharacterCreationReady,
+  updatePlayerCharacterWayOfSaying,
   type CreatePlayerCharacterResult,
 } from '~/services/characterCreationService';
 import type { CharacterPerformanceDialogueRequest } from '~/services/characterEvents/characterPerformanceRunner';
@@ -429,6 +430,13 @@ function App() {
           color: characterColor,
           label: createCharacterDialogueLabel(readyProfileRecord.name),
           avatarState: getDialogueAvatarState(creationResult.characterId),
+          onWayOfSayingInput: ({ field, value }) => {
+            void updatePlayerCharacterWayOfSaying(creationResult.characterId, {
+              [field]: value,
+            }).catch(error => {
+              console.error('Failed to update character way of saying.', error);
+            });
+          },
         }),
       });
     } catch (error) {
@@ -976,6 +984,9 @@ function createDialogueRuntimeParticipant(
     color: character.color,
     label: character.label,
     avatarState: getDialogueAvatarState(character.id),
+    wayOfSaying: character.wayOfSaying
+      ? { ...character.wayOfSaying }
+      : undefined,
   };
 }
 

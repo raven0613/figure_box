@@ -218,6 +218,7 @@ export class TownCharacterController {
     });
     this.performanceRunner = new CharacterPerformanceRunner({
       getCharacterName: characterId => this.getCharacterName(characterId),
+      getCharacterWayOfSaying: characterId => this.getCharacterWayOfSaying(characterId),
       setCharacterExpressionPreset: (characterId, expressionPresetId) => {
         this.setCharacterExpressionPreset(characterId, expressionPresetId);
       },
@@ -407,6 +408,7 @@ export class TownCharacterController {
       performanceRunner: this.performanceRunner,
       getCharacterContext: characterId => this.getCharacterSnapshot(characterId)?.context ?? null,
       getCharacterName: characterId => this.getCharacterName(characterId),
+      getCharacterWayOfSaying: characterId => this.getCharacterWayOfSaying(characterId),
       getCharacterPersonality: characterId => (
         this.characters.find(character => character.id === characterId)?.personality
         ?? createDefaultCharacterPersonality()
@@ -1249,6 +1251,10 @@ export class TownCharacterController {
 
   private getCharacterName(characterId: string): string {
     return this.getCharacterSnapshot(characterId)?.context.name ?? characterId;
+  }
+
+  private getCharacterWayOfSaying(characterId: string): CharacterSeed['wayOfSaying'] {
+    return this.characters.find(character => character.id === characterId)?.wayOfSaying;
   }
 
   private getCharacterSnapshot(characterId: string): CharacterSnapshot | null {

@@ -34,7 +34,6 @@ export interface CharacterEventDefinition {
   conditions?: readonly CharacterEventRuleClause[];
   weightModifiers?: readonly CharacterEventWeightModifier[];
   presentationVariants?: readonly CharacterEventPresentationVariant[];
-  interactionPresentation?: CharacterEventInteractionPresentation;
   acceptance?: CharacterEventAcceptance;
   interruptPolicy?: CharacterEventInterruptPolicy;
   commitment?: number;
@@ -79,13 +78,6 @@ export interface CharacterEventPresentationVariant {
 
 export interface CharacterEventTransitionPresentation extends CharacterEventPresentationVariant {
   dialogueGroupId?: string;
-}
-
-export interface CharacterEventInteractionPresentation {
-  proposalLine?: string;
-  acceptedLine?: string;
-  rejectedLine?: string;
-  endLine?: string;
 }
 
 export type CharacterEventCardParticipantMode = 'initiatorTarget';

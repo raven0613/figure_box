@@ -131,7 +131,6 @@ finalWeight = 有 maxWeight ? min(maxWeight, repeatAdjustedWeight) : repeatAdjus
 | `conditions` | 否 | rule array | 決定 event 是否有資格進入候選池 |
 | `weightModifiers` | 否 | modifier array | 條件成立時調整 event 權重 |
 | `presentationVariants` | 否 | variant array | event 選中後，再抽選具體演出與 activity 設定 |
-| `interactionPresentation` | 否 | object | 舊式互動文字 fallback；目前主要活動通常改用 performance |
 | `acceptance` | 否 | object | 群體邀請時，被邀請者是否接受 |
 | `interruptPolicy` | 否 | `none`、`soft`、`always`、`critical` | parser 會保留，但目前專案沒有其他程式讀取，現在不影響中斷行為 |
 | `commitment` | 否 | finite number | parser 會保留，但目前沒有其他程式讀取，現在不影響決策 |
@@ -844,19 +843,6 @@ activity.rolls.<rollId>.rollContext.<key>
 
 ### 3.14 其他頂層物件
 
-#### `interactionPresentation`
-
-```json
-{
-  "proposalLine": "{initiator}：要一起嗎？",
-  "acceptedLine": "{target}：好啊。",
-  "rejectedLine": "{target}：現在不行。",
-  "endLine": "活動結束。"
-}
-```
-
-這是舊式互動文案 fallback。performance 中對應 phase 的 bubble 優先，其次才會使用這裡。
-
 #### `card`
 
 ```json
@@ -894,9 +880,6 @@ activity.rolls.<rollId>.rollContext.<key>
 - `onInterrupted`
 - `onInterruptRejected`
 - `presentationTags` 除了 decision/debug 顯示之外沒有通用效果執行器
-- `activity.storyFlow` 不在 `CharacterEventActivity` 型別與 parser 回傳值中
-
-特別注意：目前 `characterEvents.json` 的 `social.wallSlam` 內含 `activity.storyFlow`，但 `readOptionalActivity()` 沒有讀取它，所以載入後該物件會被丟棄。壁咚選項目前實際由 `dialogueScriptId` 指向的 dialogue script 處理，不是由 `storyFlow` 處理。
 
 ## 4. `characterPerformances.json`
 
@@ -1368,7 +1351,7 @@ max(step.delayMs + step.durationMs)
 - [ ] 有 roll 時，performance 的 `rollId` 與 `activity.rolls[].id` 完全一致。
 - [ ] 只有 resolving roll／branch 放 effects 與 memoryEffects。
 - [ ] 終局 branch 有合理的結果 performance 與 offline recap。
-- [ ] 沒有誤以為 `storyFlow`、interrupt 設定或 presentation tags 已有完整 runtime 效果。
+- [ ] 沒有誤以為 interrupt 設定或 presentation tags 已有完整 runtime 效果。
 
 ### `characterPerformances.json`
 

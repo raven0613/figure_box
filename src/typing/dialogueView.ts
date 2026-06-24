@@ -1,4 +1,5 @@
 import type { ExpressionPresetId } from '~/constants/character';
+import type { CharacterWayOfSaying } from '~/typing/characterProfile';
 import type { AvatarState } from '~/widgets/avatarCanvas';
 
 export type DialogueAvatarSlot = 'left' | 'center-left' | 'center-right' | 'right';
@@ -10,6 +11,7 @@ export interface DialogueViewParticipant {
   label: string;
   slot: DialogueAvatarSlot;
   avatarState: AvatarState;
+  wayOfSaying?: CharacterWayOfSaying;
 }
 
 export interface DialogueViewLine {
@@ -17,18 +19,48 @@ export interface DialogueViewLine {
   type: 'SAY';
   speakerId: string;
   text: string;
+  textSegments?: DialogueTextSegment[];
   expressionPresetId: ExpressionPresetId;
 }
+
+export interface DialogueTextSegment {
+  text: string;
+  color?: string;
+}
+
+export type DialogueInputAction =
+  | {
+    type: 'replaceTemplate';
+    variable?: string;
+    value?: string;
+    valuePrefix?: string;
+    valueSuffix?: string;
+  }
+  | {
+    type: 'recordSpokenLine';
+    targetId?: string;
+    memoryKey?: string;
+  }
+  | {
+    type: 'custom';
+    actionId: string;
+    parameters?: Record<string, string | number | boolean | null>;
+  };
 
 export interface DialogueViewInputLine {
   id?: string;
   type: 'INPUT';
   speakerId: string;
-  targetId: string;
+  targetId?: string;
   prompt: string;
-  variable: string;
+  promptSegments?: DialogueTextSegment[];
+  variable?: string;
   fallbackValue: string;
-  memoryKey: string;
+  memoryKey?: string;
+  submitLabel?: string;
+  skipLabel?: string;
+  submitActions?: DialogueInputAction[];
+  skipActions?: DialogueInputAction[];
   expressionPresetId: ExpressionPresetId;
 }
 
@@ -51,6 +83,7 @@ export interface DialogueViewActivityRollInstruction {
 export interface DialogueViewChoice {
   id: string;
   label: string;
+  labelSegments?: DialogueTextSegment[];
   result: DialogueChoiceResult;
 }
 
@@ -162,6 +195,7 @@ export interface DialogueViewChoiceLine {
   type: 'CHOICE';
   speakerId: string;
   text: string;
+  textSegments?: DialogueTextSegment[];
   expressionPresetId: ExpressionPresetId;
   idlePrompt?: string;
   idlePromptLines?: DialogueViewLine[];
@@ -192,4 +226,9 @@ export interface DialogueViewScript {
     memoryKey: string;
     text: string;
   }) => void;
+  handleInputAction?: (input: {
+    action: DialogueInputAction;
+    inputLine: DialogueViewInputLine;
+    value: string;
+  }) => void | Promise<void>;
 }

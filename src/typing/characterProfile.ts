@@ -10,11 +10,20 @@ export interface CharacterHousing {
   roomNumber: number;
 }
 
+export interface CharacterWayOfSaying {
+  beginning?: string;
+  chuckle?: string;
+  laugh?: string;
+  ending?: string;
+  selfReference?: string;
+}
+
 export interface CharacterProfileData {
   schemaVersion?: number;
   personality?: CharacterPersonality;
   housing?: CharacterHousing;
   creationStatus?: CharacterCreationStatus;
+  wayOfSaying?: CharacterWayOfSaying;
   [key: string]: unknown;
 }
 

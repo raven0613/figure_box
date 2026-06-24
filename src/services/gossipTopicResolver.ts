@@ -3,15 +3,24 @@ import {
   GOSSIP_MEMORY_TOPIC_DEFINITIONS,
   GOSSIP_TOPIC_DEFINITIONS,
 } from '~/constants/gossipTopics';
+import {
+  createParticipantWayOfSayingTemplateValues,
+  createWayOfSayingTemplateValues,
+  formatTemplateWithValues,
+} from '~/services/characterWayOfSayingTemplate';
 import { WeightedDecisionSelector } from '~/services/decisionSelector';
 import type { WeightedCandidate } from '~/services/decisionSelector';
+import type { CharacterWayOfSaying } from '~/typing/characterProfile';
 import type { ResolvedGossipTopic } from '~/typing/gossipTopic';
 
 interface ResolveGossipTopicInput {
   subjectId: string;
   subjectName: string;
+  subjectWayOfSaying?: CharacterWayOfSaying;
+  speakerWayOfSaying?: CharacterWayOfSaying;
   relationships: readonly DirectedRelationship[];
   getCharacterName: (characterId: string) => string;
+  getCharacterWayOfSaying?: (characterId: string) => CharacterWayOfSaying | undefined;
   timestamp?: number;
   random?: () => number;
 }
@@ -25,9 +34,7 @@ export function resolveGossipTopic(
   const commonCandidates: WeightedCandidate<ResolvedGossipTopic>[] = GOSSIP_TOPIC_DEFINITIONS.map(definition => ({
     item: {
       id: definition.id,
-      text: formatGossipText(definition.text, {
-        subjectName: input.subjectName,
-      }),
+      text: formatGossipText(definition.text, createGossipTemplateValues(input)),
       expressionPresetId: definition.expressionPresetId,
       subjectId: input.subjectId,
     },
@@ -49,10 +56,13 @@ export function resolveGossipTopic(
         return [{
           item: {
             id: `${definition.id}:${relationship.targetCharId}`,
-            text: formatGossipText(definition.text, {
-              subjectName: input.subjectName,
-              memoryTargetName: input.getCharacterName(relationship.targetCharId),
-            }),
+            text: formatGossipText(
+              definition.text,
+              createGossipTemplateValues(input, {
+                memoryTargetId: relationship.targetCharId,
+                memoryTargetName: input.getCharacterName(relationship.targetCharId),
+              }),
+            ),
             expressionPresetId: definition.expressionPresetId,
             subjectId: input.subjectId,
             memoryTargetId: relationship.targetCharId,
@@ -68,11 +78,29 @@ export function resolveGossipTopic(
   );
 }
 
+function createGossipTemplateValues(
+  input: ResolveGossipTopicInput,
+  memoryTarget?: {
+    memoryTargetId: string;
+    memoryTargetName: string;
+  },
+): Readonly<Record<string, string>> {
+  return {
+    subjectName: input.subjectName,
+    ...(memoryTarget ? { memoryTargetName: memoryTarget.memoryTargetName } : {}),
+    ...createParticipantWayOfSayingTemplateValues({
+      subject: input.subjectWayOfSaying,
+      memoryTarget: memoryTarget
+        ? input.getCharacterWayOfSaying?.(memoryTarget.memoryTargetId)
+        : undefined,
+    }),
+    ...createWayOfSayingTemplateValues(input.speakerWayOfSaying),
+  };
+}
+
 function formatGossipText(
   template: string,
   values: Readonly<Record<string, string>>,
 ): string {
-  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key: string) => (
-    values[key] ?? `{${key}}`
-  ));
+  return formatTemplateWithValues(template, values);
 }

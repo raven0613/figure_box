@@ -1,4 +1,5 @@
 import { CHARACTER_SEEDS } from '~/constants/character';
+import { CHARACTER_APPEARANCES } from '~/constants/characterAppearances';
 import {
   isPlayerCreatedCharacterProfile,
 } from '~/services/characterRosterService';
@@ -7,6 +8,7 @@ import { characterRuntimeSaveService } from '~/services/save/characterRuntimeSav
 import type { CharacterProfileRecord } from '~/services/save/saveTypes';
 import type { CharacterSeed } from '~/services/townCharacterTypes';
 import { createDefaultCharacterPersonality } from '~/constants/characterPersonality';
+import type { CharacterWayOfSaying } from '~/typing/characterProfile';
 
 const DEFAULT_PLAYER_CHARACTER_COLOR = '#f0cc5f';
 const DEFAULT_PLAYER_CHARACTER_POSITION = { x: 0, y: 0 };
@@ -33,6 +35,7 @@ export function getSeedPlayableCharacters(): readonly CharacterSeed[] {
     position: { ...character.position },
     saturation: character.saturation,
     personality: createDefaultCharacterPersonality(),
+    wayOfSaying: cloneCharacterWayOfSaying(CHARACTER_APPEARANCES[character.id]?.wayOfSaying),
     ...('ownItems' in character && character.ownItems
       ? {
         ownItems: character.ownItems.map(item => {
@@ -70,7 +73,16 @@ function createPlayablePlayerCharacter(record: CharacterProfileRecord): Characte
       : { ...DEFAULT_PLAYER_CHARACTER_POSITION },
     saturation: runtimeSnapshot?.status.saturation ?? DEFAULT_PLAYER_CHARACTER_SATURATION,
     personality: { ...record.profile.personality },
+    wayOfSaying: cloneCharacterWayOfSaying(record.profile.wayOfSaying),
   }];
+}
+
+function cloneCharacterWayOfSaying(
+  wayOfSaying?: CharacterWayOfSaying,
+): CharacterWayOfSaying | undefined {
+  return wayOfSaying
+    ? { ...wayOfSaying }
+    : undefined;
 }
 
 function readCharacterColor(record: CharacterProfileRecord): string {

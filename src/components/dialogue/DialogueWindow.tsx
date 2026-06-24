@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
+  DialogueInputAction,
   DialogueViewChoice,
   DialogueActivityRollContext,
   DialogueViewChoiceLine,
@@ -7,6 +8,7 @@ import type {
   DialogueViewLine,
   DialogueViewInstruction,
   DialogueViewScript,
+  DialogueTextSegment,
 } from '~/typing/dialogueView';
 import { resolveDialogueActivityRoll, resolveDialogueChoiceResult } from '~/utils/dialogueFlow';
 import { DialogueAvatarStage } from './DialogueAvatarStage';
@@ -63,6 +65,46 @@ function getFallbackDialogueLine(
   };
 }
 
+function getDefaultInputSubmitActions(inputLine: DialogueViewInputLine): DialogueInputAction[] {
+  const actions: DialogueInputAction[] = [];
+
+  if (inputLine.variable) {
+    actions.push({ type: 'replaceTemplate' });
+  }
+
+  if (inputLine.targetId && inputLine.memoryKey) {
+    actions.push({ type: 'recordSpokenLine' });
+  }
+
+  return actions;
+}
+
+function renderDialogueText(
+  text: string,
+  textSegments: DialogueTextSegment[] | undefined,
+) {
+  if (!textSegments?.length) {
+    return text;
+  }
+
+  return textSegments.map((segment, index) => (
+    <span
+      key={`${index}:${segment.text}`}
+      style={segment.color ? { color: segment.color } : undefined}
+    >
+      {segment.text}
+    </span>
+  ));
+}
+
+function getDialogueTextSegments(line: DialogueDisplayLine): DialogueTextSegment[] | undefined {
+  if (line.type === 'INPUT') {
+    return line.promptSegments;
+  }
+
+  return line.textSegments;
+}
+
 export function DialogueWindow({
   script,
   onClose,
@@ -99,9 +141,6 @@ export function DialogueWindow({
     [isChoiceLine, script.participants],
   );
   const currentExpressionPresetId = activeLine.expressionPresetId;
-  const currentLineText = currentLine.type === 'INPUT'
-    ? currentLine.prompt
-    : currentLine.text;
   const activeLineText = activeLine.type === 'INPUT'
     ? activeLine.prompt
     : activeLine.text;
@@ -271,7 +310,65 @@ export function DialogueWindow({
   };
 
   const handleInputComplete = (inputLine: DialogueViewInputLine, value: string) => {
-    const templateToken = `{${inputLine.variable}}`;
+    runInputActions(inputLine, value, inputLine.submitActions ?? getDefaultInputSubmitActions(inputLine));
+    advanceAfterInput();
+  };
+
+  const handleInputSkip = (inputLine: DialogueViewInputLine) => {
+    runInputActions(inputLine, '', inputLine.skipActions ?? []);
+    advanceAfterInput();
+  };
+
+  const advanceAfterInput = () => {
+    if (isLastLine) {
+      onClose();
+      return;
+    }
+
+    setLineIndex(current => Math.min(current + 1, instructions.length - 1));
+  };
+
+  const runInputActions = (
+    inputLine: DialogueViewInputLine,
+    value: string,
+    actions: readonly DialogueInputAction[],
+  ) => {
+    actions.forEach(action => {
+      if (action.type === 'replaceTemplate') {
+        replaceInputTemplate(inputLine, action, value);
+        return;
+      }
+
+      if (action.type === 'recordSpokenLine') {
+        recordInputSpokenLine(inputLine, action, value);
+        return;
+      }
+
+      void script.handleInputAction?.({
+        action,
+        inputLine,
+        value,
+      });
+    });
+  };
+
+  const replaceInputTemplate = (
+    inputLine: DialogueViewInputLine,
+    action: Extract<DialogueInputAction, { type: 'replaceTemplate' }>,
+    value: string,
+  ) => {
+    const variable = action.variable ?? inputLine.variable;
+
+    if (!variable) {
+      return;
+    }
+
+    const templateToken = `{${variable}}`;
+    const replacementValue = action.value ?? (
+      value
+        ? `${action.valuePrefix ?? ''}${value}${action.valueSuffix ?? ''}`
+        : ''
+    );
 
     setInstructions(current => current.map((instruction, index) => {
       if (index <= lineIndex || instruction.type !== 'SAY') {
@@ -280,16 +377,33 @@ export function DialogueWindow({
 
       return {
         ...instruction,
-        text: instruction.text.split(templateToken).join(value),
+        text: instruction.text.split(templateToken).join(replacementValue),
+        textSegments: instruction.textSegments?.map(segment => ({
+          ...segment,
+          text: segment.text.split(templateToken).join(replacementValue),
+        })),
       };
     }));
+  };
+
+  const recordInputSpokenLine = (
+    inputLine: DialogueViewInputLine,
+    action: Extract<DialogueInputAction, { type: 'recordSpokenLine' }>,
+    value: string,
+  ) => {
+    const targetId = action.targetId ?? inputLine.targetId;
+    const memoryKey = action.memoryKey ?? inputLine.memoryKey;
+
+    if (!targetId || !memoryKey) {
+      return;
+    }
+
     script.recordSpokenLine?.({
       speakerId: inputLine.speakerId,
-      targetId: inputLine.targetId,
-      memoryKey: inputLine.memoryKey,
+      targetId,
+      memoryKey,
       text: value,
     });
-    setLineIndex(current => Math.min(current + 1, instructions.length - 1));
   };
 
   return (
@@ -308,12 +422,15 @@ export function DialogueWindow({
             <strong>{activeSpeaker?.name ?? 'Unknown'}</strong>
             <span>{currentExpressionPresetId}</span>
           </div>
-          <p className={styles.lineText}>{currentLineText}</p>
+          <p className={styles.lineText}>
+            {renderDialogueText(activeLineText, getDialogueTextSegments(activeLine))}
+          </p>
           {currentInputLine ? (
             <DialogueInputForm
               key={currentInputLine.id ?? `${lineIndex}:${currentInputLine.memoryKey}`}
               inputLine={currentInputLine}
               onSubmit={value => handleInputComplete(currentInputLine, value)}
+              onSkip={() => handleInputSkip(currentInputLine)}
             />
           ) : null}
           {currentChoiceLine ? (
@@ -324,7 +441,7 @@ export function DialogueWindow({
                   type="button"
                   onClick={() => handleChoice(choice)}
                 >
-                  {choice.label}
+                  {renderDialogueText(choice.label, choice.labelSegments)}
                 </button>
               ))}
             </div>

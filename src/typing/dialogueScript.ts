@@ -1,4 +1,5 @@
 import type { ExpressionPresetId } from '~/constants/character';
+import type { CharacterWayOfSaying } from '~/typing/characterProfile';
 import type { DialogueAvatarSlot, DialogueViewInstruction } from './dialogueView';
 import type { AvatarState } from '~/widgets/avatarCanvas';
 
@@ -156,6 +157,7 @@ export interface DialogueScriptRuntimeParticipant {
   color: string;
   label: string;
   avatarState: AvatarState;
+  wayOfSaying?: CharacterWayOfSaying;
 }
 
 export interface DialogueScriptRuntimeContext {

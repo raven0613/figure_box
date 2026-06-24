@@ -1,4 +1,5 @@
 import { SocialStatus, DirectedRelationship, Mood } from "./character";
+import type { CharacterWayOfSaying } from "~/typing/characterProfile";
 
 export type EventTriggerType = 'auto' | 'click' | 'request';
 export type EventValue = string | number | boolean | null;
@@ -99,6 +100,7 @@ export interface ChangeStatCommand {
 export interface EventActor {
     id: string;
     name: string;
+    wayOfSaying?: CharacterWayOfSaying;
     traits?: string[];
     status?: {
         mood?: Mood;

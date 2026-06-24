@@ -1,4 +1,5 @@
 export const UI_COLORS = {
+    dialogueCharacterName: '#f6c83e',
     trackingArrow: '#f6c83e',
     trackingButtonBackground: 'rgba(35, 101, 148, 0.92)',
     trackingButtonBorder: 'rgba(12, 58, 122, 0.88)',

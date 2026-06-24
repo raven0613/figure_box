@@ -12,6 +12,7 @@ import type { JoinableActivity, JoinableActivityManager } from '~/services/chara
 import { resolveDialogueContent } from '~/services/dialogueContentResolver';
 import type { CharacterSnapshot } from '~/services/townCharacterTypes';
 import type { TownActivityDialogueSubjects } from './TownActivityDialogueSubjects';
+import type { CharacterWayOfSaying } from '~/typing/characterProfile';
 
 interface ObservedActivitySession {
   activity: JoinableActivity;
@@ -24,6 +25,7 @@ interface TownActivityDialogueObserverOptions {
   dialogueSubjects: TownActivityDialogueSubjects;
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   getCharacterName: (characterId: string) => string;
+  getCharacterWayOfSaying: (characterId: string) => CharacterWayOfSaying | undefined;
   getActivityDefinition: (activity: JoinableActivity) => CharacterEventActivity | undefined;
   getActivityPerformanceSelection: (activity: JoinableActivity) => CharacterPerformanceSelection;
   isActivityEnding: (activityId: string) => boolean;
@@ -49,6 +51,7 @@ export class TownActivityDialogueObserver {
   private readonly dialogueSubjects: TownActivityDialogueSubjects;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   private readonly getCharacterName: (characterId: string) => string;
+  private readonly getCharacterWayOfSaying: (characterId: string) => CharacterWayOfSaying | undefined;
   private readonly getActivityDefinition: (activity: JoinableActivity) => CharacterEventActivity | undefined;
   private readonly getActivityPerformanceSelection: (activity: JoinableActivity) => CharacterPerformanceSelection;
   private readonly isActivityEnding: (activityId: string) => boolean;
@@ -67,6 +70,7 @@ export class TownActivityDialogueObserver {
     this.dialogueSubjects = options.dialogueSubjects;
     this.getCharacterContext = options.getCharacterContext;
     this.getCharacterName = options.getCharacterName;
+    this.getCharacterWayOfSaying = options.getCharacterWayOfSaying;
     this.getActivityDefinition = options.getActivityDefinition;
     this.getActivityPerformanceSelection = options.getActivityPerformanceSelection;
     this.isActivityEnding = options.isActivityEnding;
@@ -180,8 +184,11 @@ export class TownActivityDialogueObserver {
           contentPoolId,
           subjectId,
           subjectName: this.getCharacterName(subjectId),
+          subjectWayOfSaying: this.getCharacterWayOfSaying(subjectId),
+          speakerWayOfSaying: this.getCharacterWayOfSaying(initiatorId),
           relationships: subjectContext.relationships,
           getCharacterName: this.getCharacterName,
+          getCharacterWayOfSaying: this.getCharacterWayOfSaying,
         });
 
         if (!content) {

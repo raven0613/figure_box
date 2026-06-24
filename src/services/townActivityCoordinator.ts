@@ -6,6 +6,7 @@ import {
   type CharacterEventActivityEffects,
 } from '~/constants/charactarEventsDefinitions';
 import type { CharacterPersonality } from '~/constants/characterPersonality';
+import type { CharacterWayOfSaying } from '~/typing/characterProfile';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
 import type {
   CharacterPerformanceActivityRollRequest,
@@ -39,6 +40,7 @@ interface TownActivityCoordinatorOptions {
   performanceRunner: CharacterPerformanceRunner;
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   getCharacterName: (characterId: string) => string;
+  getCharacterWayOfSaying: (characterId: string) => CharacterWayOfSaying | undefined;
   getCharacterPersonality: (characterId: string) => CharacterPersonality;
   getCharacterPosition: (characterId: string) => Position | null;
   getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
@@ -78,6 +80,7 @@ export class TownActivityCoordinator {
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
   private readonly getCharacterName: (characterId: string) => string;
+  private readonly getCharacterWayOfSaying: (characterId: string) => CharacterWayOfSaying | undefined;
   private readonly getCharacterPersonality: (characterId: string) => CharacterPersonality;
   private readonly getCharacterPosition: (characterId: string) => Position | null;
   private readonly getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
@@ -94,6 +97,7 @@ export class TownActivityCoordinator {
     this.performanceRunner = options.performanceRunner;
     this.getCharacterContext = options.getCharacterContext;
     this.getCharacterName = options.getCharacterName;
+    this.getCharacterWayOfSaying = options.getCharacterWayOfSaying;
     this.getCharacterPersonality = options.getCharacterPersonality;
     this.getCharacterPosition = options.getCharacterPosition;
     this.getRelationshipStatus = options.getRelationshipStatus;
@@ -111,6 +115,7 @@ export class TownActivityCoordinator {
       dialogueSubjects: this.dialogueSubjects,
       getCharacterContext: this.getCharacterContext,
       getCharacterName: this.getCharacterName,
+      getCharacterWayOfSaying: this.getCharacterWayOfSaying,
       getActivityDefinition: activity => this.getActivityDefinition(activity),
       getActivityPerformanceSelection: activity => this.getActivityPerformanceSelection(activity),
       isActivityEnding: activityId => this.endingActivityIds.has(activityId),

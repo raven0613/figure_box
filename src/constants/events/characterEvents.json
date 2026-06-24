@@ -1437,42 +1437,7 @@
                 }
               ]
             }
-          ],
-          "storyFlow": {
-            "choicePrompt": "要為他們加點張力，還是介入降溫？",
-            "choices": [
-              {
-                "id": "pushInitiator",
-                "label": "推A一把",
-                "rollId": "wallSlamDistanceOutcome",
-                "rollContext": {
-                  "wallSlamTensionChoice": "pushInitiator"
-                }
-              },
-              {
-                "id": "coolDown",
-                "label": "拿風扇降溫",
-                "rollId": "wallSlamDistanceOutcome",
-                "rollContext": {
-                  "wallSlamTensionChoice": "coolDown"
-                }
-              }
-            ],
-            "finalRollRouting": [
-              {
-                "afterBranch": "lipBrush",
-                "rollId": "wallSlamFinalAfterLipBrush"
-              },
-              {
-                "afterBranch": "heartOverload",
-                "rollId": "wallSlamFinalAfterHeartOverload"
-              },
-              {
-                "afterBranch": "counter",
-                "endsActivity": true
-              }
-            ]
-          }
+          ]
         }
       }
     ],

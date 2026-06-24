@@ -428,7 +428,7 @@
               "target": "target",
               "prompt": "{initiatorName}要對{targetName}說什麼？",
               "variable": "sentence",
-              "fallbackValue": "我有話想跟你說",
+              "fallbackValue": "${selfReference}有話想跟你說",
               "memoryKey": "wallSlam.spokenLine",
               "expressionPresetId": "normal"
             },
@@ -452,7 +452,7 @@
               "target": "target",
               "prompt": "{initiatorName}要對{targetName}說什麼？",
               "variable": "sentence",
-              "fallbackValue": "我有話想跟你說",
+              "fallbackValue": "${selfReference}有話想跟你說",
               "memoryKey": "wallSlam.spokenLine",
               "expressionPresetId": "surprised"
             },
@@ -476,7 +476,7 @@
               "target": "target",
               "prompt": "{initiatorName}要對{targetName}說什麼？",
               "variable": "sentence",
-              "fallbackValue": "其實，我一直想找你說這件事",
+              "fallbackValue": "其實，${selfReference}一直想找你說這件事",
               "memoryKey": "wallSlam.spokenLine",
               "expressionPresetId": "normal"
             },
@@ -500,14 +500,14 @@
               "target": "target",
               "prompt": "{initiatorName}要對{targetName}說什麼？",
               "variable": "sentence",
-              "fallbackValue": "你會聽我把話說完",
+              "fallbackValue": "你會聽${selfReference}把話說完",
               "memoryKey": "wallSlam.spokenLine",
               "expressionPresetId": "laugh"
             },
             {
               "type": "SAY",
               "speaker": "initiator",
-              "text": "我有預感，接下來 {sentence}",
+              "text": "${selfReference}有預感，接下來 {sentence}",
               "expressionPresetId": "laugh"
             }
           ]
@@ -522,7 +522,7 @@
             {
               "type": "SAY",
               "speaker": "target",
-              "text": "我好像看過你......只是沒想到居然是用這種方式認識你。",
+              "text": "${selfReference}好像看過你......只是沒想到居然是用這種方式認識你。",
               "expressionPresetId": "curious"
             }
           ],
@@ -560,7 +560,7 @@
         "choices": [
           {
             "id": "push-initiator",
-            "label": "推A一把",
+            "label": "推 {initiatorName} 一把",
             "result": {
               "type": "setRollContext",
               "rollContext": {
@@ -613,7 +613,7 @@
                   {
                     "type": "SAY",
                     "speaker": "target",
-                    "text": "……算了，當我沒問。沒事的話，我要先走了。",
+                    "text": "……算了，當${selfReference}沒問。沒事的話，${selfReference}要先走了。",
                     "expressionPresetId": "surprised"
                   }
                 ],
@@ -627,7 +627,7 @@
                   {
                     "type": "SAY",
                     "speaker": "target",
-                    "text": "……真是拿你沒辦法。所以，你特地把我攔在這裡，到底是要跟我說什麼？",
+                    "text": "……真是拿你沒辦法。所以，你特地把${selfReference}攔在這裡，到底是要跟${selfReference}說什麼？",
                     "expressionPresetId": "curious"
                   }
                 ]
@@ -656,7 +656,7 @@
                   {
                     "type": "SAY",
                     "speaker": "target",
-                    "text": "你……你到底在做什麼？！我絕對不會原諒你的。",
+                    "text": "你……你到底在做什麼？！${selfReference}絕對不會原諒你的。",
                     "expressionPresetId": "mad"
                   }
                 ],

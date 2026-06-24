@@ -4,7 +4,6 @@ import type {
   CharacterEventCardParticipantMode,
   CharacterEventDefinition,
   CharacterEventInterruptPolicy,
-  CharacterEventInteractionPresentation,
 } from '../../constants/charactarEventsDefinitions';
 import { Feeling, Mood, SocialStatus } from '../../constants/character';
 import { readCharacterEventAction } from './actionSchema';
@@ -28,7 +27,6 @@ import {
   readOptionalNonNegativeNumber,
   readOptionalNumber,
   readOptionalProbability,
-  readOptionalString,
   readRequiredNumber,
   readRequiredString,
   type CharacterEventDefinitionRecord,
@@ -73,7 +71,6 @@ function parseCharacterEventDefinition(
   const conditions = readOptionalRuleClauses(rawDefinition, 'conditions', index);
   const weightModifiers = readOptionalWeightModifiers(rawDefinition, 'weightModifiers', index);
   const presentationVariants = readOptionalPresentationVariants(rawDefinition, index);
-  const interactionPresentation = readOptionalInteractionPresentation(rawDefinition, index);
   const acceptance = readOptionalAcceptance(rawDefinition, index);
   const interruptPolicy = readOptionalInterruptPolicy(rawDefinition, 'interruptPolicy', index);
   const commitment = readOptionalNumber(rawDefinition, 'commitment', index);
@@ -96,7 +93,6 @@ function parseCharacterEventDefinition(
     conditions,
     weightModifiers,
     presentationVariants,
-    interactionPresentation,
     acceptance,
     interruptPolicy,
     commitment,
@@ -104,28 +100,6 @@ function parseCharacterEventDefinition(
     offlineRecap,
     onInterrupted,
     onInterruptRejected,
-  };
-}
-
-function readOptionalInteractionPresentation(
-  definition: CharacterEventDefinitionRecord,
-  index: number,
-): CharacterEventInteractionPresentation | undefined {
-  const value = definition.interactionPresentation;
-
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!isRecord(value)) {
-    throw new Error(`Character event definition at index ${index} has invalid interactionPresentation.`);
-  }
-
-  return {
-    proposalLine: readOptionalString(value, 'proposalLine', index),
-    acceptedLine: readOptionalString(value, 'acceptedLine', index),
-    rejectedLine: readOptionalString(value, 'rejectedLine', index),
-    endLine: readOptionalString(value, 'endLine', index),
   };
 }
 

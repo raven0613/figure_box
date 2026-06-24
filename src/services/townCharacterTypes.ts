@@ -4,6 +4,7 @@ import type { characterMachine } from '~/stateMachines/gameFlow/children/charact
 import type { CharacterEvent } from '~/stateMachines/gameFlow/events';
 import type { CharacterSeedItem } from '~/typing/item';
 import type { CharacterPersonality } from '~/constants/characterPersonality';
+import type { CharacterWayOfSaying } from '~/typing/characterProfile';
 
 export type CharacterActor = ActorRefFrom<typeof characterMachine>;
 
@@ -15,6 +16,7 @@ export interface CharacterSeed {
   position: Position;
   saturation: number;
   personality?: CharacterPersonality;
+  wayOfSaying?: CharacterWayOfSaying;
   ownItems?: readonly CharacterSeedItem[];
 }
 

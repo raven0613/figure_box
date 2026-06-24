@@ -25,6 +25,7 @@ import type {
 import {
   PLAYER_CREATED_CHARACTER_PROFILE_SCHEMA_VERSION,
   type CharacterHousing,
+  type CharacterWayOfSaying,
 } from '~/typing/characterProfile';
 import type { AvatarState } from '~/widgets/avatarCanvas';
 
@@ -166,6 +167,54 @@ export async function markPlayerCharacterCreationReady(
   return nextProfileRecord;
 }
 
+export async function updatePlayerCharacterWayOfSaying(
+  characterId: string,
+  patch: Partial<CharacterWayOfSaying>,
+): Promise<PlayerCreatedCharacterProfileRecord> {
+  const timestamp = Date.now();
+  const nextProfileRecord = await saveDb.transaction('rw', [
+    saveDb.saveMeta,
+    saveDb.characters,
+  ], async () => {
+    const currentRecord = await saveDb.characters.get(characterId);
+
+    if (
+      !currentRecord ||
+      currentRecord.source !== 'playerCreated' ||
+      !isPlayerCreatedCharacterProfile(currentRecord.profile)
+    ) {
+      throw new Error('找不到可設定說話習慣的自創角色。');
+    }
+
+    const nextWayOfSaying = {
+      ...(currentRecord.profile.wayOfSaying ?? {}),
+      ...normalizeWayOfSayingPatch(patch),
+    };
+    const nextProfileRecord: PlayerCreatedCharacterProfileRecord = {
+      ...currentRecord,
+      source: 'playerCreated',
+      updatedAt: timestamp,
+      profile: {
+        ...currentRecord.profile,
+        wayOfSaying: nextWayOfSaying,
+      },
+    };
+
+    await saveDb.characters.put(nextProfileRecord);
+
+    const saveMetaRecord = normalizeSaveMetaRecord(await saveDb.saveMeta.get('current'));
+    await saveDb.saveMeta.put({
+      ...saveMetaRecord,
+      updatedAt: timestamp,
+    });
+
+    return nextProfileRecord;
+  });
+
+  characterProfileSaveService.upsert(nextProfileRecord);
+  return nextProfileRecord;
+}
+
 export async function deletePlayerCharacterCreation(characterId: string): Promise<void> {
   await saveDb.transaction('rw', [
     saveDb.saveMeta,
@@ -187,6 +236,29 @@ export async function deletePlayerCharacterCreation(characterId: string): Promis
   characterProfileSaveService.delete(characterId);
   characterAvatarSaveService.delete(characterId);
   characterRuntimeSaveService.deleteRuntimeSnapshot(characterId);
+}
+
+function normalizeWayOfSayingPatch(
+  patch: Partial<CharacterWayOfSaying>,
+): Partial<CharacterWayOfSaying> {
+  return Object.entries(patch).reduce<Partial<CharacterWayOfSaying>>((nextPatch, [key, value]) => {
+    if (!isCharacterWayOfSayingKey(key) || typeof value !== 'string') {
+      return nextPatch;
+    }
+
+    return {
+      ...nextPatch,
+      [key]: value.trim(),
+    };
+  }, {});
+}
+
+function isCharacterWayOfSayingKey(key: string): key is keyof CharacterWayOfSaying {
+  return key === 'beginning' ||
+    key === 'chuckle' ||
+    key === 'laugh' ||
+    key === 'ending' ||
+    key === 'selfReference';
 }
 
 function createPlayerCharacterProfileRecord(input: {

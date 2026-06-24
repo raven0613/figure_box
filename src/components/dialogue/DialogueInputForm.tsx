@@ -6,11 +6,13 @@ import styles from './dialogue.module.scss';
 interface DialogueInputFormProps {
   inputLine: DialogueViewInputLine;
   onSubmit: (value: string) => void;
+  onSkip?: () => void;
 }
 
 export function DialogueInputForm({
   inputLine,
   onSubmit,
+  onSkip,
 }: DialogueInputFormProps) {
   const [value, setValue] = useState('');
 
@@ -28,7 +30,12 @@ export function DialogueInputForm({
         aria-label={inputLine.prompt}
         onChange={event => setValue(event.target.value)}
       />
-      <button type="submit">確定</button>
+      <button type="submit">{inputLine.submitLabel ?? '確定'}</button>
+      {inputLine.skipLabel && onSkip ? (
+        <button type="button" onClick={onSkip}>
+          {inputLine.skipLabel}
+        </button>
+      ) : null}
     </form>
   );
 }

@@ -3,6 +3,11 @@ import {
 } from '~/constants/character';
 import { ClauseMode, EventActor, EventBlackboard, EventCondition, EventValue, GameEvent, PlayDialogueCommand, RuleClause, ValuePath } from './event';
 import { DialogueBank, DialogueScript, DialogueScriptCondition, RuleContext, SelectedDialogue } from './dialogue';
+import {
+  createParticipantWayOfSayingTemplateValues,
+  createWayOfSayingTemplateValues,
+} from '~/services/characterWayOfSayingTemplate';
+import type { DialogueParticipantRole } from '~/typing/dialogue';
 
 export function canTriggerGameEvent(
   event: GameEvent,
@@ -61,7 +66,7 @@ export function selectDialogueScript(
     weight: selected.weight,
     lines: selected.script.lines.map(line => ({
       ...line,
-      text: injectTemplate(line.text, context),
+      text: injectTemplate(line.text, context, line.speaker),
     })),
   };
 }
@@ -202,12 +207,36 @@ function getPathSource(scope: string, context: RuleContext): unknown {
   }
 }
 
-function injectTemplate(template: string, context: RuleContext): string {
+function injectTemplate(
+  template: string,
+  context: RuleContext,
+  speaker: DialogueParticipantRole,
+): string {
+  const templateValues = createDialogueEventTemplateValues(context, speaker);
+
   return template.replace(/\$\{([^}]+)\}/g, (_, rawPath: string) => {
-    const value = readValue(rawPath.trim() as ValuePath, context);
+    const path = rawPath.trim();
+    const value = templateValues[path] ?? readValue(path as ValuePath, context);
 
     return value == null ? '' : String(value);
   });
+}
+
+function createDialogueEventTemplateValues(
+  context: RuleContext,
+  speaker: DialogueParticipantRole,
+): Readonly<Record<string, string>> {
+  const speakerWayOfSaying = speaker === 'target'
+    ? context.target.wayOfSaying
+    : context.initiator.wayOfSaying;
+
+  return {
+    ...createParticipantWayOfSayingTemplateValues({
+      initiator: context.initiator.wayOfSaying,
+      target: context.target.wayOfSaying,
+    }),
+    ...createWayOfSayingTemplateValues(speakerWayOfSaying),
+  };
 }
 
 function sampleWeighted<T>(

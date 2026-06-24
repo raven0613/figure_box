@@ -14,6 +14,16 @@ import type {
   DialogueViewInstruction,
   DialogueViewScript,
 } from '~/typing/dialogueView';
+import {
+  createParticipantWayOfSayingTemplateValues,
+  createWayOfSayingTemplateValues,
+} from '~/services/characterWayOfSayingTemplate';
+import {
+  formatDialogueTextWithNameHighlights,
+  type FormattedDialogueText,
+} from '~/services/dialogueTextFormatter';
+
+type TemplateValuesByParticipant = Readonly<Record<string, Readonly<Record<string, string>>>>;
 
 export function createDialogueViewScript(
   definition: DialogueScriptDefinition,
@@ -32,16 +42,11 @@ export function createDialogueViewScript(
       return [participant.key, runtimeParticipant.id] as const;
     }),
   );
-  const participantTemplateValues = Object.fromEntries(
-    Object.entries(context.participants).map(([key, participant]) => [
-      `${key}Name`,
-      participant.name,
-    ]),
+  const baseTemplateValues = createBaseTemplateValues(context);
+  const templateValuesByParticipant = createTemplateValuesByParticipant(
+    context,
+    baseTemplateValues,
   );
-  const templateValues: Readonly<Record<string, string>> = {
-    ...participantTemplateValues,
-    ...context.templateValues,
-  };
 
   return {
     id: definition.id,
@@ -60,7 +65,12 @@ export function createDialogueViewScript(
       };
     }),
     lines: definition.lines.map(instruction => (
-      resolveInstruction(instruction, participantIdByKey, templateValues)
+      resolveInstruction(
+        instruction,
+        participantIdByKey,
+        templateValuesByParticipant,
+        baseTemplateValues,
+      )
     )),
     branchGroups: definition.branchGroups
       ? Object.fromEntries(
@@ -71,7 +81,12 @@ export function createDialogueViewScript(
             selectionStrategy: group.selectionStrategy,
             rankWeights: group.rankWeights ? [...group.rankWeights] : undefined,
             candidates: group.candidates.map(candidate => (
-              resolveBranchCandidate(candidate, participantIdByKey, templateValues)
+              resolveBranchCandidate(
+                candidate,
+                participantIdByKey,
+                templateValuesByParticipant,
+                baseTemplateValues,
+              )
             )),
           },
         ]),
@@ -87,27 +102,40 @@ export function createDialogueViewScript(
 function resolveInstruction(
   instruction: DialogueScriptInstructionDefinition,
   participantIdByKey: ReadonlyMap<string, string>,
-  templateValues: Readonly<Record<string, string>>,
+  templateValuesByParticipant: TemplateValuesByParticipant,
+  baseTemplateValues: Readonly<Record<string, string>>,
 ): DialogueViewInstruction {
+  const templateValues = getTemplateValuesForSpeaker(
+    instruction.type === 'ACTIVITY_ROLL' ? undefined : instruction.speaker,
+    templateValuesByParticipant,
+    baseTemplateValues,
+  );
+
   if (instruction.type === 'SAY') {
+    const formattedText = formatDialogueText(instruction.text, templateValues);
+
     return {
       id: instruction.id,
       type: 'SAY',
       speakerId: getParticipantId(instruction.speaker, participantIdByKey),
-      text: formatDialogueText(instruction.text, templateValues),
+      text: formattedText.text,
+      textSegments: formattedText.textSegments,
       expressionPresetId: instruction.expressionPresetId,
     };
   }
 
   if (instruction.type === 'INPUT') {
+    const formattedPrompt = formatDialogueText(instruction.prompt, templateValues);
+
     return {
       id: instruction.id,
       type: 'INPUT',
       speakerId: getParticipantId(instruction.speaker, participantIdByKey),
       targetId: getParticipantId(instruction.target, participantIdByKey),
-      prompt: formatDialogueText(instruction.prompt, templateValues),
+      prompt: formattedPrompt.text,
+      promptSegments: formattedPrompt.textSegments,
       variable: instruction.variable,
-      fallbackValue: formatDialogueText(instruction.fallbackValue, templateValues),
+      fallbackValue: formatDialogueText(instruction.fallbackValue, templateValues).text,
       memoryKey: instruction.memoryKey,
       expressionPresetId: instruction.expressionPresetId,
     };
@@ -123,56 +151,97 @@ function resolveInstruction(
       subjectKey: instruction.subjectKey,
       subjectKeys: instruction.subjectKeys ? [...instruction.subjectKeys] : undefined,
       lines: (instruction.lines ?? []).map(line => (
-        resolveInstruction(line, participantIdByKey, templateValues)
+        resolveInstruction(
+          line,
+          participantIdByKey,
+          templateValuesByParticipant,
+          baseTemplateValues,
+        )
       )),
       lineVariants: instruction.lineVariants?.map(lines => (
-        lines.map(line => resolveInstruction(line, participantIdByKey, templateValues))
+        lines.map(line => resolveInstruction(
+          line,
+          participantIdByKey,
+          templateValuesByParticipant,
+          baseTemplateValues,
+        ))
       )),
       branchLines: Object.fromEntries(
         Object.entries(instruction.branchLines).map(([branchId, lines]) => [
           branchId,
-          lines.map(line => resolveInstruction(line, participantIdByKey, templateValues)),
+          lines.map(line => resolveInstruction(
+            line,
+            participantIdByKey,
+            templateValuesByParticipant,
+            baseTemplateValues,
+          )),
         ]),
       ),
     };
   }
 
+  const formattedText = formatDialogueText(instruction.text, templateValues);
+
   return {
     id: instruction.id,
     type: 'CHOICE',
     speakerId: getParticipantId(instruction.speaker, participantIdByKey),
-    text: formatDialogueText(instruction.text, templateValues),
+    text: formattedText.text,
+    textSegments: formattedText.textSegments,
     expressionPresetId: instruction.expressionPresetId,
     idlePrompt: instruction.idlePrompt
-      ? formatDialogueText(instruction.idlePrompt, templateValues)
+      ? formatDialogueText(instruction.idlePrompt, templateValues).text
       : undefined,
     idlePromptLines: instruction.idlePromptLines?.map(line => ({
       id: line.id,
       type: 'SAY',
       speakerId: getParticipantId(line.speaker, participantIdByKey),
-      text: formatDialogueText(line.text, templateValues),
+      ...formatDialogueText(
+        line.text,
+        getTemplateValuesForSpeaker(
+          line.speaker,
+          templateValuesByParticipant,
+          baseTemplateValues,
+        ),
+      ),
       expressionPresetId: line.expressionPresetId,
     })),
     timeoutMs: instruction.timeoutMs,
-    choices: instruction.choices.map(choice => ({
-      id: choice.id,
-      label: formatDialogueText(choice.label, templateValues),
-      result: resolveChoiceResult(choice.result, participantIdByKey, templateValues),
-    })),
+    choices: instruction.choices.map(choice => {
+      const formattedLabel = formatDialogueText(choice.label, templateValues);
+
+      return {
+        id: choice.id,
+        label: formattedLabel.text,
+        labelSegments: formattedLabel.textSegments,
+        result: resolveChoiceResult(
+          choice.result,
+          participantIdByKey,
+          templateValuesByParticipant,
+          baseTemplateValues,
+        ),
+      };
+    }),
   };
 }
 
 function resolveChoiceResult(
   result: DialogueScriptChoiceResultDefinition,
   participantIdByKey: ReadonlyMap<string, string>,
-  templateValues: Readonly<Record<string, string>>,
+  templateValuesByParticipant: TemplateValuesByParticipant,
+  baseTemplateValues: Readonly<Record<string, string>>,
 ): DialogueChoiceResult {
   if (result.type === 'appendLines' || result.type === 'replaceRemaining') {
     return {
       type: result.type,
       rollContext: result.rollContext ? { ...result.rollContext } : undefined,
       lines: result.lines.map(instruction => (
-        resolveInstruction(instruction, participantIdByKey, templateValues)
+        resolveInstruction(
+          instruction,
+          participantIdByKey,
+          templateValuesByParticipant,
+          baseTemplateValues,
+        )
       )),
     };
   }
@@ -207,18 +276,33 @@ function resolveChoiceResult(
       subjectKey: result.subjectKey,
       subjectKeys: result.subjectKeys ? [...result.subjectKeys] : undefined,
       lines: (result.lines ?? []).map(instruction => (
-        resolveInstruction(instruction, participantIdByKey, templateValues)
+        resolveInstruction(
+          instruction,
+          participantIdByKey,
+          templateValuesByParticipant,
+          baseTemplateValues,
+        )
       )),
       lineVariants: result.lineVariants?.map(lines => (
         lines.map(instruction => (
-          resolveInstruction(instruction, participantIdByKey, templateValues)
+          resolveInstruction(
+            instruction,
+            participantIdByKey,
+            templateValuesByParticipant,
+            baseTemplateValues,
+          )
         ))
       )),
       branchLines: Object.fromEntries(
         Object.entries(result.branchLines).map(([branchId, lines]) => [
           branchId,
           lines.map(instruction => (
-            resolveInstruction(instruction, participantIdByKey, templateValues)
+            resolveInstruction(
+              instruction,
+              participantIdByKey,
+              templateValuesByParticipant,
+              baseTemplateValues,
+            )
           )),
         ]),
       ),
@@ -231,7 +315,8 @@ function resolveChoiceResult(
 function resolveBranchCandidate(
   candidate: DialogueScriptBranchCandidateDefinition,
   participantIdByKey: ReadonlyMap<string, string>,
-  templateValues: Readonly<Record<string, string>>,
+  templateValuesByParticipant: TemplateValuesByParticipant,
+  baseTemplateValues: Readonly<Record<string, string>>,
 ): DialogueBranchCandidate {
   return {
     id: candidate.id,
@@ -247,9 +332,65 @@ function resolveBranchCandidate(
       multiplier: rule.multiplier,
     })),
     lines: candidate.lines.map(instruction => (
-      resolveInstruction(instruction, participantIdByKey, templateValues)
+      resolveInstruction(
+        instruction,
+        participantIdByKey,
+        templateValuesByParticipant,
+        baseTemplateValues,
+      )
     )),
   };
+}
+
+function createBaseTemplateValues(
+  context: DialogueScriptRuntimeContext,
+): Readonly<Record<string, string>> {
+  const participantTemplateValues = Object.fromEntries(
+    Object.entries(context.participants).map(([key, participant]) => [
+      `${key}Name`,
+      participant.name,
+    ]),
+  );
+
+  return {
+    ...participantTemplateValues,
+    ...createParticipantWayOfSayingTemplateValues(
+      Object.fromEntries(
+        Object.entries(context.participants).map(([key, participant]) => [
+          key,
+          participant.wayOfSaying,
+        ]),
+      ),
+    ),
+    ...context.templateValues,
+  };
+}
+
+function createTemplateValuesByParticipant(
+  context: DialogueScriptRuntimeContext,
+  baseTemplateValues: Readonly<Record<string, string>>,
+): TemplateValuesByParticipant {
+  return Object.fromEntries(
+    Object.entries(context.participants).map(([key, participant]) => [
+      key,
+      {
+        ...baseTemplateValues,
+        ...createWayOfSayingTemplateValues(participant.wayOfSaying),
+      },
+    ]),
+  );
+}
+
+function getTemplateValuesForSpeaker(
+  speakerKey: string | undefined,
+  templateValuesByParticipant: TemplateValuesByParticipant,
+  baseTemplateValues: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> {
+  if (!speakerKey) {
+    return baseTemplateValues;
+  }
+
+  return templateValuesByParticipant[speakerKey] ?? baseTemplateValues;
 }
 
 function resolveCondition(
@@ -310,8 +451,6 @@ function getParticipantId(
 function formatDialogueText(
   template: string,
   values: Readonly<Record<string, string>>,
-): string {
-  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key: string) => (
-    values[key] ?? `{${key}}`
-  ));
+): FormattedDialogueText {
+  return formatDialogueTextWithNameHighlights(template, values);
 }

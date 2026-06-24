@@ -1,5 +1,4 @@
 import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
-import type { CharacterEventInteractionPresentation } from '../../constants/charactarEventsDefinitions';
 import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '../../constants/charactarEventsDefinitions';
 import {
   getCharacterPerformanceBubbleStep,
@@ -19,6 +18,12 @@ import type {
 import type { ExpressionPresetId } from '~/typing/expression';
 import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import { PausableTimeoutScheduler } from '~/services/pausableTimeoutScheduler';
+import type { CharacterWayOfSaying } from '~/typing/characterProfile';
+import {
+  createParticipantWayOfSayingTemplateValues,
+  createWayOfSayingTemplateValues,
+  formatTemplateWithValues,
+} from '~/services/characterWayOfSayingTemplate';
 
 export interface CharacterPerformanceSelection {
   definitionId?: string;
@@ -39,7 +44,6 @@ export interface CharacterPerformanceBubbleInput {
   fallbackDurationMs: number;
   initiatorName: string;
   targetName: string;
-  legacyPresentation?: CharacterEventInteractionPresentation;
 }
 
 export interface CharacterActivityPerformanceInput {
@@ -94,6 +98,7 @@ export interface CharacterPerformanceDialogueRequest {
 
 interface CharacterPerformanceRunnerPorts {
   getCharacterName: (characterId: string) => string;
+  getCharacterWayOfSaying: (characterId: string) => CharacterWayOfSaying | undefined;
   setCharacterExpressionPreset: (characterId: string, expressionPresetId: ExpressionPresetId) => void;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   removeCharacterBubble: (characterId: string) => void;
@@ -166,9 +171,7 @@ export class CharacterPerformanceRunner {
   getInteractionBubble(input: CharacterPerformanceBubbleInput): CharacterPerformanceBubble {
     const performanceId = this.getSelectedPerformanceId(input.selection);
     const step = getCharacterPerformanceBubbleStep(performanceId, input.phase, input.target);
-    const template = step?.text
-      ?? getLegacyInteractionLine(input.legacyPresentation, input.phase)
-      ?? input.fallbackTemplate;
+    const template = step?.text ?? input.fallbackTemplate;
 
     return {
       text: formatInteractionLine(template, input.initiatorName, input.targetName),
@@ -282,6 +285,10 @@ export class CharacterPerformanceRunner {
     participantIds: readonly string[],
     hostCharacterIds: readonly string[] = [],
   ): void {
+    new Set([...participantIds, ...hostCharacterIds]).forEach(characterId => {
+      this.ports.cancelCharacterAnimation?.(characterId);
+    });
+
     participantIds.forEach(characterId => {
       this.ports.removeCharacterBubble(characterId);
     });
@@ -410,13 +417,12 @@ export class CharacterPerformanceRunner {
     const characterIds = resolvePerformanceTargetIds(step.target, initiatorId, targetId);
 
     if (step.type === 'bubble') {
-      const initiatorName = this.ports.getCharacterName(initiatorId);
-      const targetName = this.ports.getCharacterName(targetId);
+      const templateValues = this.getInteractionPerformanceTemplateValues(initiatorId, targetId);
 
       characterIds.forEach(characterId => {
         this.ports.showCharacterBubble(
           characterId,
-          formatInteractionLine(step.text, initiatorName, targetName),
+          formatTemplate(step.text, this.getSpeakerTemplateValues(characterId, templateValues)),
           step.durationMs,
         );
       });
@@ -516,7 +522,7 @@ export class CharacterPerformanceRunner {
       characterIds.forEach(characterId => {
         this.ports.showCharacterBubble(
           characterId,
-          formatTemplate(step.text, templateValues),
+          formatTemplate(step.text, this.getSpeakerTemplateValues(characterId, templateValues)),
           step.durationMs,
         );
       });
@@ -738,32 +744,41 @@ export class CharacterPerformanceRunner {
     return {
       initiator: formatCharacterNames(hostIds, characterId => this.ports.getCharacterName(characterId)),
       target: formatCharacterNames(targetIds, characterId => this.ports.getCharacterName(characterId)),
+      ...createParticipantWayOfSayingTemplateValues({
+        ...(hostIds[0]
+          ? { initiator: this.ports.getCharacterWayOfSaying(hostIds[0]) }
+          : {}),
+        ...(targetIds[0]
+          ? { target: this.ports.getCharacterWayOfSaying(targetIds[0]) }
+          : {}),
+      }),
       ...input.templateValues,
     };
   }
-}
 
-function getLegacyInteractionLine(
-  presentation: CharacterEventInteractionPresentation | undefined,
-  phase: CharacterPerformancePhase,
-): string | undefined {
-  if (phase === 'proposal') {
-    return presentation?.proposalLine;
+  private getInteractionPerformanceTemplateValues(
+    initiatorId: string,
+    targetId: string,
+  ): Readonly<Record<string, string>> {
+    return {
+      initiator: this.ports.getCharacterName(initiatorId),
+      target: this.ports.getCharacterName(targetId),
+      ...createParticipantWayOfSayingTemplateValues({
+        initiator: this.ports.getCharacterWayOfSaying(initiatorId),
+        target: this.ports.getCharacterWayOfSaying(targetId),
+      }),
+    };
   }
 
-  if (phase === 'accepted') {
-    return presentation?.acceptedLine;
+  private getSpeakerTemplateValues(
+    speakerId: string,
+    templateValues: Readonly<Record<string, string>>,
+  ): Readonly<Record<string, string>> {
+    return {
+      ...templateValues,
+      ...createWayOfSayingTemplateValues(this.ports.getCharacterWayOfSaying(speakerId)),
+    };
   }
-
-  if (phase === 'rejected') {
-    return presentation?.rejectedLine;
-  }
-
-  if (phase === 'end') {
-    return presentation?.endLine;
-  }
-
-  return undefined;
 }
 
 function formatInteractionLine(
@@ -781,9 +796,7 @@ function formatTemplate(
   template: string,
   values: Readonly<Record<string, string>>,
 ): string {
-  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key: string) => (
-    values[key] ?? `{${key}}`
-  ));
+  return formatTemplateWithValues(template, values);
 }
 
 function formatCharacterNames(
