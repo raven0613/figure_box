@@ -348,10 +348,6 @@ export function CharacterStatusPanel({
         <strong>{snapshot.context.utilityScores.play}</strong>
       </div>
       <div className={styles.detailRow}>
-        <span>Rest score</span>
-        <strong>{snapshot.context.utilityScores.rest}</strong>
-      </div>
-      <div className={styles.detailRow}>
         <span>Chat score</span>
         <strong>{snapshot.context.utilityScores.chat}</strong>
       </div>

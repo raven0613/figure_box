@@ -45,12 +45,7 @@
   },
   "resolutionEffects": {
     "goEatSaturationDelta": 100,
-    "goRestMoodValueDelta": 10,
-    "goPlayMoodValueDelta": 18,
-    "goPlayPlayNeedDelta": -45,
-    "homeFoodSaturationDelta": 35,
-    "homePlayMoodValueDelta": 10,
-    "homePlayPlayNeedDelta": -35
+    "homeFoodSaturationDelta": 35
   },
   "events": {
     "default": {
@@ -88,9 +83,6 @@
       },
       "findFood": {
         "weightMultiplier": 1.1
-      },
-      "rest": {
-        "weightMultiplier": 0.9
       },
       "play": {
         "weightMultiplier": 0.75

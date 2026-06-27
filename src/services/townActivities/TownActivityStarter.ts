@@ -19,6 +19,7 @@ interface TownActivityStarterOptions {
   getInvitedParticipantIds: (
     hostCharacterId: string,
     activityDefinition: CharacterEventActivity,
+    sourceEventId: string,
   ) => string[];
   handleGroupInviteResolution: (
     activity: JoinableActivity,
@@ -42,6 +43,7 @@ export class TownActivityStarter {
   private readonly getInvitedParticipantIds: (
     hostCharacterId: string,
     activityDefinition: CharacterEventActivity,
+    sourceEventId: string,
   ) => string[];
   private readonly handleGroupInviteResolution: (
     activity: JoinableActivity,
@@ -101,7 +103,11 @@ export class TownActivityStarter {
     const phase = shouldResolveGroupInvites(activityDefinition)
       ? 'inviting'
       : getPostInviteActivityPhase(activityDefinition);
-    const participantIds = this.getInvitedParticipantIds(characterId, activityDefinition);
+    const participantIds = this.getInvitedParticipantIds(
+      characterId,
+      activityDefinition,
+      currentActivity.sourceEventId,
+    );
 
     const activity = this.activityManager.createActivity({
       id: currentActivity.activityId,

@@ -140,6 +140,7 @@ function cloneActivityCooldowns(
   activityCooldowns: CharacterRuntimeSnapshot['activityCooldowns'],
 ): CharacterRuntimeSnapshot['activityCooldowns'] {
   return {
+    commonUntil: activityCooldowns.commonUntil,
     categoryUntilByKey: { ...activityCooldowns.categoryUntilByKey },
     pairUntilByKey: { ...activityCooldowns.pairUntilByKey },
     repeatByKey: Object.fromEntries(

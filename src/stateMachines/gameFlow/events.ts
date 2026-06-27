@@ -52,9 +52,8 @@ export type CharacterEvent =
   }
   | { type: EventType.PassBy; targetCharId: string; timestamp?: number }
   | { type: EventType.GoEat; target: Position }
-  | { type: EventType.GoRest }
-  | { type: EventType.GoPlay }
   | { type: EventType.GoHome }
+  | { type: EventType.StartBehavior; behaviorId: string; target?: Position; timestamp?: number }
   | { type: EventType.EnterApartment; apartmentSpaceId: string }
   | { type: EventType.LeaveApartment; worldSpaceId: string; position: Position }
   | { type: EventType.StartActivity; activityId: string; sourceEventId: string }
@@ -65,9 +64,12 @@ export type CharacterEvent =
     type: EventType.EndJoinedActivity;
     activityId: string;
     participantIds?: readonly string[];
+    sourceEventId?: string;
+    activityRole?: 'initiator' | 'target';
     activityEffects?: CharacterEventActivityEffects;
     outcomeId?: string;
     resolvedBy?: ActivityOutcomeResolvedBy;
+    cancelled?: boolean;
     timestamp?: number;
   }
   | {
@@ -129,9 +131,8 @@ export enum EventType {
   UserClick = "userClick", // 主動：玩家點擊
   PassBy = "passBy", // 自動：擦肩而過
   GoEat = "goEat",
-  GoRest = "goRest",
-  GoPlay = "goPlay",
   GoHome = "goHome",
+  StartBehavior = "startBehavior",
   EnterApartment = "enterApartment",
   LeaveApartment = "leaveApartment",
   StartActivity = "startActivity",

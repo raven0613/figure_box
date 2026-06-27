@@ -1,6 +1,7 @@
 import type {
   CharacterActivityCooldowns,
   CharacterContext,
+  UtilityDrivenMotivation,
 } from '~/stateMachines/gameFlow/context';
 import {
   CHARACTER_EVENT_DEFINITIONS_BY_ID,
@@ -17,13 +18,58 @@ export interface ActivityCooldownRecordInput {
 }
 
 const DEFAULT_COOLDOWN_CATEGORY = 'activity';
+const COMMON_ACTIVITY_COOLDOWN_WEIGHT_MULTIPLIER = 0.25;
+const POST_ACTIVITY_IDLE_MOTIVATION_WEIGHT = 120;
+const POST_ACTIVITY_NON_IDLE_MOTIVATION_WEIGHT_MULTIPLIER = 0.2;
 
 export function createEmptyActivityCooldowns(): CharacterActivityCooldowns {
   return {
+    commonUntil: 0,
     categoryUntilByKey: {},
     pairUntilByKey: {},
     repeatByKey: {},
   };
+}
+
+export function getActivityCommonCooldownWeightMultiplier(
+  context: CharacterContext,
+  timestamp: number,
+): number {
+  return context.activityCooldowns.commonUntil > timestamp
+    ? COMMON_ACTIVITY_COOLDOWN_WEIGHT_MULTIPLIER
+    : 1;
+}
+
+export function getActivityCooldownMotivationWeight(
+  context: CharacterContext,
+  motivation: UtilityDrivenMotivation,
+  baseWeight: number,
+  timestamp: number,
+): number {
+  if (context.activityCooldowns.commonUntil <= timestamp) {
+    return baseWeight;
+  }
+
+  if (motivation === 'idle') {
+    return Math.max(baseWeight, POST_ACTIVITY_IDLE_MOTIVATION_WEIGHT);
+  }
+
+  if (motivation === 'findFood') {
+    return baseWeight;
+  }
+
+  return baseWeight * POST_ACTIVITY_NON_IDLE_MOTIVATION_WEIGHT_MULTIPLIER;
+}
+
+export function isActivityDefinitionCoolingDown(
+  context: CharacterContext,
+  eventDefinition: CharacterEventDefinition,
+  timestamp: number,
+): boolean {
+  const category = getCooldownCategory(eventDefinition);
+
+  return context.activityCooldowns.commonUntil > timestamp ||
+    isCategoryCoolingDown(context.activityCooldowns, category, timestamp);
 }
 
 export function getAvailableActivityTargetIds(
@@ -84,11 +130,14 @@ export function recordActivityCooldowns(
     ? getDefinitionActivityCooldowns(eventDefinition)
     : undefined;
 
-  if (!eventDefinition || !activityCooldowns || input.partnerCharIds.length === 0) {
+  if (!eventDefinition || !activityCooldowns) {
     return cooldowns;
   }
 
   const category = getCooldownCategory(eventDefinition);
+  const commonUntil = activityCooldowns.commonMs
+    ? Math.max(cooldowns.commonUntil, input.timestamp + activityCooldowns.commonMs)
+    : cooldowns.commonUntil;
   const ownCooldownMs = input.role === 'initiator'
     ? activityCooldowns.selfMs
     : activityCooldowns.targetMs;
@@ -119,6 +168,7 @@ export function recordActivityCooldowns(
   );
 
   return {
+    commonUntil,
     categoryUntilByKey,
     pairUntilByKey,
     repeatByKey,

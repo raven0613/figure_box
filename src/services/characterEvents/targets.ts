@@ -28,10 +28,13 @@ export function resolveActivityDestination(
   return destination;
 }
 
-export function getRandomMapTarget(position: Position): Position {
+export function getRandomMapTarget(
+  position: Position,
+  random: () => number = Math.random,
+): Position {
   const target = {
-    x: Math.floor(Math.random() * TOWN_MAP_WIDTH),
-    y: Math.floor(Math.random() * TOWN_MAP_HEIGHT),
+    x: Math.floor(random() * TOWN_MAP_WIDTH),
+    y: Math.floor(random() * TOWN_MAP_HEIGHT),
   };
 
   if (target.x === position.x && target.y === position.y) {

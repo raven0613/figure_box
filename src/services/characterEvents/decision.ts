@@ -15,6 +15,7 @@ import { CHARACTER_EVENT_DEFINITIONS_BY_ID } from '../../constants/charactarEven
 import { createCharacterEventRuleContext } from './rules';
 import { selectCharacterEventPresentationVariant } from './variants';
 import { WeightedDecisionSelector } from '../decisionSelector';
+import { getActivityCooldownMotivationWeight } from './activityCooldowns';
 
 const weightedDecisionSelector = new WeightedDecisionSelector();
 
@@ -25,11 +26,17 @@ export function decideCharacterEvent(
   const utilityScores = calculateCharacterUtilityScores(context);
   const candidates = collectCharacterEventCandidates(context, utilityScores, input);
   const random = input.random ?? Math.random;
+  const timestamp = input.timestamp ?? Date.now();
   const candidateGroups = groupCandidatesByMotivation(candidates);
   const selectedGroup = weightedDecisionSelector.select(
     candidateGroups.map(group => ({
       item: group,
-      weight: utilityScores[group.motivation],
+      weight: getActivityCooldownMotivationWeight(
+        context,
+        group.motivation,
+        utilityScores[group.motivation],
+        timestamp,
+      ) * getMotivationGroupWeightMultiplier(group),
     })),
     random,
   );
@@ -104,6 +111,13 @@ function groupCandidatesByMotivation(
     motivation,
     candidates: groupCandidates,
   }));
+}
+
+function getMotivationGroupWeightMultiplier(group: CharacterEventMotivationGroup): number {
+  return Math.max(
+    1,
+    ...group.candidates.map(candidate => candidate.motivationWeightMultiplier ?? 1),
+  );
 }
 
 function getCandidateBucketIds(candidates: CharacterEventCandidate[]): CharacterEventBucketId[] {

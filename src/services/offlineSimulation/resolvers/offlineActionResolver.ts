@@ -5,7 +5,6 @@ import {
   createOfflineContainedPositionPatch,
   createOfflineDestinationPositionPatch,
   createOfflineNearbyDriftPositionPatch,
-  getFirstDestinationTarget,
 } from '../offlinePositionResolver';
 import {
   createNumericPatch,
@@ -53,55 +52,26 @@ export function resolveOfflineActionPreview(
         },
         notes: ['沿用在線吃飯完成後的飽足尺度；食物與店家細節待內容資料補齊後再抽。'],
       };
-    case EventType.GoRest:
-      return {
-        kind: 'solo',
-        resolverSource: 'action.goRest',
-        statusPatch: createStatusPatch({
-          moodValue: createNumericPatch(
-            context.character.status.moodValue,
-            context.character.status.moodValue + OFFLINE_SIMULATION_POLICY.resolutionEffects.goRestMoodValueDelta,
-            100,
-          ),
-        }),
-        positionPatch: createOfflineContainedPositionPatch('restAtHome'),
-        currentMotivation: 'idle',
-        variables: {
-          activityType: 'rest',
-          locationName: '家裡',
-        },
-        notes: ['休息離線預覽只提高心情值，暫不改變其他需求。'],
-      };
-    case EventType.GoPlay:
-      return {
-        kind: 'solo',
-        resolverSource: 'action.goPlay',
-        statusPatch: createStatusPatch({
-          moodValue: createNumericPatch(
-            context.character.status.moodValue,
-            context.character.status.moodValue + OFFLINE_SIMULATION_POLICY.resolutionEffects.goPlayMoodValueDelta,
-            100,
-          ),
-          playNeed: createNumericPatch(
-            context.character.status.playNeed,
-            context.character.status.playNeed + OFFLINE_SIMULATION_POLICY.resolutionEffects.goPlayPlayNeedDelta,
-            0,
-          ),
-        }),
-        positionPatch: createOfflineDestinationPositionPatch(
-          'playDestination',
-          getFirstDestinationTarget('play'),
-        ),
-        currentMotivation: 'idle',
-        variables: {
-          activityType: 'play',
-          itemName: '附近的東西',
-          locationName: '遊玩地點',
-        },
-        notes: ['沿用在線單人玩完成後的 playNeed 與心情尺度；玩什麼待內容資料補齊後再抽。'],
-      };
     case EventType.GoHome:
       return resolveGoHomePreview(context);
+    case EventType.StartBehavior:
+      return {
+        kind: 'solo',
+        resolverSource: `behavior.${context.candidate.event.behaviorId}`,
+        statusPatch: null,
+        positionPatch: context.candidate.event.target
+          ? createOfflineDestinationPositionPatch(
+            'behaviorDestination',
+            context.candidate.event.target,
+          )
+          : createOfflineNearbyDriftPositionPatch(context.character.position, 'behaviorNearbyDrift'),
+        currentMotivation: context.candidate.motivation,
+        variables: {
+          activityType: 'behavior',
+          locationName: '附近',
+        },
+        notes: ['生活 behavior 離線預覽只處理位置變化，暫不套用活動效果。'],
+      };
     default:
       return null;
   }
@@ -129,33 +99,6 @@ function resolveGoHomePreview(
         locationName: '家裡',
       },
       notes: ['預覽為回家找食物，使用保守飽足增量。'],
-    };
-  }
-
-  if (context.candidate.motivation === 'play') {
-    return {
-      kind: 'solo',
-      resolverSource: 'action.goHome',
-      statusPatch: createStatusPatch({
-        moodValue: createNumericPatch(
-          context.character.status.moodValue,
-          context.character.status.moodValue + OFFLINE_SIMULATION_POLICY.resolutionEffects.homePlayMoodValueDelta,
-          100,
-        ),
-        playNeed: createNumericPatch(
-          context.character.status.playNeed,
-          context.character.status.playNeed + OFFLINE_SIMULATION_POLICY.resolutionEffects.homePlayPlayNeedDelta,
-          0,
-        ),
-      }),
-      positionPatch: createOfflineContainedPositionPatch('playAtApartment'),
-      currentMotivation: 'idle',
-      variables: {
-        activityType: 'play',
-        itemName: '家裡的東西',
-        locationName: '家裡',
-      },
-      notes: ['回家玩耍使用保守效果；玩什麼待內容資料補齊後再抽。'],
     };
   }
 

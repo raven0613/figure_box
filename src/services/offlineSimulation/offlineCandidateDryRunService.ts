@@ -95,11 +95,13 @@ function createCharacterContext(snapshot: CharacterRuntimeSnapshot): CharacterCo
     position: { ...snapshot.position },
     presence: clonePresence(snapshot.presence),
     currentMotivation: 'idle' as const,
+    currentBehavior: null,
     controlState: CharacterControlState.Normal,
     pendingActivityJoin: null,
     currentActivity: null,
     heldItem: snapshot.heldItem ? { ...snapshot.heldItem } : null,
     activityCooldowns: {
+      commonUntil: snapshot.activityCooldowns.commonUntil,
       categoryUntilByKey: { ...snapshot.activityCooldowns.categoryUntilByKey },
       pairUntilByKey: { ...snapshot.activityCooldowns.pairUntilByKey },
       repeatByKey: Object.fromEntries(
@@ -135,7 +137,6 @@ function createCharacterContext(snapshot: CharacterRuntimeSnapshot): CharacterCo
       utilityScores: {
         idle: 0,
         findFood: 0,
-        rest: 0,
         play: 0,
         chat: 0,
         goHome: 0,

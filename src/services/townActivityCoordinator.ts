@@ -258,8 +258,8 @@ export class TownActivityCoordinator {
       activityManager: this.activityManager,
       getCharacterPosition: this.getCharacterPosition,
       getSelectedActivityDefinition: snapshot => this.getSelectedActivityDefinition(snapshot),
-      getInvitedParticipantIds: (hostCharacterId, activityDefinition) => (
-        this.inviteResolver.getInvitedParticipantIds(hostCharacterId, activityDefinition)
+      getInvitedParticipantIds: (hostCharacterId, activityDefinition, sourceEventId) => (
+        this.inviteResolver.getInvitedParticipantIds(hostCharacterId, activityDefinition, sourceEventId)
       ),
       handleGroupInviteResolution: (activity, hostCharacterId, activityDefinition) => {
         this.inviteResolver.handleGroupInviteResolution(activity, hostCharacterId, activityDefinition);

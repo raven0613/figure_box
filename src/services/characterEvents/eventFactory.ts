@@ -4,9 +4,11 @@ import {
   type CharacterEventAction,
   type CharacterEventTarget,
 } from '../../constants/charactarEventsDefinitions';
+import type { CharacterBehaviorDefinition } from '~/constants/characterBehaviorDefinitions';
 import type { JoinableActivity } from './joinableActivities';
-import { getRandomDestinationTarget } from './targets';
+import { getRandomDestinationTarget, getRandomMapTarget } from './targets';
 import type { CharacterEventDecisionInput } from './types';
+import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 
 export function createCharacterEventFromAction(
   action: CharacterEventAction,
@@ -17,10 +19,6 @@ export function createCharacterEventFromAction(
   switch (action.type) {
     case 'goIdle':
       return { type: EventType.GoIdle };
-    case 'goRest':
-      return { type: EventType.GoRest };
-    case 'goPlay':
-      return { type: EventType.GoPlay };
     case 'goHome':
       return { type: EventType.GoHome };
     case 'goEat':
@@ -54,6 +52,26 @@ export function createCharacterEventFromAction(
   }
 }
 
+export function createCharacterBehaviorEvent(
+  definition: CharacterBehaviorDefinition,
+  context: CharacterContext,
+  input: CharacterEventDecisionInput,
+  random: () => number = Math.random,
+): CharacterEvent | null {
+  const target = resolveBehaviorTarget(definition, context, random);
+
+  if (definition.target && !target) {
+    return null;
+  }
+
+  return {
+    type: EventType.StartBehavior,
+    behaviorId: definition.id,
+    target,
+    timestamp: input.timestamp,
+  };
+}
+
 function filterJoinableActivitiesByMotivation(
   activities: readonly JoinableActivity[],
   motivation: Extract<CharacterEventAction, { type: 'joinActivity' }>['motivation'],
@@ -73,6 +91,18 @@ function resolveCharacterEventTarget(target: CharacterEventTarget) {
   }
 
   return target;
+}
+
+function resolveBehaviorTarget(
+  definition: CharacterBehaviorDefinition,
+  context: CharacterContext,
+  random: () => number,
+) {
+  if (definition.target === 'randomMap') {
+    return getRandomMapTarget(context.position, random);
+  }
+
+  return undefined;
 }
 
 function createActivityId(random: () => number): string {

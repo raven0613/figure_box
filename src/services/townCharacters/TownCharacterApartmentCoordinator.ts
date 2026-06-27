@@ -7,7 +7,6 @@ import { EventType, type CharacterEvent } from '~/stateMachines/gameFlow/events'
 import type { FabricTownMapWidget } from '~/widgets/fabricTownMapWidget';
 
 const APARTMENT_EXIT_FOOD_SCORE_THRESHOLD = 65;
-const APARTMENT_EXIT_PLAY_SCORE_THRESHOLD = 72;
 
 interface TownCharacterApartmentCoordinatorOptions {
   widget: FabricTownMapWidget;
@@ -44,9 +43,7 @@ export class TownCharacterApartmentCoordinator {
     );
 
     if (!isHungry) {
-      return utilityScores.play >= APARTMENT_EXIT_PLAY_SCORE_THRESHOLD
-        ? this.leaveApartmentWithFollowUp(characterId, { type: EventType.GoPlay })
-        : false;
+      return false;
     }
 
     return this.leaveApartmentWithFollowUp(characterId, {

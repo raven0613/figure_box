@@ -159,6 +159,7 @@ export class TownActivityPerformanceDirector {
       );
       this.resolveActivityOutcome({
         activityId: activity.id,
+        sourceEventId: activity.sourceEventId,
         participantIds: activity.participantIds,
         hostCharacterIds: activity.hostCharacterIds,
         outcome: {
@@ -211,6 +212,7 @@ export class TownActivityPerformanceDirector {
       this.clearActivityVisuals(activity);
       this.resolveActivityOutcome({
         activityId: activity.id,
+        sourceEventId: activity.sourceEventId,
         participantIds: activity.participantIds,
         hostCharacterIds: activity.hostCharacterIds,
         outcome: {

@@ -322,6 +322,7 @@ function cloneActivityCooldowns(
   activityCooldowns: CharacterContext['activityCooldowns'],
 ): CharacterContext['activityCooldowns'] {
   return {
+    commonUntil: activityCooldowns.commonUntil,
     categoryUntilByKey: { ...activityCooldowns.categoryUntilByKey },
     pairUntilByKey: { ...activityCooldowns.pairUntilByKey },
     repeatByKey: Object.fromEntries(

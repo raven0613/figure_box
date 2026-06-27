@@ -718,6 +718,7 @@ function readRequiredCooldowns(
   }
 
   return {
+    commonMs: readOptionalNonNegativeNumber(value, 'commonMs', index),
     selfMs: readOptionalNonNegativeNumber(value, 'selfMs', index),
     targetMs: readOptionalNonNegativeNumber(value, 'targetMs', index),
     pairMs: readOptionalNonNegativeNumber(value, 'pairMs', index),

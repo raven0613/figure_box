@@ -37,6 +37,7 @@ export interface CharacterContext {
   position: Position;
   presence: CharacterPresence;
   currentMotivation: CharacterMotivation;
+  currentBehavior: CharacterBehaviorState | null;
   controlState: CharacterControlState;
   pendingActivityJoin: CharacterActivityJoinRequest | null;
   currentActivity: CharacterActivityParticipation | null;
@@ -85,9 +86,16 @@ export interface CharacterMachineInput {
   runtime?: CharacterRuntimeInput;
 }
 
-export type CharacterMotivation = 'idle' | 'findFood' | 'rest' | 'play' | 'chat' | 'goHome' | 'controllingByGod';
+export type CharacterMotivation = 'idle' | 'findFood' | 'play' | 'chat' | 'goHome' | 'controllingByGod';
 export type UtilityDrivenMotivation = Exclude<CharacterMotivation, 'controllingByGod'>;
 export type CharacterUtilityScores = Record<UtilityDrivenMotivation, number>;
+
+export interface CharacterBehaviorState {
+  id: string;
+  tickable: boolean;
+  startedAt: number;
+  endsAt?: number;
+}
 
 export interface CharacterActivityJoinRequest {
   id: string;
@@ -107,6 +115,7 @@ export interface CharacterHeldItem {
 }
 
 export interface CharacterActivityCooldowns {
+  commonUntil: number;
   categoryUntilByKey: Record<string, number>;
   pairUntilByKey: Record<string, number>;
   repeatByKey: Record<string, CharacterActivityRepeatRecord>;

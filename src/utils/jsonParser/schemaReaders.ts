@@ -10,7 +10,7 @@ import type {
 export type CharacterEventDefinitionRecord = Record<string, unknown>;
 
 const VALID_BUCKET_IDS = ['baseline', 'need', 'environment', 'global'] as const;
-const VALID_MOTIVATIONS = ['idle', 'findFood', 'rest', 'play', 'chat'] as const;
+const VALID_MOTIVATIONS = ['idle', 'findFood', 'play', 'chat'] as const;
 const VALID_CLAUSE_MODES = ['all', 'some'] as const;
 
 // 共用 readRequiredString、readOptionalNumber、isRecord、enum includes 等基礎 reader
@@ -245,4 +245,3 @@ export function includesString<T extends string>(
 function isUtilityDrivenMotivation(value: string): value is UtilityDrivenMotivation {
   return includesString(VALID_MOTIVATIONS, value);
 }
-

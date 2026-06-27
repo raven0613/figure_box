@@ -11,9 +11,6 @@
       "summary": "{characterName} 去找了點東西吃。",
       "detail": "{characterName} 離開原本的位置，最後在食物附近停了下來。"
     },
-    "rest": {
-      "summary": "{characterName} 休息了一段時間。"
-    },
     "play": {
       "summary": "{characterName} 自己玩了一會兒。"
     },
@@ -28,12 +25,6 @@
     "goEat": {
       "summary": "{characterName} 去找了點東西吃。",
       "detail": "{characterName} 看起來比剛才有精神一點。"
-    },
-    "goRest": {
-      "summary": "{characterName} 找了個地方休息。"
-    },
-    "goPlay": {
-      "summary": "{characterName} 找了地方玩。"
     },
     "goHome": {
       "summary": "{characterName} 回家待了一會兒。"

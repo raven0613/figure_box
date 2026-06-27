@@ -10,6 +10,15 @@ import { EventType } from '~/stateMachines/gameFlow/events';
 import { CharacterControlState } from '~/stateMachines/gameFlow/states';
 import { canAcceptCharacterEventInvitation } from '~/services/characterEvents/acceptance';
 import {
+  getSocialOpportunityScore,
+  type CharacterSocialOpportunity,
+} from '~/services/characterEvents/socialOpportunity';
+import {
+  getAvailableActivityTargetIds,
+  isActivityDefinitionCoolingDown,
+} from '~/services/characterEvents/activityCooldowns';
+import { getFeelingForIntimacy } from '~/stateMachines/gameFlow/relationships';
+import {
   getItemJoinRequirementScope,
   getGroupMaxParticipants,
   getGroupMinParticipants,
@@ -66,7 +75,11 @@ export class TownActivityInviteResolver {
     this.activityResponseDelayMs = options.activityResponseDelayMs;
   }
 
-  getInvitedParticipantIds(hostCharacterId: string, activityDefinition: CharacterEventActivity): string[] {
+  getInvitedParticipantIds(
+    hostCharacterId: string,
+    activityDefinition: CharacterEventActivity,
+    sourceEventId: string,
+  ): string[] {
     const maxParticipants = getGroupMaxParticipants(activityDefinition);
 
     if (maxParticipants <= 1) {
@@ -74,8 +87,23 @@ export class TownActivityInviteResolver {
     }
 
     const inviteNearbyRange = activityDefinition.group.inviteNearbyRange ?? 0;
-    const invitedParticipantIds = this.getNearbyCharacterIds(hostCharacterId, inviteNearbyRange)
-      .filter(characterId => this.canInviteCharacterToActivity(characterId, activityDefinition))
+    const hostContext = this.getCharacterContext(hostCharacterId);
+    const eventDefinition = CHARACTER_EVENT_DEFINITIONS_BY_ID[sourceEventId];
+    const inviteCandidateIds = this.getNearbyCharacterIds(hostCharacterId, inviteNearbyRange)
+      .filter(characterId => this.canInviteCharacterToActivity(characterId, activityDefinition));
+    const availableCandidateIds = eventDefinition && hostContext
+      ? getAvailableActivityTargetIds(hostContext, eventDefinition, inviteCandidateIds, Date.now())
+      : inviteCandidateIds;
+    const invitedParticipantIds = availableCandidateIds
+      .map((characterId, index) => ({
+        characterId,
+        index,
+        score: this.getInviteSocialOpportunityScore(hostContext, hostCharacterId, characterId),
+      }))
+      .sort((left, right) => (
+        right.score - left.score || left.index - right.index
+      ))
+      .map(candidate => candidate.characterId)
       .slice(0, Math.max(0, maxParticipants - 1));
 
     return [hostCharacterId, ...invitedParticipantIds];
@@ -112,6 +140,34 @@ export class TownActivityInviteResolver {
     return this.actorHasItem(characterId, activityDefinition.joinRequirements.itemId);
   }
 
+  private getInviteSocialOpportunityScore(
+    hostContext: CharacterSnapshot['context'] | null,
+    hostCharacterId: string,
+    targetCharacterId: string,
+  ): number {
+    return getSocialOpportunityScore(
+      this.createInviteSocialOpportunity(hostContext, hostCharacterId, targetCharacterId),
+    );
+  }
+
+  private createInviteSocialOpportunity(
+    hostContext: CharacterSnapshot['context'] | null,
+    hostCharacterId: string,
+    targetCharacterId: string,
+  ): CharacterSocialOpportunity {
+    const relationship = hostContext?.relationships.find(entry => (
+      entry.targetCharId === targetCharacterId
+    ));
+    const intimacy = relationship?.intimacy ?? 0;
+
+    return {
+      characterId: targetCharacterId,
+      feeling: relationship?.feeling ?? getFeelingForIntimacy(intimacy),
+      intimacy,
+      socialStatus: this.getRelationshipStatus(hostCharacterId, targetCharacterId) ?? SocialStatus.Stranger,
+    };
+  }
+
   handleGroupInviteResolution(
     activity: JoinableActivity,
     hostCharacterId: string,
@@ -122,6 +178,12 @@ export class TownActivityInviteResolver {
       this.canInviteeAcceptActivity(inviteeId, hostCharacterId, activity)
     ));
     const acceptedParticipantIds = [hostCharacterId, ...acceptedInviteeIds];
+    const eventDefinition = CHARACTER_EVENT_DEFINITIONS_BY_ID[activity.sourceEventId];
+    const hostContext = this.getCharacterContext(hostCharacterId);
+    const shouldCancelCooldownSoloFallback = acceptedInviteeIds.length === 0 &&
+      eventDefinition !== undefined &&
+      hostContext !== null &&
+      isActivityDefinitionCoolingDown(hostContext, eventDefinition, Date.now());
 
     if (inviteeIds.length > 0) {
       this.performanceRunner.playActivityPerformanceSteps({
@@ -131,31 +193,19 @@ export class TownActivityInviteResolver {
         participantIds: activity.participantIds,
         hostCharacterIds: activity.hostCharacterIds,
       });
+    }
+
+    if (shouldCancelCooldownSoloFallback) {
+      this.cancelInviteActivity(activity, hostCharacterId, inviteeIds.length > 0, true);
+      return;
+    }
+
+    if (inviteeIds.length > 0) {
       this.recordInviteCooldowns(activity, hostCharacterId, inviteeIds);
     }
 
     if (acceptedParticipantIds.length < getGroupMinParticipants(activityDefinition)) {
-      this.performanceRunner.playActivityPerformanceSteps({
-        selection: this.getActivityPerformanceSelection(activity),
-        phase: 'rejectedMood',
-        activityId: activity.id,
-        participantIds: activity.participantIds,
-        hostCharacterIds: activity.hostCharacterIds,
-      });
-      this.scheduleActivityTimeout(activity.id, () => {
-        const endedActivity = this.activityManager.endActivity(activity.id);
-
-        if (endedActivity) {
-          this.clearActivityVisuals(endedActivity);
-        }
-
-        this.sendToCharacter(hostCharacterId, {
-          type: EventType.EndJoinedActivity,
-          activityId: activity.id,
-          timestamp: Date.now(),
-        });
-        this.notifyActivitiesChanged();
-      }, this.activityResponseDelayMs);
+      this.cancelInviteActivity(activity, hostCharacterId, true, false);
       return;
     }
 
@@ -207,6 +257,39 @@ export class TownActivityInviteResolver {
       } else {
         this.playActivityPerformance(refreshedActivity);
       }
+      this.notifyActivitiesChanged();
+    }, this.activityResponseDelayMs);
+  }
+
+  private cancelInviteActivity(
+    activity: JoinableActivity,
+    hostCharacterId: string,
+    playRejectedMood: boolean,
+    cancelled: boolean,
+  ): void {
+    if (playRejectedMood) {
+      this.performanceRunner.playActivityPerformanceSteps({
+        selection: this.getActivityPerformanceSelection(activity),
+        phase: 'rejectedMood',
+        activityId: activity.id,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+      });
+    }
+
+    this.scheduleActivityTimeout(activity.id, () => {
+      const endedActivity = this.activityManager.endActivity(activity.id);
+
+      if (endedActivity) {
+        this.clearActivityVisuals(endedActivity);
+      }
+
+      this.sendToCharacter(hostCharacterId, {
+        type: EventType.EndJoinedActivity,
+        activityId: activity.id,
+        cancelled,
+        timestamp: Date.now(),
+      });
       this.notifyActivitiesChanged();
     }, this.activityResponseDelayMs);
   }

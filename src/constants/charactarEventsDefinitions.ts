@@ -47,8 +47,6 @@ export type CharacterEventInterruptPolicy = 'none' | 'soft' | 'always' | 'critic
 
 export type CharacterEventAction =
   | { type: 'goIdle' }
-  | { type: 'goRest' }
-  | { type: 'goPlay' }
   | { type: 'goHome' }
   | { type: 'goEat'; target: CharacterEventTarget }
   | { type: 'startActivity' }
@@ -231,6 +229,7 @@ export interface CharacterEventActivityRoll {
 }
 
 export interface CharacterEventCooldowns {
+  commonMs?: number;
   selfMs?: number;
   targetMs?: number;
   pairMs?: number;

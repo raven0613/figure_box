@@ -17,7 +17,7 @@ import {
 } from './schemaReaders';
 
 const VALID_BUCKET_IDS = ['baseline', 'need', 'environment', 'global'] as const;
-const VALID_MOTIVATIONS = ['idle', 'findFood', 'rest', 'play', 'chat', 'goHome'] as const;
+const VALID_MOTIVATIONS = ['idle', 'findFood', 'play', 'chat', 'goHome'] as const;
 const VALID_RECAP_MODES = ['none', 'auto', 'always'] as const;
 const VALID_REQUEST_LEVELS = ['critical', 'social', 'minor'] as const;
 const VALID_REQUEST_MODES = ['allow', 'pendingOnly', 'disabled'] as const;
@@ -117,12 +117,7 @@ function readResolutionEffectsPolicy(
 ): OfflineSimulationPolicy['resolutionEffects'] {
   return {
     goEatSaturationDelta: readRequiredNumber(value, 'goEatSaturationDelta', 0),
-    goRestMoodValueDelta: readRequiredNumber(value, 'goRestMoodValueDelta', 0),
-    goPlayMoodValueDelta: readRequiredNumber(value, 'goPlayMoodValueDelta', 0),
-    goPlayPlayNeedDelta: readRequiredNumber(value, 'goPlayPlayNeedDelta', 0),
     homeFoodSaturationDelta: readRequiredNumber(value, 'homeFoodSaturationDelta', 0),
-    homePlayMoodValueDelta: readRequiredNumber(value, 'homePlayMoodValueDelta', 0),
-    homePlayPlayNeedDelta: readRequiredNumber(value, 'homePlayPlayNeedDelta', 0),
   };
 }
 

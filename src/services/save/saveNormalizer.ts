@@ -838,6 +838,9 @@ function readActivityCooldowns(
   }
 
   return {
+    commonUntil: typeof value.commonUntil === 'number' && Number.isFinite(value.commonUntil)
+      ? value.commonUntil
+      : fallback.commonUntil,
     categoryUntilByKey: readNumberRecord(value.categoryUntilByKey),
     pairUntilByKey: readNumberRecord(value.pairUntilByKey),
     repeatByKey: readActivityRepeatRecords(value.repeatByKey),

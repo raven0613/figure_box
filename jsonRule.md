@@ -6,9 +6,9 @@
 
 ## 1. 兩份 JSON 各自負責什麼
 
-| 檔案 | 主要責任 |
-| --- | --- |
-| `src/constants/events/characterEvents.json` | 決定角色「何時想做什麼」、候選權重、活動規則、邀請與加入條件、冷卻、活動結果、角色狀態與關係變化、離線摘要 |
+| 檔案                                              | 主要責任                                                                                                       |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `src/constants/events/characterEvents.json`       | 決定角色「何時想做什麼」、候選權重、活動規則、邀請與加入條件、冷卻、活動結果、角色狀態與關係變化、離線摘要     |
 | `src/constants/events/characterPerformances.json` | 決定事件或活動在各階段「如何演出」，例如對話泡泡、表情、表情泡泡、地圖標籤、動畫、對話腳本與活動 roll 觸發時機 |
 
 兩者以 `performanceId` 串接：
@@ -67,7 +67,6 @@ npm test
 
 - `idle`
 - `findFood`
-- `rest`
 - `play`
 - `chat`
 
@@ -116,37 +115,37 @@ finalWeight = 有 maxWeight ? min(maxWeight, repeatAdjustedWeight) : repeatAdjus
 }
 ```
 
-| Key | 必填 | 型別／可用值 | 功能與影響 |
-| --- | --- | --- | --- |
-| `id` | 是 | 非空字串 | event 的唯一識別碼，也會存進 `sourceEventId`，供活動查找、冷卻與離線系統使用 |
-| `bucketId` | 是 | `baseline`、`need`、`environment`、`global` | 候選來源分類；`global` bucket 只有輸入含 `globalEventTags` 時才會收集 |
-| `motivation` | 是 | `idle`、`findFood`、`rest`、`play`、`chat` | event 所屬的第一層動機抽選群組 |
-| `characterEvent` | 是 | object | event 選中後送給角色 state machine 的動作 |
-| `baseWeight` | 是 | finite number | 最低候選權重。頂層 parser 允許負數，但最終權重 `<= 0` 仍會被排除，建議使用非負數 |
-| `weightSource` | 否 | motivation 值 | 以指定 utility score 作為動態權重來源 |
-| `addWeight` | 否 | finite number | 加在來源權重上；沒有 `weightSource` 時等於加在 `baseWeight` 上 |
-| `maxWeight` | 否 | finite number | 最終權重上限 |
-| `requiresNearbyCharacter` | 否 | boolean | `true` 時，附近沒有角色便不建立候選 |
-| `conditionMode` | 否 | `all`、`some` | `conditions` 的 AND／OR 模式；省略時等同 `all` |
-| `conditions` | 否 | rule array | 決定 event 是否有資格進入候選池 |
-| `weightModifiers` | 否 | modifier array | 條件成立時調整 event 權重 |
-| `presentationVariants` | 否 | variant array | event 選中後，再抽選具體演出與 activity 設定 |
-| `acceptance` | 否 | object | 群體邀請時，被邀請者是否接受 |
-| `interruptPolicy` | 否 | `none`、`soft`、`always`、`critical` | parser 會保留，但目前專案沒有其他程式讀取，現在不影響中斷行為 |
-| `commitment` | 否 | finite number | parser 會保留，但目前沒有其他程式讀取，現在不影響決策 |
-| `card` | 否 | object | 提供可由 UI／上帝操作使用的事件卡資訊 |
-| `offlineRecap` | 否 | object | offline simulation 的摘要模板 |
-| `onInterrupted` | 否 | transition variant array | parser 會保留，但目前沒有其他程式讀取 |
-| `onInterruptRejected` | 否 | transition variant array | parser 會保留，但目前沒有其他程式讀取 |
+| Key                       | 必填 | 型別／可用值                                | 功能與影響                                                                       |
+| ------------------------- | ---- | ------------------------------------------- | -------------------------------------------------------------------------------- |
+| `id`                      | 是   | 非空字串                                    | event 的唯一識別碼，也會存進 `sourceEventId`，供活動查找、冷卻與離線系統使用     |
+| `bucketId`                | 是   | `baseline`、`need`、`environment`、`global` | 候選來源分類；`global` bucket 只有輸入含 `globalEventTags` 時才會收集            |
+| `motivation`              | 是   | `idle`、`findFood`、`play`、`chat`          | event 所屬的第一層動機抽選群組                                                   |
+| `characterEvent`          | 是   | object                                      | event 選中後送給角色 state machine 的動作                                        |
+| `baseWeight`              | 是   | finite number                               | 最低候選權重。頂層 parser 允許負數，但最終權重 `<= 0` 仍會被排除，建議使用非負數 |
+| `weightSource`            | 否   | motivation 值                               | 以指定 utility score 作為動態權重來源                                            |
+| `addWeight`               | 否   | finite number                               | 加在來源權重上；沒有 `weightSource` 時等於加在 `baseWeight` 上                   |
+| `maxWeight`               | 否   | finite number                               | 最終權重上限                                                                     |
+| `requiresNearbyCharacter` | 否   | boolean                                     | `true` 時，附近沒有角色便不建立候選                                              |
+| `conditionMode`           | 否   | `all`、`some`                               | `conditions` 的 AND／OR 模式；省略時等同 `all`                                   |
+| `conditions`              | 否   | rule array                                  | 決定 event 是否有資格進入候選池                                                  |
+| `weightModifiers`         | 否   | modifier array                              | 條件成立時調整 event 權重                                                        |
+| `presentationVariants`    | 否   | variant array                               | event 選中後，再抽選具體演出與 activity 設定                                     |
+| `acceptance`              | 否   | object                                      | 群體邀請時，被邀請者是否接受                                                     |
+| `interruptPolicy`         | 否   | `none`、`soft`、`always`、`critical`        | parser 會保留，但目前專案沒有其他程式讀取，現在不影響中斷行為                    |
+| `commitment`              | 否   | finite number                               | parser 會保留，但目前沒有其他程式讀取，現在不影響決策                            |
+| `card`                    | 否   | object                                      | 提供可由 UI／上帝操作使用的事件卡資訊                                            |
+| `offlineRecap`            | 否   | object                                      | offline simulation 的摘要模板                                                    |
+| `onInterrupted`           | 否   | transition variant array                    | parser 會保留，但目前沒有其他程式讀取                                            |
+| `onInterruptRejected`     | 否   | transition variant array                    | parser 會保留，但目前沒有其他程式讀取                                            |
 
 ### 3.3 `bucketId`
 
-| 值 | 用途 |
-| --- | --- |
-| `baseline` | 永遠可考慮的保底行為，例如 idle |
-| `need` | 飢餓、休息、玩樂等內在需求 |
-| `environment` | 依附近角色、物品或活動觸發 |
-| `global` | 依世界事件 tag 觸發；沒有 `input.globalEventTags` 時整個 bucket 不會執行 |
+| 值            | 用途                                                                     |
+| ------------- | ------------------------------------------------------------------------ |
+| `baseline`    | 永遠可考慮的保底行為，例如 idle                                          |
+| `need`        | 飢餓、休息、玩樂等內在需求                                               |
+| `environment` | 依附近角色、物品或活動觸發                                               |
+| `global`      | 依世界事件 tag 觸發；沒有 `input.globalEventTags` 時整個 bucket 不會執行 |
 
 `bucketId` 本身不直接改權重；它主要決定何時、從哪一組 definition 收集候選。
 
@@ -159,22 +158,6 @@ finalWeight = 有 maxWeight ? min(maxWeight, repeatAdjustedWeight) : repeatAdjus
 ```
 
 讓角色進入 idle。
-
-#### `goRest`
-
-```json
-{ "type": "goRest" }
-```
-
-讓角色休息。
-
-#### `goPlay`
-
-```json
-{ "type": "goPlay" }
-```
-
-執行既有的單人玩樂流程。
 
 #### `goHome`
 
@@ -224,10 +207,10 @@ finalWeight = 有 maxWeight ? min(maxWeight, repeatAdjustedWeight) : repeatAdjus
 }
 ```
 
-| Key | 必填 | 影響 |
-| --- | --- | --- |
-| `target` | 是 | 目前只能是 `nearbyJoinableActivity` |
-| `motivation` | 否 | 限制要加入的活動動機／類型選擇；可用 motivation 白名單 |
+| Key          | 必填 | 影響                                                   |
+| ------------ | ---- | ------------------------------------------------------ |
+| `target`     | 是   | 目前只能是 `nearbyJoinableActivity`                    |
+| `motivation` | 否   | 限制要加入的活動動機／類型選擇；可用 motivation 白名單 |
 
 附近沒有可加入活動時，這類 event 會自動排除。
 
@@ -248,11 +231,11 @@ finalWeight = 有 maxWeight ? min(maxWeight, repeatAdjustedWeight) : repeatAdjus
 
 每條規則包含：
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `path` | 是 | 從規則 context 讀取實際值 |
-| `operator` | 是 | 比較方式 |
-| `value` | 是 | 預期值；可為 string、number、boolean、null 或以上型別組成的陣列 |
+| Key        | 必填 | 功能                                                            |
+| ---------- | ---- | --------------------------------------------------------------- |
+| `path`     | 是   | 從規則 context 讀取實際值                                       |
+| `operator` | 是   | 比較方式                                                        |
+| `value`    | 是   | 預期值；可為 string、number、boolean、null 或以上型別組成的陣列 |
 
 `conditionMode`：
 
@@ -262,13 +245,13 @@ finalWeight = 有 maxWeight ? min(maxWeight, repeatAdjustedWeight) : repeatAdjus
 
 可用 operator：
 
-| Operator | 語意 | 適合範例 |
-| --- | --- | --- |
-| `==` | 嚴格相等 | mood 等於 `happy` |
-| `!=` | 嚴格不相等 | feeling 不是 `hate` |
-| `>`、`>=`、`<`、`<=` | 轉成 number 後比較 | moodValue、intimacy、count |
-| `in` | 實際值是否存在於 `value` 陣列 | mood 是否在多個允許值中 |
-| `includes` | 實際值必須是陣列，檢查是否含 `value` | `ownItemIds` 是否含某物品 |
+| Operator             | 語意                                 | 適合範例                   |
+| -------------------- | ------------------------------------ | -------------------------- |
+| `==`                 | 嚴格相等                             | mood 等於 `happy`          |
+| `!=`                 | 嚴格不相等                           | feeling 不是 `hate`        |
+| `>`、`>=`、`<`、`<=` | 轉成 number 後比較                   | moodValue、intimacy、count |
+| `in`                 | 實際值是否存在於 `value` 陣列        | mood 是否在多個允許值中    |
+| `includes`           | 實際值必須是陣列，檢查是否含 `value` | `ownItemIds` 是否含某物品  |
 
 #### 建議使用的 event rule paths
 
@@ -303,7 +286,6 @@ parser 只檢查 path 是否以 `character.`、`utility.` 或 `input.` 開頭；
 
 - `utility.idle`
 - `utility.findFood`
-- `utility.rest`
 - `utility.play`
 - `utility.chat`
 - `utility.goHome`
@@ -377,17 +359,17 @@ event 選中後，會從符合條件且權重大於 `0` 的 variant 中再做一
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `id` | 是 | variant 在該 event 內的唯一 ID；會存入 `selectedPresentationVariantId` |
-| `baseWeight` | 是 | variant 抽選基礎權重 |
-| `conditionMode` | 否 | `all`／`some` |
-| `conditions` | 否 | 是否可選此 variant |
-| `weightModifiers` | 否 | 調整 variant 權重 |
-| `presentationTags` | 否 | 任意字串陣列，目前只記錄在 decision/debug 資料，沒有通用 runtime renderer |
-| `performanceId` | 否 | 對應 `characterPerformances.json` 的 definition `id` |
-| `offlineRecap` | 否 | 此 variant 的離線摘要，通常比 event 層更具體 |
-| `activity` | 否 | 要建立的多人／可觀察活動規則 |
+| Key                | 必填 | 功能                                                                      |
+| ------------------ | ---- | ------------------------------------------------------------------------- |
+| `id`               | 是   | variant 在該 event 內的唯一 ID；會存入 `selectedPresentationVariantId`    |
+| `baseWeight`       | 是   | variant 抽選基礎權重                                                      |
+| `conditionMode`    | 否   | `all`／`some`                                                             |
+| `conditions`       | 否   | 是否可選此 variant                                                        |
+| `weightModifiers`  | 否   | 調整 variant 權重                                                         |
+| `presentationTags` | 否   | 任意字串陣列，目前只記錄在 decision/debug 資料，沒有通用 runtime renderer |
+| `performanceId`    | 否   | 對應 `characterPerformances.json` 的 definition `id`                      |
+| `offlineRecap`     | 否   | 此 variant 的離線摘要，通常比 event 層更具體                              |
+| `activity`         | 否   | 要建立的多人／可觀察活動規則                                              |
 
 如果所有 variant 都不符合條件或權重皆 `<= 0`，event 仍可能被選中，但不會有 selected variant，也不會取得 variant activity/performance。
 
@@ -395,10 +377,10 @@ event 選中後，會從符合條件且權重大於 `0` 的 variant 中再做一
 
 建議優先使用現有三種 activity type：
 
-| Type | 適合用途 |
-| --- | --- |
-| `chat` | 聊天、討論、社交互動 |
-| `playWithItem` | 拿某物、玩某物、使用某物 |
+| Type             | 適合用途                   |
+| ---------------- | -------------------------- |
+| `chat`           | 聊天、討論、社交互動       |
+| `playWithItem`   | 拿某物、玩某物、使用某物   |
 | `playAtLocation` | 去某處或在某地一起進行活動 |
 
 只要能歸入這三類，現有 live 與 offline 流程較能直接處理。新增新的 activity type 需要同步修改型別、parser、live resolver 與 offline resolver。
@@ -413,9 +395,7 @@ event 選中後，會從符合條件且權重大於 `0` 的 variant 中再做一
   "destination": "randomDestination.play",
   "availability": {
     "timeOfDay": ["morning", "afternoon"],
-    "timeWindows": [
-      { "from": "09:00", "to": "12:00" }
-    ]
+    "timeWindows": [{ "from": "09:00", "to": "12:00" }]
   },
   "group": {
     "inviteNearbyRange": 4,
@@ -438,34 +418,32 @@ event 選中後，會從符合條件且權重大於 `0` 的 variant 中再做一
 }
 ```
 
-| Key | 必填 | 功能與影響 |
-| --- | --- | --- |
-| `key` | 是 | 活動種類的穩定識別碼，寫入 runtime activity 的 `activityKey` |
-| `type` | 是 | `chat`、`playWithItem`、`playAtLocation` |
-| `startPhase` | 否 | `active` 或 `traveling`；省略時，有 `destination` 為 `traveling`，否則為 `active` |
-| `destination` | 否 | `"randomDestination.play"`、`"randomDestination.coffee"`、`"randomDestination.sketch"`、`"randomDestination.jogging"`、`"randomDestination.photography"`，或 `{ "x": number, "y": number }` |
-| `availability` | 否 | 活動可用時段。目前由 offline simulation 使用；live town activity 流程尚未套用 |
-| `group` | 是 | 邀請距離與人數 |
-| `joinable` | 否 | live town activity 必須明確設為 `true` 才會建立；省略或 `false` 時 starter 會立即結束該 activity |
-| `durationMs` | 是 | 活動 phase 的持續時間，必須 `>= 0` |
-| `refreshDurationOnJoin` | 否 | 新角色加入時是否把結束時間重設為「現在 + duration」 |
-| `joinWindowMs` | 否 | 邀請／加入窗口時間，必須 `>= 0` |
-| `joinRequirements` | 否 | 加入活動的物品要求；省略等同 `{ "type": "none" }` |
-| `cooldowns` | 是 | 發起者、受邀者、配對與重複活動冷卻 |
-| `effects` | 否 | 活動正常完成後，所有參與者共用的效果 |
-| `effectsByRole` | 否 | 正常完成後，依 initiator／target 覆寫共用效果 |
-| `dialogueScriptId` | 否 | 地圖上可觀察活動使用的 dialogue script |
-| `dialogueSubjectSelection` | 否 | 對話前從角色記憶挑選談論對象 |
-| `rolls` | 否 | 活動中的加權分支與終局結果 |
+| Key                        | 必填 | 功能與影響                                                                                                                                                                                  |
+| -------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`                      | 是   | 活動種類的穩定識別碼，寫入 runtime activity 的 `activityKey`                                                                                                                                |
+| `type`                     | 是   | `chat`、`playWithItem`、`playAtLocation`                                                                                                                                                    |
+| `startPhase`               | 否   | `active` 或 `traveling`；省略時，有 `destination` 為 `traveling`，否則為 `active`                                                                                                           |
+| `destination`              | 否   | `"randomDestination.play"`、`"randomDestination.coffee"`、`"randomDestination.sketch"`、`"randomDestination.jogging"`、`"randomDestination.photography"`，或 `{ "x": number, "y": number }` |
+| `availability`             | 否   | 活動可用時段。目前由 offline simulation 使用；live town activity 流程尚未套用                                                                                                               |
+| `group`                    | 是   | 邀請距離與人數                                                                                                                                                                              |
+| `joinable`                 | 否   | live town activity 必須明確設為 `true` 才會建立；省略或 `false` 時 starter 會立即結束該 activity                                                                                            |
+| `durationMs`               | 是   | 活動 phase 的持續時間，必須 `>= 0`                                                                                                                                                          |
+| `refreshDurationOnJoin`    | 否   | 新角色加入時是否把結束時間重設為「現在 + duration」                                                                                                                                         |
+| `joinWindowMs`             | 否   | 邀請／加入窗口時間，必須 `>= 0`                                                                                                                                                             |
+| `joinRequirements`         | 否   | 加入活動的物品要求；省略等同 `{ "type": "none" }`                                                                                                                                           |
+| `cooldowns`                | 是   | 發起者、受邀者、配對與重複活動冷卻                                                                                                                                                          |
+| `effects`                  | 否   | 活動正常完成後，所有參與者共用的效果                                                                                                                                                        |
+| `effectsByRole`            | 否   | 正常完成後，依 initiator／target 覆寫共用效果                                                                                                                                               |
+| `dialogueScriptId`         | 否   | 地圖上可觀察活動使用的 dialogue script                                                                                                                                                      |
+| `dialogueSubjectSelection` | 否   | 對話前從角色記憶挑選談論對象                                                                                                                                                                |
+| `rolls`                    | 否   | 活動中的加權分支與終局結果                                                                                                                                                                  |
 
 #### `availability`
 
 ```json
 {
   "timeOfDay": ["morning", "evening"],
-  "timeWindows": [
-    { "from": "22:00", "to": "02:00" }
-  ]
+  "timeWindows": [{ "from": "22:00", "to": "02:00" }]
 }
 ```
 
@@ -478,11 +456,11 @@ event 選中後，會從符合條件且權重大於 `0` 的 variant 中再做一
 
 #### `group`
 
-| Key | 預設 | 功能 |
-| --- | --- | --- |
-| `inviteNearbyRange` | 呼叫端常視為 `0` | 以地圖格距離搜尋邀請對象 |
-| `minParticipants` | `1` | 活動成立與持續所需最少人數 |
-| `maxParticipants` | `minParticipants` | 活動人數上限；實際值不會小於 min |
+| Key                 | 預設              | 功能                             |
+| ------------------- | ----------------- | -------------------------------- |
+| `inviteNearbyRange` | 呼叫端常視為 `0`  | 以地圖格距離搜尋邀請對象         |
+| `minParticipants`   | `1`               | 活動成立與持續所需最少人數       |
+| `maxParticipants`   | `minParticipants` | 活動人數上限；實際值不會小於 min |
 
 三者 parser 只接受非負數，但沒有強制整數。這些是人數與格數，應填非負整數。
 
@@ -506,11 +484,11 @@ event 選中後，會從符合條件且權重大於 `0` 的 variant 中再做一
 }
 ```
 
-| Key | 功能 |
-| --- | --- |
-| `type` | `none` 或 `hasItem` |
+| Key      | 功能                                    |
+| -------- | --------------------------------------- |
+| `type`   | `none` 或 `hasItem`                     |
 | `itemId` | `hasItem` 必填，對應 item definition ID |
-| `scope` | `joiner` 或 `host`；省略預設 `joiner` |
+| `scope`  | `joiner` 或 `host`；省略預設 `joiner`   |
 
 - `joiner`：每位要加入的人都必須持有該 item。
 - `host`：只要求活動發起者持有，受邀者不必持有。
@@ -531,15 +509,15 @@ event 選中後，會從符合條件且權重大於 `0` 的 variant 中再做一
 }
 ```
 
-| Key | 功能 |
-| --- | --- |
-| `selfMs` | 發起者在同 category 內不能再次發起的時間 |
-| `targetMs` | 受邀者在同 category 內的冷卻時間 |
-| `pairMs` | 同一對角色在同 category 內不能再次配對的時間 |
-| `category` | 共用冷卻分類；省略時為 `activity` |
-| `repeatPenalty.windowMs` | 在此時間窗內計算連續重複次數 |
-| `repeatPenalty.weightMultiplierPerRepeat` | 每次重複把候選權重乘上的倍率，範圍 `0..1` |
-| `repeatPenalty.maxRepeats` | 計算倍率時最多採用幾次重複 |
+| Key                                       | 功能                                         |
+| ----------------------------------------- | -------------------------------------------- |
+| `selfMs`                                  | 發起者在同 category 內不能再次發起的時間     |
+| `targetMs`                                | 受邀者在同 category 內的冷卻時間             |
+| `pairMs`                                  | 同一對角色在同 category 內不能再次配對的時間 |
+| `category`                                | 共用冷卻分類；省略時為 `activity`            |
+| `repeatPenalty.windowMs`                  | 在此時間窗內計算連續重複次數                 |
+| `repeatPenalty.weightMultiplierPerRepeat` | 每次重複把候選權重乘上的倍率，範圍 `0..1`    |
+| `repeatPenalty.maxRepeats`                | 計算倍率時最多採用幾次重複                   |
 
 重複倍率：
 
@@ -573,13 +551,13 @@ multiplier = weightMultiplierPerRepeat ^ repeatCount
 }
 ```
 
-| Key | 功能 |
-| --- | --- |
-| `relationshipIntimacyDelta` | 增減對另一位參與者的親密度 |
-| `relationshipFeelingTarget` | 直接把 feeling 設為指定值 |
-| `moodValueDelta` | 增減 moodValue，最後限制在 `0..100`，並重新計算 mood |
-| `moodStageTarget` | 直接把 moodValue 設為該 mood 階段的最低值；存在時優先於 `moodValueDelta` |
-| `playNeedDelta` | 增減 playNeed，最後限制在 `0..100` |
+| Key                         | 功能                                                                     |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `relationshipIntimacyDelta` | 增減對另一位參與者的親密度                                               |
+| `relationshipFeelingTarget` | 直接把 feeling 設為指定值                                                |
+| `moodValueDelta`            | 增減 moodValue，最後限制在 `0..100`，並重新計算 mood                     |
+| `moodStageTarget`           | 直接把 moodValue 設為該 mood 階段的最低值；存在時優先於 `moodValueDelta` |
+| `playNeedDelta`             | 增減 playNeed，最後限制在 `0..100`                                       |
 
 共用 `effects` 先套用，再由 `effectsByRole[role]` 以 key 覆寫。不是將同一 key 相加。
 
@@ -640,17 +618,17 @@ sad, upset, heartbroken, angry, afraid
 `character` 是受邀者，`utility` 是受邀者目前的需求分數；邀請判定沒有額外感知輸入，
 所以 `input.*` 會是空陣列或 `0`，通常不應用來調整接受機率。
 
-| Key | 限制 |
-| --- | --- |
-| `minMoodValue` | 必須 `>= 0`；parser 沒限制最大 100 |
-| `allowedMoods` | 必須使用 Mood enum |
-| `relationships[].minIntimacy` | finite number |
-| `relationships[].maxIntimacy` | finite number |
-| `relationships[].allowedFeelings` | 必須使用 Feeling enum |
-| `relationships[].allowedSocialStatuses` | 必須使用 SocialStatus enum |
-| `baseChance` | 符合心情與關係要求時的基礎接受機率，`0..1`，省略為 `1` |
-| `fallbackChance` | `0..1` |
-| `weightModifiers` | 依受邀者狀態、需求或 personality 調整接受機率 |
+| Key                                     | 限制                                                   |
+| --------------------------------------- | ------------------------------------------------------ |
+| `minMoodValue`                          | 必須 `>= 0`；parser 沒限制最大 100                     |
+| `allowedMoods`                          | 必須使用 Mood enum                                     |
+| `relationships[].minIntimacy`           | finite number                                          |
+| `relationships[].maxIntimacy`           | finite number                                          |
+| `relationships[].allowedFeelings`       | 必須使用 Feeling enum                                  |
+| `relationships[].allowedSocialStatuses` | 必須使用 SocialStatus enum                             |
+| `baseChance`                            | 符合心情與關係要求時的基礎接受機率，`0..1`，省略為 `1` |
+| `fallbackChance`                        | `0..1`                                                 |
+| `weightModifiers`                       | 依受邀者狀態、需求或 personality 調整接受機率          |
 
 SocialStatus 可用值：
 
@@ -673,13 +651,13 @@ friend, close_friend, best_friend, lovers, married
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `sourceRole` | 是 | 從 `initiator` 或 `target` 的記憶挑選 |
-| `memoryType` | 是 | `impression`、`argument`、`fight`、`kiss`、`wallSlam` |
-| `minCount` | 是 | 記憶次數至少多少，允許 `0` |
-| `count` | 是 | 要選幾個主題，必須 `> 0` |
-| `excludeParticipants` | 否 | 是否排除本活動參與者，預設 `true` |
+| Key                   | 必填 | 功能                                                  |
+| --------------------- | ---- | ----------------------------------------------------- |
+| `sourceRole`          | 是   | 從 `initiator` 或 `target` 的記憶挑選                 |
+| `memoryType`          | 是   | `impression`、`argument`、`fight`、`kiss`、`wallSlam` |
+| `minCount`            | 是   | 記憶次數至少多少，允許 `0`                            |
+| `count`               | 是   | 要選幾個主題，必須 `> 0`                              |
+| `excludeParticipants` | 否   | 是否排除本活動參與者，預設 `true`                     |
 
 如果可用 subject 少於 `count`，觀察對話不會開啟。
 
@@ -710,27 +688,27 @@ friend, close_friend, best_friend, lovers, married
 
 #### Roll 欄位
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `id` | 是 | performance `roll` step 使用的 `rollId` |
-| `resolvesActivity` | 否 | `true` 表示此 roll 選出 branch 後結束活動 |
-| `branches` | 是 | 非空分支陣列 |
+| Key                | 必填 | 功能                                      |
+| ------------------ | ---- | ----------------------------------------- |
+| `id`               | 是   | performance `roll` step 使用的 `rollId`   |
+| `resolvesActivity` | 否   | `true` 表示此 roll 選出 branch 後結束活動 |
+| `branches`         | 是   | 非空分支陣列                              |
 
 #### Branch 欄位
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `id` | 是 | 結果 ID；後續 roll 可由 `activity.rolls.<rollId>.selectedBranchId` 讀取 |
-| `baseWeight` | 是 | 非負權重 |
-| `resolvesActivity` | 否 | 單一 branch 可提前結束活動 |
-| `conditionMode` | 否 | `all`／`some` |
-| `conditions` | 否 | branch 是否可進候選 |
-| `weightModifiers` | 否 | 調整 branch 權重 |
-| `performanceId` | 否 | 選中 branch 後播放的 performance |
-| `effects` | 否 | 終局結果的共用效果 |
-| `effectsByRole` | 否 | 終局結果的角色效果 |
-| `memoryEffects` | 否 | 終局結果寫入關係記憶 |
-| `offlineRecap` | 否 | 此結果的離線摘要 |
+| Key                | 必填 | 功能                                                                    |
+| ------------------ | ---- | ----------------------------------------------------------------------- |
+| `id`               | 是   | 結果 ID；後續 roll 可由 `activity.rolls.<rollId>.selectedBranchId` 讀取 |
+| `baseWeight`       | 是   | 非負權重                                                                |
+| `resolvesActivity` | 否   | 單一 branch 可提前結束活動                                              |
+| `conditionMode`    | 否   | `all`／`some`                                                           |
+| `conditions`       | 否   | branch 是否可進候選                                                     |
+| `weightModifiers`  | 否   | 調整 branch 權重                                                        |
+| `performanceId`    | 否   | 選中 branch 後播放的 performance                                        |
+| `effects`          | 否   | 終局結果的共用效果                                                      |
+| `effectsByRole`    | 否   | 終局結果的角色效果                                                      |
+| `memoryEffects`    | 否   | 終局結果寫入關係記憶                                                    |
+| `offlineRecap`     | 否   | 此結果的離線摘要                                                        |
 
 若 roll 本身不是 `resolvesActivity: true`，branch 也沒有 `resolvesActivity: true`，該 branch 不可包含 `effects`、`effectsByRole` 或 `memoryEffects`，否則 parser 會報錯。
 
@@ -790,13 +768,13 @@ activity.rolls.<rollId>.rollContext.<key>
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `recipientRole` | 是 | `initiator`、`target` 或 `both`，誰要記住 |
-| `target` | 是 | `otherParticipant` 或 `dialogueSubject`，記憶指向誰 |
-| `memoryType` | 是 | MemoryType enum |
-| `countDelta` | 是 | 必須 `> 0`；目前不能用此欄位減少記憶 |
-| `startedByRole` | 否 | `initiator` 或 `target`；省略時 runtime 以 initiator 作為 startedBy |
+| Key             | 必填 | 功能                                                                |
+| --------------- | ---- | ------------------------------------------------------------------- |
+| `recipientRole` | 是   | `initiator`、`target` 或 `both`，誰要記住                           |
+| `target`        | 是   | `otherParticipant` 或 `dialogueSubject`，記憶指向誰                 |
+| `memoryType`    | 是   | MemoryType enum                                                     |
+| `countDelta`    | 是   | 必須 `> 0`；目前不能用此欄位減少記憶                                |
+| `startedByRole` | 否   | `initiator` 或 `target`；省略時 runtime 以 initiator 作為 startedBy |
 
 使用 `target: "dialogueSubject"` 時，若活動沒有成功選到 subject，就不會寫入該筆記憶。
 
@@ -823,14 +801,14 @@ activity.rolls.<rollId>.rollContext.<key>
 
 所有 key 都可省略，但 object 至少要有一個有效欄位。
 
-| Key | 功能 |
-| --- | --- |
-| `summary` | 簡短摘要 |
-| `detail` | 詳細描述 |
-| `quote` | 可顯示的引言 |
-| `priority` | 摘要排序／挑選優先度 |
-| `sequenceKey` | 把多筆 recap 串成同一序列 |
-| `sequenceOrder` | 序列中的順序 |
+| Key             | 功能                      |
+| --------------- | ------------------------- |
+| `summary`       | 簡短摘要                  |
+| `detail`        | 詳細描述                  |
+| `quote`         | 可顯示的引言              |
+| `priority`      | 摘要排序／挑選優先度      |
+| `sequenceKey`   | 把多筆 recap 串成同一序列 |
+| `sequenceOrder` | 序列中的順序              |
 
 活動可沿用 offline 系統的前提：
 
@@ -854,12 +832,12 @@ activity.rolls.<rollId>.rollContext.<key>
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `label` | 是 | 卡片顯示名稱 |
-| `promptTemplate` | 是 | 帶 `{initiator}`、`{target}` 的操作描述 |
-| `participantMode` | 是 | 目前只能是 `initiatorTarget` |
-| `performanceId` | 是 | 卡片執行時的 performance |
+| Key               | 必填 | 功能                                    |
+| ----------------- | ---- | --------------------------------------- |
+| `label`           | 是   | 卡片顯示名稱                            |
+| `promptTemplate`  | 是   | 帶 `{initiator}`、`{target}` 的操作描述 |
+| `participantMode` | 是   | 目前只能是 `initiatorTarget`            |
+| `performanceId`   | 是   | 卡片執行時的 performance                |
 
 #### `onInterrupted`、`onInterruptRejected`
 
@@ -901,10 +879,10 @@ activity.rolls.<rollId>.rollContext.<key>
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `id` | 是 | 唯一 performance ID，供 event、variant、roll branch 或 card 引用 |
-| `steps` | 是 | 演出步驟陣列；parser 允許空陣列 |
+| Key     | 必填 | 功能                                                             |
+| ------- | ---- | ---------------------------------------------------------------- |
+| `id`    | 是   | 唯一 performance ID，供 event、variant、roll branch 或 card 引用 |
+| `steps` | 是   | 演出步驟陣列；parser 允許空陣列                                  |
 
 同一 phase 的 steps 不是按陣列順序逐一等待，而是全部以各自 `delayMs` 排程。若希望 A 播完再播 B，必須自行把 B 的 `delayMs` 設為 A 的 delay + duration。
 
@@ -949,14 +927,14 @@ activity.rolls.<rollId>.rollContext.<key>
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `phase` | 是 | 此 step 在哪個生命週期階段播放 |
-| `type` | 是 | step 種類 |
-| `target` | 大多數 type 必填 | `initiator`、`target`、`both`；animation 另支援 `heldItem`；roll 不填 target |
-| `participantCount` | 否 | 只在活動播放流程中依參與者總數過濾 |
-| `delayMs` | 否 | 相對 phase 開始延遲多久播放，預設 `0`，必須 `>= 0` |
-| `durationMs` | 否 | 顯示／動畫持續時間，必須 `>= 0`；roll 沒有此欄位 |
+| Key                | 必填             | 功能                                                                         |
+| ------------------ | ---------------- | ---------------------------------------------------------------------------- |
+| `phase`            | 是               | 此 step 在哪個生命週期階段播放                                               |
+| `type`             | 是               | step 種類                                                                    |
+| `target`           | 大多數 type 必填 | `initiator`、`target`、`both`；animation 另支援 `heldItem`；roll 不填 target |
+| `participantCount` | 否               | 只在活動播放流程中依參與者總數過濾                                           |
+| `delayMs`          | 否               | 相對 phase 開始延遲多久播放，預設 `0`，必須 `>= 0`                           |
+| `durationMs`       | 否               | 顯示／動畫持續時間，必須 `>= 0`；roll 沒有此欄位                             |
 
 `participantCount`：
 
@@ -968,17 +946,17 @@ activity.rolls.<rollId>.rollContext.<key>
 
 ### 4.3 `phase`
 
-| Phase | 目前觸發時機 |
-| --- | --- |
-| `proposal` | 群組活動送出邀請時 |
-| `accepted` | 至少有受邀者接受，活動準備成立時 |
-| `rejected` | 型別與 parser 支援；目前主要 activity invite 流程沒有使用此 generic phase |
-| `rejectedBusy` | 型別與 parser 支援；目前 activity invite resolver 沒有觸發 |
-| `rejectedMood` | 接受人數低於 `minParticipants` 時 |
-| `active` | 活動正式開始；roll branch performance 也固定用 `active` phase 播放 |
-| `participantLeftSolo` | 離開事件後只剩單人，或 group reaction 後恢復成單人 |
-| `participantLeftGroup` | 原本多人活動有人離開時 |
-| `end` | 活動時間到或被正常結束，且不是由 resolving roll 結束時 |
+| Phase                  | 目前觸發時機                                                              |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `proposal`             | 群組活動送出邀請時                                                        |
+| `accepted`             | 至少有受邀者接受，活動準備成立時                                          |
+| `rejected`             | 型別與 parser 支援；目前主要 activity invite 流程沒有使用此 generic phase |
+| `rejectedBusy`         | 型別與 parser 支援；目前 activity invite resolver 沒有觸發                |
+| `rejectedMood`         | 接受人數低於 `minParticipants` 時                                         |
+| `active`               | 活動正式開始；roll branch performance 也固定用 `active` phase 播放        |
+| `participantLeftSolo`  | 離開事件後只剩單人，或 group reaction 後恢復成單人                        |
+| `participantLeftGroup` | 原本多人活動有人離開時                                                    |
+| `end`                  | 活動時間到或被正常結束，且不是由 resolving roll 結束時                    |
 
 若某 phase 沒有 steps，通常就是沒有演出。`participantLeftGroup` 是例外：完全沒有相符 step 時，runner 會播放 5 秒 surprised fallback。
 
@@ -986,20 +964,20 @@ activity.rolls.<rollId>.rollContext.<key>
 
 一般互動：
 
-| Target | 對象 |
-| --- | --- |
-| `initiator` | 發起者 |
-| `target` | 對象角色 |
-| `both` | 發起者與對象 |
+| Target      | 對象         |
+| ----------- | ------------ |
+| `initiator` | 發起者       |
+| `target`    | 對象角色     |
+| `both`      | 發起者與對象 |
 
 Activity：
 
-| Target | 對象 |
-| --- | --- |
-| `initiator` | `hostCharacterIds`；沒有 host 時取第一位 participant |
-| `target` | 非 host 的所有 participants；沒有 host 時從第二位開始 |
-| `both` | 所有 participants |
-| `heldItem` | 只允許 animation；作用於 host，沒有 host 時取第一位 participant |
+| Target      | 對象                                                            |
+| ----------- | --------------------------------------------------------------- |
+| `initiator` | `hostCharacterIds`；沒有 host 時取第一位 participant            |
+| `target`    | 非 host 的所有 participants；沒有 host 時從第二位開始           |
+| `both`      | 所有 participants                                               |
+| `heldItem`  | 只允許 animation；作用於 host，沒有 host 時取第一位 participant |
 
 ### 4.5 Step types
 
@@ -1016,9 +994,9 @@ Activity：
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `text` | 是 | 角色頭上的文字泡泡模板 |
+| Key    | 必填 | 功能                   |
+| ------ | ---- | ---------------------- |
+| `text` | 是   | 角色頭上的文字泡泡模板 |
 
 模板目前支援傳入值：
 
@@ -1085,10 +1063,10 @@ question, sparkle_light, determined, hungry
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `effectId` | 是 | 建立、更新與清除地圖活動顯示時使用的識別碼 |
-| `label` | 否 | 地圖上顯示的文字；省略時顯示 `effectId` |
+| Key        | 必填 | 功能                                       |
+| ---------- | ---- | ------------------------------------------ |
+| `effectId` | 是   | 建立、更新與清除地圖活動顯示時使用的識別碼 |
+| `label`    | 否   | 地圖上顯示的文字；省略時顯示 `effectId`    |
 
 在 activity 的 `active` phase，如果 event activity 有 `dialogueScriptId`，map effect 會帶「觀察」互動入口。
 
@@ -1145,11 +1123,11 @@ characterJumpAnim
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `dialogueGroupId` | 二擇一 | 由 dialogue group 選內容 |
-| `scriptId` | 二擇一 | 直接播放指定 dialogue script |
-| `displayMode` | 否 | `preview` 或 `ambient` |
+| Key               | 必填   | 功能                         |
+| ----------------- | ------ | ---------------------------- |
+| `dialogueGroupId` | 二擇一 | 由 dialogue group 選內容     |
+| `scriptId`        | 二擇一 | 直接播放指定 dialogue script |
+| `displayMode`     | 否     | `preview` 或 `ambient`       |
 
 `dialogueGroupId` 與 `scriptId` 至少要有一個；parser 允許兩者同時存在，但通常應選一種來源避免語意不清。
 
@@ -1175,9 +1153,9 @@ characterEvents.json activity.dialogueScriptId
 }
 ```
 
-| Key | 必填 | 功能 |
-| --- | --- | --- |
-| `rollId` | 是 | 對應 activity `rolls[].id` |
+| Key      | 必填 | 功能                       |
+| -------- | ---- | -------------------------- |
+| `rollId` | 是   | 對應 activity `rolls[].id` |
 
 `roll`：
 
@@ -1368,24 +1346,24 @@ max(step.delayMs + step.durationMs)
 
 ## 6. 相關程式碼位置
 
-| 責任 | 檔案 |
-| --- | --- |
-| Event 型別與資料入口 | `src/constants/charactarEventsDefinitions.ts` |
-| Event definition parser | `src/utils/jsonParser/definitionSchema.ts` |
-| Action parser | `src/utils/jsonParser/actionSchema.ts` |
-| Activity、effects、roll parser | `src/utils/jsonParser/activitySchema.ts` |
-| Variant parser | `src/utils/jsonParser/presentationSchema.ts` |
-| Rule parser | `src/utils/jsonParser/ruleSchema.ts` |
-| Event 候選與權重 | `src/services/characterEvents/buckets.ts` |
-| 動機與事件抽選 | `src/services/characterEvents/decision.ts` |
-| Rule 實際比較方式 | `src/services/ruleEvaluator.ts` |
-| Variant 抽選 | `src/services/characterEvents/variants.ts` |
-| Activity roll 抽選 | `src/services/characterEvents/activityRolls.ts` |
-| Activity effects | `src/services/characterEvents/activityCompletionEffects.ts` |
-| Activity runtime | `src/services/characterEvents/joinableActivities.ts` |
-| 邀請與接受條件 | `src/services/townActivities/TownActivityInviteResolver.ts` |
-| Performance 型別與資料入口 | `src/services/characterEvents/performances.ts` |
-| Performance parser | `src/services/characterEvents/performanceSchema.ts` |
-| Performance 執行器 | `src/services/characterEvents/characterPerformanceRunner.ts` |
-| Activity 表演與結算 | `src/services/townActivities/TownActivityPerformanceDirector.ts` |
-| 可觀察活動對話 | `src/services/townActivities/TownActivityDialogueObserver.ts` |
+| 責任                           | 檔案                                                             |
+| ------------------------------ | ---------------------------------------------------------------- |
+| Event 型別與資料入口           | `src/constants/charactarEventsDefinitions.ts`                    |
+| Event definition parser        | `src/utils/jsonParser/definitionSchema.ts`                       |
+| Action parser                  | `src/utils/jsonParser/actionSchema.ts`                           |
+| Activity、effects、roll parser | `src/utils/jsonParser/activitySchema.ts`                         |
+| Variant parser                 | `src/utils/jsonParser/presentationSchema.ts`                     |
+| Rule parser                    | `src/utils/jsonParser/ruleSchema.ts`                             |
+| Event 候選與權重               | `src/services/characterEvents/buckets.ts`                        |
+| 動機與事件抽選                 | `src/services/characterEvents/decision.ts`                       |
+| Rule 實際比較方式              | `src/services/ruleEvaluator.ts`                                  |
+| Variant 抽選                   | `src/services/characterEvents/variants.ts`                       |
+| Activity roll 抽選             | `src/services/characterEvents/activityRolls.ts`                  |
+| Activity effects               | `src/services/characterEvents/activityCompletionEffects.ts`      |
+| Activity runtime               | `src/services/characterEvents/joinableActivities.ts`             |
+| 邀請與接受條件                 | `src/services/townActivities/TownActivityInviteResolver.ts`      |
+| Performance 型別與資料入口     | `src/services/characterEvents/performances.ts`                   |
+| Performance parser             | `src/services/characterEvents/performanceSchema.ts`              |
+| Performance 執行器             | `src/services/characterEvents/characterPerformanceRunner.ts`     |
+| Activity 表演與結算            | `src/services/townActivities/TownActivityPerformanceDirector.ts` |
+| 可觀察活動對話                 | `src/services/townActivities/TownActivityDialogueObserver.ts`    |

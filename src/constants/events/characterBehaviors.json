@@ -1,0 +1,55 @@
+[
+  {
+    "id": "behavior.stroll",
+    "bucketId": "baseline",
+    "motivation": "idle",
+    "type": "stroll",
+    "baseWeight": 14,
+    "weightSource": "idle",
+    "maxWeight": 42,
+    "tickable": true,
+    "target": "randomMap",
+    "presentationTags": ["motion.walk", "expressionBubble.relaxed"]
+  },
+  {
+    "id": "behavior.daydream",
+    "bucketId": "baseline",
+    "motivation": "idle",
+    "type": "idleMoment",
+    "baseWeight": 9,
+    "weightSource": "idle",
+    "maxWeight": 32,
+    "tickable": true,
+    "durationMs": 6000,
+    "presentationTags": ["motion.stand", "expressionBubble.thinking"]
+  },
+  {
+    "id": "behavior.sit",
+    "bucketId": "baseline",
+    "motivation": "idle",
+    "type": "sit",
+    "baseWeight": 7,
+    "weightSource": "idle",
+    "maxWeight": 24,
+    "tickable": false,
+    "durationMs": 9000,
+    "presentationTags": ["motion.sit", "expressionBubble.relaxed"]
+  },
+  {
+    "id": "behavior.observeVisibleItem",
+    "bucketId": "environment",
+    "motivation": "idle",
+    "type": "observe",
+    "baseWeight": 16,
+    "tickable": false,
+    "durationMs": 6000,
+    "conditions": [
+      {
+        "path": "input.nearbyVisibleItemCount",
+        "operator": ">",
+        "value": 0
+      }
+    ],
+    "presentationTags": ["motion.turn", "expressionBubble.curious"]
+  }
+]

@@ -10,7 +10,7 @@ import {
   type CharacterEventDefinitionRecord,
 } from './schemaReaders';
 
-const VALID_MOTIVATIONS = ['idle', 'findFood', 'rest', 'play', 'chat', 'goHome'] as const;
+const VALID_MOTIVATIONS = ['idle', 'findFood', 'play', 'chat', 'goHome'] as const;
 const VALID_ACTIVITY_TYPES = ['chat', 'playWithItem', 'playAtLocation'] as const;
 
 export function loadOfflineRecapTemplates(rawTemplates: unknown): OfflineRecapTemplates {

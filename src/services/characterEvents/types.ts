@@ -55,6 +55,7 @@ export interface CharacterEventCandidate {
   motivation: UtilityDrivenMotivation;
   event: CharacterEvent;
   weight: number;
+  motivationWeightMultiplier?: number;
 }
 
 export interface CharacterEventDecisionResult {

@@ -71,8 +71,8 @@
             }
           },
           {
-            "id": "rest",
-            "label": "先休息",
+            "id": "observe",
+            "label": "先觀察",
             "result": {
               "type": "replaceRemaining",
               "lines": [
@@ -419,7 +419,7 @@
             {
               "type": "SAY",
               "speaker": "initiator",
-              "text": "旁白：{initiatorName} 跨前一步，單手啪地一聲撐在牆上，將 {targetName} 困在自己與牆壁之間。他的眼神維持著平靜與專注，封死了所有退路。",
+              "text": "旁白：{initiatorName} 往前一步，手掌撐在牆上，擋住了 {targetName} 的去路",
               "expressionPresetId": "normal"
             },
             {
@@ -613,7 +613,7 @@
                   {
                     "type": "SAY",
                     "speaker": "target",
-                    "text": "……算了，當${selfReference}沒問。沒事的話，${selfReference}要先走了。",
+                    "text": "……算了，當${selfReference}沒問。${selfReference}先走了。",
                     "expressionPresetId": "surprised"
                   }
                 ],
@@ -638,7 +638,7 @@
             {
               "type": "SAY",
               "speaker": "initiator",
-              "text": "旁白：兩人的距離在萬分之一秒內歸零，嘴唇極其輕微地擦過了對方的嘴唇。空氣在這一瞬間徹底死寂。",
+              "text": "旁白：兩人的距離在萬分之一秒內歸零，嘴唇極其輕微地擦過了對方的嘴唇。",
               "expressionPresetId": "surprised"
             },
             {
@@ -650,7 +650,7 @@
                   {
                     "type": "SAY",
                     "speaker": "target",
-                    "text": "旁白：{targetName} 的臉瞬間漲紅，頭頂冒出無數煙霧與憤怒符號。他雙手猛地把 {initiatorName} 推開，用手背用力擦拭嘴唇，眼神充滿了慌亂與羞憤。",
+                    "text": "旁白：{targetName} 的臉一下子漲紅，慌亂地推開了對方。",
                     "expressionPresetId": "mad"
                   },
                   {
@@ -681,7 +681,7 @@
             {
               "type": "SAY",
               "speaker": "target",
-              "text": "旁白：{targetName} 眼神冰冷，一記手刀啪地打掉 {initiatorName} 撐在牆上的手，直接從側邊閃了出去。",
+              "text": "旁白：{targetName} 一記手刀啪地打掉 {initiatorName} 撐在牆上的手，從旁邊閃了出去。",
               "expressionPresetId": "mad"
             },
             {

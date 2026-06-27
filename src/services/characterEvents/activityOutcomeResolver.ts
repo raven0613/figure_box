@@ -18,6 +18,7 @@ export interface ActivityOutcome {
 
 export interface ResolveActivityOutcomeInput {
   activityId: string;
+  sourceEventId?: string;
   participantIds: readonly string[];
   hostCharacterIds?: readonly string[];
   dialogueSubjectId?: string;
@@ -28,6 +29,7 @@ export interface ResolveActivityOutcomeInput {
 
 export interface ResolvedActivityOutcome {
   activityId: string;
+  sourceEventId?: string;
   participantIds: readonly string[];
   outcome: ActivityOutcome;
   resolvedBy: ActivityOutcomeResolvedBy;
@@ -57,6 +59,7 @@ export class ActivityOutcomeResolver {
 
     const resolution: ResolvedActivityOutcome = {
       activityId: input.activityId,
+      sourceEventId: input.sourceEventId,
       participantIds: Array.from(new Set(input.participantIds)),
       outcome: {
         ...input.outcome,
@@ -99,6 +102,8 @@ export class ActivityOutcomeResolver {
         type: EventType.EndJoinedActivity,
         activityId: resolution.activityId,
         participantIds: resolution.participantIds,
+        sourceEventId: resolution.sourceEventId,
+        activityRole: role,
         activityEffects: resolveActivityEffectsForRole(
           resolution.outcome.effects,
           resolution.outcome.effectsByRole,

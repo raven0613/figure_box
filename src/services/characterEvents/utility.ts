@@ -13,7 +13,6 @@ export function calculateCharacterUtilityScores(context: CharacterContext): Char
     ? Math.min(100, saturationNeed + 25)
     : saturationNeed;
   const moodNeed = 100 - context.status.moodValue;
-  const restScore = Math.min(100, 18 + moodNeed * 0.35);
   const playScore = Math.min(100, context.status.playNeed + moodNeed * 0.2);
   const chatScore = Math.min(100, 16 + context.status.moodValue * 0.25);
   const idleScore = context.status.saturation > 70 && context.status.moodValue > 70 ? 45 : 8;
@@ -21,7 +20,6 @@ export function calculateCharacterUtilityScores(context: CharacterContext): Char
   return {
     idle: Math.round(idleScore),
     findFood: Math.round(hungerScore),
-    rest: Math.round(restScore),
     play: Math.round(playScore),
     chat: Math.round(chatScore),
     goHome: 0,

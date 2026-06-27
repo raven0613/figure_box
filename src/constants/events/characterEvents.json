@@ -82,72 +82,6 @@
     ]
   },
   {
-    "id": "need.rest",
-    "bucketId": "need",
-    "motivation": "rest",
-    "characterEvent": {
-      "type": "goRest"
-    },
-    "baseWeight": 0,
-    "weightSource": "rest",
-    "interruptPolicy": "soft",
-    "commitment": 20,
-    "weightModifiers": [
-      {
-        "path": "character.status.moodValue",
-        "operator": "<",
-        "value": 25,
-        "add": 12
-      }
-    ]
-  },
-  {
-    "id": "need.play",
-    "bucketId": "need",
-    "motivation": "play",
-    "characterEvent": {
-      "type": "goPlay"
-    },
-    "baseWeight": 0,
-    "weightSource": "play",
-    "interruptPolicy": "soft",
-    "commitment": 18,
-    "weightModifiers": [
-      {
-        "path": "character.status.moodValue",
-        "operator": "<",
-        "value": 35,
-        "add": 8
-      }
-    ],
-    "presentationVariants": [
-      {
-        "id": "play.cheerful",
-        "baseWeight": 10,
-        "conditions": [
-          {
-            "path": "character.status.moodValue",
-            "operator": ">=",
-            "value": 45
-          }
-        ],
-        "presentationTags": ["expressionBubble.laugh", "motion.walk"]
-      },
-      {
-        "id": "play.low_mood",
-        "baseWeight": 8,
-        "conditions": [
-          {
-            "path": "character.status.moodValue",
-            "operator": "<",
-            "value": 45
-          }
-        ],
-        "presentationTags": ["expressionBubble.sigh", "mapEffect.lowSaturation"]
-      }
-    ]
-  },
-  {
     "id": "need.playWithItem",
     "bucketId": "need",
     "motivation": "play",
@@ -193,6 +127,7 @@
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 8000,
             "targetMs": 6000,
             "pairMs": 24000,
@@ -240,6 +175,7 @@
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 8000,
             "targetMs": 6000,
             "pairMs": 24000,
@@ -261,33 +197,6 @@
             "scope": "host"
           }
         }
-      }
-    ]
-  },
-  {
-    "id": "need.playAtApartment",
-    "bucketId": "need",
-    "motivation": "play",
-    "characterEvent": {
-      "type": "goHome"
-    },
-    "baseWeight": 0,
-    "weightSource": "play",
-    "maxWeight": 28,
-    "interruptPolicy": "soft",
-    "commitment": 18,
-    "conditions": [
-      {
-        "path": "character.presence.kind",
-        "operator": "==",
-        "value": "positioned"
-      }
-    ],
-    "presentationVariants": [
-      {
-        "id": "play_at_apartment.casual",
-        "baseWeight": 10,
-        "presentationTags": ["expressionBubble.play", "motion.walk"]
       }
     ]
   },
@@ -371,6 +280,7 @@
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 12000,
             "targetMs": 9000,
             "pairMs": 35000,
@@ -480,6 +390,7 @@
           "refreshDurationOnJoin": true,
           "joinWindowMs": 8000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 10000,
             "targetMs": 8000,
             "pairMs": 28000,
@@ -530,6 +441,7 @@
             "excludeParticipants": true
           },
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 12000,
             "targetMs": 10000,
             "pairMs": 36000,
@@ -655,6 +567,7 @@
           "refreshDurationOnJoin": false,
           "joinWindowMs": 8000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 14000,
             "targetMs": 12000,
             "pairMs": 42000,
@@ -944,6 +857,7 @@
           "refreshDurationOnJoin": true,
           "joinWindowMs": 20000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 12000,
             "targetMs": 9000,
             "pairMs": 35000,
@@ -1051,6 +965,7 @@
           "durationMs": 45000,
           "dialogueScriptId": "activity-wall-slam-tension-choice",
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 60000,
             "targetMs": 60000,
             "pairMs": 180000,
@@ -1527,6 +1442,7 @@
           "refreshDurationOnJoin": false,
           "joinWindowMs": 10000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 18000,
             "targetMs": 10000,
             "pairMs": 30000,
@@ -1617,6 +1533,7 @@
           "refreshDurationOnJoin": true,
           "joinWindowMs": 14000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 20000,
             "targetMs": 10000,
             "pairMs": 28000,
@@ -1691,6 +1608,7 @@
           "durationMs": 26000,
           "refreshDurationOnJoin": false,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 22000,
             "category": "quiet_creative",
             "repeatPenalty": {
@@ -1777,6 +1695,7 @@
           "refreshDurationOnJoin": false,
           "joinWindowMs": 10000,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 18000,
             "targetMs": 10000,
             "pairMs": 30000,
@@ -1858,6 +1777,7 @@
           "durationMs": 22000,
           "refreshDurationOnJoin": false,
           "cooldowns": {
+            "commonMs": 12000,
             "selfMs": 24000,
             "category": "quiet_photography",
             "repeatPenalty": {

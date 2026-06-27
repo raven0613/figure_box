@@ -39,7 +39,6 @@ import {
 } from '~/services/characterEvents/utility';
 import { applyCompletedActivityStatusEffects } from '~/services/characterEvents/activityCompletionEffects';
 import {
-    getRandomDestinationTarget,
     getRandomMapTarget,
 } from '~/services/characterEvents/targets';
 import { TOWN_APARTMENT_ENTRANCE_TILES, TOWN_WORLD_SPACE_ID } from '~/constants/townMap';
@@ -51,12 +50,12 @@ import {
     CHARACTER_EVENT_DEFINITIONS_BY_ID,
     type CharacterEventActivity,
 } from '~/constants/charactarEventsDefinitions';
+import { CHARACTER_BEHAVIOR_DEFINITIONS_BY_ID } from '~/constants/characterBehaviorDefinitions';
 import type { CharacterRequestSatisfiedEffect } from '~/services/characterRequests/types';
 
 const INITIAL_UTILITY_SCORES: CharacterUtilityScores = {
     idle: 10,
     findFood: 0,
-    rest: 20,
     play: 35,
     chat: 15,
     goHome: 0,
@@ -86,6 +85,7 @@ export const characterMachine = createMachine(
             utilityScores: INITIAL_UTILITY_SCORES,
             lastEventDecision: null,
             currentMotivation: 'idle',
+            currentBehavior: null,
             controlState: CharacterControlState.Normal,
             pendingActivityJoin: null,
             currentActivity: null,
@@ -110,7 +110,7 @@ export const characterMachine = createMachine(
         on: {
             [EventType.Tick]: {
                 guard: 'canReceiveTick',
-                actions: ['tickStatus', 'clearIdleTarget', 'updateUtilityScores', 'decideAndRaiseEvent'],
+                actions: ['tickStatus', 'clearExpiredBehavior', 'clearIdleTarget', 'updateUtilityScores', 'decideAndRaiseEvent'],
             },
             [EventType.PassBy]: {
                 guard: 'canReceiveLogicCommand',
@@ -133,27 +133,7 @@ export const characterMachine = createMachine(
                     '.mind.thinking',
                     '.communication.requesting',
                 ],
-                actions: ['setFoodMotivation', 'setManualTarget'],
-            },
-            [EventType.GoRest]: {
-                guard: 'shouldChangeToRest',
-                target: [
-                    '.bodyAction.idle',
-                    '.bodyMove.lie',
-                    '.mind.null',
-                    '.communication.null',
-                ],
-                actions: ['setRestMotivation', 'clearTarget'],
-            },
-            [EventType.GoPlay]: {
-                guard: 'shouldChangeToPlay',
-                target: [
-                    '.bodyAction.socializing',
-                    '.bodyMove.walking',
-                    '.mind.thinking',
-                    '.communication.null',
-                ],
-                actions: ['setPlayMotivation', 'choosePlayTarget'],
+                actions: ['setFoodMotivation', 'setNeedBehavior', 'setManualTarget'],
             },
             [EventType.GoHome]: {
                 guard: 'shouldGoHome',
@@ -164,7 +144,7 @@ export const characterMachine = createMachine(
                     '.communication.null',
                     '.control.spaceTransition',
                 ],
-                actions: ['setGoHomeMotivation', 'chooseApartmentEntranceTarget', 'setSpaceTransitionControl'],
+                actions: ['setGoHomeMotivation', 'setNeedBehavior', 'chooseApartmentEntranceTarget', 'setSpaceTransitionControl'],
             },
             [EventType.EnterApartment]: {
                 guard: 'shouldEnterApartment',
@@ -175,7 +155,7 @@ export const characterMachine = createMachine(
                     '.communication.null',
                     '.control.normal',
                 ],
-                actions: ['enterApartment', 'setIdleMotivation', 'clearTarget', 'setNormalControl'],
+                actions: ['enterApartment', 'setIdleMotivation', 'clearBehavior', 'clearTarget', 'setNormalControl'],
             },
             [EventType.LeaveApartment]: {
                 guard: 'shouldLeaveApartment',
@@ -186,8 +166,40 @@ export const characterMachine = createMachine(
                     '.communication.null',
                     '.control.normal',
                 ],
-                actions: ['leaveApartment', 'setIdleMotivation', 'clearTarget', 'setNormalControl'],
+                actions: ['leaveApartment', 'setIdleMotivation', 'clearBehavior', 'clearTarget', 'setNormalControl'],
             },
+            [EventType.StartBehavior]: [
+                {
+                    guard: 'shouldStartWalkingBehavior',
+                    target: [
+                        '.bodyAction.observing',
+                        '.bodyMove.walking',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['setBehaviorMotivation', 'startBehavior', 'setBehaviorTarget'],
+                },
+                {
+                    guard: 'shouldStartSittingBehavior',
+                    target: [
+                        '.bodyAction.idle',
+                        '.bodyMove.sit',
+                        '.mind.null',
+                        '.communication.null',
+                    ],
+                    actions: ['setBehaviorMotivation', 'startBehavior', 'clearTarget'],
+                },
+                {
+                    guard: 'shouldStartBehavior',
+                    target: [
+                        '.bodyAction.observing',
+                        '.bodyMove.stand',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['setBehaviorMotivation', 'startBehavior', 'clearTarget'],
+                },
+            ],
             [EventType.StartActivity]: [
                 {
                     guard: 'shouldStartPlayWithItemActivity',
@@ -197,7 +209,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setActivityMotivation', 'startOwnActivity'],
+                    actions: ['setActivityMotivation', 'clearBehavior', 'startOwnActivity'],
                 },
                 {
                     guard: 'shouldStartActivity',
@@ -207,7 +219,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setActivityMotivation', 'startOwnActivity'],
+                    actions: ['setActivityMotivation', 'clearBehavior', 'startOwnActivity'],
                 },
             ],
             [EventType.JoinActivity]: [
@@ -219,7 +231,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setActivityMotivation', 'setPendingActivityJoin'],
+                    actions: ['setActivityMotivation', 'clearBehavior', 'setPendingActivityJoin'],
                 },
                 {
                     guard: 'shouldJoinActivity',
@@ -229,7 +241,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setActivityMotivation', 'setPendingActivityJoin'],
+                    actions: ['setActivityMotivation', 'clearBehavior', 'setPendingActivityJoin'],
                 },
             ],
             [EventType.JoinActivityAccepted]: [
@@ -241,7 +253,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setActivityMotivation', 'acceptActivityJoin', 'clearTarget'],
+                    actions: ['setActivityMotivation', 'clearBehavior', 'acceptActivityJoin', 'clearTarget'],
                 },
                 {
                     guard: 'shouldAcceptActivityJoin',
@@ -251,7 +263,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setActivityMotivation', 'acceptActivityJoin', 'clearTarget'],
+                    actions: ['setActivityMotivation', 'clearBehavior', 'acceptActivityJoin', 'clearTarget'],
                 },
             ],
             [EventType.JoinActivityRejected]: {
@@ -262,7 +274,7 @@ export const characterMachine = createMachine(
                     '.mind.null',
                     '.communication.null',
                 ],
-                actions: ['rejectActivityJoin', 'setIdleMotivation', 'clearTarget'],
+                actions: ['rejectActivityJoin', 'setIdleMotivation', 'clearBehavior', 'clearTarget'],
             },
             [EventType.EndJoinedActivity]: {
                 guard: 'shouldEndJoinedActivity',
@@ -272,7 +284,7 @@ export const characterMachine = createMachine(
                     '.mind.null',
                     '.communication.null',
                 ],
-                actions: ['completeJoinedActivity', 'clearTarget'],
+                actions: ['completeJoinedActivity', 'clearBehavior', 'clearTarget'],
             },
             [EventType.RecordActivityCooldown]: {
                 actions: 'recordActivityCooldown',
@@ -315,7 +327,7 @@ export const characterMachine = createMachine(
                     '.mind.null',
                     '.communication.null',
                 ],
-                actions: ['setIdleMotivation', 'clearTarget'],
+                actions: ['setIdleMotivation', 'clearBehavior', 'clearTarget'],
             },
             [EventType.PickUp]: {
                 guard: 'canReceivePickUpCommand',
@@ -326,7 +338,7 @@ export const characterMachine = createMachine(
                     '.communication.null',
                     '.control.normal',
                 ],
-                actions: ['setPickedUpMotivation', 'clearTarget', 'clearActivity', 'setNormalControl'],
+                actions: ['setPickedUpMotivation', 'clearBehavior', 'clearTarget', 'clearActivity', 'setNormalControl'],
             },
             [EventType.Drop]: {
                 guard: 'canReceiveDropCommand',
@@ -337,7 +349,7 @@ export const characterMachine = createMachine(
                     '.communication.null',
                     '.control.normal',
                 ],
-                actions: ['dropAtPosition', 'setIdleMotivation', 'clearTarget', 'setNormalControl'],
+                actions: ['dropAtPosition', 'setIdleMotivation', 'clearBehavior', 'clearTarget', 'setNormalControl'],
             },
             [EventType.MoveTo]: {
                 guard: 'canReceiveLogicCommand',
@@ -346,7 +358,7 @@ export const characterMachine = createMachine(
                     '.bodyMove.walking',
                     '.mind.thinking',
                 ],
-                actions: 'setManualTarget',
+                actions: ['setManualMoveBehavior', 'setManualTarget'],
             },
             [EventType.Arrive]: {
                 target: [
@@ -355,7 +367,7 @@ export const characterMachine = createMachine(
                     '.mind.null',
                     '.communication.null',
                 ],
-                actions: ['arriveAtTarget', 'completeCurrentMotivation'],
+                actions: ['arriveAtTarget', 'completeCurrentMotivation', 'clearBehavior'],
             },
             [EventType.MoveBlocked]: [
                 {
@@ -367,7 +379,7 @@ export const characterMachine = createMachine(
                         '.communication.null',
                         '.control.normal',
                     ],
-                    actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget', 'clearActivity', 'setNormalControl'],
+                    actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearBehavior', 'clearTarget', 'clearActivity', 'setNormalControl'],
                 },
                 {
                     target: [
@@ -376,7 +388,7 @@ export const characterMachine = createMachine(
                         '.mind.null',
                         '.communication.null',
                     ],
-                    actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearTarget', 'clearActivity'],
+                    actions: ['syncPositionOnBlock', 'setIdleMotivation', 'clearBehavior', 'clearTarget', 'clearActivity'],
                 },
             ],
             [EventType.ApplyOfflineRuntime]: {
@@ -387,7 +399,7 @@ export const characterMachine = createMachine(
                     '.communication.null',
                     '.control.normal',
                 ],
-                actions: ['applyOfflineRuntime', 'setIdleMotivation', 'clearTarget', 'clearActivity', 'setNormalControl'],
+                actions: ['applyOfflineRuntime', 'setIdleMotivation', 'clearBehavior', 'clearTarget', 'clearActivity', 'setNormalControl'],
             },
             [EventType.StartThinking]: {
                 guard: 'canReceiveLogicCommand',
@@ -470,16 +482,7 @@ export const characterMachine = createMachine(
             shouldChangeToFindFood: ({ context }) => (
                 canReceiveActivityIdleLogicCommand(context) &&
                 context.currentMotivation !== 'controllingByGod' &&
-                (context.currentMotivation !== 'findFood' || context.target === null)
-            ),
-            shouldChangeToRest: ({ context }) => (
-                canReceiveActivityIdleLogicCommand(context) &&
-                context.currentMotivation !== 'controllingByGod' && context.currentMotivation !== 'rest'
-            ),
-            shouldChangeToPlay: ({ context }) => (
-                canReceiveActivityIdleLogicCommand(context) &&
-                context.currentMotivation !== 'controllingByGod' &&
-                (context.currentMotivation !== 'play' || context.target === null)
+                context.currentMotivation !== 'findFood'
             ),
             shouldGoHome: ({ context }) => (
                 canReceiveActivityIdleLogicCommand(context) &&
@@ -497,6 +500,17 @@ export const characterMachine = createMachine(
             ),
             isSpaceTransitionControl: ({ context }) => (
                 context.controlState === CharacterControlState.SpaceTransition
+            ),
+            shouldStartBehavior: ({ context }) => canStartBehavior(context),
+            shouldStartWalkingBehavior: ({ context, event }) => (
+                event.type === EventType.StartBehavior &&
+                canStartBehavior(context) &&
+                event.target !== undefined
+            ),
+            shouldStartSittingBehavior: ({ context, event }) => (
+                event.type === EventType.StartBehavior &&
+                canStartBehavior(context) &&
+                getBehaviorDefinition(event.behaviorId)?.type === 'sit'
             ),
             shouldStartActivity: ({ context }) => canStartOrJoinActivity(context),
             shouldStartPlayWithItemActivity: ({ context, event }) => (
@@ -618,6 +632,17 @@ export const characterMachine = createMachine(
                     context.status.moodValue - 1,
                 ),
             }),
+            clearExpiredBehavior: assign({
+                currentBehavior: ({ context, event }) => (
+                    isBehaviorExpired(context, event) ? null : context.currentBehavior
+                ),
+                target: ({ context, event }) => (
+                    isBehaviorExpired(context, event) ? null : context.target
+                ),
+                currentMotivation: ({ context, event }) => (
+                    isBehaviorExpired(context, event) ? 'idle' : context.currentMotivation
+                ),
+            }),
             updateUtilityScores: assign({
                 utilityScores: ({ context }) => calculateCharacterUtilityScores(context),
             }),
@@ -653,14 +678,15 @@ export const characterMachine = createMachine(
             setFoodMotivation: assign({
                 currentMotivation: () => 'findFood',
             }),
-            setRestMotivation: assign({
-                currentMotivation: () => 'rest',
-            }),
-            setPlayMotivation: assign({
-                currentMotivation: () => 'play',
-            }),
             setGoHomeMotivation: assign({
                 currentMotivation: () => 'goHome',
+            }),
+            setBehaviorMotivation: assign({
+                currentMotivation: ({ context, event }) => (
+                    event.type === EventType.StartBehavior
+                        ? getBehaviorDefinition(event.behaviorId)?.motivation ?? context.currentMotivation
+                        : context.currentMotivation
+                ),
             }),
             setActivityMotivation: assign({
                 currentMotivation: ({ event }) => (
@@ -683,16 +709,32 @@ export const characterMachine = createMachine(
             setPickedUpMotivation: assign({
                 currentMotivation: () => 'controllingByGod',
             }),
+            setNeedBehavior: assign({
+                currentBehavior: ({ event }) => createNonTickableBehaviorState(
+                    getNeedBehaviorId(event),
+                    Date.now(),
+                ),
+            }),
+            setManualMoveBehavior: assign({
+                currentBehavior: () => createNonTickableBehaviorState('manual.moveTo', Date.now()),
+            }),
+            startBehavior: assign({
+                currentBehavior: ({ event }) => (
+                    event.type === EventType.StartBehavior
+                        ? createBehaviorState(event.behaviorId, event.timestamp ?? Date.now())
+                        : null
+                ),
+            }),
             chooseRandomTarget: assign({
                 target: ({ context }) => getRandomMapTarget(context.position),
             }),
-            choosePlayTarget: assign({
-                target: ({ context }) => (
-                    getRandomDestinationTarget('play') ?? getRandomMapTarget(context.position)
-                ),
-            }),
             chooseApartmentEntranceTarget: assign({
                 target: () => chooseRandomApartmentEntranceTile(),
+            }),
+            setBehaviorTarget: assign({
+                target: ({ event }) => (
+                    event.type === EventType.StartBehavior ? event.target ?? null : null
+                ),
             }),
             startOwnActivity: assign({
                 currentActivity: ({ event }) => (
@@ -744,6 +786,7 @@ export const characterMachine = createMachine(
             completeJoinedActivity: assign({
                 status: ({ context, event }) => (
                     event.type === EventType.EndJoinedActivity &&
+                        !event.cancelled &&
                         context.currentActivity?.activityId === event.activityId
                         ? getCompletedActivityStatus(context, event.activityEffects)
                         : context.status
@@ -762,6 +805,7 @@ export const characterMachine = createMachine(
                 ),
                 relationships: ({ context, event }) => (
                     event.type === EventType.EndJoinedActivity &&
+                        !event.cancelled &&
                         context.currentActivity?.activityId === event.activityId
                         ? applyCompletedActivityRelationshipEffects(
                             context.relationships,
@@ -772,11 +816,27 @@ export const characterMachine = createMachine(
                         )
                         : context.relationships
                 ),
+                activityCooldowns: ({ context, event }) => (
+                    event.type === EventType.EndJoinedActivity &&
+                        !event.cancelled &&
+                        context.currentActivity?.activityId === event.activityId
+                        ? recordActivityCooldowns(context.activityCooldowns, {
+                            partnerCharIds: (event.participantIds ?? [])
+                                .filter(participantId => participantId !== context.id),
+                            role: event.activityRole ?? 'target',
+                            sourceEventId: event.sourceEventId ?? context.currentActivity.sourceEventId,
+                            timestamp: event.timestamp ?? Date.now(),
+                        })
+                        : context.activityCooldowns
+                ),
                 currentMotivation: () => 'idle',
             }),
             clearActivity: assign({
                 pendingActivityJoin: () => null,
                 currentActivity: () => null,
+            }),
+            clearBehavior: assign({
+                currentBehavior: () => null,
             }),
             recordActivityCooldown: assign({
                 activityCooldowns: ({ context, event }) => (
@@ -873,7 +933,8 @@ export const characterMachine = createMachine(
                 target: ({ context }) => (
                     context.currentMotivation === 'idle' &&
                         context.currentActivity === null &&
-                        context.pendingActivityJoin === null
+                        context.pendingActivityJoin === null &&
+                        context.currentBehavior === null
                         ? null
                         : context.target
                 ),
@@ -1036,6 +1097,7 @@ function cloneActivityCooldowns(
     activityCooldowns: CharacterActivityCooldowns,
 ): CharacterActivityCooldowns {
     return {
+        commonUntil: activityCooldowns.commonUntil,
         categoryUntilByKey: { ...activityCooldowns.categoryUntilByKey },
         pairUntilByKey: { ...activityCooldowns.pairUntilByKey },
         repeatByKey: Object.fromEntries(
@@ -1078,9 +1140,23 @@ function canStartOrJoinActivity(context: CharacterContext): boolean {
     return (
         canReceiveNormalLogicCommand(context) &&
         context.currentMotivation !== 'controllingByGod' &&
-        context.target === null &&
         context.currentActivity === null &&
-        context.pendingActivityJoin === null
+        context.pendingActivityJoin === null &&
+        context.currentBehavior?.tickable !== false
+    );
+}
+
+function canStartBehavior(context: CharacterContext): boolean {
+    return (
+        canReceiveNormalLogicCommand(context) &&
+        context.currentMotivation !== 'controllingByGod' &&
+        context.presence.kind === 'positioned' &&
+        context.currentActivity === null &&
+        context.pendingActivityJoin === null &&
+        context.currentBehavior?.tickable !== false &&
+        !isLocked(context, 'bodyAction') &&
+        !isLocked(context, 'bodyMove') &&
+        !isLocked(context, 'mind')
     );
 }
 
@@ -1165,8 +1241,63 @@ function canReceiveActivityIdleLogicCommand(context: CharacterContext): boolean 
     return (
         canReceiveNormalLogicCommand(context) &&
         context.currentActivity === null &&
-        context.pendingActivityJoin === null
+        context.pendingActivityJoin === null &&
+        context.currentBehavior?.tickable !== false
     );
+}
+
+function getBehaviorDefinition(behaviorId: string) {
+    return CHARACTER_BEHAVIOR_DEFINITIONS_BY_ID[behaviorId];
+}
+
+function createBehaviorState(
+    behaviorId: string,
+    timestamp: number,
+): CharacterContext['currentBehavior'] {
+    const definition = getBehaviorDefinition(behaviorId);
+
+    if (!definition) {
+        return null;
+    }
+
+    return {
+        id: behaviorId,
+        tickable: definition.tickable,
+        startedAt: timestamp,
+        endsAt: definition.durationMs === undefined
+            ? undefined
+            : timestamp + definition.durationMs,
+    };
+}
+
+function createNonTickableBehaviorState(
+    behaviorId: string | null,
+    timestamp: number,
+): CharacterContext['currentBehavior'] {
+    return behaviorId
+        ? {
+            id: behaviorId,
+            tickable: false,
+            startedAt: timestamp,
+        }
+        : null;
+}
+
+function getNeedBehaviorId(event: CharacterEvent): string | null {
+    switch (event.type) {
+        case EventType.GoEat:
+            return 'need.findFood';
+        case EventType.GoHome:
+            return 'need.goHome';
+        default:
+            return null;
+    }
+}
+
+function isBehaviorExpired(context: CharacterContext, event: CharacterEvent): boolean {
+    return event.type === EventType.Tick &&
+        context.currentBehavior?.endsAt !== undefined &&
+        (event.timestamp ?? Date.now()) >= context.currentBehavior.endsAt;
 }
 
 function chooseRandomApartmentEntranceTile(): CharacterContext['position'] {
@@ -1256,11 +1387,11 @@ function applyRequestEffectsToStatus(
 
 function canMakeAutonomousDecision(context: CharacterContext): boolean {
     return (
-        context.target === null &&
         context.presence.kind === 'positioned' &&
         context.pendingActivityJoin === null &&
         context.currentActivity === null &&
         context.currentMotivation !== 'controllingByGod' &&
+        context.currentBehavior?.tickable !== false &&
         !isLocked(context, 'bodyAction') &&
         !isLocked(context, 'bodyMove') &&
         !isLocked(context, 'mind')

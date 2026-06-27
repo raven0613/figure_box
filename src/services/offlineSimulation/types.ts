@@ -46,12 +46,7 @@ export interface OfflineSimulationPolicy {
   };
   resolutionEffects: {
     goEatSaturationDelta: number;
-    goRestMoodValueDelta: number;
-    goPlayMoodValueDelta: number;
-    goPlayPlayNeedDelta: number;
     homeFoodSaturationDelta: number;
-    homePlayMoodValueDelta: number;
-    homePlayPlayNeedDelta: number;
   };
   events: {
     default: Required<OfflineEventPolicyRule>;
@@ -172,6 +167,7 @@ export type OfflinePositionPatchMode =
 export type OfflineResolverSource =
   | `action.${string}`
   | `activity.${string}`
+  | `behavior.${string}`
   | `eventOverride.${string}`;
 
 export interface OfflinePositionPatchPreview {
