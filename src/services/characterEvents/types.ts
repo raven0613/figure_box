@@ -1,4 +1,4 @@
-import type { Feeling, SocialStatus } from '~/constants/character';
+import type { Feeling, Position, SocialStatus } from '~/constants/character';
 import type { CharacterEvent } from '~/stateMachines/gameFlow/events';
 import type { JoinableActivity } from './joinableActivities';
 import type {
@@ -22,6 +22,7 @@ export interface CharacterEventDecisionInput {
   nearbyRelationships?: readonly CharacterEventNearbyRelationship[];
   nearbyJoinableActivities?: readonly JoinableActivity[];
   nearbyVisibleItems?: readonly CharacterEventNearbyVisibleItem[];
+  nearbyObservableObjects?: readonly CharacterEventNearbyObservableObject[];
   ownItemIds?: readonly string[];
   globalEventTags?: string[];
   timestamp?: number;
@@ -47,6 +48,20 @@ export interface CharacterEventNearbyVisibleItem {
     y: number;
   };
   distance: number;
+}
+
+export type CharacterEventObservableObjectKind = 'mapObject' | 'placedItem';
+
+export interface CharacterEventNearbyObservableObject {
+  id: string;
+  kind: CharacterEventObservableObjectKind;
+  label: string;
+  position: Position;
+  distance: number;
+  mapObjectId?: MapObjectId;
+  placedObjectId?: MapObjectId;
+  itemInstanceId?: ItemInstanceId;
+  definitionId?: ItemDefinitionId;
 }
 
 export interface CharacterEventCandidate {

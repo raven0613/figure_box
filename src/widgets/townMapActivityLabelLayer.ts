@@ -24,6 +24,7 @@ export class TownMapActivityLabelLayer {
   private readonly getZoom: () => number;
   private readonly onMapActivityObserve?: (activityId: string) => void;
   private readonly labels = new Map<string, Text>();
+  private readonly activities = new Map<string, MapActivityView>();
   private readonly timers = new Map<string, number>();
   private viewportZoom = 1;
 
@@ -38,6 +39,7 @@ export class TownMapActivityLabelLayer {
 
   dispose(): void {
     Array.from(this.labels.keys()).forEach(activityId => this.remove(activityId));
+    this.activities.clear();
     this.timers.forEach(timer => this.timerScheduler.cancel(timer));
     this.timers.clear();
   }
@@ -55,17 +57,15 @@ export class TownMapActivityLabelLayer {
 
     this.clearTimer(activity.id);
 
-    const center = averagePoints(points);
     const label = this.getOrCreateLabel(activity);
 
+    this.activities.set(activity.id, activity);
     this.configureInteraction(label, activity);
     label.set({
       text: activity.label,
-      left: center.x,
-      top: center.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 1.1,
       ...getToneStyle(activity.tone),
     });
-    label.setCoords();
+    this.positionLabel(label, points);
     this.canvas.bringObjectToFront(label);
     this.canvas.requestRenderAll();
 
@@ -78,6 +78,8 @@ export class TownMapActivityLabelLayer {
 
   remove(activityId: string): void {
     const currentLabel = this.labels.get(activityId);
+
+    this.activities.delete(activityId);
 
     if (!currentLabel) {
       this.clearTimer(activityId);
@@ -99,6 +101,33 @@ export class TownMapActivityLabelLayer {
   syncViewportZoom(zoom: number): void {
     this.viewportZoom = zoom;
     this.labels.forEach(label => this.applyTextViewportZoom(label));
+  }
+
+  syncCharacterPosition(characterId: string): void {
+    this.activities.forEach(activity => {
+      if (!activity.participantIds.includes(characterId)) {
+        return;
+      }
+
+      const label = this.labels.get(activity.id);
+      const points = this.getAnchorPoints(activity);
+
+      if (!label || points.length === 0) {
+        return;
+      }
+
+      this.positionLabel(label, points);
+    });
+  }
+
+  private positionLabel(label: Text, points: readonly GridCoordinate[]): void {
+    const center = averagePoints(points);
+
+    label.set({
+      left: center.x,
+      top: center.y - this.cellSize * TOWN_MAP_CHARACTER_RENDER_SCALE * 1.1,
+    });
+    label.setCoords();
   }
 
   private getAnchorPoints(activity: MapActivityView): GridCoordinate[] {

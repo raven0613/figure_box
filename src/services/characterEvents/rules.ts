@@ -41,6 +41,9 @@ interface CharacterEventRuleInputSnapshot {
   nearbyVisibleItemTags: string[];
   nearbyVisibleItemRarities: string[];
   nearbyVisibleItemCount: number;
+  nearbyObservableObjectIds: string[];
+  nearbyObservableObjectKinds: string[];
+  nearbyObservableObjectCount: number;
   ownItemIds: readonly string[];
   ownItemCount: number;
   globalEventTags: string[];
@@ -55,6 +58,7 @@ export function createCharacterEventRuleContext(
   const nearbyRelationships = input.nearbyRelationships ?? [];
   const nearbyJoinableActivities = input.nearbyJoinableActivities ?? [];
   const nearbyVisibleItems = input.nearbyVisibleItems ?? [];
+  const nearbyObservableObjects = input.nearbyObservableObjects ?? [];
   const globalEventTags = input.globalEventTags ?? [];
   const ownItemIds = input.ownItemIds ?? character.ownItems.map(item => item.definitionId);
   const nearbyVisibleItemTags = [...new Set(nearbyVisibleItems.flatMap(item => [...item.tags]))];
@@ -74,6 +78,9 @@ export function createCharacterEventRuleContext(
       nearbyVisibleItemTags,
       nearbyVisibleItemRarities: nearbyVisibleItems.map(item => item.rarity),
       nearbyVisibleItemCount: nearbyVisibleItems.length,
+      nearbyObservableObjectIds: nearbyObservableObjects.map(object => object.id),
+      nearbyObservableObjectKinds: nearbyObservableObjects.map(object => object.kind),
+      nearbyObservableObjectCount: nearbyObservableObjects.length,
       ownItemIds,
       ownItemCount: ownItemIds.length,
       globalEventTags,

@@ -10,6 +10,8 @@ import { getRandomDestinationTarget, getRandomMapTarget } from './targets';
 import type { CharacterEventDecisionInput } from './types';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 
+const OBSERVABLE_OBJECT_TARGET_MAX_DISTANCE = 3;
+
 export function createCharacterEventFromAction(
   action: CharacterEventAction,
   input: CharacterEventDecisionInput,
@@ -58,7 +60,7 @@ export function createCharacterBehaviorEvent(
   input: CharacterEventDecisionInput,
   random: () => number = Math.random,
 ): CharacterEvent | null {
-  const target = resolveBehaviorTarget(definition, context, random);
+  const target = resolveBehaviorTarget(definition, context, input, random);
 
   if (definition.target && !target) {
     return null;
@@ -96,13 +98,32 @@ function resolveCharacterEventTarget(target: CharacterEventTarget) {
 function resolveBehaviorTarget(
   definition: CharacterBehaviorDefinition,
   context: CharacterContext,
+  input: CharacterEventDecisionInput,
   random: () => number,
 ) {
   if (definition.target === 'randomMap') {
     return getRandomMapTarget(context.position, random);
   }
 
+  if (definition.target === 'nearbyObservableObject') {
+    return selectNearbyObservableObjectTarget(input, random);
+  }
+
   return undefined;
+}
+
+function selectNearbyObservableObjectTarget(
+  input: CharacterEventDecisionInput,
+  random: () => number,
+) {
+  const candidates = (input.nearbyObservableObjects ?? [])
+    .filter(object => object.distance <= OBSERVABLE_OBJECT_TARGET_MAX_DISTANCE);
+
+  if (candidates.length === 0) {
+    return undefined;
+  }
+
+  return candidates[Math.floor(random() * candidates.length)].position;
 }
 
 function createActivityId(random: () => number): string {

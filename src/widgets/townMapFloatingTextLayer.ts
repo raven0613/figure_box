@@ -243,6 +243,7 @@ export class TownMapFloatingTextLayer {
 
   syncCharacterPosition(characterId: string, anchor: GridCoordinate): void {
     this.expressionBubbleLayer.syncCharacterPosition(characterId, anchor);
+    this.activityLabelLayer.syncCharacterPosition(characterId);
 
     const animationState = this.bubbleAnimations.get(characterId);
 

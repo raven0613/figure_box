@@ -1,4 +1,5 @@
 import type { ExpressionPresetId } from '~/constants/character';
+import { OBSERVE_OBJECT_BEHAVIOR_ID } from '~/constants/characterBehaviorDefinitions';
 import { getExpressionPresetDefinition } from '~/constants/expressionCatalog';
 import {
   CharacterPerformanceRunner,
@@ -438,7 +439,7 @@ export class TownCharacterController {
         this.widget.getOccupiedNeighborIds(position.x, position.y, radius, excludedCharacterId)
       ),
       getNearbyObjects: (position, radius) => (
-        this.widget.getMapObjectsInRadius(position.x, position.y, radius)
+        this.spatialQueries.getNearbyObservableObjectsAtPosition(position, radius)
       ),
       getNearbyActivities: (actorId, position, timestamp) => (
         this.activityCoordinator.getNearbyJoinableActivitiesAtPosition(actorId, position, timestamp)
@@ -453,6 +454,13 @@ export class TownCharacterController {
       ),
       joinActivity: (characterId, activityId) => (
         this.activityCoordinator.joinActivityByGodDrop(characterId, activityId)
+      ),
+      startObjectObservation: (characterId, target) => (
+        this.sendToCharacter(characterId, {
+          type: EventType.StartBehavior,
+          behaviorId: OBSERVE_OBJECT_BEHAVIOR_ID,
+          target,
+        })
       ),
       playRelationshipMoment: (actorId, targetCharacterId, label) => {
         this.relationshipMomentFlowCoordinator.startByGodDrop({
@@ -477,11 +485,14 @@ export class TownCharacterController {
       spawnCharacterActor: character => {
         this.runtimeCoordinator.spawnCharacterActor(character);
       },
-      maybeLeaveApartmentForOutsideNeed: characterId => (
-        this.apartmentCoordinator.maybeLeaveApartmentForOutsideNeed(characterId)
+      maybeLeaveApartment: characterId => (
+        this.apartmentCoordinator.maybeLeaveApartment(characterId)
       ),
       getNearbyCharacterIds: (characterId, range) => this.spatialQueries.getNearbyCharacterIds(characterId, range),
       getNearbyVisibleItems: (characterId, radius) => this.spatialQueries.getNearbyVisibleItems(characterId, radius),
+      getNearbyObservableObjects: (characterId, radius) => (
+        this.spatialQueries.getNearbyObservableObjects(characterId, radius)
+      ),
       getNearbyRelationships: (characterId, nearbyCharacterIds) => (
         this.relationshipCoordinator.getNearbyRelationshipSnapshots(characterId, nearbyCharacterIds)
       ),

@@ -1,6 +1,6 @@
 import type { SocialStatus, Position } from '~/constants/character';
-import type { TownMapObjectData } from '~/constants/townMap';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
+import type { CharacterEventNearbyObservableObject } from '~/services/characterEvents/types';
 import type { ExpressionBubbleId } from '~/typing/expressionBubble';
 import {
   GOD_DROP_SCAN_RADIUS,
@@ -22,7 +22,7 @@ interface GodDropCoordinatorOptions {
     radius: number,
     excludedCharacterId: string,
   ) => readonly string[];
-  getNearbyObjects: (position: Position, radius: number) => readonly TownMapObjectData[];
+  getNearbyObjects: (position: Position, radius: number) => readonly CharacterEventNearbyObservableObject[];
   getNearbyActivities: (
     actorId: string,
     position: Position,
@@ -33,6 +33,7 @@ interface GodDropCoordinatorOptions {
   getCharacterDistance: (position: Position, characterId: string) => number | null;
   getRelationshipStatus: (actorId: string, targetCharacterId: string) => SocialStatus;
   joinActivity: (characterId: string, activityId: string) => boolean;
+  startObjectObservation: (characterId: string, target: Position) => boolean;
   playRelationshipMoment: (actorId: string, targetCharacterId: string, label: string) => void;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
   showCharacterExpressionBubble: (
@@ -53,6 +54,7 @@ export class GodDropCoordinator {
   private readonly getCharacterDistance: GodDropCoordinatorOptions['getCharacterDistance'];
   private readonly getRelationshipStatus: GodDropCoordinatorOptions['getRelationshipStatus'];
   private readonly joinActivity: GodDropCoordinatorOptions['joinActivity'];
+  private readonly startObjectObservation: GodDropCoordinatorOptions['startObjectObservation'];
   private readonly playRelationshipMoment: GodDropCoordinatorOptions['playRelationshipMoment'];
   private readonly showCharacterBubble: GodDropCoordinatorOptions['showCharacterBubble'];
   private readonly showCharacterExpressionBubble: GodDropCoordinatorOptions['showCharacterExpressionBubble'];
@@ -71,6 +73,7 @@ export class GodDropCoordinator {
     this.getCharacterDistance = options.getCharacterDistance;
     this.getRelationshipStatus = options.getRelationshipStatus;
     this.joinActivity = options.joinActivity;
+    this.startObjectObservation = options.startObjectObservation;
     this.playRelationshipMoment = options.playRelationshipMoment;
     this.showCharacterBubble = options.showCharacterBubble;
     this.showCharacterExpressionBubble = options.showCharacterExpressionBubble;
@@ -180,12 +183,17 @@ export class GodDropCoordinator {
     this.clear();
 
     if (candidate.kind === 'object') {
-      this.showCharacterBubble(
-        opportunity.actorId,
-        source === 'player' ? `我去看看${candidate.label.replace('看看', '')}` : candidate.label,
-        2200,
-      );
-      this.showCharacterExpressionBubble(opportunity.actorId, 'surprised', 900);
+      if (candidate.targetPosition && this.startObjectObservation(opportunity.actorId, candidate.targetPosition)) {
+        this.showCharacterBubble(
+          opportunity.actorId,
+          source === 'player' ? `我去看看${candidate.label.replace('看看', '')}` : candidate.label,
+          2200,
+        );
+        this.showCharacterExpressionBubble(opportunity.actorId, 'surprised', 900);
+      } else if (source === 'player') {
+        this.showCharacterBubble(opportunity.actorId, '現在看不了...', 1400);
+      }
+
       return;
     }
 

@@ -1,12 +1,13 @@
 import { Feeling, SocialStatus, type Position } from '~/constants/character';
 import { CHARACTER_EVENT_DEFINITIONS } from '~/constants/charactarEventsDefinitions';
-import { TOWN_WORLD_SPACE_ID } from '~/constants/townMap';
+import { TOWN_MAP_OBJECTS, TOWN_WORLD_SPACE_ID } from '~/constants/townMap';
 import type { CharacterContext } from '~/stateMachines/gameFlow/context';
 import {
   normalizeRelationshipPair,
 } from '~/stateMachines/gameFlow/relationships';
 import type {
   CharacterEventDecisionInput,
+  CharacterEventNearbyObservableObject,
   CharacterEventNearbyRelationship,
   CharacterEventNearbyVisibleItem,
 } from '~/services/characterEvents/types';
@@ -22,6 +23,7 @@ export function createOfflineDecisionInput(
 ): CharacterEventDecisionInput {
   const nearbyCharacters = getNearbyCharacters(context, contexts);
   const nearbyCharacterIds = nearbyCharacters.map(character => character.id);
+  const nearbyVisibleItems = getNearbyVisibleItems(context);
 
   return {
     nearbyCharacterIds,
@@ -29,7 +31,8 @@ export function createOfflineDecisionInput(
       nearbyCharacters.map(character => [character.id, character.distance]),
     ),
     nearbyRelationships: getNearbyRelationships(context, nearbyCharacterIds),
-    nearbyVisibleItems: getNearbyVisibleItems(context),
+    nearbyVisibleItems,
+    nearbyObservableObjects: getNearbyObservableObjects(context, nearbyVisibleItems),
     ownItemIds: itemService.getActorItems(context.id)
       .filter(item => item.state === 'stored' || item.state === 'held')
       .map(item => item.definitionId),
@@ -37,6 +40,45 @@ export function createOfflineDecisionInput(
     timestamp,
     random,
   };
+}
+
+function getNearbyObservableObjects(
+  context: CharacterContext,
+  nearbyVisibleItems: readonly CharacterEventNearbyVisibleItem[],
+): CharacterEventNearbyObservableObject[] {
+  if (context.presence.kind !== 'positioned' || context.presence.spaceId !== TOWN_WORLD_SPACE_ID) {
+    return [];
+  }
+
+  return [
+    ...TOWN_MAP_OBJECTS
+      .filter(object => object.interactable)
+      .flatMap(object => {
+        const position = getNearestMapObjectPosition(object, context.position);
+        const distance = getDistance(context.position, position);
+
+        return distance <= OFFLINE_SIMULATION_POLICY.perception.itemVisibilityRadius
+          ? [{
+            id: `mapObject:${object.id}`,
+            kind: 'mapObject' as const,
+            label: object.label,
+            position,
+            distance,
+            mapObjectId: object.id,
+          }]
+          : [];
+      }),
+    ...nearbyVisibleItems.map(item => ({
+      id: `placedItem:${item.placedObjectId}`,
+      kind: 'placedItem' as const,
+      label: item.definitionId,
+      position: { ...item.position },
+      distance: item.distance,
+      placedObjectId: item.placedObjectId,
+      itemInstanceId: item.itemInstanceId,
+      definitionId: item.definitionId,
+    })),
+  ];
 }
 
 function getNearbyCharacters(
@@ -139,6 +181,21 @@ function getNearbyVisibleItems(context: CharacterContext): CharacterEventNearbyV
 
 function getDistance(left: Position, right: Position): number {
   return Math.hypot(left.x - right.x, left.y - right.y);
+}
+
+function getNearestMapObjectPosition(
+  object: (typeof TOWN_MAP_OBJECTS)[number],
+  position: Position,
+): Position {
+  const minX = object.x;
+  const maxX = object.x + object.width - 1;
+  const minY = object.y;
+  const maxY = object.y + object.length - 1;
+
+  return {
+    x: Math.min(maxX, Math.max(minX, position.x)),
+    y: Math.min(maxY, Math.max(minY, position.y)),
+  };
 }
 
 function getMaxOfflineNearbyCharacterRange(): number {

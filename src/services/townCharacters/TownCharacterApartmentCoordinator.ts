@@ -29,7 +29,7 @@ export class TownCharacterApartmentCoordinator {
     return this.leaveApartmentWithFollowUp(characterId);
   }
 
-  maybeLeaveApartmentForOutsideNeed(characterId: string): boolean {
+  maybeLeaveApartment(characterId: string): boolean {
     const snapshot = this.getCharacterSnapshot(characterId);
 
     if (!snapshot || snapshot.context.presence.kind !== 'contained') {
@@ -42,14 +42,14 @@ export class TownCharacterApartmentCoordinator {
       utilityScores.findFood >= APARTMENT_EXIT_FOOD_SCORE_THRESHOLD
     );
 
-    if (!isHungry) {
-      return false;
-    }
+    const followUpEvent: CharacterEvent | undefined = isHungry
+      ? {
+          type: EventType.GoEat,
+          target: getRandomDestinationTarget('findFood') ?? { x: 1, y: 20 },
+        }
+      : undefined;
 
-    return this.leaveApartmentWithFollowUp(characterId, {
-      type: EventType.GoEat,
-      target: getRandomDestinationTarget('findFood') ?? { x: 1, y: 20 },
-    });
+    return this.leaveApartmentWithFollowUp(characterId, followUpEvent);
   }
 
   private leaveApartmentWithFollowUp(characterId: string, followUpEvent?: CharacterEvent): boolean {

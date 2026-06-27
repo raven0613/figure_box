@@ -11,7 +11,9 @@ import type {
 } from '~/services/characterEvents/rules';
 
 export type CharacterBehaviorType = 'stroll' | 'idleMoment' | 'observe' | 'sit';
-export type CharacterBehaviorTarget = 'randomMap';
+export type CharacterBehaviorTarget = 'randomMap' | 'nearbyObservableObject';
+
+export const OBSERVE_OBJECT_BEHAVIOR_ID = 'behavior.observeVisibleItem';
 
 export interface CharacterBehaviorDefinition {
   id: string;

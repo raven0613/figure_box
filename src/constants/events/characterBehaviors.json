@@ -43,13 +43,7 @@
     "baseWeight": 16,
     "tickable": false,
     "durationMs": 6000,
-    "conditions": [
-      {
-        "path": "input.nearbyVisibleItemCount",
-        "operator": ">",
-        "value": 0
-      }
-    ],
+    "target": "nearbyObservableObject",
     "presentationTags": ["motion.turn", "expressionBubble.curious"]
   }
 ]

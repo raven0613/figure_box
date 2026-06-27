@@ -1,6 +1,6 @@
 import { SocialStatus, type Position } from '~/constants/character';
-import type { TownMapObjectData } from '~/constants/townMap';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
+import type { CharacterEventNearbyObservableObject } from '~/services/characterEvents/types';
 import { WeightedDecisionSelector } from './decisionSelector';
 
 export type GodDropCandidateKind = 'object' | 'person' | 'activity';
@@ -19,6 +19,7 @@ export interface GodDropOpportunityCandidate {
   activityId?: string;
   participantId?: string;
   objectId?: string;
+  targetPosition?: Position;
 }
 
 export interface GodDropOpportunity {
@@ -36,7 +37,7 @@ interface CreateGodDropOpportunityInput {
   droppedAt: Position;
   timestamp: number;
   nearbyCharacterIds: readonly string[];
-  nearbyObjects: readonly TownMapObjectData[];
+  nearbyObjects: readonly CharacterEventNearbyObservableObject[];
   nearbyActivities: readonly JoinableActivity[];
   isCharacterUnavailable?: (characterId: string) => boolean;
   getCharacterName: (characterId: string) => string;
@@ -63,7 +64,7 @@ export class GodDropOpportunityService {
 
   createOpportunity(input: CreateGodDropOpportunityInput): GodDropOpportunity | null {
     const activityParticipantIds = new Set(input.nearbyActivities.flatMap(activity => [...activity.participantIds]));
-    const objectCandidates = input.nearbyObjects.map(object => this.createObjectCandidate(input, object));
+    const objectCandidates = input.nearbyObjects.map(object => this.createObjectCandidate(object));
     const activityCandidates = input.nearbyActivities.flatMap(activity => this.createActivityCandidates(input, activity));
     const personCandidates = input.nearbyCharacterIds
       .filter(characterId => !activityParticipantIds.has(characterId))
@@ -94,13 +95,8 @@ export class GodDropOpportunityService {
     );
   }
 
-  private createObjectCandidate(
-    input: CreateGodDropOpportunityInput,
-    object: TownMapObjectData,
-  ): GodDropOpportunityCandidate | null {
-    const distance = getObjectDistance(object, input.droppedAt);
-
-    if (distance > GOD_DROP_SCAN_RADIUS) {
+  private createObjectCandidate(object: CharacterEventNearbyObservableObject): GodDropOpportunityCandidate | null {
+    if (object.distance > GOD_DROP_SCAN_RADIUS) {
       return null;
     }
 
@@ -111,9 +107,10 @@ export class GodDropOpportunityService {
       targetId: object.id,
       objectId: object.id,
       label: `看看${object.label}`,
-      distance,
+      distance: object.distance,
       baseScore: BASE_OBJECT_SCORE,
-      reasons: ['nearbyObject', `type:${object.type}`],
+      reasons: ['nearbyObject', `kind:${object.kind}`],
+      targetPosition: object.position,
     });
   }
 
@@ -234,6 +231,7 @@ export class GodDropOpportunityService {
     activityId?: string;
     participantId?: string;
     objectId?: string;
+    targetPosition?: Position;
   }): GodDropOpportunityCandidate {
     const proximityScore = Math.max(0, GOD_DROP_SCAN_RADIUS + 1 - input.distance) * 5;
     const score = input.baseScore + proximityScore;
@@ -252,19 +250,9 @@ export class GodDropOpportunityService {
       activityId: input.activityId,
       participantId: input.participantId,
       objectId: input.objectId,
+      targetPosition: input.targetPosition,
     };
   }
-}
-
-function getObjectDistance(object: TownMapObjectData, position: Position): number {
-  const minX = object.x;
-  const maxX = object.x + object.width - 1;
-  const minY = object.y;
-  const maxY = object.y + object.length - 1;
-  const nearestX = Math.min(maxX, Math.max(minX, position.x));
-  const nearestY = Math.min(maxY, Math.max(minY, position.y));
-
-  return getDistance(position, { x: nearestX, y: nearestY });
 }
 
 function getDistance(from: Position, to: Position): number {

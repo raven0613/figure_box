@@ -2,6 +2,7 @@ import type { CharacterContext, CharacterUtilityScores } from '~/stateMachines/g
 
 export const SATURATION_LOSS_PER_TICK = 0.1;
 export const SATURATION_GAIN_AFTER_EATING = 100;
+export const SATURATION_GAIN_AFTER_HOME_FOOD = 35;
 export const PLAY_NEED_GAIN_PER_TICK = 0.5;
 export const PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY = 45;
 export const PLAY_NEED_REDUCTION_AFTER_PLAYING_TOGETHER = 35;

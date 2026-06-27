@@ -24,7 +24,7 @@ import {
 } from './schemaReaders';
 
 const VALID_BEHAVIOR_TYPES = ['stroll', 'idleMoment', 'observe', 'sit'] as const;
-const VALID_BEHAVIOR_TARGETS = ['randomMap'] as const;
+const VALID_BEHAVIOR_TARGETS = ['randomMap', 'nearbyObservableObject'] as const;
 
 export function loadCharacterBehaviorDefinitions(rawDefinitions: unknown): CharacterBehaviorDefinition[] {
   if (!Array.isArray(rawDefinitions)) {

@@ -100,10 +100,15 @@ export class TownMapWalkAnimator {
   ): void {
     this.cancelWalk(characterId);
 
+    if (path.length === 0) {
+      onArrive(this.getCharacterTile(characterId) ?? { x: 0, y: 0 });
+      return;
+    }
+
     const token = this.getCharacterToken(characterId);
 
-    if (!token || path.length === 0) {
-      onArrive(path[path.length - 1] ?? { x: 0, y: 0 });
+    if (!token) {
+      onBlocked(this.getCharacterTile(characterId) ?? path[0]);
       return;
     }
 
@@ -211,6 +216,15 @@ export class TownMapWalkAnimator {
   }
 
   private advanceWalker(walker: WalkState, timestamp: number): 'continue' | 'done' {
+    const currentToken = this.getCharacterToken(walker.characterId);
+
+    if (!currentToken) {
+      walker.onBlocked(this.getCharacterTile(walker.characterId) ?? walker.path[walker.currentSegment]);
+      return 'done';
+    }
+
+    walker.token = currentToken;
+
     if (walker.pausedUntil !== null) {
       if (timestamp < walker.pausedUntil) {
         walker.lastTimestamp = timestamp;

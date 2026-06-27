@@ -6,6 +6,7 @@ import type { CharacterControlReason } from "./controlReasons";
 import type { CharacterControlState } from "./states";
 import type { ItemDefinitionId, ItemInstanceId } from "~/typing/item";
 import type {
+  CharacterEventNearbyObservableObject,
   CharacterEventNearbyRelationship,
   CharacterEventNearbyVisibleItem,
 } from "~/services/characterEvents/types";
@@ -45,6 +46,7 @@ export type CharacterEvent =
     nearbyRelationships?: readonly CharacterEventNearbyRelationship[];
     nearbyJoinableActivities?: readonly JoinableActivity[];
     nearbyVisibleItems?: readonly CharacterEventNearbyVisibleItem[];
+    nearbyObservableObjects?: readonly CharacterEventNearbyObservableObject[];
     ownItemIds?: readonly string[];
     globalEventTags?: string[];
     timestamp?: number;

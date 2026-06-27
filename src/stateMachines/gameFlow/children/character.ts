@@ -35,6 +35,7 @@ import {
     PLAY_NEED_GAIN_PER_TICK,
     PLAY_NEED_REDUCTION_AFTER_SOLO_PLAY,
     SATURATION_GAIN_AFTER_EATING,
+    SATURATION_GAIN_AFTER_HOME_FOOD,
     SATURATION_LOSS_PER_TICK,
 } from '~/services/characterEvents/utility';
 import { applyCompletedActivityStatusEffects } from '~/services/characterEvents/activityCompletionEffects';
@@ -60,6 +61,7 @@ const INITIAL_UTILITY_SCORES: CharacterUtilityScores = {
     chat: 15,
     goHome: 0,
 };
+const FIND_FOOD_AT_APARTMENT_EVENT_ID = 'need.findFoodAtApartment';
 
 export const characterMachine = createMachine(
     {
@@ -155,7 +157,14 @@ export const characterMachine = createMachine(
                     '.communication.null',
                     '.control.normal',
                 ],
-                actions: ['enterApartment', 'setIdleMotivation', 'clearBehavior', 'clearTarget', 'setNormalControl'],
+                actions: [
+                    'completeApartmentFood',
+                    'enterApartment',
+                    'setIdleMotivation',
+                    'clearBehavior',
+                    'clearTarget',
+                    'setNormalControl',
+                ],
             },
             [EventType.LeaveApartment]: {
                 guard: 'shouldLeaveApartment',
@@ -197,7 +206,7 @@ export const characterMachine = createMachine(
                         '.mind.thinking',
                         '.communication.null',
                     ],
-                    actions: ['setBehaviorMotivation', 'startBehavior', 'clearTarget'],
+                    actions: ['setBehaviorMotivation', 'startBehavior', 'setBehaviorTarget'],
                 },
             ],
             [EventType.StartActivity]: [
@@ -360,15 +369,27 @@ export const characterMachine = createMachine(
                 ],
                 actions: ['setManualMoveBehavior', 'setManualTarget'],
             },
-            [EventType.Arrive]: {
-                target: [
-                    '.bodyAction.idle',
-                    '.bodyMove.stand',
-                    '.mind.null',
-                    '.communication.null',
-                ],
-                actions: ['arriveAtTarget', 'completeCurrentMotivation', 'clearBehavior'],
-            },
+            [EventType.Arrive]: [
+                {
+                    guard: 'shouldStartBehaviorDwellOnArrive',
+                    target: [
+                        '.bodyAction.observing',
+                        '.bodyMove.stand',
+                        '.mind.thinking',
+                        '.communication.null',
+                    ],
+                    actions: ['arriveAtTarget', 'startBehaviorDwell'],
+                },
+                {
+                    target: [
+                        '.bodyAction.idle',
+                        '.bodyMove.stand',
+                        '.mind.null',
+                        '.communication.null',
+                    ],
+                    actions: ['arriveAtTarget', 'completeCurrentMotivation', 'clearBehavior'],
+                },
+            ],
             [EventType.MoveBlocked]: [
                 {
                     guard: 'isSpaceTransitionControl',
@@ -505,12 +526,21 @@ export const characterMachine = createMachine(
             shouldStartWalkingBehavior: ({ context, event }) => (
                 event.type === EventType.StartBehavior &&
                 canStartBehavior(context) &&
-                event.target !== undefined
+                event.target !== undefined &&
+                !isSamePosition(context.position, event.target)
             ),
             shouldStartSittingBehavior: ({ context, event }) => (
                 event.type === EventType.StartBehavior &&
                 canStartBehavior(context) &&
                 getBehaviorDefinition(event.behaviorId)?.type === 'sit'
+            ),
+            shouldStartBehaviorDwellOnArrive: ({ context, event }) => (
+                event.type === EventType.Arrive &&
+                context.currentBehavior !== null &&
+                context.currentBehavior.endsAt === undefined &&
+                context.target !== null &&
+                isSamePosition(context.target, event.position) &&
+                getBehaviorDefinition(context.currentBehavior.id)?.durationMs !== undefined
             ),
             shouldStartActivity: ({ context }) => canStartOrJoinActivity(context),
             shouldStartPlayWithItemActivity: ({ context, event }) => (
@@ -664,6 +694,7 @@ export const characterMachine = createMachine(
                     nearbyRelationships: event.nearbyRelationships,
                     nearbyJoinableActivities: event.nearbyJoinableActivities,
                     nearbyVisibleItems: event.nearbyVisibleItems,
+                    nearbyObservableObjects: event.nearbyObservableObjects,
                     ownItemIds: event.ownItemIds,
                     globalEventTags: event.globalEventTags,
                     timestamp: event.timestamp,
@@ -719,11 +750,35 @@ export const characterMachine = createMachine(
                 currentBehavior: () => createNonTickableBehaviorState('manual.moveTo', Date.now()),
             }),
             startBehavior: assign({
-                currentBehavior: ({ event }) => (
+                currentBehavior: ({ context, event }) => (
                     event.type === EventType.StartBehavior
-                        ? createBehaviorState(event.behaviorId, event.timestamp ?? Date.now())
+                        ? createBehaviorState(
+                            event.behaviorId,
+                            event.timestamp ?? Date.now(),
+                            event.target !== undefined && !isSamePosition(context.position, event.target),
+                        )
                         : null
                 ),
+            }),
+            startBehaviorDwell: assign({
+                currentBehavior: ({ context }) => {
+                    const currentBehavior = context.currentBehavior;
+                    const durationMs = currentBehavior
+                        ? getBehaviorDefinition(currentBehavior.id)?.durationMs
+                        : undefined;
+
+                    if (!currentBehavior || durationMs === undefined) {
+                        return currentBehavior;
+                    }
+
+                    const startedAt = Date.now();
+
+                    return {
+                        ...currentBehavior,
+                        startedAt,
+                        endsAt: startedAt + durationMs,
+                    };
+                },
             }),
             chooseRandomTarget: assign({
                 target: ({ context }) => getRandomMapTarget(context.position),
@@ -979,6 +1034,20 @@ export const characterMachine = createMachine(
                             spaceId: event.apartmentSpaceId,
                         }
                         : context.presence
+                ),
+            }),
+            completeApartmentFood: assign({
+                status: ({ context, event }) => (
+                    event.type === EventType.EnterApartment &&
+                        context.lastEventDecision?.selectedCandidateId === FIND_FOOD_AT_APARTMENT_EVENT_ID
+                        ? {
+                            ...context.status,
+                            saturation: Math.min(
+                                100,
+                                context.status.saturation + SATURATION_GAIN_AFTER_HOME_FOOD,
+                            ),
+                        }
+                        : context.status
                 ),
             }),
             leaveApartment: assign({
@@ -1253,6 +1322,7 @@ function getBehaviorDefinition(behaviorId: string) {
 function createBehaviorState(
     behaviorId: string,
     timestamp: number,
+    isTravelingToTarget = false,
 ): CharacterContext['currentBehavior'] {
     const definition = getBehaviorDefinition(behaviorId);
 
@@ -1264,7 +1334,7 @@ function createBehaviorState(
         id: behaviorId,
         tickable: definition.tickable,
         startedAt: timestamp,
-        endsAt: definition.durationMs === undefined
+        endsAt: isTravelingToTarget || definition.durationMs === undefined
             ? undefined
             : timestamp + definition.durationMs,
     };
@@ -1306,6 +1376,13 @@ function chooseRandomApartmentEntranceTile(): CharacterContext['position'] {
     ];
 
     return { x: entranceTile.x, y: entranceTile.y };
+}
+
+function isSamePosition(
+    left: CharacterContext['position'],
+    right: CharacterContext['position'],
+): boolean {
+    return left.x === right.x && left.y === right.y;
 }
 
 function getCompletedActivityStatus(
