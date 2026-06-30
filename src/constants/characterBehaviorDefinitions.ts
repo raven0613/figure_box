@@ -17,6 +17,7 @@ export const OBSERVE_OBJECT_BEHAVIOR_ID = 'behavior.observeVisibleItem';
 
 export interface CharacterBehaviorDefinition {
   id: string;
+  label?: string;
   bucketId: CharacterEventBucketId;
   motivation: UtilityDrivenMotivation;
   type: CharacterBehaviorType;

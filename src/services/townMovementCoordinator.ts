@@ -1,4 +1,5 @@
 import type { Position } from '~/constants/character';
+import { CHARACTER_BEHAVIOR_DEFINITIONS_BY_ID } from '~/constants/characterBehaviorDefinitions';
 import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
 import { TOWN_APARTMENT_ENTRANCE_TILES, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
@@ -154,7 +155,7 @@ export class TownMovementCoordinator {
 
     this.ensurePositionedCharacterVisible(characterId, snapshot);
 
-    this.widget.updateCharacterStatus(characterId, snapshot.context.currentMotivation);
+    this.widget.updateCharacterStatus(characterId, getCharacterStatusText(snapshot));
     this.widget.updateCharacterExpressionPreset(characterId, snapshot.context.status.expressionPresetId);
 
     const summary = getCharacterStateSummary(snapshot.value);
@@ -301,4 +302,14 @@ export class TownMovementCoordinator {
     this.widget.cancelWalk(characterId);
     this.walkingCharacterIds.delete(characterId);
   }
+}
+
+function getCharacterStatusText(snapshot: CharacterSnapshot): string {
+  const behaviorId = snapshot.context.currentBehavior?.id;
+
+  if (!behaviorId) {
+    return snapshot.context.currentMotivation;
+  }
+
+  return CHARACTER_BEHAVIOR_DEFINITIONS_BY_ID[behaviorId]?.label ?? behaviorId;
 }

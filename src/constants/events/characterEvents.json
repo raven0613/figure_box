@@ -140,8 +140,8 @@
           },
           "effects": {
             "relationshipIntimacyDelta": 1,
-            "moodValueDelta": 10,
-            "playNeedDelta": -35
+            "moodValueDelta": 20,
+            "playNeedDelta": -50
           },
           "joinRequirements": {
             "type": "hasItem",
@@ -188,8 +188,8 @@
           },
           "effects": {
             "relationshipIntimacyDelta": 1,
-            "moodValueDelta": 10,
-            "playNeedDelta": -35
+            "moodValueDelta": 20,
+            "playNeedDelta": -50
           },
           "joinRequirements": {
             "type": "hasItem",
@@ -293,8 +293,8 @@
           },
           "effects": {
             "relationshipIntimacyDelta": 1,
-            "moodValueDelta": 10,
-            "playNeedDelta": -35
+            "moodValueDelta": 20,
+            "playNeedDelta": -50
           },
           "joinRequirements": {
             "type": "none"
@@ -403,7 +403,7 @@
           },
           "effects": {
             "relationshipIntimacyDelta": 1,
-            "moodValueDelta": 6
+            "moodValueDelta": 20
           },
           "joinRequirements": {
             "type": "none"
@@ -477,7 +477,7 @@
                   ],
                   "effects": {
                     "relationshipIntimacyDelta": 1,
-                    "moodValueDelta": 1
+                    "moodValueDelta": 10
                   },
                   "memoryEffects": [
                     {
@@ -516,10 +516,10 @@
                   },
                   "effectsByRole": {
                     "initiator": {
-                      "moodValueDelta": 1
+                      "moodValueDelta": 10
                     },
                     "target": {
-                      "moodValueDelta": -1
+                      "moodValueDelta": -5
                     }
                   },
                   "memoryEffects": [
@@ -658,7 +658,7 @@
                   ],
                   "effects": {
                     "relationshipIntimacyDelta": 1,
-                    "moodValueDelta": 4
+                    "moodValueDelta": 10
                   },
                   "memoryEffects": [
                     {
@@ -743,7 +743,7 @@
                   ],
                   "effects": {
                     "relationshipIntimacyDelta": 2,
-                    "moodValueDelta": 6
+                    "moodValueDelta": 15
                   },
                   "memoryEffects": [
                     {
@@ -870,8 +870,8 @@
           },
           "effects": {
             "relationshipIntimacyDelta": 1,
-            "moodValueDelta": 10,
-            "playNeedDelta": -35
+            "moodValueDelta": 20,
+            "playNeedDelta": -50
           },
           "joinRequirements": {
             "type": "none"
@@ -1454,8 +1454,8 @@
             }
           },
           "effects": {
-            "moodValueDelta": 6,
-            "playNeedDelta": -18
+            "moodValueDelta": 10,
+            "playNeedDelta": -30
           },
           "joinRequirements": {
             "type": "hasItem",
@@ -1545,8 +1545,8 @@
             }
           },
           "effects": {
-            "moodValueDelta": 7,
-            "playNeedDelta": -16
+            "moodValueDelta": 15,
+            "playNeedDelta": -30
           },
           "joinRequirements": {
             "type": "none"
@@ -1618,8 +1618,8 @@
             }
           },
           "effects": {
-            "moodValueDelta": 8,
-            "playNeedDelta": -22
+            "moodValueDelta": 30,
+            "playNeedDelta": -30
           },
           "joinRequirements": {
             "type": "none"
@@ -1707,8 +1707,8 @@
             }
           },
           "effects": {
-            "moodValueDelta": 6,
-            "playNeedDelta": -24
+            "moodValueDelta": 30,
+            "playNeedDelta": -45
           },
           "joinRequirements": {
             "type": "none"
@@ -1787,8 +1787,8 @@
             }
           },
           "effects": {
-            "moodValueDelta": 8,
-            "playNeedDelta": -24
+            "moodValueDelta": 30,
+            "playNeedDelta": -30
           },
           "joinRequirements": {
             "type": "hasItem",

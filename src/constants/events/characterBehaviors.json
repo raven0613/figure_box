@@ -1,6 +1,7 @@
 [
   {
     "id": "behavior.stroll",
+    "label": "散步中",
     "bucketId": "baseline",
     "motivation": "idle",
     "type": "stroll",
@@ -13,6 +14,7 @@
   },
   {
     "id": "behavior.daydream",
+    "label": "發呆中",
     "bucketId": "baseline",
     "motivation": "idle",
     "type": "idleMoment",
@@ -20,11 +22,12 @@
     "weightSource": "idle",
     "maxWeight": 32,
     "tickable": true,
-    "durationMs": 6000,
+    "durationMs": 20000,
     "presentationTags": ["motion.stand", "expressionBubble.thinking"]
   },
   {
     "id": "behavior.sit",
+    "label": "坐著休息",
     "bucketId": "baseline",
     "motivation": "idle",
     "type": "sit",
@@ -32,17 +35,18 @@
     "weightSource": "idle",
     "maxWeight": 24,
     "tickable": false,
-    "durationMs": 9000,
+    "durationMs": 160000,
     "presentationTags": ["motion.sit", "expressionBubble.relaxed"]
   },
   {
     "id": "behavior.observeVisibleItem",
+    "label": "觀察物件中",
     "bucketId": "environment",
     "motivation": "idle",
     "type": "observe",
     "baseWeight": 16,
     "tickable": false,
-    "durationMs": 6000,
+    "durationMs": 150000,
     "target": "nearbyObservableObject",
     "presentationTags": ["motion.turn", "expressionBubble.curious"]
   }

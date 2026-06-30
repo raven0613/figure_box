@@ -17,6 +17,7 @@ import {
   readOptionalMotivation,
   readOptionalNonNegativeNumber,
   readOptionalNumber,
+  readOptionalString,
   readOptionalStringList,
   readRequiredNumber,
   readRequiredString,
@@ -49,6 +50,7 @@ function parseCharacterBehaviorDefinition(
 
   return {
     id: readRequiredString(rawDefinition, 'id', index),
+    label: readOptionalString(rawDefinition, 'label', index),
     bucketId: readBucketId(rawDefinition, index),
     motivation: readMotivation(rawDefinition, index),
     type: readBehaviorType(rawDefinition, index),

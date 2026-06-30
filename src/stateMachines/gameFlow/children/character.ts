@@ -659,7 +659,7 @@ export const characterMachine = createMachine(
                         saturation: Math.max(0, context.status.saturation - SATURATION_LOSS_PER_TICK),
                         playNeed: Math.min(100, context.status.playNeed + PLAY_NEED_GAIN_PER_TICK),
                     },
-                    context.status.moodValue - 1,
+                    context.status.moodValue - 0.1,
                 ),
             }),
             clearExpiredBehavior: assign({
@@ -1396,7 +1396,7 @@ function updateCharacterMoodValue(
     status: CharacterContext['status'],
     moodValue: number,
 ): CharacterContext['status'] {
-    const clampedMoodValue = clampMoodValue(moodValue);
+    const clampedMoodValue = Number(clampMoodValue(moodValue).toFixed(1));
 
     return {
         ...status,
