@@ -258,6 +258,9 @@ export class TownCharacterController {
       widget: this.widget,
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
+      onActivityRouteCompleted: activityId => {
+        this.activityCoordinator.handleJoggingRouteCompleted(activityId);
+      },
     });
     this.runtimeCoordinator = new TownCharacterRuntimeCoordinator({
       actorRegistry: this.actorRegistry,
@@ -420,6 +423,15 @@ export class TownCharacterController {
       ),
       getNearbyCharacterIds: (characterId, range) => this.spatialQueries.getNearbyCharacterIds(characterId, range),
       getTravelTarget: destination => destination,
+      startJoggingRoute: input => {
+        this.movementCoordinator.startJoggingRoute(input);
+      },
+      startJoggingRace: activityId => {
+        this.movementCoordinator.startJoggingRace(activityId);
+      },
+      cancelActivityRoute: (activityId, options) => {
+        this.movementCoordinator.cancelActivityRoute(activityId, options);
+      },
       actorHasItem: (characterId, itemId) => (
         itemService.getActorItems(characterId)
           .some(itemInstance => (

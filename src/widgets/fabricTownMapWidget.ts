@@ -93,6 +93,7 @@ export class FabricTownMapWidget {
   private readonly placedItemShapes = new Map<string, Group>();
   private readonly characterTileOffsets = new Map<string, GridCoordinate>();
   private readonly characterOffsetAnimationFrameIds = new Map<string, number>();
+  private readonly tileOverlapOffsetSuppressedCharacterIds = new Set<string>();
   private readonly characterPresentationOffsets = new Map<string, GridCoordinate>();
   private readonly characterPresentationOffsetAnimations =
     new Map<string, CharacterPresentationOffsetAnimation>();
@@ -374,6 +375,22 @@ export class FabricTownMapWidget {
     );
   }
 
+  setCharacterTileOverlapOffsetSuppressed(
+    characterId: string,
+    isSuppressed: boolean,
+  ): void {
+    if (isSuppressed) {
+      this.tileOverlapOffsetSuppressedCharacterIds.add(characterId);
+      this.characterTileOffsets.delete(characterId);
+      this.cancelCharacterOffsetAnimation(characterId);
+      this.positionCharacterAtCurrentTile(characterId);
+      return;
+    }
+
+    this.tileOverlapOffsetSuppressedCharacterIds.delete(characterId);
+    this.syncTileOverlapOffsets(this.grid.getOccupantTile(characterId));
+  }
+
   setCharacterPresentationPositionFromTileCenterInCells(
     characterId: string,
     positionOffsetCells: GridCoordinate,
@@ -588,6 +605,7 @@ export class FabricTownMapWidget {
     this.cancelCharacterPresentationOffsetAnimation(characterId);
     this.grid.removeOccupant(characterId);
     this.characterTileOffsets.delete(characterId);
+    this.tileOverlapOffsetSuppressedCharacterIds.delete(characterId);
     this.characterPresentationOffsets.delete(characterId);
     this.syncTileOverlapOffsets(previousTile);
     this.characterTracker.removeCharacter(characterId);
@@ -610,6 +628,14 @@ export class FabricTownMapWidget {
     onBlocked: (position: GridCoordinate) => void,
   ): void {
     this.walkAnimator.walkCharacterAlongPath(characterId, path, onArrive, onBlocked);
+  }
+
+  setCharacterWalkSpeedMultiplier(characterId: string, multiplier: number): void {
+    this.walkAnimator.setSpeedMultiplier(characterId, multiplier);
+  }
+
+  clearCharacterWalkSpeedMultiplier(characterId: string): void {
+    this.walkAnimator.clearSpeedMultiplier(characterId);
   }
 
   cancelWalk(characterId: string): void {
@@ -901,11 +927,13 @@ export class FabricTownMapWidget {
     occupantIds.forEach(characterId => {
       const isWalking = this.walkAnimator.isWalking(characterId);
       const existingOffset = this.characterTileOffsets.get(characterId) ?? ZERO_OFFSET;
-      const nextOffset = occupantIds.length > 1
-        ? this.getExistingOrRandomOverlapOffset(characterId)
-        : isWalking
-          ? existingOffset
-          : ZERO_OFFSET;
+      const nextOffset = this.tileOverlapOffsetSuppressedCharacterIds.has(characterId)
+        ? ZERO_OFFSET
+        : occupantIds.length > 1
+          ? this.getExistingOrRandomOverlapOffset(characterId)
+          : isWalking
+            ? existingOffset
+            : ZERO_OFFSET;
 
       this.characterTileOffsets.set(characterId, nextOffset);
 
@@ -1000,6 +1028,7 @@ export class FabricTownMapWidget {
     }
 
     this.positionCharacterAtCurrentTile(characterId);
+    this.canvas.requestRenderAll();
   }
 
   private positionCharacterAtCurrentTile(characterId: string): boolean {

@@ -12,6 +12,8 @@ import {
   getItemJoinRequirementScope,
 } from '~/services/townActivities/townActivityRules';
 
+const JOGGING_ACTIVITY_KEY = 'life.jogging';
+
 interface TownActivityJoinGatewayOptions {
   activityManager: JoinableActivityManager;
   getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
@@ -67,6 +69,10 @@ export class TownActivityJoinGateway {
 
   canCharacterJoinActivity(characterId: string, activity: JoinableActivity): boolean {
     if (activity.participantIds.includes(characterId)) {
+      return false;
+    }
+
+    if (activity.activityKey === JOGGING_ACTIVITY_KEY && activity.phase === 'active') {
       return false;
     }
 

@@ -1577,13 +1577,6 @@
       },
       {
         "phase": "active",
-        "type": "animation",
-        "target": "both",
-        "animationId": "characterJumpAnim",
-        "durationMs": 18000
-      },
-      {
-        "phase": "active",
         "type": "mapEffect",
         "target": "both",
         "participantCount": {
@@ -1591,7 +1584,7 @@
         },
         "effectId": "casualJogging",
         "label": "獨自慢跑中",
-        "durationMs": 18000
+        "durationMs": 60000
       },
       {
         "phase": "active",
@@ -1602,7 +1595,16 @@
         },
         "effectId": "casualJogging",
         "label": "結伴慢跑中",
-        "durationMs": 18000
+        "durationMs": 60000
+      },
+      {
+        "phase": "active",
+        "type": "roll",
+        "participantCount": {
+          "min": 2
+        },
+        "rollId": "joggingRaceStart",
+        "delayMs": 3600
       },
       {
         "phase": "end",
@@ -1610,6 +1612,106 @@
         "target": "both",
         "text": "呼……今天先跑到這裡。",
         "durationMs": 2200
+      }
+    ]
+  },
+  {
+    "id": "life.jogging.steadyPace",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "both",
+        "expressionBubbleId": "laugh",
+        "durationMs": 2200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "joggingSteadyPace",
+        "label": "保持並肩慢跑",
+        "durationMs": 2200
+      }
+    ]
+  },
+  {
+    "id": "life.jogging.raceStarted",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "both",
+        "expressionBubbleId": "determined",
+        "durationMs": 2200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "joggingRaceStarted",
+        "label": "突然開始競速",
+        "durationMs": 2200
+      }
+    ]
+  },
+  {
+    "id": "life.jogging.finishSteady",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "both",
+        "expressionBubbleId": "laugh",
+        "delayMs": 160,
+        "durationMs": 2600
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "joggingFinishSteady",
+        "label": "開心抵達終點",
+        "delayMs": 160,
+        "durationMs": 2600
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "今天跑得很舒服。",
+        "delayMs": 400,
+        "durationMs": 2200
+      }
+    ]
+  },
+  {
+    "id": "life.jogging.finishRace",
+    "steps": [
+      {
+        "phase": "active",
+        "type": "expressionBubble",
+        "target": "both",
+        "expressionBubbleId": "sigh",
+        "delayMs": 160,
+        "durationMs": 2800
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "joggingFinishRace",
+        "label": "喘著抵達終點",
+        "delayMs": 160,
+        "durationMs": 2800
+      },
+      {
+        "phase": "active",
+        "type": "bubble",
+        "target": "both",
+        "text": "呼……剛剛是不是跑太快了？",
+        "delayMs": 400,
+        "durationMs": 2400
       }
     ]
   },

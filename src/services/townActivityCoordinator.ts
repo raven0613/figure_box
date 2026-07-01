@@ -34,6 +34,7 @@ import { TownActivityRollResolver } from '~/services/townActivities/TownActivity
 import { TownActivityStarter } from '~/services/townActivities/TownActivityStarter';
 import { TownActivityTimeoutController } from '~/services/townActivities/TownActivityTimeoutController';
 import { EventType } from '~/stateMachines/gameFlow/events';
+import type { CancelActivityRouteOptions } from '~/services/townMovementCoordinator';
 
 interface TownActivityCoordinatorOptions {
   activityManager: JoinableActivityManager;
@@ -46,6 +47,13 @@ interface TownActivityCoordinatorOptions {
   getRelationshipStatus: (characterId: string, targetCharacterId: string) => SocialStatus;
   getNearbyCharacterIds: (characterId: string, range: number) => string[];
   getTravelTarget: (destination: Position) => Position;
+  startJoggingRoute: (input: {
+    activityId: string;
+    participantIds: readonly string[];
+    location: Position;
+  }) => void;
+  startJoggingRace: (activityId: string) => void;
+  cancelActivityRoute: (activityId: string, options?: CancelActivityRouteOptions) => void;
   actorHasItem: (characterId: string, itemId: string) => boolean;
   sendToCharacter: SendCharacterEvent;
   showCharacterBubble: (characterId: string, text: string, durationMs?: number) => void;
@@ -61,6 +69,8 @@ export interface InteractionCardActivityInput {
 
 const DEFAULT_ACTIVITY_RESPONSE_DELAY_MS = 1200;
 const DEFAULT_ACTIVITY_END_DURATION_MS = 1000;
+const JOGGING_FINISH_ROLL_ID = 'joggingFinish';
+const GROUP_ACTIVITY_MIN_PARTICIPANT_COUNT = 2;
 
 // joinable activity 加入、查找、過期清理
 export class TownActivityCoordinator {
@@ -173,6 +183,9 @@ export class TownActivityCoordinator {
       clearRollSelectionsForActivity: activityId => {
         this.rollResolver.deleteSelectionsForActivity(activityId);
       },
+      startJoggingRoute: options.startJoggingRoute,
+      startJoggingRace: options.startJoggingRace,
+      cancelActivityRoute: options.cancelActivityRoute,
       notifyActivitiesChanged: this.notifyActivitiesChanged,
       activityEndDurationMs: DEFAULT_ACTIVITY_END_DURATION_MS,
     });
@@ -384,6 +397,37 @@ export class TownActivityCoordinator {
 
   resolveActivityRoll(request: CharacterPerformanceActivityRollRequest): string | null {
     return this.rollResolver.resolveActivityRoll(request);
+  }
+
+  handleJoggingRouteCompleted(activityId: string): void {
+    const activity = this.activityManager.getActivity(activityId);
+
+    if (!activity || activity.phase !== 'active') {
+      return;
+    }
+
+    if (activity.participantIds.length >= GROUP_ACTIVITY_MIN_PARTICIPANT_COUNT) {
+      const selectedBranchId = this.resolveActivityRoll({
+        activityId: activity.id,
+        rollId: JOGGING_FINISH_ROLL_ID,
+        participantIds: activity.participantIds,
+        hostCharacterIds: activity.hostCharacterIds,
+      });
+
+      if (selectedBranchId) {
+        return;
+      }
+    }
+
+    const endedActivity = this.activityManager.endActivity(activity.id);
+
+    if (!endedActivity) {
+      return;
+    }
+
+    this.playActivityEndPerformance(endedActivity, Date.now());
+    this.joinTravelFlow.deleteArrivalsForActivity(activity.id);
+    this.notifyActivitiesChanged();
   }
 
   createActivityDialogueRequest(

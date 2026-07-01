@@ -1691,7 +1691,7 @@
             "maxParticipants": 2
           },
           "joinable": true,
-          "durationMs": 18000,
+          "durationMs": 60000,
           "refreshDurationOnJoin": false,
           "joinWindowMs": 10000,
           "cooldowns": {
@@ -1710,6 +1710,121 @@
             "moodValueDelta": 30,
             "playNeedDelta": -45
           },
+          "rolls": [
+            {
+              "id": "joggingRaceStart",
+              "branches": [
+                {
+                  "id": "steadyPace",
+                  "baseWeight": 70,
+                  "performanceId": "life.jogging.steadyPace",
+                  "weightModifiers": [
+                    {
+                      "path": "initiator.personality.activityPace",
+                      "operator": "<=",
+                      "value": 2,
+                      "add": 10
+                    },
+                    {
+                      "path": "target.personality.activityPace",
+                      "operator": "<=",
+                      "value": 2,
+                      "add": 10
+                    },
+                    {
+                      "path": "initiator.relationshipToTarget.feeling",
+                      "operator": "in",
+                      "value": ["warm", "like", "fond", "secret_crush", "open_crush", "love"],
+                      "add": 10
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.feeling",
+                      "operator": "in",
+                      "value": ["warm", "like", "fond", "secret_crush", "open_crush", "love"],
+                      "add": 10
+                    }
+                  ]
+                },
+                {
+                  "id": "raceStarted",
+                  "baseWeight": 30,
+                  "performanceId": "life.jogging.raceStarted",
+                  "weightModifiers": [
+                    {
+                      "path": "initiator.personality.activityPace",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 20
+                    },
+                    {
+                      "path": "target.personality.activityPace",
+                      "operator": ">=",
+                      "value": 4,
+                      "add": 20
+                    },
+                    {
+                      "path": "initiator.relationshipToTarget.socialStatus",
+                      "operator": "in",
+                      "value": ["lovers", "married"],
+                      "add": 10
+                    },
+                    {
+                      "path": "target.relationshipToInitiator.socialStatus",
+                      "operator": "in",
+                      "value": ["lovers", "married"],
+                      "add": 10
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "joggingFinish",
+              "resolvesActivity": true,
+              "branches": [
+                {
+                  "id": "steadyFinish",
+                  "baseWeight": 10,
+                  "conditions": [
+                    {
+                      "path": "activity.rolls.joggingRaceStart.selectedBranchId",
+                      "operator": "==",
+                      "value": "steadyPace"
+                    }
+                  ],
+                  "performanceId": "life.jogging.finishSteady",
+                  "effects": {
+                    "moodValueDelta": 30,
+                    "playNeedDelta": -45
+                  },
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 並肩慢跑到終點。",
+                    "detail": "穩定的步伐讓兩人都開心了起來。"
+                  }
+                },
+                {
+                  "id": "raceFinish",
+                  "baseWeight": 10,
+                  "conditions": [
+                    {
+                      "path": "activity.rolls.joggingRaceStart.selectedBranchId",
+                      "operator": "==",
+                      "value": "raceStarted"
+                    }
+                  ],
+                  "performanceId": "life.jogging.finishRace",
+                  "effects": {
+                    "moodValueDelta": 30,
+                    "playNeedDelta": -45
+                  },
+                  "offlineRecap": {
+                    "summary": "{participantNameList} 慢跑途中突然競速，最後一起喘著抵達終點。",
+                    "detail": "一前一後交錯追趕，讓這趟慢跑變得格外刺激。"
+                  }
+                }
+              ]
+            }
+          ],
           "joinRequirements": {
             "type": "none"
           }

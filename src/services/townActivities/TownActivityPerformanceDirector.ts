@@ -16,6 +16,7 @@ import type {
   JoinableActivityManager,
 } from '~/services/characterEvents/joinableActivities';
 import type { TownActivityDialogueSubjects } from '~/services/townActivities/TownActivityDialogueSubjects';
+import type { CancelActivityRouteOptions } from '~/services/townMovementCoordinator';
 
 interface TownActivityPerformanceDirectorOptions {
   activityManager: JoinableActivityManager;
@@ -33,11 +34,22 @@ interface TownActivityPerformanceDirectorOptions {
   markActivityEnding: (activityId: string) => void;
   unmarkActivityEnding: (activityId: string) => void;
   clearRollSelectionsForActivity: (activityId: string) => void;
+  startJoggingRoute: (input: {
+    activityId: string;
+    participantIds: readonly string[];
+    location: NonNullable<JoinableActivity['location']>;
+  }) => void;
+  startJoggingRace: (activityId: string) => void;
+  cancelActivityRoute: (activityId: string, options?: CancelActivityRouteOptions) => void;
   notifyActivitiesChanged: () => void;
   activityEndDurationMs: number;
 }
 
 const PARTICIPANT_LEFT_RECOVERY_DELAY_MS = 5000;
+const JOGGING_ACTIVITY_KEY = 'life.jogging';
+const JOGGING_RACE_STARTED_BRANCH_ID = 'raceStarted';
+const MIN_JOGGING_ROUTE_PARTICIPANT_COUNT = 1;
+const MAX_JOGGING_ROUTE_PARTICIPANT_COUNT = 2;
 
 export class TownActivityPerformanceDirector {
   private readonly activityManager: JoinableActivityManager;
@@ -67,6 +79,9 @@ export class TownActivityPerformanceDirector {
   private readonly markActivityEnding: (activityId: string) => void;
   private readonly unmarkActivityEnding: (activityId: string) => void;
   private readonly clearRollSelectionsForActivity: (activityId: string) => void;
+  private readonly startJoggingRoute: TownActivityPerformanceDirectorOptions['startJoggingRoute'];
+  private readonly startJoggingRace: TownActivityPerformanceDirectorOptions['startJoggingRace'];
+  private readonly cancelActivityRoute: TownActivityPerformanceDirectorOptions['cancelActivityRoute'];
   private readonly notifyActivitiesChanged: () => void;
   private readonly activityEndDurationMs: number;
 
@@ -84,6 +99,9 @@ export class TownActivityPerformanceDirector {
     this.markActivityEnding = options.markActivityEnding;
     this.unmarkActivityEnding = options.unmarkActivityEnding;
     this.clearRollSelectionsForActivity = options.clearRollSelectionsForActivity;
+    this.startJoggingRoute = options.startJoggingRoute;
+    this.startJoggingRace = options.startJoggingRace;
+    this.cancelActivityRoute = options.cancelActivityRoute;
     this.notifyActivitiesChanged = options.notifyActivitiesChanged;
     this.activityEndDurationMs = options.activityEndDurationMs;
   }
@@ -102,12 +120,15 @@ export class TownActivityPerformanceDirector {
       participantIds: activity.participantIds,
       hostCharacterIds: activity.hostCharacterIds,
     });
+    this.startRoutePerformance(activity);
   }
 
   playActivityRollBranchPerformance(
     activity: JoinableActivity,
     branch: CharacterEventActivityRollBranch,
   ): number {
+    this.startRouteRollBranchPerformance(activity, branch);
+
     if (!branch.performanceId) {
       return 0;
     }
@@ -144,6 +165,13 @@ export class TownActivityPerformanceDirector {
       activity.participantIds,
       activity.hostCharacterIds,
     );
+    this.cancelActivityRoute(activity.id, {
+      forgetCompleted: true,
+      keepPairFinishFormation: (
+        activity.activityKey === JOGGING_ACTIVITY_KEY &&
+        activity.participantIds.length === MAX_JOGGING_ROUTE_PARTICIPANT_COUNT
+      ),
+    });
     this.activityManager.endActivity(activity.id);
 
     const durationMs = this.playActivityRollBranchPerformance(activity, branch);
@@ -151,6 +179,7 @@ export class TownActivityPerformanceDirector {
 
     this.notifyActivitiesChanged();
     this.scheduleActivityTimeout(activity.id, () => {
+      this.cancelActivityRoute(activity.id);
       this.performanceRunner.clearActivitySettlementVisuals(
         this.getActivityPerformanceSelection(activity),
         activity.id,
@@ -179,6 +208,7 @@ export class TownActivityPerformanceDirector {
   }
 
   clearActivityVisuals(activity: JoinableActivity): void {
+    this.cancelActivityRoute(activity.id);
     this.performanceRunner.clearActivityVisuals(
       this.getActivityPerformanceSelection(activity),
       activity.id,
@@ -189,6 +219,7 @@ export class TownActivityPerformanceDirector {
 
   playActivityEndPerformance(activity: JoinableActivity, timestamp: number): void {
     this.markActivityEnding(activity.id);
+    this.cancelActivityRoute(activity.id, { forgetCompleted: true });
     this.performanceRunner.cancelActivityPerformance(activity.id);
     this.performanceRunner.clearActivityActiveVisuals(
       this.getActivityPerformanceSelection(activity),
@@ -234,6 +265,10 @@ export class TownActivityPerformanceDirector {
     activity: JoinableActivity,
     previousParticipantCount: number,
   ): void {
+    if (previousParticipantCount > activity.participantIds.length) {
+      this.cancelActivityRoute(activity.id);
+    }
+
     const phase = previousParticipantCount > 1
       ? 'participantLeftGroup'
       : 'participantLeftSolo';
@@ -274,5 +309,34 @@ export class TownActivityPerformanceDirector {
 
       this.playActivityPerformance(currentActivity);
     }, PARTICIPANT_LEFT_RECOVERY_DELAY_MS);
+  }
+
+  private startRoutePerformance(activity: JoinableActivity): void {
+    if (
+      activity.activityKey !== JOGGING_ACTIVITY_KEY ||
+      activity.participantIds.length < MIN_JOGGING_ROUTE_PARTICIPANT_COUNT ||
+      activity.participantIds.length > MAX_JOGGING_ROUTE_PARTICIPANT_COUNT ||
+      !activity.location
+    ) {
+      return;
+    }
+
+    this.startJoggingRoute({
+      activityId: activity.id,
+      participantIds: activity.participantIds,
+      location: activity.location,
+    });
+  }
+
+  private startRouteRollBranchPerformance(
+    activity: JoinableActivity,
+    branch: CharacterEventActivityRollBranch,
+  ): void {
+    if (
+      activity.activityKey === JOGGING_ACTIVITY_KEY &&
+      branch.id === JOGGING_RACE_STARTED_BRANCH_ID
+    ) {
+      this.startJoggingRace(activity.id);
+    }
   }
 }

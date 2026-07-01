@@ -31,6 +31,8 @@ interface TownMapWalkAnimatorOptions {
 }
 
 const MAX_WALK_FRAME_DELTA_MS = 50;
+const DEFAULT_WALK_SPEED_MULTIPLIER = 1;
+const MIN_WALK_SPEED_MULTIPLIER = 0.1;
 
 // 走路狀態與步進動畫
 export class TownMapWalkAnimator {
@@ -45,6 +47,7 @@ export class TownMapWalkAnimator {
   private readonly setCharacterDirection: (characterId: string, direction: TownMapCharacterSpriteDirection) => void;
   private readonly onWalkStopped: (characterId: string) => void;
   private readonly walkers = new Map<string, WalkState>();
+  private readonly speedMultipliersByCharacterId = new Map<string, number>();
   private isPaused = false;
 
   constructor(options: TownMapWalkAnimatorOptions) {
@@ -62,6 +65,7 @@ export class TownMapWalkAnimator {
 
   dispose(): void {
     this.walkers.clear();
+    this.speedMultipliersByCharacterId.clear();
   }
 
   hasActiveAnimations(): boolean {
@@ -70,6 +74,26 @@ export class TownMapWalkAnimator {
 
   isWalking(characterId: string): boolean {
     return this.walkers.has(characterId);
+  }
+
+  setSpeedMultiplier(characterId: string, multiplier: number): void {
+    const normalizedMultiplier = Math.max(MIN_WALK_SPEED_MULTIPLIER, multiplier);
+
+    if (normalizedMultiplier === DEFAULT_WALK_SPEED_MULTIPLIER) {
+      this.speedMultipliersByCharacterId.delete(characterId);
+    } else {
+      this.speedMultipliersByCharacterId.set(characterId, normalizedMultiplier);
+    }
+
+    const walker = this.walkers.get(characterId);
+
+    if (walker) {
+      walker.speed = this.getWalkSpeed(characterId);
+    }
+  }
+
+  clearSpeedMultiplier(characterId: string): void {
+    this.setSpeedMultiplier(characterId, DEFAULT_WALK_SPEED_MULTIPLIER);
   }
 
   setPaused(isPaused: boolean): void {
@@ -206,13 +230,20 @@ export class TownMapWalkAnimator {
       currentSegment: 0,
       segmentProgress: 0,
       lastTimestamp: null,
-      speed: this.cellSize / 300,
+      speed: this.getWalkSpeed(characterId),
       path,
       characterId,
       onArrive,
       onBlocked,
       pausedUntil: null,
     };
+  }
+
+  private getWalkSpeed(characterId: string): number {
+    const speedMultiplier = this.speedMultipliersByCharacterId.get(characterId)
+      ?? DEFAULT_WALK_SPEED_MULTIPLIER;
+
+    return (this.cellSize / 300) * speedMultiplier;
   }
 
   private advanceWalker(walker: WalkState, timestamp: number): 'continue' | 'done' {
