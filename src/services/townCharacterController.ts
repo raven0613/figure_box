@@ -426,6 +426,9 @@ export class TownCharacterController {
       startJoggingRoute: input => {
         this.movementCoordinator.startJoggingRoute(input);
       },
+      startStrollTogetherRoute: input => {
+        this.movementCoordinator.startStrollTogetherRoute(input);
+      },
       startJoggingRace: activityId => {
         this.movementCoordinator.startJoggingRace(activityId);
       },
@@ -504,6 +507,9 @@ export class TownCharacterController {
         this.apartmentCoordinator.maybeLeaveApartment(characterId)
       ),
       getNearbyCharacterIds: (characterId, range) => this.spatialQueries.getNearbyCharacterIds(characterId, range),
+      getNearbyCharacterDistances: (characterId, nearbyCharacterIds) => (
+        this.spatialQueries.getNearbyCharacterDistances(characterId, nearbyCharacterIds)
+      ),
       getNearbyVisibleItems: (characterId, radius) => this.spatialQueries.getNearbyVisibleItems(characterId, radius),
       getNearbyObservableObjects: (characterId, radius) => (
         this.spatialQueries.getNearbyObservableObjects(characterId, radius)

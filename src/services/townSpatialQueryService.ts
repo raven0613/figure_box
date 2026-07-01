@@ -63,6 +63,31 @@ export class TownSpatialQueryService {
     return { x: tile.x, y: tile.y };
   }
 
+  getNearbyCharacterDistances(
+    characterId: string,
+    nearbyCharacterIds: readonly string[],
+  ): Record<string, number> {
+    const position = this.getCharacterPosition(characterId);
+
+    if (!position) {
+      return {};
+    }
+
+    return nearbyCharacterIds.reduce<Record<string, number>>(
+      (distances, nearbyCharacterId) => {
+        const nearbyPosition = this.getCharacterPosition(nearbyCharacterId);
+
+        return nearbyPosition
+          ? {
+            ...distances,
+            [nearbyCharacterId]: getGridDistance(position, nearbyPosition),
+          }
+          : distances;
+      },
+      {},
+    );
+  }
+
   getNearbyVisibleItems(
     characterId: string,
     radius: number,

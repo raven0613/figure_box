@@ -1559,6 +1559,61 @@
     ]
   },
   {
+    "id": "life.strollTogether",
+    "steps": [
+      {
+        "phase": "proposal",
+        "type": "bubble",
+        "target": "initiator",
+        "text": "要不要一起走一段？",
+        "durationMs": 2200
+      },
+      {
+        "phase": "accepted",
+        "type": "bubble",
+        "target": "target",
+        "text": "好啊，一起走吧。",
+        "durationMs": 2000
+      },
+      {
+        "phase": "rejectedBusy",
+        "type": "bubble",
+        "target": "target",
+        "text": "抱歉，我現在有點忙。",
+        "durationMs": 2200
+      },
+      {
+        "phase": "rejectedMood",
+        "type": "bubble",
+        "target": "target",
+        "text": "我現在想自己待一下。",
+        "durationMs": 2200
+      },
+      {
+        "phase": "active",
+        "type": "mapEffect",
+        "target": "both",
+        "effectId": "strollTogether",
+        "label": "一起散步中",
+        "durationMs": 60000
+      },
+      {
+        "phase": "end",
+        "type": "expressionBubble",
+        "target": "both",
+        "expressionBubbleId": "laugh",
+        "durationMs": 2200
+      },
+      {
+        "phase": "end",
+        "type": "bubble",
+        "target": "both",
+        "text": "一起走走真舒服。",
+        "durationMs": 2200
+      }
+    ]
+  },
+  {
     "id": "life.jogging",
     "steps": [
       {

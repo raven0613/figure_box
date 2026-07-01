@@ -43,6 +43,7 @@ export type CharacterEvent =
   | {
     type: EventType.Tick;
     nearbyCharacterIds?: string[];
+    nearbyCharacterDistances?: Record<string, number>;
     nearbyRelationships?: readonly CharacterEventNearbyRelationship[];
     nearbyJoinableActivities?: readonly JoinableActivity[];
     nearbyVisibleItems?: readonly CharacterEventNearbyVisibleItem[];

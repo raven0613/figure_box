@@ -30,6 +30,7 @@ import {
   getActivityRepeatWeightMultiplier,
   getAvailableActivityTargetIds,
 } from './activityCooldowns';
+import { getDefinitionNearbyCharacterRange } from './nearbyCharacterRange';
 import { getSocialOpportunityWeightMultiplier } from './socialOpportunity';
 
 interface CharacterEventBucket {
@@ -361,12 +362,11 @@ function createDefinitionScopedInput(
   definition: CharacterEventDefinition,
   input: CharacterEventDecisionInput,
 ): CharacterEventDecisionInput {
-  const range = getDefinitionInviteNearbyRange(definition);
-
-  if (range === null || !input.nearbyCharacterDistances) {
+  if (!input.nearbyCharacterDistances) {
     return input;
   }
 
+  const range = getDefinitionNearbyCharacterRange(definition);
   const nearbyCharacterIds = (input.nearbyCharacterIds ?? [])
     .filter(characterId => (input.nearbyCharacterDistances?.[characterId] ?? Number.POSITIVE_INFINITY) <= range);
   const nearbyCharacterIdSet = new Set(nearbyCharacterIds);
@@ -377,16 +377,4 @@ function createDefinitionScopedInput(
     nearbyRelationships: input.nearbyRelationships
       ?.filter(relationship => nearbyCharacterIdSet.has(relationship.characterId)),
   };
-}
-
-function getDefinitionInviteNearbyRange(definition: CharacterEventDefinition): number | null {
-  const ranges = definition.presentationVariants
-    ?.map(variant => variant.activity?.group.inviteNearbyRange)
-    .filter((range): range is number => range !== undefined) ?? [];
-
-  if (ranges.length === 0) {
-    return null;
-  }
-
-  return Math.max(...ranges);
 }

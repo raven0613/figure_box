@@ -1,5 +1,9 @@
 import { getSeedPlayableCharacters } from '~/services/playableCharacterService';
 import type { JoinableActivity } from '~/services/characterEvents/joinableActivities';
+import {
+  DEFAULT_NEARBY_CHARACTER_RANGE,
+  getEventDecisionNearbyCharacterRange,
+} from '~/services/characterEvents/nearbyCharacterRange';
 import type {
   CharacterEventNearbyObservableObject,
   CharacterEventNearbyRelationship,
@@ -23,6 +27,10 @@ interface TownCharacterTickCoordinatorOptions {
   spawnCharacterActor: (character: CharacterSeed) => void;
   maybeLeaveApartment: (characterId: string) => boolean;
   getNearbyCharacterIds: (characterId: string, range: number) => string[];
+  getNearbyCharacterDistances: (
+    characterId: string,
+    nearbyCharacterIds: readonly string[],
+  ) => Record<string, number>;
   getNearbyVisibleItems: (characterId: string, radius: number) => CharacterEventNearbyVisibleItem[];
   getNearbyObservableObjects: (characterId: string, radius: number) => CharacterEventNearbyObservableObject[];
   getNearbyRelationships: (
@@ -44,7 +52,7 @@ const INITIAL_DECISION_STAGGER_MAX_MS = 4500;
 const DECISION_INTERVAL_MIN_MS = 2500;
 const DECISION_INTERVAL_MAX_MS = 5500;
 const ITEM_VISIBILITY_RADIUS = 10;
-const NEARBY_CHARACTER_RANGE = 2;
+const EVENT_DECISION_NEARBY_CHARACTER_RANGE = getEventDecisionNearbyCharacterRange();
 const TICK_INTERVAL_MS = 1000;
 
 export class TownCharacterTickCoordinator {
@@ -55,6 +63,7 @@ export class TownCharacterTickCoordinator {
   private readonly spawnCharacterActor: TownCharacterTickCoordinatorOptions['spawnCharacterActor'];
   private readonly maybeLeaveApartment: TownCharacterTickCoordinatorOptions['maybeLeaveApartment'];
   private readonly getNearbyCharacterIds: TownCharacterTickCoordinatorOptions['getNearbyCharacterIds'];
+  private readonly getNearbyCharacterDistances: TownCharacterTickCoordinatorOptions['getNearbyCharacterDistances'];
   private readonly getNearbyVisibleItems: TownCharacterTickCoordinatorOptions['getNearbyVisibleItems'];
   private readonly getNearbyObservableObjects: TownCharacterTickCoordinatorOptions['getNearbyObservableObjects'];
   private readonly getNearbyRelationships: TownCharacterTickCoordinatorOptions['getNearbyRelationships'];
@@ -77,6 +86,7 @@ export class TownCharacterTickCoordinator {
     this.spawnCharacterActor = options.spawnCharacterActor;
     this.maybeLeaveApartment = options.maybeLeaveApartment;
     this.getNearbyCharacterIds = options.getNearbyCharacterIds;
+    this.getNearbyCharacterDistances = options.getNearbyCharacterDistances;
     this.getNearbyVisibleItems = options.getNearbyVisibleItems;
     this.getNearbyObservableObjects = options.getNearbyObservableObjects;
     this.getNearbyRelationships = options.getNearbyRelationships;
@@ -201,13 +211,21 @@ export class TownCharacterTickCoordinator {
     const allowAutonomousDecision = this.canCharacterDecideNow(characterId, timestamp);
     const didLeaveApartment = allowAutonomousDecision &&
       this.maybeLeaveApartment(characterId);
-    const nearbyCharacterIds = this.getNearbyCharacterIds(characterId, NEARBY_CHARACTER_RANGE);
+    const nearbyCharacterIds = this.getNearbyCharacterIds(
+      characterId,
+      EVENT_DECISION_NEARBY_CHARACTER_RANGE,
+    );
+    const nearbyCharacterDistances = this.getNearbyCharacterDistances(characterId, nearbyCharacterIds);
+    const requestNearbyCharacterIds = nearbyCharacterIds.filter(nearbyCharacterId => (
+      (nearbyCharacterDistances[nearbyCharacterId] ?? Number.POSITIVE_INFINITY) <= DEFAULT_NEARBY_CHARACTER_RANGE
+    ));
     const nearbyVisibleItems = this.getNearbyVisibleItems(characterId, ITEM_VISIBILITY_RADIUS);
     const nearbyObservableObjects = this.getNearbyObservableObjects(characterId, ITEM_VISIBILITY_RADIUS);
 
     this.sendToCharacter(characterId, {
       type: EventType.Tick,
       nearbyCharacterIds,
+      nearbyCharacterDistances,
       nearbyRelationships: this.getNearbyRelationships(characterId, nearbyCharacterIds),
       nearbyJoinableActivities: this.getNearbyJoinableActivities(characterId, timestamp),
       nearbyVisibleItems,
@@ -216,7 +234,7 @@ export class TownCharacterTickCoordinator {
       timestamp,
       allowAutonomousDecision: allowAutonomousDecision && !didLeaveApartment,
     });
-    this.tickCharacterRequest(characterId, nearbyCharacterIds, timestamp);
+    this.tickCharacterRequest(characterId, requestNearbyCharacterIds, timestamp);
   }
 
   private tickCharacterRequest(

@@ -1,8 +1,14 @@
 import type { Position } from '~/constants/character';
 import { CHARACTER_BEHAVIOR_DEFINITIONS_BY_ID } from '~/constants/characterBehaviorDefinitions';
 import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
-import { TOWN_APARTMENT_ENTRANCE_TILES, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
+import {
+  TOWN_APARTMENT_ENTRANCE_TILES,
+  TOWN_APARTMENT_SPACE_ID,
+  TOWN_MAP_HEIGHT,
+  TOWN_MAP_WIDTH,
+} from '~/constants/townMap';
 import { resolveJoggingRouteWaypoints } from '~/services/townActivities/joggingRoutePlanner';
+import { sampleWithoutReplacement } from '~/services/townActivities/townActivityRules';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
@@ -17,6 +23,12 @@ interface TownMovementCoordinatorOptions {
 }
 
 export interface JoggingRouteInput {
+  activityId: string;
+  participantIds: readonly string[];
+  location: Position;
+}
+
+export interface StrollTogetherRouteInput {
   activityId: string;
   participantIds: readonly string[];
   location: Position;
@@ -63,6 +75,8 @@ const SIDE_BY_SIDE_VERTICAL_OFFSET_CELLS = 0.5;
 const JOGGING_FINISH_X_OFFSET_CELLS = 0.5;
 const JOGGING_FINISH_Y_OFFSET_CELLS = 0.35;
 const ACTIVITY_ROUTE_OFFSET_TRANSITION_MS = 0;
+const STROLL_TOGETHER_MIN_ROUTE_DISTANCE_CELLS = 8;
+const STROLL_TOGETHER_MAX_ROUTE_DISTANCE_CELLS = 18;
 const JOGGING_RACE_FAST_SPEED_MULTIPLIER = 1.3;
 const JOGGING_RACE_SLOW_SPEED_MULTIPLIER = 0.8;
 const JOGGING_RACE_FIRST_SWAP_DELAY_MS = 1200;
@@ -131,6 +145,21 @@ export class TownMovementCoordinator {
       formation: input.participantIds.length === MAX_ACTIVITY_ROUTE_PARTICIPANT_COUNT
         ? 'sideBySide'
         : undefined,
+    });
+  }
+
+  startStrollTogetherRoute(input: StrollTogetherRouteInput): void {
+    const destination = this.selectStrollTogetherRouteDestination(input.location);
+
+    if (!destination) {
+      return;
+    }
+
+    this.startActivityRoute({
+      activityId: input.activityId,
+      participantIds: input.participantIds,
+      waypoints: [{ ...input.location }, destination],
+      formation: 'sideBySide',
     });
   }
 
@@ -563,6 +592,38 @@ export class TownMovementCoordinator {
         );
       }
     });
+  }
+
+  private selectStrollTogetherRouteDestination(location: Position): Position | null {
+    const destinationCandidates = this.getStrollTogetherRouteDestinationCandidates(location);
+    const candidates = sampleWithoutReplacement(destinationCandidates, destinationCandidates.length);
+
+    return candidates.find(candidate => this.widget.findPath(location, candidate) !== null) ?? null;
+  }
+
+  private getStrollTogetherRouteDestinationCandidates(location: Position): Position[] {
+    const minX = Math.max(0, location.x - STROLL_TOGETHER_MAX_ROUTE_DISTANCE_CELLS);
+    const maxX = Math.min(TOWN_MAP_WIDTH - 1, location.x + STROLL_TOGETHER_MAX_ROUTE_DISTANCE_CELLS);
+    const minY = Math.max(0, location.y - STROLL_TOGETHER_MAX_ROUTE_DISTANCE_CELLS);
+    const maxY = Math.min(TOWN_MAP_HEIGHT - 1, location.y + STROLL_TOGETHER_MAX_ROUTE_DISTANCE_CELLS);
+    const candidates: Position[] = [];
+
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const candidate = { x, y };
+        const distance = Math.abs(candidate.x - location.x) + Math.abs(candidate.y - location.y);
+
+        if (
+          distance >= STROLL_TOGETHER_MIN_ROUTE_DISTANCE_CELLS &&
+          distance <= STROLL_TOGETHER_MAX_ROUTE_DISTANCE_CELLS &&
+          this.isWalkablePosition(candidate)
+        ) {
+          candidates.push(candidate);
+        }
+      }
+    }
+
+    return candidates;
   }
 
   private scheduleJoggingRaceLeaderSwap(

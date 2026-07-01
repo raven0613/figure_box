@@ -13,6 +13,11 @@ import {
 } from '~/services/townActivities/townActivityRules';
 
 const JOGGING_ACTIVITY_KEY = 'life.jogging';
+const STROLL_TOGETHER_ACTIVITY_KEY = 'life.stroll-together';
+const ACTIVE_ROUTE_ACTIVITY_KEYS = new Set([
+  JOGGING_ACTIVITY_KEY,
+  STROLL_TOGETHER_ACTIVITY_KEY,
+]);
 
 interface TownActivityJoinGatewayOptions {
   activityManager: JoinableActivityManager;
@@ -72,7 +77,7 @@ export class TownActivityJoinGateway {
       return false;
     }
 
-    if (activity.activityKey === JOGGING_ACTIVITY_KEY && activity.phase === 'active') {
+    if (ACTIVE_ROUTE_ACTIVITY_KEYS.has(activity.activityKey) && activity.phase === 'active') {
       return false;
     }
 

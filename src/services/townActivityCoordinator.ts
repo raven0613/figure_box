@@ -52,6 +52,11 @@ interface TownActivityCoordinatorOptions {
     participantIds: readonly string[];
     location: Position;
   }) => void;
+  startStrollTogetherRoute: (input: {
+    activityId: string;
+    participantIds: readonly string[];
+    location: Position;
+  }) => void;
   startJoggingRace: (activityId: string) => void;
   finishJoggingRoute: (activityId: string) => void;
   cancelActivityRoute: (activityId: string, options?: CancelActivityRouteOptions) => void;
@@ -186,6 +191,7 @@ export class TownActivityCoordinator {
         this.rollResolver.deleteSelectionsForActivity(activityId);
       },
       startJoggingRoute: options.startJoggingRoute,
+      startStrollTogetherRoute: options.startStrollTogetherRoute,
       startJoggingRace: options.startJoggingRace,
       finishJoggingRoute: options.finishJoggingRoute,
       cancelActivityRoute: options.cancelActivityRoute,

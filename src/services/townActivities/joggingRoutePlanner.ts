@@ -7,10 +7,15 @@ export function resolveJoggingRouteWaypoints(location: Position): Position[] | n
   const routeRows = getUniqueSortedNumbers(joggingTiles.map(tile => tile.y));
   const turnColumn = getFarthestNumber(routeColumns, location.x);
   const turnRow = getFarthestNumber(routeRows, location.y);
+
+  if (turnColumn === null || turnRow === null) {
+    return null;
+  }
+
   const finishColumnCandidates = routeColumns.filter(column => column !== turnColumn);
   const finishColumn = getFarthestNumber(finishColumnCandidates, turnColumn);
 
-  if (turnColumn === null || turnRow === null || finishColumn === null) {
+  if (finishColumn === null) {
     return null;
   }
 

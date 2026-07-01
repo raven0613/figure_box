@@ -39,6 +39,11 @@ interface TownActivityPerformanceDirectorOptions {
     participantIds: readonly string[];
     location: NonNullable<JoinableActivity['location']>;
   }) => void;
+  startStrollTogetherRoute: (input: {
+    activityId: string;
+    participantIds: readonly string[];
+    location: NonNullable<JoinableActivity['location']>;
+  }) => void;
   startJoggingRace: (activityId: string) => void;
   finishJoggingRoute: (activityId: string) => void;
   cancelActivityRoute: (activityId: string, options?: CancelActivityRouteOptions) => void;
@@ -48,9 +53,11 @@ interface TownActivityPerformanceDirectorOptions {
 
 const PARTICIPANT_LEFT_RECOVERY_DELAY_MS = 5000;
 const JOGGING_ACTIVITY_KEY = 'life.jogging';
+const STROLL_TOGETHER_ACTIVITY_KEY = 'life.stroll-together';
 const JOGGING_RACE_STARTED_BRANCH_ID = 'raceStarted';
 const MIN_JOGGING_ROUTE_PARTICIPANT_COUNT = 1;
 const MAX_JOGGING_ROUTE_PARTICIPANT_COUNT = 2;
+const STROLL_TOGETHER_ROUTE_PARTICIPANT_COUNT = 2;
 
 export class TownActivityPerformanceDirector {
   private readonly activityManager: JoinableActivityManager;
@@ -81,6 +88,7 @@ export class TownActivityPerformanceDirector {
   private readonly unmarkActivityEnding: (activityId: string) => void;
   private readonly clearRollSelectionsForActivity: (activityId: string) => void;
   private readonly startJoggingRoute: TownActivityPerformanceDirectorOptions['startJoggingRoute'];
+  private readonly startStrollTogetherRoute: TownActivityPerformanceDirectorOptions['startStrollTogetherRoute'];
   private readonly startJoggingRace: TownActivityPerformanceDirectorOptions['startJoggingRace'];
   private readonly finishJoggingRoute: TownActivityPerformanceDirectorOptions['finishJoggingRoute'];
   private readonly cancelActivityRoute: TownActivityPerformanceDirectorOptions['cancelActivityRoute'];
@@ -102,6 +110,7 @@ export class TownActivityPerformanceDirector {
     this.unmarkActivityEnding = options.unmarkActivityEnding;
     this.clearRollSelectionsForActivity = options.clearRollSelectionsForActivity;
     this.startJoggingRoute = options.startJoggingRoute;
+    this.startStrollTogetherRoute = options.startStrollTogetherRoute;
     this.startJoggingRace = options.startJoggingRace;
     this.finishJoggingRoute = options.finishJoggingRoute;
     this.cancelActivityRoute = options.cancelActivityRoute;
@@ -316,20 +325,33 @@ export class TownActivityPerformanceDirector {
   }
 
   private startRoutePerformance(activity: JoinableActivity): void {
-    if (
-      activity.activityKey !== JOGGING_ACTIVITY_KEY ||
-      activity.participantIds.length < MIN_JOGGING_ROUTE_PARTICIPANT_COUNT ||
-      activity.participantIds.length > MAX_JOGGING_ROUTE_PARTICIPANT_COUNT ||
-      !activity.location
-    ) {
+    if (!activity.location) {
       return;
     }
 
-    this.startJoggingRoute({
-      activityId: activity.id,
-      participantIds: activity.participantIds,
-      location: activity.location,
-    });
+    if (
+      activity.activityKey === JOGGING_ACTIVITY_KEY &&
+      activity.participantIds.length >= MIN_JOGGING_ROUTE_PARTICIPANT_COUNT &&
+      activity.participantIds.length <= MAX_JOGGING_ROUTE_PARTICIPANT_COUNT
+    ) {
+      this.startJoggingRoute({
+        activityId: activity.id,
+        participantIds: activity.participantIds,
+        location: activity.location,
+      });
+      return;
+    }
+
+    if (
+      activity.activityKey === STROLL_TOGETHER_ACTIVITY_KEY &&
+      activity.participantIds.length === STROLL_TOGETHER_ROUTE_PARTICIPANT_COUNT
+    ) {
+      this.startStrollTogetherRoute({
+        activityId: activity.id,
+        participantIds: activity.participantIds,
+        location: activity.location,
+      });
+    }
   }
 
   private startRouteRollBranchPerformance(

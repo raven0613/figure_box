@@ -770,6 +770,113 @@
     ]
   },
   {
+    "id": "environment.nearbyCharacter.strollTogether",
+    "bucketId": "environment",
+    "motivation": "idle",
+    "characterEvent": {
+      "type": "startActivity"
+    },
+    "baseWeight": 12,
+    "weightSource": "idle",
+    "maxWeight": 55,
+    "interruptPolicy": "soft",
+    "commitment": 12,
+    "requiresNearbyCharacter": true,
+    "conditions": [
+      {
+        "path": "input.nearbyCharacterCount",
+        "operator": ">",
+        "value": 0
+      }
+    ],
+    "weightModifiers": [
+      {
+        "path": "character.personality.socialTendency",
+        "operator": "<=",
+        "value": 1,
+        "multiplier": 0.65
+      },
+      {
+        "path": "character.personality.socialTendency",
+        "operator": ">=",
+        "value": 4,
+        "multiplier": 1.25
+      }
+    ],
+    "acceptance": {
+      "minMoodValue": 12,
+      "allowedMoods": ["peaceful", "relaxed", "happy", "ecstatic"],
+      "relationships": [
+        {
+          "minIntimacy": -10,
+          "allowedFeelings": ["neutral", "warm", "like", "fond", "secret_crush", "open_crush", "love"],
+          "allowedSocialStatuses": ["stranger", "acquaintance", "friendly", "friend", "close_friend", "best_friend", "lovers", "married"]
+        }
+      ],
+      "baseChance": 0.72,
+      "fallbackChance": 0.68,
+      "weightModifiers": [
+        {
+          "path": "character.personality.socialTendency",
+          "operator": "<=",
+          "value": 1,
+          "multiplier": 0.7
+        },
+        {
+          "path": "character.personality.socialTendency",
+          "operator": ">=",
+          "value": 4,
+          "multiplier": 1.2
+        }
+      ]
+    },
+    "presentationVariants": [
+      {
+        "id": "stroll_together.casual",
+        "baseWeight": 10,
+        "presentationTags": ["motion.walk", "expressionBubble.relaxed"],
+        "performanceId": "life.strollTogether",
+        "offlineRecap": {
+          "summary": "{participantNameList} 一起散了一段步。",
+          "detail": "兩人放慢腳步，並肩走過鎮上的街道。"
+        },
+        "activity": {
+          "key": "life.stroll-together",
+          "type": "playAtLocation",
+          "startPhase": "traveling",
+          "group": {
+            "inviteNearbyRange": 3,
+            "minParticipants": 2,
+            "maxParticipants": 2
+          },
+          "joinable": true,
+          "durationMs": 60000,
+          "refreshDurationOnJoin": false,
+          "joinWindowMs": 10000,
+          "cooldowns": {
+            "commonMs": 12000,
+            "selfMs": 18000,
+            "targetMs": 10000,
+            "pairMs": 30000,
+            "category": "quiet_stroll",
+            "repeatPenalty": {
+              "windowMs": 150000,
+              "weightMultiplierPerRepeat": 0.5,
+              "maxRepeats": 3
+            }
+          },
+          "effects": {
+            "relationshipIntimacyDelta": 1,
+            "moodValueDelta": 15
+          },
+          "joinRequirements": {
+            "type": "none"
+          }
+        }
+      }
+    ]
+  },
+  {
     "id": "environment.nearbyCharacter.play",
     "bucketId": "environment",
     "motivation": "play",

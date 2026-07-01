@@ -17,6 +17,7 @@ import {
   getAvailableActivityTargetIds,
   isActivityDefinitionCoolingDown,
 } from '~/services/characterEvents/activityCooldowns';
+import { WeightedDecisionSelector } from '~/services/decisionSelector';
 import { getFeelingForIntimacy } from '~/stateMachines/gameFlow/relationships';
 import {
   getItemJoinRequirementScope,
@@ -24,6 +25,9 @@ import {
   getGroupMinParticipants,
   getPostInviteActivityPhase,
 } from './townActivityRules';
+
+const SINGLE_INVITE_BASE_WEIGHT = 1;
+const STROLL_TOGETHER_ACTIVITY_KEY = 'life.stroll-together';
 
 interface TownActivityInviteResolverOptions {
   activityManager: JoinableActivityManager;
@@ -43,6 +47,7 @@ interface TownActivityInviteResolverOptions {
 }
 
 export class TownActivityInviteResolver {
+  private readonly inviteCandidateSelector = new WeightedDecisionSelector();
   private readonly activityManager: JoinableActivityManager;
   private readonly performanceRunner: CharacterPerformanceRunner;
   private readonly getCharacterContext: (characterId: string) => CharacterSnapshot['context'] | null;
@@ -94,12 +99,26 @@ export class TownActivityInviteResolver {
     const availableCandidateIds = eventDefinition && hostContext
       ? getAvailableActivityTargetIds(hostContext, eventDefinition, inviteCandidateIds, Date.now())
       : inviteCandidateIds;
-    const invitedParticipantIds = availableCandidateIds
-      .map((characterId, index) => ({
-        characterId,
-        index,
-        score: this.getInviteSocialOpportunityScore(hostContext, hostCharacterId, characterId),
-      }))
+    const inviteCandidates = availableCandidateIds.map((characterId, index) => ({
+      characterId,
+      index,
+      score: this.getInviteSocialOpportunityScore(hostContext, hostCharacterId, characterId),
+    }));
+
+    if (activityDefinition.key === STROLL_TOGETHER_ACTIVITY_KEY && maxParticipants === 2) {
+      const selectedCandidate = this.inviteCandidateSelector.select(
+        inviteCandidates.map(candidate => ({
+          item: candidate,
+          weight: SINGLE_INVITE_BASE_WEIGHT + candidate.score,
+        })),
+      );
+
+      return selectedCandidate
+        ? [hostCharacterId, selectedCandidate.characterId]
+        : [hostCharacterId];
+    }
+
+    const invitedParticipantIds = inviteCandidates
       .sort((left, right) => (
         right.score - left.score || left.index - right.index
       ))

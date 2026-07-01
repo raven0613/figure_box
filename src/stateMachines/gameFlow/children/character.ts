@@ -691,6 +691,7 @@ export const characterMachine = createMachine(
 
                 const decision = decideCharacterEvent(context, {
                     nearbyCharacterIds: event.nearbyCharacterIds,
+                    nearbyCharacterDistances: event.nearbyCharacterDistances,
                     nearbyRelationships: event.nearbyRelationships,
                     nearbyJoinableActivities: event.nearbyJoinableActivities,
                     nearbyVisibleItems: event.nearbyVisibleItems,
