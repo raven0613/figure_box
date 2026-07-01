@@ -40,6 +40,7 @@ interface TownActivityPerformanceDirectorOptions {
     location: NonNullable<JoinableActivity['location']>;
   }) => void;
   startJoggingRace: (activityId: string) => void;
+  finishJoggingRoute: (activityId: string) => void;
   cancelActivityRoute: (activityId: string, options?: CancelActivityRouteOptions) => void;
   notifyActivitiesChanged: () => void;
   activityEndDurationMs: number;
@@ -81,6 +82,7 @@ export class TownActivityPerformanceDirector {
   private readonly clearRollSelectionsForActivity: (activityId: string) => void;
   private readonly startJoggingRoute: TownActivityPerformanceDirectorOptions['startJoggingRoute'];
   private readonly startJoggingRace: TownActivityPerformanceDirectorOptions['startJoggingRace'];
+  private readonly finishJoggingRoute: TownActivityPerformanceDirectorOptions['finishJoggingRoute'];
   private readonly cancelActivityRoute: TownActivityPerformanceDirectorOptions['cancelActivityRoute'];
   private readonly notifyActivitiesChanged: () => void;
   private readonly activityEndDurationMs: number;
@@ -101,6 +103,7 @@ export class TownActivityPerformanceDirector {
     this.clearRollSelectionsForActivity = options.clearRollSelectionsForActivity;
     this.startJoggingRoute = options.startJoggingRoute;
     this.startJoggingRace = options.startJoggingRace;
+    this.finishJoggingRoute = options.finishJoggingRoute;
     this.cancelActivityRoute = options.cancelActivityRoute;
     this.notifyActivitiesChanged = options.notifyActivitiesChanged;
     this.activityEndDurationMs = options.activityEndDurationMs;
@@ -165,13 +168,14 @@ export class TownActivityPerformanceDirector {
       activity.participantIds,
       activity.hostCharacterIds,
     );
-    this.cancelActivityRoute(activity.id, {
-      forgetCompleted: true,
-      keepPairFinishFormation: (
-        activity.activityKey === JOGGING_ACTIVITY_KEY &&
-        activity.participantIds.length === MAX_JOGGING_ROUTE_PARTICIPANT_COUNT
-      ),
-    });
+    if (
+      activity.activityKey === JOGGING_ACTIVITY_KEY &&
+      activity.participantIds.length === MAX_JOGGING_ROUTE_PARTICIPANT_COUNT
+    ) {
+      this.finishJoggingRoute(activity.id);
+    } else {
+      this.cancelActivityRoute(activity.id, { forgetCompleted: true });
+    }
     this.activityManager.endActivity(activity.id);
 
     const durationMs = this.playActivityRollBranchPerformance(activity, branch);

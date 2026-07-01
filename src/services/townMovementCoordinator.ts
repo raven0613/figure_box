@@ -1,7 +1,8 @@
 import type { Position } from '~/constants/character';
 import { CHARACTER_BEHAVIOR_DEFINITIONS_BY_ID } from '~/constants/characterBehaviorDefinitions';
 import { DEFAULT_EXPRESSION_PRESET_ID } from '~/constants/expressionCatalog';
-import { DESTINATION_MAP, TOWN_APARTMENT_ENTRANCE_TILES, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
+import { TOWN_APARTMENT_ENTRANCE_TILES, TOWN_APARTMENT_SPACE_ID } from '~/constants/townMap';
+import { resolveJoggingRouteWaypoints } from '~/services/townActivities/joggingRoutePlanner';
 import { getCharacterStateSummary } from '~/stateMachines/gameFlow/children/character';
 import { EventType } from '~/stateMachines/gameFlow/events';
 import type { CharacterSnapshot, SendCharacterEvent } from '~/services/townCharacterTypes';
@@ -21,9 +22,17 @@ export interface JoggingRouteInput {
   location: Position;
 }
 
+export type ActivityRouteFormation = 'sideBySide';
+
+export interface ActivityRouteInput {
+  activityId: string;
+  participantIds: readonly string[];
+  waypoints: readonly Position[];
+  formation?: ActivityRouteFormation;
+}
+
 export interface CancelActivityRouteOptions {
   forgetCompleted?: boolean;
-  keepPairFinishFormation?: boolean;
 }
 
 interface ActivityRouteWalk {
@@ -32,25 +41,28 @@ interface ActivityRouteWalk {
   waypoints: readonly Position[];
   nextWaypointIndex: number;
   pendingCharacterIds: Set<string>;
-  isRaceStarted: boolean;
-  raceLeaderIndex: number;
+  formation?: ActivityRouteFormation;
+}
+
+interface JoggingRaceState {
+  characterIds: readonly string[];
+  leaderIndex: number;
   raceSwapTimeoutId: ReturnType<typeof setTimeout> | null;
 }
 
 interface CharacterRoutePlan {
   characterId: string;
-  waypoints: readonly Position[];
   presentationOffsetCells?: Position;
 }
 
-const MIN_JOGGING_ROUTE_PARTICIPANT_COUNT = 1;
-const MAX_JOGGING_ROUTE_PARTICIPANT_COUNT = 2;
-const JOGGING_HORIZONTAL_SIDE_OFFSET_CELLS = 0.32;
-const JOGGING_HORIZONTAL_STAGGER_OFFSET_CELLS = -0.2;
-const JOGGING_VERTICAL_SIDE_OFFSET_CELLS = 0.5;
+const MIN_ACTIVITY_ROUTE_PARTICIPANT_COUNT = 1;
+const MAX_ACTIVITY_ROUTE_PARTICIPANT_COUNT = 2;
+const SIDE_BY_SIDE_HORIZONTAL_OFFSET_CELLS = 0.32;
+const SIDE_BY_SIDE_HORIZONTAL_STAGGER_CELLS = -0.2;
+const SIDE_BY_SIDE_VERTICAL_OFFSET_CELLS = 0.5;
 const JOGGING_FINISH_X_OFFSET_CELLS = 0.5;
 const JOGGING_FINISH_Y_OFFSET_CELLS = 0.35;
-const JOGGING_ROUTE_OFFSET_TRANSITION_MS = 0;
+const ACTIVITY_ROUTE_OFFSET_TRANSITION_MS = 0;
 const JOGGING_RACE_FAST_SPEED_MULTIPLIER = 1.3;
 const JOGGING_RACE_SLOW_SPEED_MULTIPLIER = 0.8;
 const JOGGING_RACE_FIRST_SWAP_DELAY_MS = 1200;
@@ -72,6 +84,7 @@ export class TownMovementCoordinator {
   private readonly activeRouteWalksByActivityId = new Map<string, ActivityRouteWalk>();
   private readonly completedRouteWalkActivityIds = new Set<string>();
   private readonly routePresentationCharacterIdsByActivityId = new Map<string, readonly string[]>();
+  private readonly joggingRaceStatesByActivityId = new Map<string, JoggingRaceState>();
   private isWorldPaused = false;
 
   constructor(options: TownMovementCoordinatorOptions) {
@@ -82,8 +95,10 @@ export class TownMovementCoordinator {
   }
 
   dispose(): void {
+    [...this.joggingRaceStatesByActivityId.keys()].forEach(activityId => {
+      this.stopJoggingRace(activityId);
+    });
     this.activeRouteWalksByActivityId.forEach(routeWalk => {
-      this.stopJoggingRace(routeWalk);
       routeWalk.characterIds.forEach(characterId => this.widget.cancelWalk(characterId));
     });
     this.activeRouteWalksByActivityId.clear();
@@ -103,31 +118,46 @@ export class TownMovementCoordinator {
   }
 
   startJoggingRoute(input: JoggingRouteInput): void {
+    const waypoints = resolveJoggingRouteWaypoints(input.location);
+
+    if (!waypoints) {
+      return;
+    }
+
+    this.startActivityRoute({
+      activityId: input.activityId,
+      participantIds: input.participantIds,
+      waypoints,
+      formation: input.participantIds.length === MAX_ACTIVITY_ROUTE_PARTICIPANT_COUNT
+        ? 'sideBySide'
+        : undefined,
+    });
+  }
+
+  startActivityRoute(input: ActivityRouteInput): void {
     if (
-      input.participantIds.length < MIN_JOGGING_ROUTE_PARTICIPANT_COUNT ||
-      input.participantIds.length > MAX_JOGGING_ROUTE_PARTICIPANT_COUNT ||
+      input.participantIds.length < MIN_ACTIVITY_ROUTE_PARTICIPANT_COUNT ||
+      input.participantIds.length > MAX_ACTIVITY_ROUTE_PARTICIPANT_COUNT ||
+      input.waypoints.length === 0 ||
       this.activeRouteWalksByActivityId.has(input.activityId) ||
       this.completedRouteWalkActivityIds.has(input.activityId)
     ) {
       return;
     }
 
-    const routePlans = this.createJoggingRoutePlans(input);
-    const routeWaypoints = routePlans?.[0]?.waypoints;
+    const routePlans = this.createActivityRoutePlans(input);
 
-    if (!routePlans || !routeWaypoints) {
+    if (!routePlans) {
       return;
     }
 
     const routeWalk: ActivityRouteWalk = {
       activityId: input.activityId,
       characterIds: routePlans.map(plan => plan.characterId),
-      waypoints: routeWaypoints,
+      waypoints: [...input.waypoints],
       nextWaypointIndex: 0,
       pendingCharacterIds: new Set(),
-      isRaceStarted: false,
-      raceLeaderIndex: 0,
-      raceSwapTimeoutId: null,
+      ...(input.formation ? { formation: input.formation } : {}),
     };
 
     this.activeRouteWalksByActivityId.set(input.activityId, routeWalk);
@@ -140,59 +170,47 @@ export class TownMovementCoordinator {
 
     if (
       !routeWalk ||
-      routeWalk.characterIds.length !== MAX_JOGGING_ROUTE_PARTICIPANT_COUNT ||
-      routeWalk.isRaceStarted
+      routeWalk.characterIds.length !== MAX_ACTIVITY_ROUTE_PARTICIPANT_COUNT ||
+      this.joggingRaceStatesByActivityId.has(activityId)
     ) {
       return;
     }
 
-    routeWalk.isRaceStarted = true;
-    routeWalk.raceLeaderIndex = 0;
-    this.applyJoggingRacePaces(routeWalk);
-    this.scheduleJoggingRaceLeaderSwap(routeWalk, JOGGING_RACE_FIRST_SWAP_DELAY_MS);
+    const raceState: JoggingRaceState = {
+      characterIds: routeWalk.characterIds,
+      leaderIndex: 0,
+      raceSwapTimeoutId: null,
+    };
+
+    this.joggingRaceStatesByActivityId.set(activityId, raceState);
+    this.applyJoggingRacePaces(raceState);
+    this.scheduleJoggingRaceLeaderSwap(activityId, raceState, JOGGING_RACE_FIRST_SWAP_DELAY_MS);
   }
 
   cancelActivityRoute(
     activityId: string,
     options: CancelActivityRouteOptions = {},
   ): void {
-    const routeWalk = this.activeRouteWalksByActivityId.get(activityId);
-    const presentationCharacterIds = this.routePresentationCharacterIdsByActivityId.get(activityId);
-
-    if (routeWalk) {
-      this.activeRouteWalksByActivityId.delete(activityId);
-      this.stopJoggingRace(routeWalk);
-      routeWalk.characterIds.forEach(characterId => {
-        const currentTile = this.widget.getCharacterTile(characterId);
-
-        this.widget.cancelWalk(characterId);
-        this.walkingCharacterIds.delete(characterId);
-
-        if (currentTile) {
-          this.sendToCharacter(characterId, {
-            type: EventType.Arrive,
-            position: currentTile,
-          });
-        }
-      });
-    }
-
-    if (
-      options.keepPairFinishFormation &&
-      presentationCharacterIds?.length === MAX_JOGGING_ROUTE_PARTICIPANT_COUNT
-    ) {
-      this.applyJoggingFinishFormation(presentationCharacterIds);
-    } else {
-      presentationCharacterIds?.forEach(characterId => {
-        void this.widget.clearCharacterPresentationOffset(characterId, 0);
-        this.widget.setCharacterTileOverlapOffsetSuppressed(characterId, false);
-      });
-      this.routePresentationCharacterIdsByActivityId.delete(activityId);
-    }
+    this.stopActivityRouteWalk(activityId);
+    this.clearActivityRoutePresentation(activityId);
 
     if (options.forgetCompleted) {
       this.completedRouteWalkActivityIds.delete(activityId);
     }
+  }
+
+  finishJoggingRoute(activityId: string): void {
+    const presentationCharacterIds = this.routePresentationCharacterIdsByActivityId.get(activityId);
+
+    this.stopActivityRouteWalk(activityId);
+    this.completedRouteWalkActivityIds.delete(activityId);
+
+    if (presentationCharacterIds?.length === MAX_ACTIVITY_ROUTE_PARTICIPANT_COUNT) {
+      this.applyJoggingFinishFormation(presentationCharacterIds);
+      return;
+    }
+
+    this.clearActivityRoutePresentation(activityId);
   }
 
   pauseWorld(): void {
@@ -392,72 +410,8 @@ export class TownMovementCoordinator {
     }
   }
 
-  private createJoggingRoutePlans(
-    input: JoggingRouteInput,
-  ): CharacterRoutePlan[] | null {
-    const centerRouteWaypoints = this.resolveJoggingRouteWaypoints(input.location);
-
-    if (!centerRouteWaypoints) {
-      return null;
-    }
-
-    if (input.participantIds.length === 1) {
-      return this.createJoggingRoutePlansFromWaypointSets(
-        input.participantIds,
-        [centerRouteWaypoints],
-      );
-    }
-
-    return this.createVisualSideBySideJoggingRoutePlans(input, centerRouteWaypoints);
-  }
-
-  private createJoggingRoutePlansFromWaypointSets(
-    participantIds: readonly string[],
-    routeWaypointSets: readonly Position[][],
-  ): CharacterRoutePlan[] | null {
-    const routePlans = participantIds.map((characterId, index) => {
-      const currentTile = this.widget.getCharacterTile(characterId);
-      const routeWaypoints = routeWaypointSets[index];
-      const routeStart = routeWaypoints?.[0];
-
-      if (!currentTile || !routeStart) {
-        return null;
-      }
-
-      if (!this.canReachRouteWaypoints(currentTile, routeWaypoints)) {
-        return null;
-      }
-
-      return {
-        characterId,
-        waypoints: routeWaypoints,
-      };
-    });
-
-    const validRoutePlans = routePlans.filter(isCharacterRoutePlan);
-
-    if (validRoutePlans.length !== routePlans.length) {
-      return null;
-    }
-
-    return validRoutePlans;
-  }
-
-  private createVisualSideBySideJoggingRoutePlans(
-    input: JoggingRouteInput,
-    centerRouteWaypoints: readonly Position[],
-  ): CharacterRoutePlan[] | null {
-    const routeStart = centerRouteWaypoints[0];
-    const routeEnd = centerRouteWaypoints[centerRouteWaypoints.length - 1];
-
-    if (!routeStart || !routeEnd) {
-      return null;
-    }
-
-    const presentationOffsets = getSideBySideVisualOffsets(
-      routeStart,
-      centerRouteWaypoints[1] ?? routeEnd,
-    );
+  private createActivityRoutePlans(input: ActivityRouteInput): CharacterRoutePlan[] | null {
+    const formationOffsets = this.getInitialRouteFormationOffsets(input);
     const routePlans = input.participantIds.map((characterId, index) => {
       const currentTile = this.widget.getCharacterTile(characterId);
 
@@ -465,14 +419,15 @@ export class TownMovementCoordinator {
         return null;
       }
 
-      if (!this.canReachRouteWaypoints(currentTile, centerRouteWaypoints)) {
+      if (!this.canReachRouteWaypoints(currentTile, input.waypoints)) {
         return null;
       }
 
+      const presentationOffsetCells = formationOffsets?.[index];
+
       return {
         characterId,
-        waypoints: centerRouteWaypoints,
-        presentationOffsetCells: presentationOffsets[index],
+        ...(presentationOffsetCells ? { presentationOffsetCells } : {}),
       };
     });
     const validRoutePlans = routePlans.filter(isCharacterRoutePlan);
@@ -484,25 +439,22 @@ export class TownMovementCoordinator {
     return validRoutePlans;
   }
 
-  private resolveJoggingRouteWaypoints(location: Position): Position[] | null {
-    const joggingTiles = DESTINATION_MAP.jogging.flatMap(destination => destination.serviceTiles);
-    const routeColumns = getUniqueSortedNumbers(joggingTiles.map(tile => tile.x));
-    const routeRows = getUniqueSortedNumbers(joggingTiles.map(tile => tile.y));
-    const turnColumn = getFarthestNumber(routeColumns, location.x);
-    const turnRow = getFarthestNumber(routeRows, location.y);
-    const finishColumnCandidates = routeColumns.filter(column => column !== turnColumn);
-    const finishColumn = getFarthestNumber(finishColumnCandidates, turnColumn);
-
-    if (turnColumn === null || turnRow === null || finishColumn === null) {
+  private getInitialRouteFormationOffsets(
+    input: ActivityRouteInput,
+  ): [Position, Position] | null {
+    if (
+      input.formation !== 'sideBySide' ||
+      input.participantIds.length !== MAX_ACTIVITY_ROUTE_PARTICIPANT_COUNT
+    ) {
       return null;
     }
 
-    return dedupeConsecutivePositions([
-      { ...location },
-      { x: turnColumn, y: location.y },
-      { x: turnColumn, y: turnRow },
-      { x: finishColumn, y: turnRow },
-    ]);
+    const routeStart = input.waypoints[0];
+    const routeEnd = input.waypoints[1] ?? input.waypoints[input.waypoints.length - 1];
+
+    return routeStart && routeEnd
+      ? getSideBySideVisualOffsets(routeStart, routeEnd)
+      : null;
   }
 
   private canReachRouteWaypoints(
@@ -543,7 +495,7 @@ export class TownMovementCoordinator {
       void this.widget.setCharacterPresentationOffsetInCells(
         plan.characterId,
         plan.presentationOffsetCells,
-        JOGGING_ROUTE_OFFSET_TRANSITION_MS,
+        ACTIVITY_ROUTE_OFFSET_TRANSITION_MS,
       );
     });
   }
@@ -553,7 +505,8 @@ export class TownMovementCoordinator {
     waypointIndex: number,
   ): void {
     if (
-      routeWalk.characterIds.length !== MAX_JOGGING_ROUTE_PARTICIPANT_COUNT ||
+      routeWalk.formation !== 'sideBySide' ||
+      routeWalk.characterIds.length !== MAX_ACTIVITY_ROUTE_PARTICIPANT_COUNT ||
       !this.routePresentationCharacterIdsByActivityId.has(routeWalk.activityId)
     ) {
       return;
@@ -579,17 +532,17 @@ export class TownMovementCoordinator {
         void this.widget.setCharacterPresentationOffsetInCells(
           characterId,
           offset,
-          JOGGING_ROUTE_OFFSET_TRANSITION_MS,
+          ACTIVITY_ROUTE_OFFSET_TRANSITION_MS,
         );
       }
     });
   }
 
-  private applyJoggingRacePaces(routeWalk: ActivityRouteWalk): void {
-    routeWalk.characterIds.forEach((characterId, index) => {
+  private applyJoggingRacePaces(raceState: JoggingRaceState): void {
+    raceState.characterIds.forEach((characterId, index) => {
       this.widget.setCharacterWalkSpeedMultiplier(
         characterId,
-        index === routeWalk.raceLeaderIndex
+        index === raceState.leaderIndex
           ? JOGGING_RACE_FAST_SPEED_MULTIPLIER
           : JOGGING_RACE_SLOW_SPEED_MULTIPLIER,
       );
@@ -606,42 +559,83 @@ export class TownMovementCoordinator {
         void this.widget.setCharacterPresentationOffsetInCells(
           characterId,
           offset,
-          JOGGING_ROUTE_OFFSET_TRANSITION_MS,
+          ACTIVITY_ROUTE_OFFSET_TRANSITION_MS,
         );
       }
     });
   }
 
   private scheduleJoggingRaceLeaderSwap(
-    routeWalk: ActivityRouteWalk,
+    activityId: string,
+    raceState: JoggingRaceState,
     delayMs: number,
   ): void {
-    routeWalk.raceSwapTimeoutId = setTimeout(() => {
-      routeWalk.raceSwapTimeoutId = null;
+    raceState.raceSwapTimeoutId = setTimeout(() => {
+      raceState.raceSwapTimeoutId = null;
 
       if (
-        this.activeRouteWalksByActivityId.get(routeWalk.activityId) !== routeWalk ||
-        !routeWalk.isRaceStarted
+        !this.activeRouteWalksByActivityId.has(activityId) ||
+        this.joggingRaceStatesByActivityId.get(activityId) !== raceState
       ) {
         return;
       }
 
-      routeWalk.raceLeaderIndex = routeWalk.raceLeaderIndex === 0 ? 1 : 0;
-      this.applyJoggingRacePaces(routeWalk);
-      this.scheduleJoggingRaceLeaderSwap(routeWalk, JOGGING_RACE_SWAP_INTERVAL_MS);
+      raceState.leaderIndex = raceState.leaderIndex === 0 ? 1 : 0;
+      this.applyJoggingRacePaces(raceState);
+      this.scheduleJoggingRaceLeaderSwap(activityId, raceState, JOGGING_RACE_SWAP_INTERVAL_MS);
     }, delayMs);
   }
 
-  private stopJoggingRace(routeWalk: ActivityRouteWalk): void {
-    if (routeWalk.raceSwapTimeoutId !== null) {
-      clearTimeout(routeWalk.raceSwapTimeoutId);
-      routeWalk.raceSwapTimeoutId = null;
+  private stopJoggingRace(activityId: string): void {
+    const raceState = this.joggingRaceStatesByActivityId.get(activityId);
+
+    if (!raceState) {
+      return;
     }
 
-    routeWalk.isRaceStarted = false;
-    routeWalk.characterIds.forEach(characterId => {
+    if (raceState.raceSwapTimeoutId !== null) {
+      clearTimeout(raceState.raceSwapTimeoutId);
+    }
+
+    raceState.characterIds.forEach(characterId => {
       this.widget.clearCharacterWalkSpeedMultiplier(characterId);
     });
+    this.joggingRaceStatesByActivityId.delete(activityId);
+  }
+
+  private stopActivityRouteWalk(activityId: string): void {
+    const routeWalk = this.activeRouteWalksByActivityId.get(activityId);
+
+    this.stopJoggingRace(activityId);
+
+    if (!routeWalk) {
+      return;
+    }
+
+    this.activeRouteWalksByActivityId.delete(activityId);
+    routeWalk.characterIds.forEach(characterId => {
+      const currentTile = this.widget.getCharacterTile(characterId);
+
+      this.widget.cancelWalk(characterId);
+      this.walkingCharacterIds.delete(characterId);
+
+      if (currentTile) {
+        this.sendToCharacter(characterId, {
+          type: EventType.Arrive,
+          position: currentTile,
+        });
+      }
+    });
+  }
+
+  private clearActivityRoutePresentation(activityId: string): void {
+    const characterIds = this.routePresentationCharacterIdsByActivityId.get(activityId);
+
+    characterIds?.forEach(characterId => {
+      void this.widget.clearCharacterPresentationOffset(characterId, 0);
+      this.widget.setCharacterTileOverlapOffsetSuppressed(characterId, false);
+    });
+    this.routePresentationCharacterIdsByActivityId.delete(activityId);
   }
 
   private sendRouteWalkToNextWaypoint(routeWalk: ActivityRouteWalk): void {
@@ -697,7 +691,7 @@ export class TownMovementCoordinator {
       return;
     }
 
-    this.stopJoggingRace(routeWalk);
+    this.stopJoggingRace(routeWalk.activityId);
     this.activeRouteWalksByActivityId.delete(routeWalk.activityId);
     this.completedRouteWalkActivityIds.add(routeWalk.activityId);
     this.onActivityRouteCompleted?.(routeWalk.activityId);
@@ -827,19 +821,19 @@ function getSideBySideVisualOffsets(from: Position, to: Position): [Position, Po
 
     return [
       {
-        x: -JOGGING_HORIZONTAL_STAGGER_OFFSET_CELLS * direction,
-        y: -JOGGING_HORIZONTAL_SIDE_OFFSET_CELLS,
+        x: -SIDE_BY_SIDE_HORIZONTAL_STAGGER_CELLS * direction,
+        y: -SIDE_BY_SIDE_HORIZONTAL_OFFSET_CELLS,
       },
       {
-        x: JOGGING_HORIZONTAL_STAGGER_OFFSET_CELLS * direction,
-        y: JOGGING_HORIZONTAL_SIDE_OFFSET_CELLS,
+        x: SIDE_BY_SIDE_HORIZONTAL_STAGGER_CELLS * direction,
+        y: SIDE_BY_SIDE_HORIZONTAL_OFFSET_CELLS,
       },
     ];
   }
 
   return [
-    { x: -JOGGING_VERTICAL_SIDE_OFFSET_CELLS, y: 0 },
-    { x: JOGGING_VERTICAL_SIDE_OFFSET_CELLS, y: 0 },
+    { x: -SIDE_BY_SIDE_VERTICAL_OFFSET_CELLS, y: 0 },
+    { x: SIDE_BY_SIDE_VERTICAL_OFFSET_CELLS, y: 0 },
   ];
 }
 
@@ -848,34 +842,6 @@ function getJoggingFinishVisualOffsets(): [Position, Position] {
     { x: -JOGGING_FINISH_X_OFFSET_CELLS, y: -JOGGING_FINISH_Y_OFFSET_CELLS },
     { x: JOGGING_FINISH_X_OFFSET_CELLS, y: JOGGING_FINISH_Y_OFFSET_CELLS },
   ];
-}
-
-function getUniqueSortedNumbers(values: readonly number[]): number[] {
-  return [...new Set(values)].sort((left, right) => left - right);
-}
-
-function getFarthestNumber(values: readonly number[], target: number): number | null {
-  return values.reduce<number | null>((farthestValue, value) => {
-    if (farthestValue === null) {
-      return value;
-    }
-
-    return Math.abs(value - target) > Math.abs(farthestValue - target)
-      ? value
-      : farthestValue;
-  }, null);
-}
-
-function dedupeConsecutivePositions(positions: readonly Position[]): Position[] {
-  return positions.reduce<Position[]>((result, position) => {
-    const previousPosition = result[result.length - 1];
-
-    if (!previousPosition || !areSamePosition(previousPosition, position)) {
-      result.push({ ...position });
-    }
-
-    return result;
-  }, []);
 }
 
 function areSamePosition(left: Position, right: Position): boolean {

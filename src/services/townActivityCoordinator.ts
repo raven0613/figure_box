@@ -53,6 +53,7 @@ interface TownActivityCoordinatorOptions {
     location: Position;
   }) => void;
   startJoggingRace: (activityId: string) => void;
+  finishJoggingRoute: (activityId: string) => void;
   cancelActivityRoute: (activityId: string, options?: CancelActivityRouteOptions) => void;
   actorHasItem: (characterId: string, itemId: string) => boolean;
   sendToCharacter: SendCharacterEvent;
@@ -69,6 +70,7 @@ export interface InteractionCardActivityInput {
 
 const DEFAULT_ACTIVITY_RESPONSE_DELAY_MS = 1200;
 const DEFAULT_ACTIVITY_END_DURATION_MS = 1000;
+const JOGGING_ACTIVITY_KEY = 'life.jogging';
 const JOGGING_FINISH_ROLL_ID = 'joggingFinish';
 const GROUP_ACTIVITY_MIN_PARTICIPANT_COUNT = 2;
 
@@ -185,6 +187,7 @@ export class TownActivityCoordinator {
       },
       startJoggingRoute: options.startJoggingRoute,
       startJoggingRace: options.startJoggingRace,
+      finishJoggingRoute: options.finishJoggingRoute,
       cancelActivityRoute: options.cancelActivityRoute,
       notifyActivitiesChanged: this.notifyActivitiesChanged,
       activityEndDurationMs: DEFAULT_ACTIVITY_END_DURATION_MS,
@@ -399,14 +402,17 @@ export class TownActivityCoordinator {
     return this.rollResolver.resolveActivityRoll(request);
   }
 
-  handleJoggingRouteCompleted(activityId: string): void {
+  handleActivityRouteCompleted(activityId: string): void {
     const activity = this.activityManager.getActivity(activityId);
 
     if (!activity || activity.phase !== 'active') {
       return;
     }
 
-    if (activity.participantIds.length >= GROUP_ACTIVITY_MIN_PARTICIPANT_COUNT) {
+    if (
+      activity.activityKey === JOGGING_ACTIVITY_KEY &&
+      activity.participantIds.length >= GROUP_ACTIVITY_MIN_PARTICIPANT_COUNT
+    ) {
       const selectedBranchId = this.resolveActivityRoll({
         activityId: activity.id,
         rollId: JOGGING_FINISH_ROLL_ID,

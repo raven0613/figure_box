@@ -259,7 +259,7 @@ export class TownCharacterController {
       getCharacterSnapshot: characterId => this.getCharacterSnapshot(characterId),
       sendToCharacter: (characterId, event) => this.sendToCharacter(characterId, event),
       onActivityRouteCompleted: activityId => {
-        this.activityCoordinator.handleJoggingRouteCompleted(activityId);
+        this.activityCoordinator.handleActivityRouteCompleted(activityId);
       },
     });
     this.runtimeCoordinator = new TownCharacterRuntimeCoordinator({
@@ -428,6 +428,9 @@ export class TownCharacterController {
       },
       startJoggingRace: activityId => {
         this.movementCoordinator.startJoggingRace(activityId);
+      },
+      finishJoggingRoute: activityId => {
+        this.movementCoordinator.finishJoggingRoute(activityId);
       },
       cancelActivityRoute: (activityId, options) => {
         this.movementCoordinator.cancelActivityRoute(activityId, options);
