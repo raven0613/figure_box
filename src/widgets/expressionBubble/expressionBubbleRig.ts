@@ -3,6 +3,10 @@ import {
   MINI_CANVAS_WIDTH,
   MINI_CENTER_X,
 } from '~/widgets/miniAvatar/miniAvatarRig';
+import type {
+  ExpressionBubbleId,
+  ExpressionBubblePartOffsets,
+} from '~/typing/expressionBubble';
 
 export const EXPRESSION_BUBBLE_CANVAS_WIDTH = MINI_CANVAS_WIDTH;
 export const EXPRESSION_BUBBLE_CANVAS_HEIGHT = MINI_CANVAS_HEIGHT;
@@ -31,3 +35,18 @@ export const EXPRESSION_BUBBLE_Z_INDEX = {
   effectColor: 30,
   effectLine: 31,
 } as const;
+
+export const EXPRESSION_BUBBLE_PART_OFFSETS_BY_ID: Readonly<
+  Record<ExpressionBubbleId, ExpressionBubblePartOffsets | undefined>
+> = {
+  sigh: {
+    mouth: {
+      y: 1,
+    },
+  },
+  sad: {
+    mouth: {
+      y: 1,
+    },
+  },
+};

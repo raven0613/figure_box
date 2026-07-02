@@ -6,6 +6,7 @@ import {
   EXPRESSION_BUBBLE_CANVAS_HEIGHT,
   EXPRESSION_BUBBLE_CANVAS_WIDTH,
   EXPRESSION_BUBBLE_MAP_SOURCE_CROP,
+  EXPRESSION_BUBBLE_PART_OFFSETS_BY_ID,
   EXPRESSION_BUBBLE_Z_INDEX,
 } from './expressionBubbleRig';
 import { bakeExpressionBubbleSpriteSheet } from './expressionBubbleSpriteBaker';
@@ -61,6 +62,7 @@ export function createExpressionBubbleSpriteBakeCacheKey(
     rig: {
       assetCenter: EXPRESSION_BUBBLE_ASSET_CENTER,
       mapSourceCrop: EXPRESSION_BUBBLE_MAP_SOURCE_CROP,
+      partOffsetsById: EXPRESSION_BUBBLE_PART_OFFSETS_BY_ID,
       zIndex: EXPRESSION_BUBBLE_Z_INDEX,
     },
   });
